@@ -1,33 +1,36 @@
-# Anki
+# Word Chat
 
-[![Build Status](https://github.com/ankitects/anki/actions/workflows/ci.yml/badge.svg)](https://github.com/ankitects/anki/actions/workflows/ci.yml)
-[![Documentation](https://img.shields.io/badge/docs-dev--docs.ankiweb.net-blue)](https://dev-docs.ankiweb.net/en/latest/)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=ankitects_anki&metric=coverage)](https://sonarcloud.io/summary/new_code?id=ankitects_anki)
+A language-learning chat built on an Anki collection.
 
-This repo contains the source code for the computer version of
-[Anki](https://apps.ankiweb.net).
+- `deck-status/` keeps a synced copy of the collection and serves its contents
+  as JSON on http://127.0.0.1:8090. It also stores the generated texts and
+  their audio. Settings are read from `deck-status/.env`.
+- `chat-ui/` is the GUI, on http://localhost:5173: a chat and a text studio
+  that use the words you know, through OpenRouter.
+- `checker/` splits what is typed in the chat into sentences, spell-checks
+  them and has each finished sentence profiled, on http://127.0.0.1:8092.
 
-## About
+`rslib/`, `proto/` and `ftl/` are Anki's Rust core, which `deck-status` is
+built on. They come from [Anki](https://github.com/ankitects/anki) and are
+under the same licence.
 
-Anki is a spaced repetition program. Please see the [website](https://apps.ankiweb.net) to learn more.
+## Running
 
-## Getting Started
+```
+just dev
+```
 
-### Contributing
+starts all three parts in one terminal. `just --list` shows the other
+commands, such as `just test` and `just check`.
 
-Want to contribute to Anki? Check out the [Contribution Guidelines](./docs/contributing.md).
+## Requirements
 
-For more information on building and developing, please see [Development](./docs/development.md).
+Rust, Node.js, Python 3.10 or later, and [just](https://github.com/casey/just).
 
-#### Contributors
+Building the Rust core needs `protoc`. A copy from the Anki build is expected
+in `out/extracted/protoc`; on a fresh checkout, install protoc and set
+`PROTOC_BINARY` to its path. The translation submodules are needed as well:
 
-The following people have contributed to Anki: [CONTRIBUTORS](./CONTRIBUTORS)
-
-### Anki Betas
-
-If you'd like to try development builds of Anki but don't feel comfortable
-building the code, please see [Anki betas](https://docs.ankiweb.net/releases/betas/intro).
-
-## License
-
-Anki's license: [LICENSE](./LICENSE)
+```
+git submodule update --init
+```

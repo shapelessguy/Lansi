@@ -25,7 +25,6 @@ qt-misc-invalid-property-found-on-card-please = Invalid property found on card. 
 qt-misc-loading = Loading...
 qt-misc-manage = Manage
 qt-misc-manage-note-types = Manage Note Types
-qt-misc-ai-settings = AI Settings
 qt-misc-name-exists = Name exists.
 qt-misc-non-unicode-text = <non-unicode text>
 qt-misc-optimizing = Optimizing...

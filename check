@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-./ninja format && ./ninja check

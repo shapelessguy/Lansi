@@ -13,9 +13,8 @@ import pytest
 from live import LiveChecker
 from profiling import Answer, Profile, Profiler
 from sentences import Sentence
-from spelling import Speller, SpellingIssue
-
 from server import describe, make_server
+from spelling import Speller, SpellingIssue
 
 
 @pytest.fixture

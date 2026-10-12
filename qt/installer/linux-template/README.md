@@ -1,1 +1,0 @@
-This template is adapted from [briefcase-linux-system-template](https://github.com/beeware/briefcase-linux-system-template/) for building a zip with a standalone build of Python and custom install scripts.

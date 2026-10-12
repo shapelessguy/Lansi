@@ -7,21 +7,13 @@ rust-version = "1.80"
 
 [workspace]
 members = [
-  "build/configure",
-  "build/ninja_gen",
-  "build/runner",
   "deck-status",
-  "ftl",
-  "pylib/rsbridge",
   "rslib",
   "rslib/i18n",
   "rslib/io",
-  "rslib/linkchecker",
   "rslib/process",
   "rslib/proto",
   "rslib/sync",
-  "server",
-  "tools/minilints",
 ]
 resolver = "2"
 
@@ -46,7 +38,6 @@ anki_io = { path = "rslib/io" }
 anki_process = { path = "rslib/process" }
 anki_proto = { path = "rslib/proto" }
 anki_proto_gen = { path = "rslib/proto_gen" }
-ninja_gen = { "path" = "build/ninja_gen" }
 
 # pinned
 unicase = "=2.6.0" # any changes could invalidate sqlite indexes
@@ -170,8 +161,6 @@ debug = 0
 # Debug info off by default, which speeds up incremental builds and produces a considerably
 # smaller library.
 [profile.dev.package.anki]
-debug = 0
-[profile.dev.package.rsbridge]
 debug = 0
 
 [profile.release-lto]

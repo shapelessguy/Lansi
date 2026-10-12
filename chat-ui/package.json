@@ -10,6 +10,7 @@
         "all": "concurrently --names deck,checker,ui --prefix-colors blue,magenta,green \"just deck-status\" \"just checker\" \"npm run dev\"",
         "build": "tsc --noEmit && vite build",
         "check": "tsc --noEmit",
+        "fmt": "dprint fmt",
         "test": "vitest run"
     },
     "dependencies": {
@@ -18,10 +19,12 @@
         "react-markdown": "^9.0.1"
     },
     "devDependencies": {
+        "@types/node": "^22.20.5",
         "@types/react": "^18.3.3",
         "@types/react-dom": "^18.3.0",
         "@vitejs/plugin-react": "^4.3.1",
         "concurrently": "^10.0.6",
+        "dprint": "^0.56.1",
         "typescript": "^5.5.4",
         "vite": "^5.4.2",
         "vitest": "^2.0.5"
