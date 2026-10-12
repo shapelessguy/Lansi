@@ -33,6 +33,11 @@ const config = {
             entries: [],
         },
         paths: {},
+        // The default is the time the config was loaded, which differs between
+        // processes. `svelte-kit sync` can run alongside `vite build`, and when
+        // their versions differ, the generated HTML and scripts look for their
+        // shared data under different names and no page renders.
+        version: { name: "anki" },
         csp: { mode: "hash", directives: { "script-src": ["'self'"] } },
     },
 };

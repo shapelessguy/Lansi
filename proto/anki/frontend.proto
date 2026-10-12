@@ -64,6 +64,9 @@ service FrontendService {
 
   // CSV import
   rpc ImportDialogRequireClose(generic.Empty) returns (generic.Empty);
+
+  // Sends a chat-completions request to a user-configured LLM endpoint.
+  rpc LlmChat(LlmChatRequest) returns (LlmChatResponse);
 }
 
 service BackendFrontendService {}
@@ -109,6 +112,27 @@ message ReadClipboardResponse {
 
 message WriteClipboardRequest {
   map<string, bytes> data = 1;
+}
+
+message LlmChatMessage {
+  // "system", "user" or "assistant"
+  string role = 1;
+  string content = 2;
+}
+
+message LlmChatRequest {
+  string api_endpoint = 1;
+  string api_token = 2;
+  string model_name = 3;
+  repeated LlmChatMessage messages = 4;
+  // Left to the provider's default when unset.
+  optional double temperature = 5;
+}
+
+message LlmChatResponse {
+  string text = 1;
+  uint32 prompt_tokens = 2;
+  uint32 completion_tokens = 3;
 }
 
 message Help {

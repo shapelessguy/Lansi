@@ -1,0 +1,39 @@
+[package]
+name = "anki-web-server"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+description = "Serves the web frontend and the backend API it talks to over HTTP"
+
+[[bin]]
+path = "src/main.rs"
+name = "anki-web-server"
+
+[build-dependencies]
+anki_io.workspace = true
+anki_proto.workspace = true
+anki_proto_gen.workspace = true
+anyhow.workspace = true
+inflections.workspace = true
+prost-reflect.workspace = true
+
+[dependencies]
+anki_proto.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+envy.workspace = true
+prost.workspace = true
+serde.workspace = true
+tokio.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+anki = { workspace = true, features = ["native-tls"] }
+
+[target.'cfg(not(windows))'.dependencies]
+anki = { workspace = true, features = ["rustls"] }
+
+[dev-dependencies]
+tempfile.workspace = true

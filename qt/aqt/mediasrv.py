@@ -27,6 +27,7 @@ from flask import Response, abort, request
 from waitress.server import create_server
 
 import aqt
+import aqt.llm
 import aqt.main
 import aqt.operations
 from anki import frontend_pb2, generic_pb2, hooks
@@ -535,6 +536,7 @@ def get_sveltekit_route(path: str) -> str | None:
         "image-occlusion",
         "preferences",
         "editor",
+        "llm-settings",
     ]:
         return page_name
     return None
@@ -1128,6 +1130,23 @@ def save_custom_colours() -> bytes:
     return b""
 
 
+def llm_chat() -> bytes:
+    req = frontend_pb2.LlmChatRequest()
+    req.ParseFromString(request.data)
+    reply = aqt.llm.complete(
+        api_endpoint=req.api_endpoint,
+        api_token=req.api_token,
+        model_name=req.model_name,
+        messages=[aqt.llm.LlmMessage(m.role, m.content) for m in req.messages],
+        temperature=req.temperature if req.HasField("temperature") else None,
+    )
+    return frontend_pb2.LlmChatResponse(
+        text=reply.text,
+        prompt_tokens=reply.prompt_tokens,
+        completion_tokens=reply.completion_tokens,
+    ).SerializeToString()
+
+
 post_handler_list = [
     congrats_info,
     get_deck_configs_for_update,
@@ -1161,6 +1180,7 @@ post_handler_list = [
     open_fields_dialog,
     open_cards_dialog,
     save_custom_colours,
+    llm_chat,
 ]
 
 

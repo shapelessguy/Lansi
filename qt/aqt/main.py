@@ -1359,6 +1359,11 @@ title="{}" {}>{}</button>""".format(
 
         aqt.models.Models(self, self, fromMain=True)
 
+    def on_ai_settings(self) -> None:
+        import aqt.llmdialog
+
+        aqt.llmdialog.LlmSettingsDialog(self)
+
     def onAbout(self) -> None:
         aqt.dialogs.open("About", self)
 
@@ -1456,6 +1461,7 @@ title="{}" {}>{}</button>""".format(
         qconnect(m.actionEmptyCards.triggered, self.onEmptyCards)
         qconnect(m.actionNoteTypes.triggered, self.onNoteTypes)
         qconnect(m.action_check_for_updates.triggered, self.on_check_for_updates)
+        qconnect(m.actionAiSettings.triggered, self.on_ai_settings)
         qconnect(m.actionPreferences.triggered, self.onPrefs)
 
         # View

@@ -10,6 +10,7 @@ members = [
   "build/configure",
   "build/ninja_gen",
   "build/runner",
+  "deck-status",
   "ftl",
   "pylib/rsbridge",
   "rslib",
@@ -19,6 +20,7 @@ members = [
   "rslib/process",
   "rslib/proto",
   "rslib/sync",
+  "server",
   "tools/minilints",
 ]
 resolver = "2"

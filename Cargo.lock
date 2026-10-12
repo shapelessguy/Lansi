@@ -147,10 +147,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "anki-deck-status"
+version = "0.0.0"
+dependencies = [
+ "anki",
+ "anki_io",
+ "anki_proto",
+ "anki_proto_gen",
+ "anyhow",
+ "axum",
+ "envy",
+ "inflections",
+ "prost",
+ "prost-reflect",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "anki-sync-server"
 version = "0.0.0"
 dependencies = [
  "anki",
+]
+
+[[package]]
+name = "anki-web-server"
+version = "0.0.0"
+dependencies = [
+ "anki",
+ "anki_io",
+ "anki_proto",
+ "anki_proto_gen",
+ "anyhow",
+ "axum",
+ "envy",
+ "inflections",
+ "prost",
+ "prost-reflect",
+ "serde",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -3361,9 +3400,12 @@ version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b5edd582b62f5cde844716e66d92565d7faf7ab1445c8cebce6e00fba83ddb2"
 dependencies = [
+ "base64",
  "once_cell",
  "prost",
  "prost-types",
+ "serde",
+ "serde-value",
 ]
 
 [[package]]

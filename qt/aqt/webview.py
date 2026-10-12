@@ -68,6 +68,7 @@ class AnkiWebViewKind(Enum):
     IMPORT_LOG = "import log"
     IMPORT_ANKI_PACKAGE = "anki package import"
     PREFERENCES = "preferences"
+    LLM_SETTINGS = "llm settings"
 
 
 def _is_internal_url(url: QUrl) -> bool:
@@ -167,6 +168,7 @@ class AnkiWebPage(QWebEnginePage):
             AnkiWebViewKind.IMPORT_CSV,
             AnkiWebViewKind.IMPORT_LOG,
             AnkiWebViewKind.PREFERENCES,
+            AnkiWebViewKind.LLM_SETTINGS,
         )
 
         global _profile_with_api_access, _profile_without_api_access

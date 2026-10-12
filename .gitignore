@@ -24,3 +24,6 @@ ts/.svelte-kit
 docs/_build/
 docs/autoapi/
 .complexipy_cache
+/deck-status/.env
+/deck-status/data
+/chat-ui/dist

@@ -94,6 +94,7 @@
     <addaction name="separator"/>
     <addaction name="actionNoteTypes"/>
     <addaction name="action_check_for_updates"/>
+    <addaction name="actionAiSettings"/>
     <addaction name="actionPreferences"/>
     <addaction name="separator"/>
    </widget>
@@ -223,6 +224,11 @@
    </property>
    <property name="shortcut">
     <string notr="true">F</string>
+   </property>
+  </action>
+  <action name="actionAiSettings">
+   <property name="text">
+    <string>qt_misc_ai_settings</string>
    </property>
   </action>
   <action name="actionNoteTypes">

@@ -30,6 +30,9 @@ const NONSTANDARD_HEADER: &[&str] = &[
 const IGNORED_FOLDERS: &[&str] = &[
     "./out",
     "./node_modules",
+    "./chat-ui/node_modules",
+    "./chat-ui/dist",
+    "./checker/.venv",
     "./qt/aqt/forms",
     "./tools/workspace-hack",
     "./target",

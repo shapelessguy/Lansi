@@ -1,4 +1,5 @@
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfileLoadTime", "-Command"]
+set dotenv-filename := "deck-status/.env"
 
 mod release
 
@@ -13,6 +14,34 @@ build:
 # Build and run Anki in development mode
 run *args:
     {{ run_script }} {{ args }}
+
+# Build the web frontend and serve it, with a collection, on http://127.0.0.1:8080.
+# Set ANKI_WEB_COLLECTION to the .anki2 file to serve.
+web-server:
+    {{ ninja }} sveltekit
+    cargo run --target-dir out/rust -p anki-web-server
+
+# Sync a copy of the collection periodically and serve its contents as JSON on
+# http://127.0.0.1:8090 (try /decks). Settings are read from deck-status/.env.
+deck-status:
+    cargo run --target-dir out/rust -p anki-deck-status
+
+# Run the chat GUI on http://localhost:5173. It reads the known words from the
+# deck-status server, so start `just deck-status` first.
+chat-ui:
+    cd chat-ui && npm install && npm run dev
+
+# Run everything the chat needs in one terminal: the deck-status server, the
+# checker server and the chat GUI. Ctrl+C stops all three.
+dev:
+    cd chat-ui && npm install && npm run all
+
+# Run the checker server on http://127.0.0.1:8092. The chat GUI sends it what
+# is being typed, and it prints the sentences it finds.
+checker:
+    {{ if path_exists("checker/.venv") == "true" { "" } else { "python -m venv checker/.venv" } }}
+    {{ checker_python }} -m pip install --quiet --disable-pip-version-check -r checker/requirements.txt
+    {{ checker_python }} checker/server.py
 
 # Build and run Anki in optimized (release) mode
 run-optimized *args:
@@ -182,7 +211,8 @@ clean *args:
 
 ninja := if os() == "windows" { "tools\\ninja" } else { "./ninja" }
 run_script := if os() == "windows" { ".\\run.bat" } else { "./run" }
-playwright_env := if os() == "windows" { "set PLAYWRIGHT_BROWSERS_PATH=out\\playwright-browsers&&" } else { "PLAYWRIGHT_BROWSERS_PATH=out/playwright-browsers" }
+checker_python := if os() == "windows" { "checker\\.venv\\Scripts\\python" } else { "checker/.venv/bin/python" }
+playwright_env :=if os() == "windows" { "set PLAYWRIGHT_BROWSERS_PATH=out\\playwright-browsers&&" } else { "PLAYWRIGHT_BROWSERS_PATH=out/playwright-browsers" }
 yarn := if os() == "windows" { "out\\extracted\\node\\yarn.cmd" } else { "out/extracted/node/bin/yarn" }
 uv := env("UV_BINARY", if os() == "windows" { "out\\extracted\\uv\\uv" } else { "out/extracted/uv/uv" })
 export UV_PROJECT_ENVIRONMENT := if os() == "windows" { "out\\pyenv" } else { "out/pyenv" }
