@@ -2,11 +2,14 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import type { ChatMessage } from "./openrouter";
+import { checkerFetch } from "./session";
 
 export interface StoredChat {
     id: string;
     /** The context the chat was started with. */
     contextId: string;
+    /** The language that was being learned when the chat was started. */
+    language?: string;
     messages: ChatMessage[];
     /** When a message was last added, in milliseconds since the epoch. */
     updatedAt: number;
@@ -18,44 +21,77 @@ export interface ChatStore {
     activeId: string;
 }
 
-const STORAGE_KEY = "chat-ui.chats";
-/** Where the single chat was kept before previous chats were saved. */
-const LEGACY_STORAGE_KEY = "chat-ui.chat";
+/** Where the chats were kept before the server kept them. */
+const OLD_STORAGE_KEYS = ["chat-ui.chats", "chat-ui.chat"];
 const TITLE_LENGTH = 48;
 
-export function emptyChat(contextId: string): StoredChat {
-    return { id: crypto.randomUUID(), contextId, messages: [], updatedAt: Date.now() };
+export function emptyChat(contextId: string, language = ""): StoredChat {
+    return { id: crypto.randomUUID(), contextId, language, messages: [], updatedAt: Date.now() };
 }
 
 function storeWith(chat: StoredChat): ChatStore {
     return { chats: [chat], activeId: chat.id };
 }
 
-export function loadChats(defaultContextId: string): ChatStore {
+async function send(path: string, init?: RequestInit): Promise<Response> {
+    let response: Response;
     try {
-        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-        if (
-            stored && Array.isArray(stored.chats)
-            && stored.chats.some((chat: StoredChat) => chat.id === stored.activeId)
-        ) {
-            return stored;
-        }
-        const legacy = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) ?? "null");
-        if (legacy && Array.isArray(legacy.messages) && legacy.messages.length > 0) {
-            return storeWith({ ...emptyChat(legacy.contextId ?? defaultContextId), ...legacy });
-        }
+        response = await checkerFetch(path, init);
     } catch {
-        // unreadable storage is treated like a first visit
+        throw new Error("The server cannot be reached. Is `just dev` running?");
     }
-    return storeWith(emptyChat(defaultContextId));
+    if (!response.ok) {
+        throw new Error(`The server answered ${response.status}.`);
+    }
+    return response;
 }
 
-export function saveChats(store: ChatStore): void {
+/** The chats the server keeps for whoever is logged in. */
+export async function fetchChats(): Promise<StoredChat[]> {
+    const { chats }: { chats: StoredChat[] } = await (await send("/chats")).json();
+    // The chats that were kept in this browser are let go of: the server's are the ones that count.
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+        OLD_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
     } catch {
-        // the chats then last until the page is closed
+        // nothing to let go of
     }
+    return chats.map((chat) => ({
+        ...chat,
+        // the server also says whether each message has been processed, which nothing here goes by yet
+        messages: chat.messages.map(({ role, content }) => ({ role, content })),
+    }));
+}
+
+/** Has the server keep a chat as it is now. `leaving` is for when the page is being left. */
+export async function putChat(chat: StoredChat, leaving = false): Promise<void> {
+    await send(`/chats/${chat.id}`, { method: "PUT", body: JSON.stringify(chat), keepalive: leaving });
+}
+
+export async function removeChat(id: string): Promise<void> {
+    await send(`/chats/${id}`, { method: "DELETE" });
+}
+
+/** The chats with the most recent one on show, or a fresh one if there are none. */
+export function storeOf(chats: StoredChat[], contextId: string, language: string): ChatStore {
+    const latest = listedChats({ chats, activeId: "" })[0];
+    return latest ? { chats, activeId: latest.id } : storeWith(emptyChat(contextId, language));
+}
+
+/**
+ * What has to be told to the server for it to have the chats as they are in
+ * `store`: the chats that are not as they were when last told, and the ids
+ * of those that are gone. `told` is each chat as the server has it. Chats
+ * nothing was written in are not kept.
+ */
+export function chatsToTell(
+    told: ReadonlyMap<string, StoredChat>,
+    store: ChatStore,
+): { changed: StoredChat[]; removed: string[] } {
+    const kept = store.chats.filter((chat) => chat.messages.length > 0);
+    return {
+        changed: kept.filter((chat) => told.get(chat.id) !== chat),
+        removed: [...told.keys()].filter((id) => !kept.some((chat) => chat.id === id)),
+    };
 }
 
 export function activeChat(store: ChatStore): StoredChat {
@@ -88,19 +124,19 @@ export function selectChat(store: ChatStore, id: string): ChatStore {
 }
 
 /** Shows a fresh chat, keeping the one that was open. */
-export function startChat(store: ChatStore, contextId: string): ChatStore {
-    const chat = emptyChat(contextId);
+export function startChat(store: ChatStore, contextId: string, language = ""): ChatStore {
+    const chat = emptyChat(contextId, language);
     return selectChat({ chats: [...store.chats, chat], activeId: chat.id }, chat.id);
 }
 
 /** Removes a chat. If it was the one shown, the most recent other chat is shown instead. */
-export function deleteChat(store: ChatStore, id: string, contextId: string): ChatStore {
+export function deleteChat(store: ChatStore, id: string, contextId: string, language = ""): ChatStore {
     const chats = store.chats.filter((chat) => chat.id !== id);
     if (store.activeId !== id) {
         return { ...store, chats };
     }
     const next = listedChats({ chats, activeId: "" })[0];
-    return next ? { chats, activeId: next.id } : startChat({ chats, activeId: "" }, contextId);
+    return next ? { chats, activeId: next.id } : startChat({ chats, activeId: "" }, contextId, language);
 }
 
 export function updateChat(store: ChatStore, id: string, change: (chat: StoredChat) => StoredChat): ChatStore {

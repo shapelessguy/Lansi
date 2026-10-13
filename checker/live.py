@@ -27,7 +27,7 @@ from profiling import (
     weigh_ratings,
 )
 from sentences import Sentence, split_sentences
-from spelling import Speller
+from spelling import Speller, StudySpeller
 
 # Runs a job without making the caller wait for it.
 Background = Callable[[Callable[[], None]], None]
@@ -239,6 +239,15 @@ class LiveChecker:
         """The model on this machine that sentences are profiled by at
         present, if they are."""
         return self._profiler.local_model() if self._profiler else None
+
+    def study(self, language: str) -> None:
+        """Go by `language`, given by its English name, from now on: it is
+        the one whose spelling is checked, where the speller can be told,
+        and the one sentences are judged by."""
+        if isinstance(self._speller, StudySpeller):
+            self._speller.language = language
+        if self._profiler:
+            self._profiler.language = language
 
     def billing(self) -> tuple[list[Profile], bool]:
         """The requests that have come back since this was last called, each

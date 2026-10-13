@@ -1,33 +1,42 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
+import { SetEditor } from "./components/SetEditor";
 import { SettingsPanel, type SettingsTab } from "./components/SettingsPanel";
 import { SidePanel } from "./components/SidePanel";
 import { TextList } from "./components/TextList";
 import { TextStudio } from "./components/TextStudio";
 import { UsagePanel } from "./components/UsagePanel";
+import { VocabularyList } from "./components/VocabularyList";
 import { WordList } from "./components/WordList";
 import { fetchKnownWords } from "./lib/anki";
+import { useAnkiImport } from "./lib/ankiImport";
 import {
     activeChat,
     type ChatStore,
+    chatsToTell,
     deleteChat,
     listedChats,
-    loadChats,
-    saveChats,
+    putChat,
+    removeChat,
     selectChat,
     startChat,
+    type StoredChat,
+    storeOf,
     updateChat,
 } from "./lib/chats";
 import { loadLayout, type Panel, saveLayout } from "./lib/layout";
 import type { ChatMessage } from "./lib/openrouter";
-import { loadSettings, saveSettings, type Settings } from "./lib/settings";
+import { logOut } from "./lib/session";
+import { deleteSet, fetchSets, newSet, saveSet, wordLists, type WordSet } from "./lib/sets";
+import { saveSettings, type Settings } from "./lib/settings";
 import { fetchTexts, type SavedText } from "./lib/texts";
 import { addUsage, loadUsage, saveUsage, type UsageEntry } from "./lib/usage";
+import { fetchVocabulary, type Vocabulary } from "./lib/vocabulary";
 import type { Word } from "./lib/words";
 
 export type WordsState =
@@ -40,9 +49,17 @@ export type TextsState =
     | { status: "error"; message: string }
     | { status: "ready"; texts: SavedText[] };
 
-export function App() {
-    const [settings, setSettings] = useState<Settings>(loadSettings);
-    // the panel on the left, with the known words, the chats and the texts
+interface Props {
+    /** Who is logged in. */
+    user: string;
+    /** The settings and the chats as the server had them when the user came in. */
+    initialSettings: Settings;
+    initialChats: StoredChat[];
+}
+
+export function App({ user, initialSettings, initialChats }: Props) {
+    const [settings, setSettings] = useState<Settings>(initialSettings);
+    // the panel on the left, with the words, the chats and the texts
     const [libraryOpen, setLibraryOpen] = useState(() => loadLayout().libraryOpen);
     // the panels on the right share one place, so one is shown at a time
     const [openPanel, setOpenPanel] = useState<Panel | null>(() => loadLayout().panel);
@@ -55,32 +72,60 @@ export function App() {
     // text a clicked word adds to the message being written
     const [picked, setPicked] = useState<{ word: string; nonce: number } | null>(null);
     const [usage, setUsage] = useState<UsageEntry[]>(loadUsage);
-    const [chatStore, setChatStore] = useState<ChatStore>(() => loadChats(settings.defaultContextId));
-    const [sidebarTab, setSidebarTab] = useState<"words" | "chats" | "texts">("words");
+    const [chatStore, setChatStore] = useState<ChatStore>(() =>
+        storeOf(initialChats, initialSettings.defaultContextId, initialSettings.language)
+    );
+    const [sidebarTab, setSidebarTab] = useState<"words" | "vocabulary" | "chats" | "texts">("vocabulary");
+    // how many words the vocabulary has, once it has been listed
+    const [vocabularyCount, setVocabularyCount] = useState<number | null>(null);
     const [activity, setActivity] = useState<"chat" | "texts">("chat");
     const [textsState, setTextsState] = useState<TextsState>({ status: "loading" });
     const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
     const chat = activeChat(chatStore);
     const chats = listedChats(chatStore);
-    const words = wordsState.status === "ready" ? wordsState.words : [];
+    // The words a prompt is given come from the vocabulary of the language
+    // being learned, by the sets picked out of it.
+    const [vocabulary, setVocabulary] = useState<Vocabulary | null>(null);
+    const [sets, setSets] = useState<WordSet[]>([]);
+    // the set in the editor, if it is open
+    const [editedSet, setEditedSet] = useState<WordSet | null>(null);
+    const activeSetId = settings.activeSets[settings.language];
+    const words = useMemo(
+        () => wordLists(sets, activeSetId, vocabulary?.words ?? []),
+        [sets, activeSetId, vocabulary],
+    );
     const texts = textsState.status === "ready" ? textsState.texts : [];
     const selectedText = texts.find((text) => text.id === selectedTextId) ?? null;
 
     useEffect(() => saveUsage(usage), [usage]);
 
-    // A reply changes the chats many times a second while it arrives, so they
-    // are written once it pauses, and when the page is left.
+    // The server is told of the chats that change, and of those that are
+    // deleted. A reply changes its chat many times a second while it
+    // arrives, so the telling waits until it pauses, or the page is left.
+    const told = useRef(new Map(initialChats.map((kept) => [kept.id, kept])));
     const latestChats = useRef(chatStore);
     latestChats.current = chatStore;
-    useEffect(() => {
-        const timer = setTimeout(() => saveChats(chatStore), 300);
-        return () => clearTimeout(timer);
-    }, [chatStore]);
-    useEffect(() => {
-        const save = () => saveChats(latestChats.current);
-        window.addEventListener("pagehide", save);
-        return () => window.removeEventListener("pagehide", save);
+    const tellServer = useCallback((leaving: boolean) => {
+        const { changed, removed } = chatsToTell(told.current, latestChats.current);
+        for (const changedChat of changed) {
+            told.current.set(changedChat.id, changedChat);
+            // one that could not be told is told again with the next change
+            putChat(changedChat, leaving).catch(() => told.current.delete(changedChat.id));
+        }
+        for (const id of removed) {
+            told.current.delete(id);
+            removeChat(id).catch(() => undefined);
+        }
     }, []);
+    useEffect(() => {
+        const timer = setTimeout(() => tellServer(false), 300);
+        return () => clearTimeout(timer);
+    }, [chatStore, tellServer]);
+    useEffect(() => {
+        const tell = () => tellServer(true);
+        window.addEventListener("pagehide", tell);
+        return () => window.removeEventListener("pagehide", tell);
+    }, [tellServer]);
 
     const changeMessages = useCallback(
         (chatId: string, change: (messages: ChatMessage[]) => ChatMessage[]) =>
@@ -95,7 +140,7 @@ export function App() {
     );
 
     function newChat() {
-        setChatStore((store) => startChat(store, settings.defaultContextId));
+        setChatStore((store) => startChat(store, settings.defaultContextId, settings.language));
         setActivity("chat");
     }
 
@@ -133,6 +178,85 @@ export function App() {
 
     useEffect(loadWords, [loadWords]);
 
+    // The checker server takes the Anki words into the vocabulary by itself,
+    // with the key and the models it is handed here.
+    const [vocabularyRevision, setVocabularyRevision] = useState(0);
+    useEffect(() => {
+        let current = true;
+        fetchVocabulary(settings.language).then(
+            (fetched) => current && setVocabulary(fetched),
+            () => undefined,
+        );
+        return () => {
+            current = false;
+        };
+    }, [settings.language, vocabularyRevision]);
+    useEffect(() => {
+        let current = true;
+        setSets([]);
+        fetchSets(settings.language).then((fetched) => current && setSets(fetched), () => undefined);
+        return () => {
+            current = false;
+        };
+    }, [settings.language]);
+
+    // Before a prompt is sent, the words are fetched again, so that a set is
+    // made of what is known about each word then.
+    const latestSets = useRef({ sets, activeSetId, language: settings.language });
+    latestSets.current = { sets, activeSetId, language: settings.language };
+    const freshWordLists = useCallback(async () => {
+        const { sets: current, activeSetId: active, language } = latestSets.current;
+        const fetched = await fetchVocabulary(language);
+        setVocabulary(fetched);
+        return wordLists(current, active, fetched.words);
+    }, []);
+
+    function pickSet(id: string) {
+        updateSettings({ ...settings, activeSets: { ...settings.activeSets, [settings.language]: id } });
+    }
+
+    function keepSet(set: WordSet) {
+        setSets((current) =>
+            current.some((each) => each.id === set.id)
+                ? current.map((each) => (each.id === set.id ? set : each))
+                : [...current, set]
+        );
+        saveSet(set, settings.language).catch(() => undefined);
+        // a set that has just been made is the one to use
+        if (!sets.some((each) => each.id === set.id)) {
+            pickSet(set.id);
+        }
+        setEditedSet(null);
+    }
+
+    function removeSet(id: string) {
+        setSets((current) => current.filter((each) => each.id !== id));
+        deleteSet(id, settings.language).catch(() => undefined);
+        setEditedSet(null);
+    }
+    const importing = useAnkiImport({
+        enabled: settings.importAnki,
+        apiKey: settings.apiKey,
+        model: settings.model,
+        decisionModel: settings.profileModel,
+        language: settings.language,
+        ankiLanguage: settings.ankiLanguage,
+        onUsage: useCallback(
+            (used) =>
+                addUsageEntry({
+                    id: used.id,
+                    at: Date.now(),
+                    chatId: "vocabulary",
+                    model: used.model,
+                    promptTokens: used.input_tokens,
+                    completionTokens: used.output_tokens,
+                    cost: used.cost,
+                }),
+            [addUsageEntry],
+        ),
+        onImported: useCallback(() => setVocabularyRevision((revision) => revision + 1), []),
+    });
+
     // the sentence checks belong to the chat
     const panel = openPanel === "checks" && activity !== "chat" ? null : openPanel;
 
@@ -161,10 +285,18 @@ export function App() {
                         <div className="tabs" role="tablist">
                             <button
                                 role="tab"
+                                aria-selected={sidebarTab === "vocabulary"}
+                                onClick={() => setSidebarTab("vocabulary")}
+                            >
+                                Vocabulary
+                                <span className="count">{vocabularyCount ?? vocabulary?.words.length}</span>
+                            </button>
+                            <button
+                                role="tab"
                                 aria-selected={sidebarTab === "words"}
                                 onClick={() => setSidebarTab("words")}
                             >
-                                Known words
+                                Anki words
                                 <span className="count">
                                     {wordsState.status === "ready" && wordsState.words.length}
                                 </span>
@@ -196,6 +328,20 @@ export function App() {
                             onPick={(word) => setPicked({ word: word.word, nonce: Date.now() })}
                         />
                     </div>
+                    <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "vocabulary"}>
+                        <VocabularyList
+                            active={libraryOpen && sidebarTab === "vocabulary"}
+                            language={settings.language}
+                            ankiLanguage={settings.ankiLanguage}
+                            revision={vocabularyRevision}
+                            sets={sets}
+                            activeSetId={activeSetId}
+                            onActiveSet={pickSet}
+                            onEditSet={(set) => setEditedSet(set ?? newSet())}
+                            onCount={setVocabularyCount}
+                            importing={importing}
+                        />
+                    </div>
                     <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "chats"}>
                         <ChatList
                             chats={chats}
@@ -204,7 +350,10 @@ export function App() {
                                 setChatStore((store) => selectChat(store, id));
                                 setActivity("chat");
                             }}
-                            onDelete={(id) => setChatStore((store) => deleteChat(store, id, settings.defaultContextId))}
+                            onDelete={(id) =>
+                                setChatStore((store) =>
+                                    deleteChat(store, id, settings.defaultContextId, settings.language)
+                                )}
                             onNewChat={newChat}
                         />
                     </div>
@@ -245,6 +394,7 @@ export function App() {
                     <button aria-pressed={panel === "settings"} onClick={() => togglePanel("settings")}>
                         Settings
                     </button>
+                    <button onClick={logOut} title={`Logged in as ${user}`}>Log out</button>
                 </header>
                 {/* both stay in place while hidden, so a reply or a text still arriving is not cut off */}
                 <div className="pane" hidden={activity !== "chat"}>
@@ -256,6 +406,7 @@ export function App() {
                         onCloseChecks={() => setOpenPanel(null)}
                         onEditQuestions={() => openSettings("questions")}
                         words={words}
+                        loadWords={freshWordLists}
                         picked={activity === "chat" ? picked : null}
                         onOpenSettings={() => openSettings("models")}
                         onUsage={addUsageEntry}
@@ -272,6 +423,7 @@ export function App() {
                     <TextStudio
                         settings={settings}
                         words={words}
+                        loadWords={freshWordLists}
                         picked={activity === "texts" ? picked : null}
                         selected={selectedText}
                         onSelect={setSelectedTextId}
@@ -305,6 +457,17 @@ export function App() {
                     />
                 )}
             </aside>
+            {editedSet && vocabulary && (
+                <SetEditor
+                    key={editedSet.id}
+                    set={editedSet}
+                    kept={sets.some((set) => set.id === editedSet.id)}
+                    vocabulary={vocabulary}
+                    onSave={keepSet}
+                    onDelete={() => removeSet(editedSet.id)}
+                    onClose={() => setEditedSet(null)}
+                />
+            )}
         </div>
     );
 }

@@ -100,6 +100,36 @@ a {
     color: var(--accent);
 }
 
+/* the login, in the middle of the page */
+.login {
+    display: grid;
+    place-items: center;
+    height: 100vh;
+}
+
+.login form {
+    display: grid;
+    gap: 14px;
+    width: min(340px, 90vw);
+    padding: 24px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+}
+
+.login h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 4px;
+    font-size: 1.3rem;
+}
+
+.login .error {
+    margin: 0;
+    color: var(--danger);
+}
+
 /* the panels at the sides take their width, and the main area what is left,
    whichever of the panels are shown */
 .app {
@@ -243,6 +273,452 @@ a {
 
 .due.overdue {
     color: var(--danger);
+}
+
+/* the vocabulary: categories that open onto their words, and words that open
+   onto what is stored of them */
+
+.vocabulary {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.vocabulary .word-list {
+    overflow: visible;
+}
+
+.vocabulary-category {
+    position: sticky;
+    top: 0;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 14px;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--bg);
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.vocabulary-category::before {
+    content: "▾";
+    margin-right: 8px;
+    color: var(--muted);
+}
+
+.vocabulary-category[aria-expanded="false"]::before {
+    content: "▸";
+}
+
+.vocabulary-category span:first-child {
+    flex: 1;
+    text-align: left;
+}
+
+.vocabulary .word {
+    align-items: baseline;
+}
+
+.vocabulary .word[aria-expanded="true"] {
+    background: var(--bg);
+    border-color: var(--border);
+}
+
+.entry {
+    margin: 4px 0 10px;
+    padding: 8px 10px;
+    border-left: 2px solid var(--accent);
+    font-size: 0.9rem;
+}
+
+.entry dl {
+    display: grid;
+    gap: 4px;
+    margin: 0 0 10px;
+}
+
+.entry dl > div {
+    display: grid;
+    grid-template-columns: 42% minmax(0, 1fr);
+    gap: 10px;
+}
+
+.entry dt {
+    color: var(--muted);
+}
+
+.entry dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* the forms of a word: a table for each way they are told apart */
+.entry .forms {
+    width: 100%;
+    margin: 0 0 12px;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.entry .forms th,
+.entry .forms td {
+    padding: 3px 8px 3px 0;
+    border-top: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.entry .forms th {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.entry .forms thead th {
+    border-top: none;
+    font-size: 0.8rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.entry .forms thead th:first-child {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.entry .forms th:first-child {
+    width: 24%;
+}
+
+.entry .forms small {
+    display: block;
+    color: var(--muted);
+}
+
+.entry .other-forms {
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+/* the editor of a set of words, over the whole page */
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+}
+
+.overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+}
+
+.overlay-header .set-name {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.set-total {
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.set-total b {
+    color: var(--accent);
+}
+
+.overlay-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+}
+
+/* the rules, a row for each category */
+
+.set-rule {
+    width: min(900px, 56vw);
+    flex-shrink: 0;
+    padding: 14px 20px 20px;
+    border-right: 1px solid var(--border);
+    overflow: auto;
+}
+
+.rule-grid {
+    display: grid;
+    grid-template-columns: 128px 116px 116px 60px minmax(200px, 1fr) 92px;
+    align-items: center;
+    gap: 12px;
+    min-width: 772px;
+}
+
+.rule-head {
+    padding: 0 12px 8px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.rule-row {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+
+.rule-row + .rule-row {
+    margin-top: 6px;
+}
+
+.rule-row.left-out {
+    background: none;
+    border-style: dashed;
+    color: var(--muted);
+}
+
+.rule-row.left-out > :not(.rule-name) {
+    opacity: 0.4;
+}
+
+.rule-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    text-transform: capitalize;
+    cursor: pointer;
+}
+
+.overlay input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.range {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.range i {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-style: normal;
+}
+
+.rule-grid input[type="number"] {
+    width: 100%;
+    min-width: 0;
+    padding: 5px 8px;
+    text-align: center;
+    /* the little arrows take the room the number needs */
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+.rule-grid input[type="number"]::-webkit-inner-spin-button,
+.rule-grid input[type="number"]::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+}
+
+.rule-grid select {
+    width: 100%;
+    min-width: 0;
+    padding: 5px 8px;
+}
+
+.rule-count {
+    display: grid;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.rule-count b {
+    color: var(--text);
+}
+
+.bar {
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border);
+    overflow: hidden;
+}
+
+.bar span {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+}
+
+.set-rule .hint {
+    margin: 14px 2px 0;
+}
+
+/* the words, each with a tick */
+
+.set-words {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.set-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.set-toolbar input[type="search"] {
+    width: 260px;
+}
+
+.set-toolbar label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.set-toolbar .count {
+    margin-left: auto;
+}
+
+.set-table {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.set-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.set-table th,
+.set-table td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.set-table th:first-child,
+.set-table td:first-child {
+    width: 44px;
+    padding-left: 20px;
+}
+
+.set-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.set-table th button {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 600;
+    letter-spacing: inherit;
+    text-transform: inherit;
+}
+
+.set-table th button:hover {
+    color: var(--text);
+}
+
+.set-table tbody tr:hover {
+    background: var(--panel);
+}
+
+.set-table tbody tr:not(.member) td:nth-child(2) {
+    color: var(--muted);
+}
+
+.set-table tbody tr.member td:nth-child(2) {
+    font-weight: 600;
+}
+
+.set-table tbody tr.member td:first-child {
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.set-table .num {
+    width: 80px;
+}
+
+.pill {
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.82rem;
+    text-transform: capitalize;
+}
+
+.set-table small {
+    margin-left: 8px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgb(47 111 222 / 14%);
+    color: var(--accent);
+    font-weight: 400;
+}
+
+.set-table small.cut {
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+}
+
+/* on a narrow page the rules go above the words, each over the whole width */
+@media (max-width: 1300px) {
+    .overlay-body {
+        flex-direction: column;
+    }
+
+    .set-rule {
+        width: auto;
+        max-height: 55%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
 }
 
 /* previous chats */
@@ -805,6 +1281,33 @@ a {
 .toggle small {
     color: var(--muted);
     font-weight: 400;
+}
+
+.toggle small.error,
+.import-status.error {
+    color: var(--danger);
+}
+
+.import-status {
+    color: var(--muted);
+}
+
+/* the keywords of a prompt, each with what it stands for */
+.keywords {
+    display: grid;
+    gap: 4px;
+    margin: 0 0 14px;
+}
+
+.keywords > div {
+    display: grid;
+    grid-template-columns: 9em minmax(0, 1fr);
+    gap: 10px;
+}
+
+.keywords dd {
+    margin: 0;
+    color: var(--muted);
 }
 
 .toggle input {

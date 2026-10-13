@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 
 import { fetchGenerationUsage, streamChat } from "../lib/openrouter";
+import type { WordLists } from "../lib/sets";
 import { expandPrompt, type Settings } from "../lib/settings";
 import { synthesizeSpeech } from "../lib/speech";
 import {
@@ -21,11 +22,13 @@ import {
     textTitle,
 } from "../lib/texts";
 import type { UsageEntry } from "../lib/usage";
-import type { Word } from "../lib/words";
 
 interface Props {
     settings: Settings;
-    words: Word[];
+    /** The words a prompt can ask for, by set. */
+    words: WordLists;
+    /** Works the words out again from what is known about each now, for a prompt that is about to be sent. */
+    loadWords: () => Promise<WordLists>;
     /** A word clicked in the word list, to add to the topic. */
     picked: { word: string; nonce: number } | null;
     /** The saved text being shown, or null while a new one is being set up. */
@@ -47,7 +50,8 @@ interface LoadedAudio {
 }
 
 export function TextStudio(
-    { settings, words, picked, selected, onSelect, onTextsChange, onUsage, onOpenSettings, storageError }: Props,
+    { settings, words, loadWords, picked, selected, onSelect, onTextsChange, onUsage, onOpenSettings, storageError }:
+        Props,
 ) {
     const [topic, setTopic] = useState("");
     const [length, setLength] = useState<TextLength>("medium");
@@ -139,11 +143,16 @@ export function TextStudio(
         setPhase("writing");
         setDraft("");
         let written = "";
+        // a set is worked out from the counts as they are now; if they cannot be had, from the last ones
+        const lists = settings.textPrompt.includes("{{words") ? await loadWords().catch(() => words) : words;
         const usage = await streamChat({
             apiKey: settings.apiKey,
             model: settings.model,
             messages: [
-                { role: "system", content: expandPrompt(settings.textPrompt, words) },
+                {
+                    role: "system",
+                    content: expandPrompt(settings.textPrompt, lists, settings.language, settings.level),
+                },
                 { role: "user", content: textRequest(topic, length) },
             ],
             signal: controller.signal,
@@ -164,6 +173,7 @@ export function TextStudio(
             text: written.trim(),
             topic: topic.trim(),
             model: usage?.model ?? settings.model,
+            language: settings.language,
             audio: null,
         };
         try {

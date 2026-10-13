@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 import pytest
@@ -16,6 +19,7 @@ from profiling import (
     WordRating,
     describe_assessment,
     doubt_about,
+    post,
     read_profile,
     read_questions,
     weigh_ratings,
@@ -404,6 +408,28 @@ def test_a_local_model_is_told_apart_by_looking_again() -> None:
     assert changes == ["local/clef", None]
 
 
+def test_requests_to_a_local_model_are_sent_one_after_another() -> None:
+    sending = 0
+    most_at_once = 0
+
+    def send(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+        nonlocal sending, most_at_once
+        sending += 1
+        most_at_once = max(most_at_once, sending)
+        time.sleep(0.02)
+        sending -= 1
+        return {}
+
+    local = LocalModel(probe=lambda endpoint: "a-model", send=send)
+    threads = [threading.Thread(target=local.send, args=({},)) for _ in range(5)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert most_at_once == 1
+
+
 def test_a_local_model_is_looked_for_next_to_where_it_is_asked() -> None:
     asked: list[str] = []
 
@@ -422,3 +448,75 @@ def test_the_questions_offer_several_one_or_no_errors_and_a_clarity_scale() -> N
     assert list(QUESTIONS["grammar_errors"]["criteria"]) == ["several", "one", "none"]
     assert QUESTIONS["clarity"]["type"] == "score"
     assert len(QUESTIONS["clarity"]["criteria"]) == 4
+
+
+class Trickling(BaseHTTPRequestHandler):
+    """Answers with an object, a little at a time, as OpenRouter does while
+    a slow model is writing."""
+
+    def do_POST(self) -> None:
+        self.send_response(200)
+        self.end_headers()
+        try:
+            for _ in range(20):
+                self.wfile.write(b" ")
+                self.wfile.flush()
+                time.sleep(0.02)
+            self.wfile.write(b'{"done": true}')
+        except OSError:
+            # whoever asked has given up
+            pass
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+@pytest.fixture
+def trickling() -> Any:
+    server = HTTPServer(("127.0.0.1", 0), Trickling)
+    thread = threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+    )
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}"
+    server.shutdown()
+    server.server_close()
+
+
+def test_a_response_that_keeps_coming_is_given_up_on_after_the_time_it_is_given(
+    trickling: str,
+) -> None:
+    with pytest.raises(ProfileError, match="the model took longer than 0 seconds"):
+        post(trickling, {}, {}, "the model", timeout=5, within=0.1)
+
+
+def test_a_response_that_comes_in_pieces_within_its_time_is_read_whole(
+    trickling: str,
+) -> None:
+    assert post(trickling, {}, {}, "the model", timeout=5, within=5) == {"done": True}
+
+
+def test_the_model_is_told_the_language_being_studied_once_it_is_known() -> None:
+    sent: list[dict[str, Any]] = []
+
+    def send(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+        sent.append(body)
+        return {"answers": {"polite": {"type": "choice", "choice": "yes"}}}
+
+    questions = {
+        "polite": {
+            "type": "choice",
+            "instructions": "?",
+            "criteria": {"no": "", "yes": ""},
+        }
+    }
+    profiler = Profiler(send=send)
+
+    profiler.profile("Wie geht es?", "the-key", questions=questions)
+    profiler.language = "German"
+    profiler.profile("Wie geht es?", "the-key", questions=questions)
+
+    assert [body["state"] for body in sent] == [
+        {"sentence": "Wie geht es?"},
+        {"sentence": "Wie geht es?", "language": "German"},
+    ]

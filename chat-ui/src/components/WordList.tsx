@@ -71,7 +71,7 @@ export function WordList({ state, onReload, onPick }: Props) {
                 </div>
             )}
             {words && shown.length === 0 && (
-                <p className="sidebar-note">{query ? "No words match." : "No known words yet."}</p>
+                <p className="sidebar-note">{query ? "No words match." : "No Anki words yet."}</p>
             )}
             <ul className="word-list">
                 {shown.map((word) => (

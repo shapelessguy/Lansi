@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import lru_cache
@@ -54,6 +55,10 @@ class Speller:
                 )
         return issues
 
+    def knows(self, word: str) -> bool:
+        """Whether the word is in the dictionary as it is."""
+        return bool(self._spell.known([word]))
+
     def _look_up(self, word: str) -> tuple[str, ...] | None:
         """None if `word` is spelled correctly, otherwise the suggestions."""
         if self._is_accepted(word):
@@ -87,3 +92,48 @@ def _with_capital_of(word: str, suggestion: str) -> str:
     """The dictionary is in lower case, so a suggestion for a capitalised word,
     such as a German noun, is given its capital back."""
     return suggestion.capitalize() if word[0].isupper() else suggestion
+
+
+# The languages there is a dictionary for, by their names in small letters.
+DICTIONARIES = {
+    "arabic": "ar",
+    "basque": "eu",
+    "dutch": "nl",
+    "english": "en",
+    "french": "fr",
+    "german": "de",
+    "italian": "it",
+    "latvian": "lv",
+    "persian": "fa",
+    "portuguese": "pt",
+    "russian": "ru",
+    "spanish": "es",
+}
+
+
+class StudySpeller(Speller):
+    """Checks words against the dictionary of the language being studied,
+    which may be changed at any time. A language there is no dictionary for
+    has no word found wrong, and none known."""
+
+    def __init__(self, language: str) -> None:
+        # the language, by its English name
+        self.language = language
+        self._spellers: dict[str, Speller | None] = {}
+        self._lock = threading.Lock()
+
+    def _speller(self) -> Speller | None:
+        name = self.language.strip().lower()
+        with self._lock:
+            if name not in self._spellers:
+                code = DICTIONARIES.get(name)
+                self._spellers[name] = Speller(code) if code else None
+            return self._spellers[name]
+
+    def check(self, text: str) -> list[SpellingIssue]:
+        speller = self._speller()
+        return speller.check(text) if speller else []
+
+    def knows(self, word: str) -> bool:
+        speller = self._speller()
+        return speller.knows(word) if speller else False

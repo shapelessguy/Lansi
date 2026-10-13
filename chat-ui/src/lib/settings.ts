@@ -2,7 +2,8 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { defaultQuestions, isQuestion, type ProfileQuestion, upToDateQuestions } from "./questions";
-import type { Word } from "./words";
+import { checkerFetch } from "./session";
+import type { WordLists } from "./sets";
 
 /** Instructions a chat starts with. */
 export interface ChatContext {
@@ -13,6 +14,14 @@ export interface ChatContext {
 
 export interface Settings {
     apiKey: string;
+    /** The language being learned, by its English name. The vocabulary is of this language. */
+    language: string;
+    /** The language the words in Anki are of, which need not be the one being learned at present. */
+    ankiLanguage: string;
+    /** How far along the learner is in the language being learned, such as "B1". */
+    level: string;
+    /** The set of words `{{words}}` stands for, by its id, for each language. Without one it is every word. */
+    activeSets: Record<string, string>;
     model: string;
     contexts: ChatContext[];
     /** The context new chats start with. */
@@ -31,22 +40,58 @@ export interface Settings {
     enterSends: boolean;
     /** Whether the words of each sentence are rated once the questions about it are answered. */
     rateWords: boolean;
+    /** Whether the Anki words the vocabulary lacks are taken into it as the app runs. */
+    importAnki: boolean;
 }
 
-/** Replaced in a context's prompt by the list of known words. */
+/** Replaced in a prompt by the words of the set that is in use. */
 export const WORDS_PLACEHOLDER = "{{words}}";
+/** Replaced in a prompt by the words of the set of that name, such as `{{words:Travel}}`. */
+const NAMED_WORDS = /\{\{words:([^}]+)\}\}/g;
+/** Replaced in a prompt by the language being learned. */
+export const LANGUAGE_PLACEHOLDER = "{{language}}";
+/** Replaced in a prompt by the learner's level in that language. */
+export const LEVEL_PLACEHOLDER = "{{level}}";
+
+/** The levels a learner can be at, from beginner to proficient. */
+export const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
+
+/**
+ * The languages that can be learned, by their English names: those the
+ * checker server has a spelling dictionary for. The forms of words are
+ * stored by rules of its own for German, and by general ones for the others.
+ */
+export const LANGUAGES = [
+    "German",
+    "Arabic",
+    "Basque",
+    "Dutch",
+    "English",
+    "French",
+    "Italian",
+    "Latvian",
+    "Persian",
+    "Portuguese",
+    "Russian",
+    "Spanish",
+] as const;
 
 const STORAGE_KEY = "chat-ui.settings";
 
 export function defaultSettings(): Settings {
     return {
         apiKey: "",
+        language: "German",
+        ankiLanguage: "German",
+        level: "B1",
+        activeSets: {},
         model: "openrouter/auto",
         contexts: [
             {
                 id: "tutor",
                 name: "Language tutor",
-                prompt: "You are a friendly language tutor. Talk with me in the language I am learning, "
+                prompt:
+                    `You are a friendly language tutor. Talk with me in ${LANGUAGE_PLACEHOLDER}, which I am learning at level ${LEVEL_PLACEHOLDER}, `
                     + "using mostly the words I already know, and explain any new word you introduce.\n\n"
                     + `Words I know: ${WORDS_PLACEHOLDER}`,
             },
@@ -57,7 +102,8 @@ export function defaultSettings(): Settings {
             },
         ],
         defaultContextId: "tutor",
-        textPrompt: "Write a text in the language I am learning, for me to read and listen to. "
+        textPrompt: `Write a text in ${LANGUAGE_PLACEHOLDER}, which I am learning at level ${LEVEL_PLACEHOLDER}, `
+            + "for me to read and listen to. "
             + "Use the words I know wherever you can; a few new words are fine. "
             + "Start with a short title as a Markdown heading, then the text. Write nothing else.\n\n"
             + `Words I know: ${WORDS_PLACEHOLDER}`,
@@ -68,6 +114,7 @@ export function defaultSettings(): Settings {
         questions: defaultQuestions(),
         enterSends: true,
         rateWords: true,
+        importAnki: true,
     };
 }
 
@@ -89,6 +136,12 @@ export function normalizeSettings(stored: unknown): Settings {
         typeof candidate[key] === "string" && candidate[key] ? candidate[key] : defaults[key];
     return {
         apiKey: typeof candidate.apiKey === "string" ? candidate.apiKey : defaults.apiKey,
+        language: LANGUAGES.find((language) => language === candidate.language) ?? defaults.language,
+        ankiLanguage: LANGUAGES.find((language) => language === candidate.ankiLanguage) ?? defaults.ankiLanguage,
+        level: LEVELS.find((level) => level === candidate.level) ?? defaults.level,
+        activeSets: typeof candidate.activeSets === "object" && candidate.activeSets !== null
+            ? candidate.activeSets
+            : defaults.activeSets,
         model: text("model"),
         contexts,
         defaultContextId,
@@ -105,10 +158,23 @@ export function normalizeSettings(stored: unknown): Settings {
             : defaults.questions,
         enterSends: typeof candidate.enterSends === "boolean" ? candidate.enterSends : defaults.enterSends,
         rateWords: typeof candidate.rateWords === "boolean" ? candidate.rateWords : defaults.rateWords,
+        importAnki: typeof candidate.importAnki === "boolean" ? candidate.importAnki : defaults.importAnki,
     };
 }
 
-export function loadSettings(): Settings {
+/** Where the key is kept: in this browser only, and never by the server. */
+const KEY_STORAGE_KEY = "chat-ui.key";
+
+function loadApiKey(): string {
+    try {
+        return localStorage.getItem(KEY_STORAGE_KEY) ?? "";
+    } catch {
+        return "";
+    }
+}
+
+/** The settings as they were kept in this browser, before the server kept them. */
+function settingsOfThisBrowser(): Settings {
     try {
         return normalizeSettings(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"));
     } catch {
@@ -116,15 +182,51 @@ export function loadSettings(): Settings {
     }
 }
 
-export function saveSettings(settings: Settings): void {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    } catch {
-        // storage can be unavailable in private windows; settings then last for the session
-    }
+/** The settings without the key, which is all of them the server is given. */
+export function withoutKey(settings: Settings): Omit<Settings, "apiKey"> {
+    const { apiKey: _, ...rest } = settings;
+    return rest;
 }
 
-/** The text a chat is started with: the prompt with the known words filled in. */
-export function expandPrompt(prompt: string, words: Word[]): string {
-    return prompt.replaceAll(WORDS_PLACEHOLDER, words.map((word) => word.word).join(", "));
+/**
+ * The settings of whoever is logged in, with the key of this browser. The
+ * first time, the server has none, and is given the ones this browser has.
+ */
+export async function fetchSettings(): Promise<Settings> {
+    const response = await checkerFetch("/settings");
+    if (!response.ok) {
+        throw new Error(`The server answered ${response.status}.`);
+    }
+    const { settings: kept }: { settings: unknown } = await response.json();
+    if (kept === null) {
+        const mine = settingsOfThisBrowser();
+        saveSettings({ ...mine, apiKey: mine.apiKey || loadApiKey() });
+        return { ...mine, apiKey: mine.apiKey || loadApiKey() };
+    }
+    return { ...normalizeSettings(kept), apiKey: loadApiKey() };
+}
+
+/** Keeps the key in this browser, and has the server keep everything else. */
+export function saveSettings(settings: Settings): void {
+    try {
+        localStorage.setItem(KEY_STORAGE_KEY, settings.apiKey);
+        // what was kept here before the server kept the settings, key and all
+        localStorage.removeItem(STORAGE_KEY);
+    } catch {
+        // storage can be unavailable in private windows; the key then lasts for the session
+    }
+    checkerFetch("/settings", { method: "PUT", body: JSON.stringify(withoutKey(settings)) }).catch(() => undefined);
+}
+
+/**
+ * The text a chat is started with: the prompt with the words of the sets it
+ * asks for, the language being learned and the learner's level filled in.
+ * A set that there is not gives no words.
+ */
+export function expandPrompt(prompt: string, words: WordLists, language: string, level: string): string {
+    return prompt
+        .replace(NAMED_WORDS, (_, name: string) => (words.named[name.trim().toLowerCase()] ?? []).join(", "))
+        .replaceAll(WORDS_PLACEHOLDER, words.active.join(", "))
+        .replaceAll(LANGUAGE_PLACEHOLDER, language)
+        .replaceAll(LEVEL_PLACEHOLDER, level);
 }

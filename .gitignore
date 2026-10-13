@@ -14,3 +14,5 @@ node_modules
 /deck-status/.env
 /deck-status/data
 /chat-ui/dist
+/checker/data
+/users.json

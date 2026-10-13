@@ -1,0 +1,264 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+"""Brings the words of the Anki collection into the vocabulary of the
+language they are of.
+
+Every few seconds the deck-status server, if it is there, is asked for the
+words that have a card in review, and those the vocabulary was never given
+are taken into it, a few at a time. The key and the model this needs are
+those of the chat, which hands them over and can switch the import off.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import threading
+import urllib.error
+import urllib.request
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
+
+from intake import DEFAULT_LANGUAGE, Intake, Outcome, Word
+from profiling import Profile
+
+DECK_STATUS_URL = "http://127.0.0.1:8090"
+# how often the Anki words are looked through
+LOOK_EVERY_SECS = 10.0
+# How many words are taken into the vocabulary in one go. They are worked on
+# several at a time, and with this many a slow one holds up few of the others.
+BATCH = 40
+TIMEOUT_SECS = 10
+# how many requests to the models are remembered for whoever keeps count
+MAX_UNBILLED = 2000
+# How often a word that could not be taken in is tried, in all, before it is
+# left alone until the server is started again.
+MAX_TRIES = 3
+
+# One row per note that has a card in review or being relearned, with the
+# field the note is sorted by, which is the word.
+WORDS_SQL = (
+    "select n.sfld from cards c join notes n on n.id = c.nid"
+    " where c.type in (2, 3) group by n.id order by n.id"
+)
+
+_MARKUP = re.compile(r"\[sound:[^\]]*\]|<[^>]*>")
+_IN_BRACKETS = re.compile(r"\([^)]*\)")
+_ARTICLE_OR_SICH = re.compile(r"^(der|die|das|sich)\s+", re.IGNORECASE)
+# a single word, which may have an apostrophe or a hyphen inside it
+_SINGLE_WORD = re.compile(r"[^\W\d_]+(?:['’-][^\W\d_]+)*")
+
+
+class AnkiUnavailable(Exception):
+    """The Anki words could not be fetched. The message says why."""
+
+
+def fetch_anki_notes(url: str = DECK_STATUS_URL) -> list[str]:
+    """What each note with a card in review holds as its word, as the
+    deck-status server at `url` gives it. Raises AnkiUnavailable."""
+    request = urllib.request.Request(
+        f"{url}/sql", data=json.dumps({"sql": WORDS_SQL}).encode(), method="POST"
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECS) as response:
+            rows = json.load(response)
+        return [str(row[0]) for row in rows]
+    except urllib.error.HTTPError as error:
+        raise AnkiUnavailable(
+            f"the deck-status server refused the request ({error.code})"
+        ) from None
+    except (OSError, ValueError, IndexError, TypeError):
+        raise AnkiUnavailable("the deck-status server cannot be reached") from None
+
+
+def vocabulary_words(note: str) -> list[str]:
+    """The words an Anki note gives the vocabulary. A note may hold a noun
+    with its article ("der Hund"), a verb with sich, several spellings
+    ("gern, gerne") and an abbreviation in brackets. Expressions of several
+    words give nothing: the vocabulary takes words one by one."""
+    text = _MARKUP.sub("", note).replace("&nbsp;", " ").replace("&amp;", "&")
+    words: dict[str, None] = {}
+    for part in _IN_BRACKETS.sub("", text).split(","):
+        word = _ARTICLE_OR_SICH.sub("", part.strip()).rstrip(".!?")
+        if _SINGLE_WORD.fullmatch(word):
+            words[word] = None
+    return list(words)
+
+
+@dataclass
+class ImportStatus:
+    # What the import is doing:
+    #   "off": it is switched off
+    #   "no-key": it waits for an OpenRouter key
+    #   "unavailable": Anki or a model could not be asked; `message` says why
+    #   "importing": words are being taken in
+    #   "waiting": it waits for the next look
+    state: str = "waiting"
+    # how many Anki words the vocabulary still lacks, once that is known
+    remaining: int | None = None
+    # how many words have been taken in since the server started
+    taken: int = 0
+    # how many were given up on, with what was said about the last that failed
+    failed: int = 0
+    message: str = ""
+
+
+class AnkiImporter:
+    def __init__(
+        self,
+        intake: Intake,
+        fetch_notes: Callable[[], list[str]] = fetch_anki_notes,
+        api_key: str = "",
+        batch: int = BATCH,
+        on_taken: Callable[[list[Outcome]], None] | None = None,
+    ) -> None:
+        self._intake = intake
+        self._fetch_notes = fetch_notes
+        self._batch = batch
+        self._on_taken = on_taken
+        self._enabled = True
+        # the language the Anki words are of
+        self._language = DEFAULT_LANGUAGE
+        self._api_key = api_key
+        self._model: str | None = None
+        self._decision_model: str | None = None
+        self._status = ImportStatus()
+        # the requests to the models that nobody has been told of yet
+        self._unbilled: list[Profile] = []
+        # how often each word that could not be taken in has been tried
+        self._tries: dict[str, int] = {}
+        self._lock = threading.Lock()
+
+    def configure(
+        self,
+        enabled: bool,
+        api_key: str,
+        model: str | None,
+        decision_model: str | None,
+        language: str | None = None,
+    ) -> None:
+        """Switch the import on or off, and say which key and models it is
+        to use. A key that is empty leaves the one there is in place.
+        `language` is the one the Anki words are of, if it is not the one
+        that was given before."""
+        with self._lock:
+            self._language = language or self._language
+            self._enabled = enabled
+            self._api_key = api_key or self._api_key
+            self._model = model
+            self._decision_model = decision_model
+            if not enabled:
+                self._status.state = "off"
+            elif self._status.state == "off":
+                # until the next look says more
+                self._status.state = "waiting"
+
+    def status(self) -> tuple[ImportStatus, list[Profile]]:
+        """What the import is doing, and the requests to the models it has
+        made since this was last asked."""
+        with self._lock:
+            used, self._unbilled = self._unbilled, []
+            return ImportStatus(**asdict(self._status)), used
+
+    def watch(self, every_secs: float = LOOK_EVERY_SECS) -> None:
+        """Look again and again, on a thread of its own. The first look
+        waits as long as the others, for the chat to say whether the import
+        is wanted at all."""
+
+        def keep_looking() -> None:
+            # never set, so this only waits
+            pause = threading.Event()
+            while not pause.wait(every_secs):
+                # while there are words to take in, there is no waiting
+                while self.look():
+                    pass
+
+        threading.Thread(target=keep_looking, name="anki-import", daemon=True).start()
+
+    def look(self) -> bool:
+        """Look through the Anki words once, and take in some of those the
+        vocabulary lacks. Returns whether it is worth looking again at once,
+        as there are more to take in."""
+        return self._look()
+
+    def _look(self) -> bool:
+        with self._lock:
+            enabled, api_key = self._enabled, self._api_key
+            model, decision_model = self._model, self._decision_model
+        if not enabled:
+            self._update(state="off")
+            return False
+        if not api_key:
+            self._update(state="no-key")
+            return False
+        try:
+            notes = self._fetch_notes()
+        except AnkiUnavailable as error:
+            self._update(state="unavailable", message=str(error))
+            return False
+        words = [word for note in notes for word in vocabulary_words(note)]
+        # The Anki words are of a language of their own, whichever one is
+        # being studied at present, and go into the vocabulary of that one.
+        with self._lock:
+            language = self._language
+        new = self._intake.vocabulary_of(language).not_taken(words)
+        # A word that failed is sent again, after those that were not tried.
+        to_try = [word for word in new if self._tries.get(word, 0) < MAX_TRIES]
+        batch = sorted(to_try, key=lambda word: self._tries.get(word, 0))
+        batch = batch[: self._batch]
+        if not batch:
+            self._update(state="waiting", remaining=len(new))
+            return False
+        self._update(state="importing", remaining=len(new))
+        outcomes, used = self._intake.take(
+            [Word(word) for word in batch],
+            api_key,
+            model,
+            decision_model,
+            on_outcome=self._count,
+            language=language,
+        )
+        with self._lock:
+            # kept short, should nobody be asking
+            self._unbilled = (self._unbilled + used)[-MAX_UNBILLED:]
+        failures = [outcome for outcome in outcomes if outcome.status == "failed"]
+        if len(failures) == len(outcomes) > 1:
+            # Nothing can be taken in as things are, with this key or model,
+            # so the same words are tried the next time.
+            self._update(state="unavailable", message=failures[0].reason)
+            return False
+        for failure in failures:
+            self._tries[failure.word] = self._tries.get(failure.word, 0) + 1
+        with self._lock:
+            self._status.failed = sum(
+                tries >= MAX_TRIES for tries in self._tries.values()
+            )
+            if failures:
+                last = failures[-1]
+                self._status.message = f"{last.word}: {last.reason}"
+        self._update(state="waiting")
+        if self._on_taken:
+            self._on_taken(outcomes)
+        # a word that failed is not sent again before the next pause
+        return len(to_try) > len(batch)
+
+    def _count(self, outcome: Outcome) -> None:
+        """Count a word as taken in as soon as it is, for whoever follows
+        the import to see it move."""
+        if outcome.status == "failed":
+            return
+        with self._lock:
+            self._status.taken += 1
+            if self._status.remaining:
+                self._status.remaining -= 1
+
+    def _update(
+        self, state: str, remaining: int | None = None, message: str | None = None
+    ) -> None:
+        with self._lock:
+            self._status.state = state
+            if remaining is not None:
+                self._status.remaining = remaining
+            if message is not None:
+                self._status.message = message

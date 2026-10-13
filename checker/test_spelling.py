@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import pytest
-from spelling import Speller, SpellingIssue
+from spelling import Speller, SpellingIssue, StudySpeller
 
 # "hund" is listed twice so that it counts as the more common word
 DICTIONARY = ["ich", "habe", "einen", "hund", "hund", "hunde", "geht", "wie", "es"]
@@ -86,3 +86,23 @@ def test_speller_for_german_knows_common_words_and_corrects_typos() -> None:
     assert [(issue.word, issue.suggestions[:1]) for issue in issues] == [
         ("Fahrad", ["Fahrrad"])
     ]
+
+
+def test_the_speller_of_the_language_being_studied_goes_by_that_language() -> None:
+    speller = StudySpeller("German")
+
+    in_german = speller.check("Der Hund und the dog.")
+    speller.language = "English"
+    in_english = speller.check("Der Hund und the dog.")
+
+    assert [issue.word for issue in in_german] == ["the", "dog"]
+    assert "Hund" in [issue.word for issue in in_english]
+    assert "dog" not in [issue.word for issue in in_english]
+    assert speller.knows("dog") and not speller.knows("Hund")
+
+
+def test_a_language_without_a_dictionary_has_no_word_found_wrong_or_known() -> None:
+    speller = StudySpeller("Klingon")
+
+    assert speller.check("nuqneH qqqq") == []
+    assert speller.knows("nuqneH") is False

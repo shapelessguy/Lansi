@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -51,7 +52,8 @@ QUESTIONS: Questions = {
         "type": "choice",
         "instructions": (
             "How many grammar errors does the sentence have? Judge it by the"
-            " rules of the language it is written in. Count mistakes in"
+            " rules of the `language`, if one is given, and else of the"
+            " language it is written in. Count mistakes in"
             " grammar only, such as word order, agreement, case, tense and"
             " missing or extra words. Do not count spelling or punctuation."
         ),
@@ -138,11 +140,22 @@ class ProfileError(Exception):
 Transport = Callable[[dict[str, Any], str], dict[str, Any]]
 
 
-def _post(
-    url: str, body: dict[str, Any], headers: dict[str, str], where: str
+def post(
+    url: str,
+    body: dict[str, Any],
+    headers: dict[str, str],
+    where: str,
+    timeout: float = TIMEOUT_SECS,
+    within: float | None = None,
 ) -> dict[str, Any]:
     """Send a request and return the decoded response. `where` names the
-    place it goes to, for the message of the ProfileError raised if it fails."""
+    place it goes to, for the message of the ProfileError raised if it fails.
+
+    `timeout` is how long to wait for the next piece of the response, and
+    `within` how long for the whole of it. A response that keeps coming in
+    small pieces, as OpenRouter's does while a slow model is still writing,
+    never runs into the first, so anything that may be slow needs the
+    second."""
     request = urllib.request.Request(
         url,
         data=json.dumps(body).encode(),
@@ -150,8 +163,8 @@ def _post(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECS) as response:
-            decoded: dict[str, Any] = json.load(response)
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            decoded: dict[str, Any] = json.loads(_read(response, within, where))
             return decoded
     except urllib.error.HTTPError as error:
         raise ProfileError(_error_message(error, where)) from None
@@ -159,8 +172,22 @@ def _post(
         raise ProfileError(f"could not reach {where}: {error}") from None
 
 
+def _read(response: Any, within: float | None, where: str) -> bytes:
+    """The whole of a response, given up on if it takes longer than `within`."""
+    if within is None:
+        content: bytes = response.read()
+        return content
+    give_up_at = time.monotonic() + within
+    pieces = []
+    while piece := response.read1(65536):
+        pieces.append(piece)
+        if time.monotonic() > give_up_at:
+            raise ProfileError(f"{where} took longer than {within:.0f} seconds")
+    return b"".join(pieces)
+
+
 def send_to_openrouter(body: dict[str, Any], api_key: str) -> dict[str, Any]:
-    return _post(ENDPOINT, body, {"Authorization": f"Bearer {api_key}"}, "OpenRouter")
+    return post(ENDPOINT, body, {"Authorization": f"Bearer {api_key}"}, "OpenRouter")
 
 
 def _error_message(error: urllib.error.HTTPError, where: str) -> str:
@@ -206,6 +233,10 @@ class LocalModel:
         # the name of the model that is loaded, or None while there is none
         self._model: str | None = None
         self._lock = threading.Lock()
+        # The model answers one request at a time, and keeps some of those
+        # that come in together waiting until all the others are done, long
+        # enough for them to time out. So they are sent one after another.
+        self._sending = threading.Lock()
 
     @property
     def model(self) -> str | None:
@@ -233,13 +264,14 @@ class LocalModel:
         """Ask the model. Raises ProfileError, and takes the model as gone,
         if it does not answer."""
         try:
-            return self._send(body, "")
+            with self._sending:
+                return self._send(body, "")
         except ProfileError:
             self._found(None)
             raise
 
     def _post(self, body: dict[str, Any], _api_key: str) -> dict[str, Any]:
-        return _post(self.endpoint, body, {}, "the local model")
+        return post(self.endpoint, body, {}, "the local model")
 
     def _found(self, model: str | None) -> None:
         with self._lock:
@@ -259,6 +291,10 @@ class Profiler:
         self._model = model
         self._send = send
         self._local = local
+        # The language being studied, by its English name, if it is known.
+        # The model is told, so that it does not judge a sentence by the
+        # rules of whatever other language it may be written in.
+        self.language: str | None = None
 
     def local_model(self) -> str | None:
         """The name of the model on this machine that questions go to at
@@ -312,6 +348,18 @@ class Profiler:
         ]
         return ratings, profile
 
+    def ask(
+        self,
+        state: dict[str, Any],
+        questions: Questions,
+        api_key: str,
+        model: str | None = None,
+    ) -> Profile:
+        """Ask `questions` about whatever `state` holds, of the model on
+        this machine if there is one, and else of `model` on OpenRouter.
+        Raises ProfileError."""
+        return self._ask(state, questions, api_key, model)
+
     def _ask(
         self,
         state: dict[str, Any],
@@ -319,6 +367,8 @@ class Profiler:
         api_key: str,
         model: str | None,
     ) -> Profile:
+        if self.language and "language" not in state:
+            state = {**state, "language": self.language}
         body: dict[str, Any] = {"state": state, "questions": questions}
         if self._local and self._local.model:
             try:

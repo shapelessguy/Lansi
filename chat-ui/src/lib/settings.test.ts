@@ -3,21 +3,24 @@
 
 import { expect, test } from "vitest";
 
-import { defaultSettings, expandPrompt, normalizeSettings } from "./settings";
-import type { Word } from "./words";
+import type { WordLists } from "./sets";
+import { defaultSettings, expandPrompt, normalizeSettings, withoutKey } from "./settings";
 
-function word(text: string): Word {
-    return { noteId: 0, word: text, meaning: "", partOfSpeech: "", due: "2026-01-01", intervalDays: 1 };
+/** The lists of words a prompt can ask for, with these as the ones in use. */
+function lists(active: string[] = [], named: Record<string, string[]> = {}): WordLists {
+    return { active, named };
 }
 
-test("the placeholder is replaced by the known words", () => {
-    const prompt = expandPrompt("Use only: {{words}}.", [word("sitzen"), word("der Film")]);
+test("the placeholder is replaced by the words of the set in use", () => {
+    const prompt = expandPrompt("Use only: {{words}}.", lists(["sitzen", "Film"]), "German", "B1");
 
-    expect(prompt).toBe("Use only: sitzen, der Film.");
+    expect(prompt).toBe("Use only: sitzen, Film.");
 });
 
 test("a prompt without the placeholder is left as written", () => {
-    expect(expandPrompt("You are a helpful assistant.", [word("sitzen")])).toBe("You are a helpful assistant.");
+    expect(expandPrompt("You are a helpful assistant.", lists(["sitzen"]), "German", "B1")).toBe(
+        "You are a helpful assistant.",
+    );
 });
 
 test("missing stored settings give the defaults", () => {
@@ -41,4 +44,60 @@ test("a default context that no longer exists falls back to the first one", () =
     const settings = normalizeSettings({ contexts, defaultContextId: "deleted" });
 
     expect(settings.defaultContextId).toBe("a");
+});
+
+test("the placeholder is replaced by the language being learned", () => {
+    expect(expandPrompt("Talk with me in {{language}}.", lists(), "Italian", "B1")).toBe("Talk with me in Italian.");
+});
+
+test("a new chat is told the language being learned", () => {
+    const settings = defaultSettings();
+
+    expect(settings.language).toBe("German");
+    expect(expandPrompt(settings.contexts[0].prompt, lists(), settings.language, settings.level)).toContain(
+        "Talk with me in German, which I am learning at level B1",
+    );
+});
+
+test("a stored language that cannot be learned gives the usual one", () => {
+    expect(normalizeSettings({ language: "Italian" }).language).toBe("Italian");
+    expect(normalizeSettings({ language: "Klingon" }).language).toBe("German");
+});
+
+test("the Anki words are taken to be German unless another language is stored", () => {
+    expect(normalizeSettings({}).ankiLanguage).toBe("German");
+    expect(normalizeSettings({ ankiLanguage: "Spanish" }).ankiLanguage).toBe("Spanish");
+});
+
+test("the placeholder is replaced by the level of the learner", () => {
+    expect(expandPrompt("Write for level {{level}}.", lists(), "German", "B2")).toBe("Write for level B2.");
+});
+
+test("a stored level that there is not gives the usual one", () => {
+    expect(normalizeSettings({ level: "C1" }).level).toBe("C1");
+    expect(normalizeSettings({ level: "Z9" }).level).toBe("B1");
+});
+
+test("the server is given the settings without the key", () => {
+    const given = withoutKey({ ...defaultSettings(), apiKey: "sk-or-test", level: "B2" });
+
+    expect("apiKey" in given).toBe(false);
+    expect(given.level).toBe("B2");
+});
+
+test("a set is asked for by its name, however the name is capitalised", () => {
+    const words = lists(["sitzen"], { travel: ["Zug", "Reise"], "at home": ["Tisch"] });
+
+    const prompt = expandPrompt(
+        "All: {{words}}. Trip: {{words:Travel}}. Home: {{words: At Home }}.",
+        words,
+        "German",
+        "B1",
+    );
+
+    expect(prompt).toBe("All: sitzen. Trip: Zug, Reise. Home: Tisch.");
+});
+
+test("a set that there is not gives no words", () => {
+    expect(expandPrompt("Use: {{words:Gone}}.", lists(["sitzen"]), "German", "B1")).toBe("Use: .");
 });

@@ -6,7 +6,7 @@ export type Panel = "checks" | "usage" | "settings";
 
 /** Which panels are shown at the sides. */
 export interface Layout {
-    /** Whether the panel on the left, with the known words, the chats and the texts, is shown. */
+    /** Whether the panel on the left, with the words, the chats and the texts, is shown. */
     libraryOpen: boolean;
     /** The panel shown on the right, or null if none is. */
     panel: Panel | null;

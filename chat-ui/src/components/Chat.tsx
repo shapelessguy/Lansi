@@ -20,9 +20,9 @@ import {
 } from "../lib/checker";
 import { type ChatMessage, streamChat } from "../lib/openrouter";
 import { requestQuestions } from "../lib/questions";
+import type { WordLists } from "../lib/sets";
 import { expandPrompt, type Settings } from "../lib/settings";
 import type { UsageEntry } from "../lib/usage";
-import type { Word } from "../lib/words";
 import { ChecksPanel } from "./ChecksPanel";
 
 interface Props {
@@ -32,7 +32,10 @@ interface Props {
     checksSlot: HTMLElement | null;
     onCloseChecks: () => void;
     onEditQuestions: () => void;
-    words: Word[];
+    /** The words a prompt can ask for, by set. */
+    words: WordLists;
+    /** Works the words out again from what is known about each now, for a prompt that is about to be sent. */
+    loadWords: () => Promise<WordLists>;
     picked: { word: string; nonce: number } | null;
     onOpenSettings: () => void;
     onUsage: (entry: UsageEntry) => void;
@@ -66,6 +69,7 @@ export function Chat(
         onCloseChecks,
         onEditQuestions,
         words,
+        loadWords,
         picked,
         onOpenSettings,
         onUsage,
@@ -120,6 +124,7 @@ export function Chat(
         settings.profileModel,
         questions,
         settings.rateWords,
+        settings.language,
         countProfiling,
     );
     // The checks panel goes on showing the sentence the caret was on after a
@@ -202,8 +207,10 @@ export function Chat(
         const controller = new AbortController();
         abortRef.current = controller;
         setAbort(controller);
-        const system = expandPrompt(context.prompt, words).trim();
         try {
+            // a set is worked out from the counts as they are now; if they cannot be had, from the last ones
+            const lists = context.prompt.includes("{{words") ? await loadWords().catch(() => words) : words;
+            const system = expandPrompt(context.prompt, lists, settings.language, settings.level).trim();
             const usage = await streamChat({
                 apiKey: settings.apiKey,
                 model: settings.model,

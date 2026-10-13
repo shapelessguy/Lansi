@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { ProfileAnswer, RequestQuestions } from "./questions";
+import { checkerFetch } from "./session";
 
 /** A word the checker server's spell checker does not know. */
 export interface SpellingIssue {
@@ -87,8 +88,6 @@ interface CheckReply {
     local_model: string | null;
 }
 
-/** Where the dev server forwards requests to the checker server. */
-const BASE = "/checker";
 const INTERVAL_MS = 300;
 
 /**
@@ -96,7 +95,8 @@ const INTERVAL_MS = 300;
  * is where the caret is in the text, or null if the text box is not in use;
  * the sentence it is in comes back as not complete. Finished sentences are
  * profiled by having `model` answer `questions`, if there is a key, and with
- * `rateWords` their words are then rated.
+ * `rateWords` their words are then rated. `language` is the one being
+ * learned, which the spelling and the sentences are checked by.
  */
 export async function fetchCheck(
     text: string,
@@ -105,12 +105,13 @@ export async function fetchCheck(
     model: string,
     questions: RequestQuestions,
     rateWords: boolean,
+    language: string,
 ): Promise<CheckReply> {
-    const response = await fetch(`${BASE}/sentences`, {
+    const response = await checkerFetch("/sentences", {
         method: "POST",
         // the server profiles finished sentences with the key; it stays on this machine until then
         headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {},
-        body: JSON.stringify({ text, caret, model, questions, words: rateWords }),
+        body: JSON.stringify({ text, caret, model, questions, words: rateWords, language }),
     });
     if (!response.ok) {
         throw new Error(`checker server: ${response.status}`);
@@ -134,17 +135,18 @@ export function useLiveCheck(
     model: string,
     questions: RequestQuestions,
     rateWords: boolean,
+    language: string,
     onUsage: (usage: ProfileUsage) => void,
 ): LiveCheck | null {
     const [check, setCheck] = useState<LiveCheck | null>(null);
     // what is asked, as text, so that a change in it is easy to notice
-    const asked = JSON.stringify([model, questions, rateWords]);
+    const asked = JSON.stringify([model, questions, rateWords, language]);
     const latest = useRef({ text, caret, asked });
     if (latest.current.text !== text || latest.current.caret !== caret || latest.current.asked !== asked) {
         latest.current = { text, caret, asked };
     }
-    const profiling = useRef({ apiKey, model, questions, rateWords, onUsage });
-    profiling.current = { apiKey, model, questions, rateWords, onUsage };
+    const profiling = useRef({ apiKey, model, questions, rateWords, language, onUsage });
+    profiling.current = { apiKey, model, questions, rateWords, language, onUsage };
 
     useEffect(() => {
         let sent: { text: string; caret: number | null; asked: string } = { text: "", caret: null, asked: "" };
@@ -163,8 +165,8 @@ export function useLiveCheck(
             }
             sent = current;
             awaiting = false;
-            const { apiKey, model, questions, rateWords } = profiling.current;
-            fetchCheck(current.text, current.caret, apiKey, model, questions, rateWords).then(
+            const { apiKey, model, questions, rateWords, language } = profiling.current;
+            fetchCheck(current.text, current.caret, apiKey, model, questions, rateWords, language).then(
                 (reply) => {
                     // The server reports a request only once, so it is counted
                     // even if the rest of this answer is no longer of use.

@@ -16,6 +16,12 @@ A language-learning chat built on an Anki collection. Three parts:
   two servers through the dev server's `/anki` and `/checker` proxies.
 - `checker/`: Python server that splits typed text into sentences,
   spell-checks them and profiles finished sentences with a decision model.
+  It also keeps everything a user has, in `checker/data/users/<name>/`:
+  the chats, texts and settings (`storage.py`) and a vocabulary for each
+  language (`intake.py`, `vocabulary.py`); what the models are told about
+  each category of word is in `categories.py`. Who may log in is in
+  `users.json` at the top of the repository, which holds passwords: do not
+  read it.
 
 `rslib/`, `proto/` and `ftl/` are Anki's Rust core, kept only because
 `deck-status` is built on it. Avoid changing them.

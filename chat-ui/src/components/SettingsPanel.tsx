@@ -5,7 +5,15 @@ import { useEffect, useState } from "react";
 
 import { fetchProfileModels } from "../lib/checker";
 import { isAskable, newQuestion, type ProfileQuestion, type QuestionOption } from "../lib/questions";
-import { type ChatContext, type Settings, WORDS_PLACEHOLDER } from "../lib/settings";
+import {
+    type ChatContext,
+    LANGUAGE_PLACEHOLDER,
+    LANGUAGES,
+    LEVEL_PLACEHOLDER,
+    LEVELS,
+    type Settings,
+    WORDS_PLACEHOLDER,
+} from "../lib/settings";
 import { fetchSpeechModels, type SpeechModel } from "../lib/speech";
 import { SidePanel } from "./SidePanel";
 
@@ -44,6 +52,50 @@ function ModelsTab({ settings, onChange }: TabProps) {
 
     return (
         <>
+            <h3>Language</h3>
+            <label className="field">
+                <span>Language you are learning</span>
+                <select
+                    value={settings.language}
+                    onChange={(event) => onChange({ ...settings, language: event.target.value })}
+                >
+                    {LANGUAGES.map((language) => <option key={language} value={language}>{language}</option>)}
+                </select>
+                <small>Used for spelling, sentence checks, prompts and the vocabulary.</small>
+            </label>
+            <label className="field">
+                <span>Your level</span>
+                <select
+                    value={settings.level}
+                    onChange={(event) => onChange({ ...settings, level: event.target.value })}
+                >
+                    {LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
+                </select>
+                <small>
+                    Fills <code>{LEVEL_PLACEHOLDER}</code> in your prompts.
+                </small>
+            </label>
+            <label className="toggle">
+                <span>
+                    Import Anki words
+                    <small>Adds your Anki words to the vocabulary.</small>
+                </span>
+                <input
+                    type="checkbox"
+                    checked={settings.importAnki}
+                    onChange={(event) => onChange({ ...settings, importAnki: event.target.checked })}
+                />
+            </label>
+            <label className="field">
+                <span>Import them as</span>
+                <select
+                    value={settings.ankiLanguage}
+                    onChange={(event) => onChange({ ...settings, ankiLanguage: event.target.value })}
+                >
+                    {LANGUAGES.map((language) => <option key={language} value={language}>{language}</option>)}
+                </select>
+                <small>The language your Anki words are in.</small>
+            </label>
             <h3>OpenRouter</h3>
             <label className="field">
                 <span>API key</span>
@@ -156,11 +208,36 @@ function ContentTab({ settings, onChange }: TabProps) {
 
     return (
         <>
+            <h3>Keywords</h3>
+            <p className="hint">Write these in a prompt, and each is replaced by what it stands for:</p>
+            <dl className="keywords">
+                <div>
+                    <dt>
+                        <code>{LANGUAGE_PLACEHOLDER}</code>
+                    </dt>
+                    <dd>the language you are learning ({settings.language})</dd>
+                </div>
+                <div>
+                    <dt>
+                        <code>{LEVEL_PLACEHOLDER}</code>
+                    </dt>
+                    <dd>your level in it ({settings.level})</dd>
+                </div>
+                <div>
+                    <dt>
+                        <code>{WORDS_PLACEHOLDER}</code>
+                    </dt>
+                    <dd>the words of the set in use, picked in the Vocabulary tab</dd>
+                </div>
+                <div>
+                    <dt>
+                        <code>{"{{words:Name}}"}</code>
+                    </dt>
+                    <dd>the words of the set of that name</dd>
+                </div>
+            </dl>
             <h3>Contexts</h3>
-            <p className="hint">
-                A context is the instruction a chat starts with. Write <code>{WORDS_PLACEHOLDER}</code>{" "}
-                where the list of your known words should go.
-            </p>
+            <p className="hint">A context is the instruction a chat starts with.</p>
             {settings.contexts.map((context) => (
                 <fieldset key={context.id} className="context">
                     <div className="input-row">
@@ -206,9 +283,6 @@ function ContentTab({ settings, onChange }: TabProps) {
                     value={settings.textPrompt}
                     onChange={(event) => onChange({ ...settings, textPrompt: event.target.value })}
                 />
-                <small>
-                    <code>{WORDS_PLACEHOLDER}</code> is replaced by your known words here too.
-                </small>
             </label>
 
             <h3>Speech</h3>

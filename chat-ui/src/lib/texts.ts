@@ -1,7 +1,9 @@
+import { checkerFetch } from "./session";
+
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-/** A generated text, kept by the deck-status server as a file next to its audio. */
+/** A generated text, kept by the server for whoever is logged in, with its audio. */
 export interface SavedText {
     id: string;
     /** In milliseconds since the epoch. */
@@ -13,6 +15,8 @@ export interface SavedText {
     topic: string;
     /** The model that wrote the text. */
     model: string;
+    /** The language that was being learned when the text was written. */
+    language?: string;
     /** The speech made from the text, if any. */
     audio: { model: string; voice: string; createdAt: number } | null;
 }
@@ -25,23 +29,17 @@ export const textLengths = {
 
 export type TextLength = keyof typeof textLengths;
 
-/** Where the dev server forwards requests to the deck-status server. */
-const BASE = "/anki/texts";
+const BASE = "/texts";
 
 async function send(path: string, init?: RequestInit): Promise<Response> {
     let response: Response;
     try {
-        response = await fetch(BASE + path, init);
+        response = await checkerFetch(BASE + path, init);
     } catch {
-        throw new Error("Could not reach the deck-status server. Is `just deck-status` running?");
-    }
-    // only a text's audio can be missing; anything else not found means the server lacks these routes
-    const isAudioRead = path.endsWith("/audio") && (init?.method ?? "GET") === "GET";
-    if (response.status === 404 && !isAudioRead) {
-        throw new Error("The deck-status server is too old to save texts. Restart `just deck-status`.");
+        throw new Error("The server cannot be reached. Is `just dev` running?");
     }
     if (!response.ok) {
-        throw new Error(`deck-status server: ${(await response.text()) || response.statusText}`);
+        throw new Error(`The server answered ${response.status}.`);
     }
     return response;
 }

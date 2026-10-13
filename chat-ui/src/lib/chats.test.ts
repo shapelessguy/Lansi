@@ -3,7 +3,17 @@
 
 import { expect, test } from "vitest";
 
-import { type ChatStore, chatTitle, deleteChat, listedChats, selectChat, startChat, type StoredChat } from "./chats";
+import {
+    type ChatStore,
+    chatsToTell,
+    chatTitle,
+    deleteChat,
+    listedChats,
+    selectChat,
+    startChat,
+    type StoredChat,
+    storeOf,
+} from "./chats";
 
 function chat(id: string, updatedAt: number, firstMessage?: string): StoredChat {
     const messages = firstMessage === undefined ? [] : [{ role: "user" as const, content: firstMessage }];
@@ -101,4 +111,38 @@ test("deleting the last chat leaves a new one to write in", () => {
 
     expect(next.chats).toHaveLength(1);
     expect(next.chats[0]).toMatchObject({ id: next.activeId, messages: [] });
+});
+
+test("the chat that was written in last is the one shown", () => {
+    const chats = [chat("a", 10, "eins"), chat("b", 30, "zwei"), chat("c", 20, "drei")];
+
+    expect(storeOf(chats, "tutor", "German")).toEqual({ chats, activeId: "b" });
+});
+
+test("a fresh chat of the language being learned is shown when there are none", () => {
+    const store = storeOf([], "tutor", "German");
+
+    expect(store.chats).toHaveLength(1);
+    expect(store.activeId).toBe(store.chats[0].id);
+    expect(store.chats[0]).toMatchObject({ contextId: "tutor", language: "German", messages: [] });
+});
+
+test("the server is told of the chats that are not as it has them", () => {
+    const a = chat("a", 10, "eins");
+    const b = chat("b", 20, "zwei");
+    const changed = { ...b, updatedAt: 30 };
+
+    const toTell = chatsToTell(new Map([["a", a], ["b", b]]), { chats: [a, changed], activeId: "a" });
+
+    expect(toTell).toEqual({ changed: [changed], removed: [] });
+});
+
+test("the server is told of a new chat once it is written in, and of one that is gone", () => {
+    const a = chat("a", 10, "eins");
+    const written = chat("b", 20, "zwei");
+    const empty = { ...chat("c", 30, "x"), messages: [] };
+
+    const toTell = chatsToTell(new Map([["a", a]]), { chats: [written, empty], activeId: "c" });
+
+    expect(toTell).toEqual({ changed: [written], removed: ["a"] });
 });
