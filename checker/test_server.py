@@ -8,10 +8,11 @@ import threading
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from live import LiveChecker
-from profiling import Answer, Profile, Profiler
+from profiling import Answer, Profile, Profiler, Questions, WordRating
 from sentences import Sentence
 from server import describe, make_server
 from spelling import Speller, SpellingIssue
@@ -39,15 +40,36 @@ def url() -> Iterator[str]:
 
 
 class KeyEchoingProfiler(Profiler):
-    """Answers with the key and model it was given, in place of asking Jev."""
+    """Answers every question with the key it was given, in place of asking
+    Jev, and says which model it was asked for."""
 
     def __init__(self) -> None:
-        pass
+        super().__init__()
 
-    def profile(self, sentence: str, api_key: str, model: str | None = None) -> Profile:
+    def profile(
+        self,
+        sentence: str,
+        api_key: str,
+        model: str | None = None,
+        questions: Questions | None = None,
+    ) -> Profile:
+        answers = {name: Answer("choice", choice=api_key) for name in questions or {}}
         return Profile(
-            {"key_used": Answer("choice", choice=api_key)}, model=model or "usual"
+            answers,
+            cost=0.002,
+            id=f"request-{sentence}-{'-'.join(questions or {})}",
+            model=model or "usual",
+            input_tokens=50,
         )
+
+    def rate_words(
+        self,
+        sentence: str,
+        assessment: list[dict[str, str]],
+        api_key: str,
+        model: str | None = None,
+    ) -> tuple[list[WordRating], Profile]:
+        return [WordRating("Wie", 0, 3, 0.25)], Profile({}, id="rating")
 
 
 def post(url: str, body: bytes, key: str | None = None) -> tuple[int, object]:
@@ -58,6 +80,14 @@ def post(url: str, body: bytes, key: str | None = None) -> tuple[int, object]:
             return response.status, json.load(response)
     except urllib.error.HTTPError as error:
         return error.code, json.load(error)
+
+
+def check(url: str, body: bytes, key: str | None = None) -> list[Any]:
+    """The sentences the server makes of a text."""
+    _, reply = post(url, body, key)
+    assert isinstance(reply, dict)
+    sentences: list[Any] = reply["sentences"]
+    return sentences
 
 
 def test_describe_numbers_the_sentences_and_marks_the_one_being_typed() -> None:
@@ -119,10 +149,13 @@ def test_sentences_request_returns_and_prints_the_checked_sentences(
     # the caret is at the end, where the second sentence is being typed
     body = json.dumps({"text": "Schön! Wie geht Hundd", "caret": 21}).encode()
 
-    status, sentences = post(f"{url}/sentences", body)
+    status, reply = post(f"{url}/sentences", body)
 
     assert status == 200
-    assert sentences == [
+    assert isinstance(reply, dict)
+    assert (reply["usage"], reply["pending"]) == ([], False)
+    assert reply["local_model"] is None
+    assert reply["sentences"] == [
         {
             "text": "Schön!",
             "start": 0,
@@ -133,6 +166,8 @@ def test_sentences_request_returns_and_prints_the_checked_sentences(
             "profile": None,
             "profiling": False,
             "profile_error": None,
+            "words": [],
+            "rating_words": False,
         },
         {
             "text": "Wie geht Hundd",
@@ -146,6 +181,8 @@ def test_sentences_request_returns_and_prints_the_checked_sentences(
             "profile": None,
             "profiling": False,
             "profile_error": None,
+            "words": [],
+            "rating_words": False,
         },
     ]
     printed = capsys.readouterr().out
@@ -162,22 +199,22 @@ def test_sentences_request_with_a_key_profiles_finished_sentences_with_it(
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     body = json.dumps({"text": "Wie geht Hund."}).encode()
 
-    _, without_key = post(f"{url}/sentences", body)
+    without_key = check(f"{url}/sentences", body)
     post(f"{url}/sentences", body, key="from-the-chat")
-    _, after = post(f"{url}/sentences", body, key="from-the-chat")
+    after = check(f"{url}/sentences", body, key="from-the-chat")
 
-    assert without_key[0]["profiling"] is False  # type: ignore[index]
-    assert after[0]["processed"] is True  # type: ignore[index]
-    assert after[0]["profile"]["answers"]["key_used"]["choice"] == "from-the-chat"  # type: ignore[index]
+    assert without_key[0]["profiling"] is False
+    assert after[0]["processed"] is True
+    assert after[0]["profile"]["answers"]["grammar_errors"]["choice"] == "from-the-chat"
 
 
 def test_sentences_request_profiles_with_the_model_it_names(url: str) -> None:
     body = json.dumps({"text": "Wie geht Hund.", "model": "some/model"}).encode()
 
-    post(f"{url}/sentences", body, key="a-key")
-    _, after = post(f"{url}/sentences", body, key="a-key")
+    _, reply = post(f"{url}/sentences", body, key="a-key")
 
-    assert after[0]["profile"]["model"] == "some/model"  # type: ignore[index]
+    assert isinstance(reply, dict)
+    assert {request["model"] for request in reply["usage"]} == {"some/model"}
 
 
 def test_sentences_request_without_a_model_profiles_with_the_usual_one(
@@ -185,10 +222,88 @@ def test_sentences_request_without_a_model_profiles_with_the_usual_one(
 ) -> None:
     body = json.dumps({"text": "Wie geht Hund.", "model": ""}).encode()
 
-    post(f"{url}/sentences", body, key="a-key")
-    _, after = post(f"{url}/sentences", body, key="a-key")
+    _, reply = post(f"{url}/sentences", body, key="a-key")
 
-    assert after[0]["profile"]["model"] == "usual"  # type: ignore[index]
+    assert isinstance(reply, dict)
+    assert {request["model"] for request in reply["usage"]} == {"usual"}
+
+
+def test_sentences_request_profiles_with_the_questions_it_sends(url: str) -> None:
+    questions = {
+        "polite": {
+            "type": "choice",
+            "instructions": "Is the sentence polite?",
+            "criteria": {"yes": "It is polite.", "no": "It is not polite."},
+        }
+    }
+    body = json.dumps({"text": "Wie geht Hund.", "questions": questions}).encode()
+
+    post(f"{url}/sentences", body, key="a-key")
+    after = check(f"{url}/sentences", body, key="a-key")
+
+    assert after[0]["profile"]["answers"] == {
+        "polite": {
+            "kind": "choice",
+            "choice": "a-key",
+            "score": None,
+            "max_score": None,
+            "yes": None,
+            "best": None,
+            "confidence": None,
+        }
+    }
+
+
+def test_sentences_request_with_a_question_that_has_no_options_is_refused(
+    url: str,
+) -> None:
+    questions = {"polite": {"type": "choice", "instructions": "Is it polite?"}}
+    body = json.dumps({"text": "Wie geht Hund.", "questions": questions}).encode()
+
+    status, answer = post(f"{url}/sentences", body, key="a-key")
+
+    assert status == 400
+    assert answer == {"error": "question polite needs at least two options"}
+
+
+def test_sentences_request_reports_each_request_to_the_model_once(url: str) -> None:
+    questions = {
+        "polite": {
+            "type": "choice",
+            "instructions": "Is the sentence polite?",
+            "criteria": {"yes": "It is polite.", "no": "It is not polite."},
+        }
+    }
+    body = json.dumps({"text": "Wie geht Hund.", "questions": questions}).encode()
+
+    _, first = post(f"{url}/sentences", body, key="a-key")
+    _, second = post(f"{url}/sentences", body, key="a-key")
+
+    assert isinstance(first, dict) and isinstance(second, dict)
+    assert first["usage"] == [
+        {
+            "id": "request-Wie geht Hund.-polite",
+            "model": "usual",
+            "input_tokens": 50,
+            "output_tokens": 0,
+            "cost": 0.002,
+        }
+    ]
+    assert first["pending"] is False
+    assert second["usage"] == []
+
+
+def test_sentences_request_rates_the_words_when_it_asks_for_that(url: str) -> None:
+    body = json.dumps({"text": "Wie geht Hund.", "words": True}).encode()
+    without = json.dumps({"text": "Wie geht Hund."}).encode()
+
+    for _ in range(2):
+        post(f"{url}/sentences", body, key="a-key")
+    (rated,) = check(f"{url}/sentences", body, key="a-key")
+    (not_asked_for,) = check(f"{url}/sentences", without, key="a-key")
+
+    assert rated["words"] == [{"word": "Wie", "start": 0, "end": 3, "value": 0.25}]
+    assert not_asked_for["words"] == []
 
 
 def test_sentences_request_falls_back_to_the_key_set_where_the_server_runs(
@@ -198,9 +313,9 @@ def test_sentences_request_falls_back_to_the_key_set_where_the_server_runs(
     body = json.dumps({"text": "Wie geht Hund."}).encode()
 
     post(f"{url}/sentences", body)
-    _, after = post(f"{url}/sentences", body)
+    after = check(f"{url}/sentences", body)
 
-    assert after[0]["profile"]["answers"]["key_used"]["choice"] == (  # type: ignore[index]
+    assert after[0]["profile"]["answers"]["grammar_errors"]["choice"] == (
         "from-the-environment"
     )
 
@@ -210,17 +325,15 @@ def test_sentences_request_with_a_caret_reopens_the_sentence_it_is_in(
 ) -> None:
     text = "Wie geht Hund. Schön geht Hund."
 
-    _, without = post(f"{url}/sentences", json.dumps({"text": text}).encode())
-    _, with_null = post(
+    without = check(f"{url}/sentences", json.dumps({"text": text}).encode())
+    with_null = check(
         f"{url}/sentences", json.dumps({"text": text, "caret": None}).encode()
     )
-    _, inside = post(
-        f"{url}/sentences", json.dumps({"text": text, "caret": 4}).encode()
-    )
+    inside = check(f"{url}/sentences", json.dumps({"text": text, "caret": 4}).encode())
 
-    assert [s["complete"] for s in without] == [True, True]  # type: ignore[attr-defined]
+    assert [s["complete"] for s in without] == [True, True]
     assert with_null == without
-    assert [s["complete"] for s in inside] == [False, True]  # type: ignore[attr-defined]
+    assert [s["complete"] for s in inside] == [False, True]
 
 
 @pytest.mark.parametrize(

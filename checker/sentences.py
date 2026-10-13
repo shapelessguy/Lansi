@@ -9,7 +9,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 
-from profiling import Profile
+from profiling import Profile, WordRating
 from spelling import SpellingIssue
 
 _LINE = re.compile(r"[^\r\n]+")
@@ -72,6 +72,11 @@ class Sentence:
     profiling: bool = False
     # Why the profile could not be made, if it could not.
     profile_error: str | None = None
+    # How right each word is where it stands, once the words have been rated,
+    # which is done after the sentence has been profiled.
+    words: list[WordRating] = field(default_factory=list)
+    # True while the words are being rated.
+    rating_words: bool = False
 
 
 def split_sentences(text: str, caret: int | None = None) -> list[Sentence]:
@@ -82,8 +87,10 @@ def split_sentences(text: str, caret: int | None = None) -> list[Sentence]:
 
     `caret` is where in `text` the writer's caret is, or None if the writer
     is not in the text. A sentence is complete unless the caret is on it,
-    which includes the caret being right at its start or right after its last
-    character. Without a caret, every sentence is complete.
+    which includes the caret being right at its start. A sentence without an
+    ending mark also has the caret on it right after its last character, and
+    after the spaces that follow; one with an ending mark is left as soon as
+    the caret is behind the mark. Without a caret, every sentence is complete.
     """
     sentences: list[Sentence] = []
     for line in _LINE.finditer(text):
@@ -115,7 +122,9 @@ def _add(
     # Spaces typed after a sentence that has no ending mark yet are part of
     # writing it: the next word is about to follow. After an ending mark they
     # belong to whatever comes next.
-    reach = stripped_end if ended else end
+    # An ending mark closes the sentence, so a caret right behind the mark has
+    # left it. To be back on it, the caret has to be before the mark.
+    reach = stripped_end - 1 if ended else end
     on_it = caret is not None and start <= caret <= reach
     sentences.append(Sentence(stripped, start, stripped_end, complete=not on_it))
 

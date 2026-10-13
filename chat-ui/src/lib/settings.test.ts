@@ -30,6 +30,8 @@ test("stored values are kept and gaps are filled from the defaults", () => {
     expect(settings.apiKey).toBe("sk-or-test");
     expect(settings.model).toBe(defaultSettings().model);
     expect(settings.profileModel).toBe("typesafe/jev-1.13");
+    expect(settings.enterSends).toBe(true);
+    expect(settings.rateWords).toBe(true);
     expect(settings.contexts).toEqual(defaultSettings().contexts);
 });
 

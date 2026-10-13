@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
-import { SettingsPanel } from "./components/SettingsPanel";
+import { SettingsPanel, type SettingsTab } from "./components/SettingsPanel";
+import { SidePanel } from "./components/SidePanel";
 import { TextList } from "./components/TextList";
 import { TextStudio } from "./components/TextStudio";
 import { UsagePanel } from "./components/UsagePanel";
@@ -22,6 +23,7 @@ import {
     startChat,
     updateChat,
 } from "./lib/chats";
+import { loadLayout, type Panel, saveLayout } from "./lib/layout";
 import type { ChatMessage } from "./lib/openrouter";
 import { loadSettings, saveSettings, type Settings } from "./lib/settings";
 import { fetchTexts, type SavedText } from "./lib/texts";
@@ -40,13 +42,19 @@ export type TextsState =
 
 export function App() {
     const [settings, setSettings] = useState<Settings>(loadSettings);
-    const [settingsOpen, setSettingsOpen] = useState(false);
+    // the panel on the left, with the known words, the chats and the texts
+    const [libraryOpen, setLibraryOpen] = useState(() => loadLayout().libraryOpen);
+    // the panels on the right share one place, so one is shown at a time
+    const [openPanel, setOpenPanel] = useState<Panel | null>(() => loadLayout().panel);
+    // the panels are found as they were left the next time the page is opened
+    useEffect(() => saveLayout({ libraryOpen, panel: openPanel }), [libraryOpen, openPanel]);
+    const [settingsTab, setSettingsTab] = useState<SettingsTab>("models");
+    // where the chat puts the sentence checks, which are made of what it knows
+    const [panelSlot, setPanelSlot] = useState<HTMLElement | null>(null);
     const [wordsState, setWordsState] = useState<WordsState>({ status: "loading" });
     // text a clicked word adds to the message being written
     const [picked, setPicked] = useState<{ word: string; nonce: number } | null>(null);
     const [usage, setUsage] = useState<UsageEntry[]>(loadUsage);
-    // on a narrow window the panel would cover the chat
-    const [usageOpen, setUsageOpen] = useState(() => window.innerWidth > 1000);
     const [chatStore, setChatStore] = useState<ChatStore>(() => loadChats(settings.defaultContextId));
     const [sidebarTab, setSidebarTab] = useState<"words" | "chats" | "texts">("words");
     const [activity, setActivity] = useState<"chat" | "texts">("chat");
@@ -125,74 +133,97 @@ export function App() {
 
     useEffect(loadWords, [loadWords]);
 
+    // the sentence checks belong to the chat
+    const panel = openPanel === "checks" && activity !== "chat" ? null : openPanel;
+
+    function togglePanel(wanted: Panel) {
+        setOpenPanel(panel === wanted ? null : wanted);
+    }
+
+    function openSettings(tab: SettingsTab) {
+        setSettingsTab(tab);
+        setOpenPanel("settings");
+    }
+
     function updateSettings(next: Settings) {
         setSettings(next);
         saveSettings(next);
     }
 
     return (
-        <div className={usageOpen ? "app with-usage" : "app"}>
-            <aside className="sidebar">
-                <div className="tabs" role="tablist">
-                    <button
-                        role="tab"
-                        aria-selected={sidebarTab === "words"}
-                        onClick={() => setSidebarTab("words")}
-                    >
-                        Known words
-                        <span className="count">{wordsState.status === "ready" && wordsState.words.length}</span>
-                    </button>
-                    <button
-                        role="tab"
-                        aria-selected={sidebarTab === "chats"}
-                        onClick={() => setSidebarTab("chats")}
-                    >
-                        Chats
-                        <span className="count">{chats.length > 0 && chats.length}</span>
-                    </button>
-                    <button
-                        role="tab"
-                        aria-selected={sidebarTab === "texts"}
-                        onClick={() => setSidebarTab("texts")}
-                    >
-                        Texts
-                        <span className="count">{texts.length > 0 && texts.length}</span>
-                    </button>
-                </div>
-                {/* kept in place while hidden, so the word filter and sort order survive a visit to the chats */}
-                <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "words"}>
-                    <WordList
-                        state={wordsState}
-                        onReload={loadWords}
-                        onPick={(word) => setPicked({ word: word.word, nonce: Date.now() })}
-                    />
-                </div>
-                <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "chats"}>
-                    <ChatList
-                        chats={chats}
-                        activeId={chat.id}
-                        onSelect={(id) => {
-                            setChatStore((store) => selectChat(store, id));
-                            setActivity("chat");
-                        }}
-                        onDelete={(id) => setChatStore((store) => deleteChat(store, id, settings.defaultContextId))}
-                        onNewChat={newChat}
-                    />
-                </div>
-                <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "texts"}>
-                    <TextList
-                        state={textsState}
-                        selectedId={selectedTextId}
-                        onSelect={(id) => {
-                            setSelectedTextId(id);
-                            setActivity("texts");
-                        }}
-                        onReload={loadTexts}
-                    />
-                </div>
+        <div className="app">
+            <aside className="side-panel left" hidden={!libraryOpen}>
+                <SidePanel
+                    title="Library"
+                    onClose={() => setLibraryOpen(false)}
+                    flush
+                    tabs={
+                        <div className="tabs" role="tablist">
+                            <button
+                                role="tab"
+                                aria-selected={sidebarTab === "words"}
+                                onClick={() => setSidebarTab("words")}
+                            >
+                                Known words
+                                <span className="count">
+                                    {wordsState.status === "ready" && wordsState.words.length}
+                                </span>
+                            </button>
+                            <button
+                                role="tab"
+                                aria-selected={sidebarTab === "chats"}
+                                onClick={() => setSidebarTab("chats")}
+                            >
+                                Chats
+                                <span className="count">{chats.length > 0 && chats.length}</span>
+                            </button>
+                            <button
+                                role="tab"
+                                aria-selected={sidebarTab === "texts"}
+                                onClick={() => setSidebarTab("texts")}
+                            >
+                                Texts
+                                <span className="count">{texts.length > 0 && texts.length}</span>
+                            </button>
+                        </div>
+                    }
+                >
+                    {/* kept in place while hidden, so the word filter and sort order survive a visit to the chats */}
+                    <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "words"}>
+                        <WordList
+                            state={wordsState}
+                            onReload={loadWords}
+                            onPick={(word) => setPicked({ word: word.word, nonce: Date.now() })}
+                        />
+                    </div>
+                    <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "chats"}>
+                        <ChatList
+                            chats={chats}
+                            activeId={chat.id}
+                            onSelect={(id) => {
+                                setChatStore((store) => selectChat(store, id));
+                                setActivity("chat");
+                            }}
+                            onDelete={(id) => setChatStore((store) => deleteChat(store, id, settings.defaultContextId))}
+                            onNewChat={newChat}
+                        />
+                    </div>
+                    <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "texts"}>
+                        <TextList
+                            state={textsState}
+                            selectedId={selectedTextId}
+                            onSelect={(id) => {
+                                setSelectedTextId(id);
+                                setActivity("texts");
+                            }}
+                            onReload={loadTexts}
+                        />
+                    </div>
+                </SidePanel>
             </aside>
             <main className="main">
                 <header className="topbar">
+                    <button aria-pressed={libraryOpen} onClick={() => setLibraryOpen(!libraryOpen)}>Library</button>
                     <div className="switch" role="tablist" aria-label="Activity">
                         <button role="tab" aria-selected={activity === "chat"} onClick={() => setActivity("chat")}>
                             Chat
@@ -202,17 +233,31 @@ export function App() {
                         </button>
                     </div>
                     <span className="model" title="Model">{settings.model}</span>
-                    <button onClick={() => setUsageOpen(!usageOpen)}>Usage</button>
-                    <button onClick={() => setSettingsOpen(true)}>Settings</button>
+                    {activity === "chat" && (
+                        <button
+                            aria-pressed={panel === "checks"}
+                            onClick={() => togglePanel("checks")}
+                        >
+                            Checks
+                        </button>
+                    )}
+                    <button aria-pressed={panel === "usage"} onClick={() => togglePanel("usage")}>Usage</button>
+                    <button aria-pressed={panel === "settings"} onClick={() => togglePanel("settings")}>
+                        Settings
+                    </button>
                 </header>
                 {/* both stay in place while hidden, so a reply or a text still arriving is not cut off */}
                 <div className="pane" hidden={activity !== "chat"}>
                     <Chat
                         key={chat.id}
                         settings={settings}
+                        onSettingsChange={updateSettings}
+                        checksSlot={panel === "checks" ? panelSlot : null}
+                        onCloseChecks={() => setOpenPanel(null)}
+                        onEditQuestions={() => openSettings("questions")}
                         words={words}
                         picked={activity === "chat" ? picked : null}
-                        onOpenSettings={() => setSettingsOpen(true)}
+                        onOpenSettings={() => openSettings("models")}
                         onUsage={addUsageEntry}
                         chat={chat}
                         onMessages={changeMessages}
@@ -232,26 +277,34 @@ export function App() {
                         onSelect={setSelectedTextId}
                         onTextsChange={changeTexts}
                         onUsage={addUsageEntry}
-                        onOpenSettings={() => setSettingsOpen(true)}
+                        onOpenSettings={() => openSettings("models")}
                         storageError={textsState.status === "error" ? textsState.message : null}
                     />
                 </div>
             </main>
-            {usageOpen && (
-                <UsagePanel
-                    entries={usage}
-                    currentLabel={activity === "chat" ? "This chat" : "This text"}
-                    chatId={activity === "chat" ? chat.id : `text:${selectedTextId}`}
-                    onClose={() => setUsageOpen(false)}
-                />
-            )}
-            {settingsOpen && (
-                <SettingsPanel
-                    settings={settings}
-                    onChange={updateSettings}
-                    onClose={() => setSettingsOpen(false)}
-                />
-            )}
+            <aside
+                className="side-panel"
+                hidden={panel === null}
+                ref={setPanelSlot}
+            >
+                {panel === "usage" && (
+                    <UsagePanel
+                        entries={usage}
+                        currentLabel={activity === "chat" ? "This chat" : "This text"}
+                        chatId={activity === "chat" ? chat.id : `text:${selectedTextId}`}
+                        onClose={() => setOpenPanel(null)}
+                    />
+                )}
+                {panel === "settings" && (
+                    <SettingsPanel
+                        settings={settings}
+                        tab={settingsTab}
+                        onTab={setSettingsTab}
+                        onChange={updateSettings}
+                        onClose={() => setOpenPanel(null)}
+                    />
+                )}
+            </aside>
         </div>
     );
 }

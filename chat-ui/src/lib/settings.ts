@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { defaultQuestions, isQuestion, type ProfileQuestion, upToDateQuestions } from "./questions";
 import type { Word } from "./words";
 
 /** Instructions a chat starts with. */
@@ -24,6 +25,12 @@ export interface Settings {
     speechInstructions: string;
     /** The model that profiles each sentence typed in the chat. */
     profileModel: string;
+    /** What the model is asked about each sentence. */
+    questions: ProfileQuestion[];
+    /** Whether Enter sends the message and Shift+Enter starts a new line, rather than the other way round. */
+    enterSends: boolean;
+    /** Whether the words of each sentence are rated once the questions about it are answered. */
+    rateWords: boolean;
 }
 
 /** Replaced in a context's prompt by the list of known words. */
@@ -58,6 +65,9 @@ export function defaultSettings(): Settings {
         speechVoice: "Kore",
         speechInstructions: "Read clearly and a little slowly, for a language learner.",
         profileModel: "typesafe/jev-1.13",
+        questions: defaultQuestions(),
+        enterSends: true,
+        rateWords: true,
     };
 }
 
@@ -89,6 +99,12 @@ export function normalizeSettings(stored: unknown): Settings {
             ? candidate.speechInstructions
             : defaults.speechInstructions,
         profileModel: text("profileModel"),
+        // every question may have been deleted on purpose, so an empty list is kept
+        questions: Array.isArray(candidate.questions)
+            ? upToDateQuestions(candidate.questions.filter(isQuestion))
+            : defaults.questions,
+        enterSends: typeof candidate.enterSends === "boolean" ? candidate.enterSends : defaults.enterSends,
+        rateWords: typeof candidate.rateWords === "boolean" ? candidate.rateWords : defaults.rateWords,
     };
 }
 

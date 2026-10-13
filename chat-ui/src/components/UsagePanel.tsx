@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { formatCost, formatTokens, totalUsage, type UsageEntry, usageOnDay } from "../lib/usage";
+import { SidePanel } from "./SidePanel";
 
 interface Props {
     entries: UsageEntry[];
@@ -34,14 +35,8 @@ function Totals({ title, entries }: { title: string; entries: UsageEntry[] }) {
 
 export function UsagePanel({ entries, chatId, currentLabel, onClose }: Props) {
     return (
-        <aside className="usage">
-            <header className="usage-header">
-                <h2>Usage</h2>
-                <button className="icon-button" onClick={onClose} title="Hide usage" aria-label="Hide usage">
-                    ×
-                </button>
-            </header>
-            <div className="usage-body">
+        <SidePanel title="Usage" onClose={onClose}>
+            <div className="usage">
                 <Totals title={currentLabel} entries={entries.filter((entry) => entry.chatId === chatId)} />
                 <Totals title="Today" entries={usageOnDay(entries, Date.now())} />
                 <Totals title="Everything" entries={entries} />
@@ -50,6 +45,6 @@ export function UsagePanel({ entries, chatId, currentLabel, onClose }: Props) {
                     but may not be counted here. The cost of speech is looked up a few seconds after the audio arrives.
                 </p>
             </div>
-        </aside>
+        </SidePanel>
     );
 }

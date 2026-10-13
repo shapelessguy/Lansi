@@ -123,20 +123,28 @@ def test_split_sentences_treats_only_the_sentence_the_caret_is_in_as_not_complet
     ("caret", "expected"),
     [
         (0, [False, True, True]),
-        # right after the full stop of the first and of the second sentence
-        (12, [False, True, True]),
-        (25, [True, False, True]),
+        # right before the full stop of the first and of the second sentence
+        (11, [False, True, True]),
+        (24, [True, False, True]),
         # right before the first letter of the second and of the third
         (13, [True, False, True]),
         (26, [True, True, False]),
-        # at the very end of the text
+        # at the very end of the text, which has no ending mark
         (30, [True, True, False]),
     ],
 )
-def test_split_sentences_counts_the_caret_at_either_end_as_on_the_sentence(
+def test_split_sentences_counts_the_caret_at_the_edges_of_a_sentence_as_on_it(
     caret: int, expected: list[bool]
 ) -> None:
     assert complete(THREE, caret) == expected
+
+
+@pytest.mark.parametrize("text", ["Hi wie gehts?", "Er ist gut.", "Wirklich?!", "Und…"])
+def test_split_sentences_takes_a_sentence_as_complete_once_the_caret_is_behind_its_ending_mark(
+    text: str,
+) -> None:
+    assert complete(text, len(text)) == [True]
+    assert complete(text, len(text) - 1) == [False]
 
 
 def test_split_sentences_treats_the_last_sentence_like_any_other() -> None:
