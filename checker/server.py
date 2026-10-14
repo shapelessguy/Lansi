@@ -17,21 +17,25 @@ import os
 import re
 import sys
 import threading
+import time
+import uuid
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from anki_import import DECK_STATUS_URL, AnkiImporter, fetch_anki_notes
+from book_sync import BookSync
+from books import BookError, read_epub
 from categories import CATEGORIES
-from intake import DEFAULT_LANGUAGE, Intake, Outcome, Word, read_words
+from intake import DEFAULT_LANGUAGE, MAX_WORDS, Intake, Outcome, Word, read_words
 from live import LiveChecker
-from processing import Processor
+from processing import Processor, words_in
 from profiling import (
     DEFAULT_MODEL,
     LOCAL_ENDPOINT,
@@ -44,8 +48,26 @@ from profiling import (
     read_questions,
 )
 from sentences import Sentence
+from speaking import (
+    MAX_SENTENCES,
+    BookSentence,
+    Speaker,
+    SpeechError,
+    sentences_between,
+    sentences_of_message,
+)
 from spelling import StudySpeller
 from storage import UserStore
+from tasks import Tasks
+from translating import (
+    DEFAULT_INTO,
+    MAX_SELECTION_LENGTH,
+    Passage,
+    TranslationError,
+    Translator,
+    passage_of,
+    read_messages,
+)
 from users import Users, take_vocabulary, user_directory
 from vocabulary import Vocabularies, Vocabulary
 
@@ -57,6 +79,20 @@ DEFAULT_PORT = 8092
 MAX_BODY_BYTES = 1_000_000
 # the audio of a text of a few minutes, uncompressed, with room to spare
 MAX_AUDIO_BYTES = 60_000_000
+# a book with many pictures in it, which are not kept
+MAX_BOOK_BYTES = 200_000_000
+# the request header the name of the file of a book comes in, encoded as in a URL
+FILE_NAME_HEADER = "X-File-Name"
+# no folder is named in more
+MAX_PATH_LENGTH = 1000
+# How much of the text on either side of a selection is looked at for the
+# sentences its words are in.
+MAX_AROUND_LENGTH = 2000
+# how much of a selection a task that is about it is told by
+MAX_TITLE_LENGTH = 80
+# How long the audio of a sentence that is being made is waited for before
+# whoever asked for it is told to ask again.
+SPEECH_WAIT_SECS = 50.0
 # a language is named in a word or two
 MAX_LANGUAGE_LENGTH = 40
 # The directory everything is kept in, unless CHECKER_DATA names another:
@@ -66,6 +102,9 @@ DATA_DIRECTORY = Path(__file__).parent / "data"
 # The file that says who may log in, unless CHECKER_USERS names another. It
 # is edited by hand, and read every time someone logs in.
 USERS_FILE = Path(__file__).parent.parent / "users.json"
+# The user whose collection the deck-status server keeps, unless
+# CHECKER_ANKI_USER names another. The Anki words are imported for nobody else.
+ANKI_USER = "cian_cl"
 
 
 def describe(sentences: list[Sentence]) -> str:
@@ -185,9 +224,22 @@ class Account:
     store: UserStore | None = None
     # what takes the words of those chats and texts into the vocabulary
     processor: Processor | None = None
+    # whether the Anki words are this user's, and so are imported
+    anki: bool = True
+    # what takes the books of a folder into those the user reads
+    book_sync: BookSync | None = None
+    # what translates a selection, and answers what is asked about it
+    translator: Translator | None = None
+    # the language being studied, by its English name
+    language: str = DEFAULT_LANGUAGE
+    # what reads the sentences of the books aloud
+    speaker: Speaker | None = None
+    # what is done for the user in the background
+    tasks: Tasks = field(default_factory=Tasks)
 
     def study(self, language: str) -> None:
         """Have every part go by `language`, given by its English name."""
+        self.language = language
         self.checker.study(language)
         if self.intake:
             self.intake.language = language
@@ -256,10 +308,18 @@ class CheckerHandler(BaseHTTPRequestHandler):
     def do_PUT(self) -> None:
         if not self._find_account() or self._kept("PUT") or self._sets("PUT"):
             return
+        try:
+            if self._books("PUT") or self._speech("PUT"):
+                return
+        except ValueError as error:
+            self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return
         self._reply(HTTPStatus.NOT_FOUND, {"error": "no such path"})
 
     def do_DELETE(self) -> None:
         if not self._find_account() or self._kept("DELETE") or self._sets("DELETE"):
+            return
+        if self._books("DELETE") or self._speech("DELETE"):
             return
         self._reply(HTTPStatus.NOT_FOUND, {"error": "no such path"})
 
@@ -296,6 +356,231 @@ class CheckerHandler(BaseHTTPRequestHandler):
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
         return True
+
+    def _books(self, method: str) -> bool:
+        """Answers a request about the books the user reads, and returns
+        whether the request was one.
+
+            GET /books         the books, without what they say
+            POST /books        keep the EPUB file that is sent, as its text
+                               and how large each part of it is written
+            GET /books/ID      a book with its paragraphs
+            GET /books/ID/cover  the picture on its cover, as a file
+            DELETE /books/ID   remove a book
+            GET /books/folder  the folder the books are taken from, and
+                               what the taking of them is doing
+            PUT /books/folder  take the books from the `{"folder": ...}`
+                               that is sent from now on, or from none
+            POST /books/sync   look through the folder now
+        """
+        store = self.account.store
+        sync = self.account.book_sync
+        path = urlsplit(self.path).path
+        one = re.fullmatch(r"/books/([^/]+)", path)
+        cover = re.fullmatch(r"/books/([^/]+)/cover", path)
+        if store is None or not (one or cover or path == "/books"):
+            return False
+        if cover:
+            picture = store.cover(cover.group(1)) if method == "GET" else None
+            if picture is None:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no cover"})
+                return True
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", picture[1])
+            self.send_header("Content-Length", str(len(picture[0])))
+            self.end_headers()
+            self.wfile.write(picture[0])
+            return True
+        if sync and path in ("/books/folder", "/books/sync"):
+            if method == "PUT" and path == "/books/folder":
+                folder = self._read_body().get("folder")
+                if not isinstance(folder, str) or len(folder) > MAX_PATH_LENGTH:
+                    raise ValueError('expected {"folder": "..."}')
+                sync.choose(folder)
+            elif method == "POST" and path == "/books/sync":
+                sync.start()
+            elif method != "GET" or path != "/books/folder":
+                return False
+            self._reply(HTTPStatus.OK, asdict(sync.status()))
+        elif method == "GET" and not one:
+            self._reply(HTTPStatus.OK, {"books": store.books()})
+        elif method == "POST" and not one:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > MAX_BOOK_BYTES:
+                raise ValueError("the book is too large")
+            name = unquote(self.headers.get(FILE_NAME_HEADER) or "")
+            try:
+                book = read_epub(self.rfile.read(length), Path(name).stem[:200])
+            except BookError as error:
+                raise ValueError(str(error)) from None
+            listed = store.add_book(
+                uuid.uuid4().hex,
+                book.title,
+                book.author,
+                book.language,
+                [block.kept() for block in book.blocks],
+                cover=book.cover,
+            )
+            log(
+                f"{datetime.now():%H:%M:%S} book added: {book.title}"
+                f" ({len(book.blocks)} paragraphs)"
+            )
+            self._reply(HTTPStatus.OK, listed)
+        elif method == "GET" and one:
+            found = store.book(one.group(1))
+            if found:
+                self._reply(HTTPStatus.OK, found)
+            else:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such book"})
+        elif method == "DELETE" and one:
+            store.delete_book(one.group(1))
+            self._reply(HTTPStatus.OK, {})
+        else:
+            return False
+        return True
+
+    def _speech(self, method: str, api_key: str | None = None) -> bool:
+        """Answers a request about the reading aloud of a book, or of a
+        message of a chat, and returns whether the request was one. For a
+        chat the paths start with /chats/ID in place of /books/ID.
+
+            POST /books/ID/speech        have the sentences read that a
+                                         selection has all or part of
+            GET /books/ID/speech/S       the audio of the sentence S, as a
+                                         file; one being made is waited for
+            PUT /books/ID/speech/R       say where the listener of the
+                                         reading R is, as `{"at": ...}`
+            DELETE /books/ID/speech/R    leave the rest of the reading R
+                                         unread
+
+        A POST brings `{"start_block": ..., "start": ..., "end_block": ...,
+        "end": ..., "model": ..., "voice": ..., "instructions": ...}`: the
+        selection goes from `start` in the text of the paragraph
+        `start_block` to `end` in that of `end_block`. The reply lists the
+        `sentences`, each with its id, where it is, and whether its audio
+        is `ready`. The audio that is not is made in the background, as the
+        `task` of the reply, whose `reading` is what a PUT and a DELETE
+        name; there is none if all of it is kept.
+
+        A POST for a chat brings `{"message": ..., "text": ..., "model":
+        ..., "voice": ..., "instructions": ...}` in place of a selection:
+        the place of the message among the messages of the chat, and what
+        it says, every sentence of which is read.
+        """
+        store, speaker = self.account.store, self.account.speaker
+        path = urlsplit(self.path).path
+        found = re.fullmatch(r"/(books|chats)/([^/]+)/speech(?:/([^/]+))?", path)
+        if store is None or speaker is None or not found:
+            return False
+        kind, book_id, name = found.groups()
+        if method == "POST" and name is None:
+            self._read_aloud(speaker, store, kind, book_id, api_key or "")
+        elif method == "GET" and name:
+            try:
+                audio, kind = speaker.audio(book_id, name, SPEECH_WAIT_SECS)
+            except SpeechError as error:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": str(error)})
+                return True
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", str(len(audio)))
+            self.end_headers()
+            self.wfile.write(audio)
+        elif method == "PUT" and name:
+            at = self._read_body().get("at")
+            if not isinstance(at, int) or isinstance(at, bool):
+                raise ValueError('expected {"at": a whole number}')
+            speaker.listen_at(name, at)
+            self._reply(HTTPStatus.OK, {})
+        elif method == "DELETE" and name:
+            speaker.stop(name)
+            self._reply(HTTPStatus.OK, {})
+        else:
+            return False
+        return True
+
+    def _read_aloud(
+        self, speaker: Speaker, store: UserStore, kind: str, book_id: str, api_key: str
+    ) -> None:
+        """Has what a POST names read aloud: the sentences of a selection
+        of the book, or those of a message of the chat, that goes by
+        `book_id`. `kind` says which of the two it is."""
+        body = self._read_body()
+        places: list[int] = [
+            place
+            for name in ("start_block", "start", "end_block", "end")
+            if isinstance(place := body.get(name), int) and not isinstance(place, bool)
+        ]
+        message, text = body.get("message"), body.get("text")
+        if kind == "books" and len(places) != 4:
+            raise ValueError('expected {"start_block": ..., "start": ..., ...}')
+        if kind == "chats" and not (
+            isinstance(message, int)
+            and not isinstance(message, bool)
+            and message >= 0
+            and isinstance(text, str)
+        ):
+            raise ValueError('expected {"message": ..., "text": "..."}')
+        model, voice = body.get("model"), body.get("voice")
+        if not (isinstance(model, str) and model and isinstance(voice, str) and voice):
+            raise ValueError("a model and a voice must be named")
+        instructions = body.get("instructions")
+        if not isinstance(instructions, str):
+            instructions = ""
+        sentences: list[BookSentence]
+        if kind == "chats":
+            # what they are was looked into above
+            assert isinstance(text, str) and isinstance(message, int)
+            sentences = sentences_of_message(text, message)
+        else:
+            book = store.book(book_id)
+            if book is None:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such book"})
+                return
+            sentences = sentences_between(book["blocks"], *places)
+        if not sentences:
+            raise ValueError("there is no sentence in the selection")
+        if len(sentences) > MAX_SENTENCES:
+            raise ValueError(f"more than {MAX_SENTENCES} sentences are selected")
+        ready = speaker.kept(book_id, sentences, model, voice)
+        missing = [number for number, kept in enumerate(ready) if not kept]
+        task = None
+        if missing and not api_key:
+            self._reply(
+                HTTPStatus.BAD_GATEWAY, {"error": "an OpenRouter key is needed"}
+            )
+            return
+        if missing:
+            to_make = [sentences[number] for number in missing]
+            reading = speaker.start(book_id, to_make)
+
+            def make(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+                outcomes = speaker.make(
+                    reading,
+                    book_id,
+                    to_make,
+                    api_key,
+                    model,
+                    voice,
+                    instructions,
+                    step,
+                    missing,
+                )
+                return outcomes, []
+
+            title = " ".join(sentences[0].text.split())[:MAX_TITLE_LENGTH]
+            task = self.account.tasks.start("speech", title, len(to_make), make)
+            task["reading"] = reading
+        self._reply(
+            HTTPStatus.OK,
+            {
+                "sentences": [
+                    {**asdict(sentence), "ready": kept}
+                    for sentence, kept in zip(sentences, ready)
+                ],
+                "task": task,
+            },
+        )
 
     def _kept(self, method: str) -> bool:
         """Answers a request about what the user has kept: the chats, the
@@ -373,6 +658,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if not self._find_account() or self._kept("GET") or self._sets("GET"):
             return
+        if self._books("GET") or self._speech("GET"):
+            return
+        if urlsplit(self.path).path == "/tasks":
+            # what is done in the background, and what came of it
+            self._reply(HTTPStatus.OK, {"tasks": self.account.tasks.listing()})
+            return
         intake = self.account.intake
         url = urlsplit(self.path)
         entry = re.fullmatch(r"/vocabulary/words/(\d+)", url.path)
@@ -417,16 +708,115 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._log_in()
             elif not self._find_account():
                 pass
+            elif self._books("POST") or self._speech("POST", api_key):
+                pass
             elif self.path == "/sentences":
                 self._check_sentences(api_key)
+            elif self.path == "/translate" and self.account.translator:
+                self._translate(self.account.translator, api_key)
+            elif self.path == "/translate/chat" and self.account.translator:
+                self._answer(self.account.translator, api_key)
             elif self.path == "/vocabulary/words" and self.account.intake:
                 self._take_words(self.account.intake, api_key)
+            elif self.path == "/vocabulary/selection" and self.account.intake:
+                self._take_selection(self.account.intake, api_key)
             elif self.path == "/vocabulary/import" and self.account.importer:
                 self._import(self.account.importer, api_key)
             else:
                 self._reply(HTTPStatus.NOT_FOUND, {"error": "no such path"})
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+
+    def _translate(self, translator: Translator, api_key: str | None) -> None:
+        """Translates the `selection` of a `{"selection": ..., "before": ...,
+        "after": ..., "language": ..., "into": ..., "model": ...}` request,
+        where `before` and `after` are the text around it, as much of it as
+        the sender likes. Replies with the translation, with the `passage`
+        the model was given, which is the sentences the selection is in and
+        a few before them, and with what the request to the model used."""
+        body = self._read_body()
+        selection = body.get("selection")
+        before, after = body.get("before", ""), body.get("after", "")
+        if not (
+            isinstance(selection, str)
+            and isinstance(before, str)
+            and isinstance(after, str)
+        ):
+            raise ValueError('expected {"selection": "...", "before": "..."}')
+        if len(selection) > MAX_SELECTION_LENGTH:
+            raise ValueError("the selection is too long")
+        passage = passage_of(before, selection, after)
+        language, into, model = self._read_translating(body)
+        started = time.monotonic()
+        try:
+            translation, used = translator.translate(
+                passage, language, into, api_key or "", model
+            )
+        except TranslationError as error:
+            self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
+            return
+        log(
+            f"{datetime.now():%H:%M:%S} translated: {passage.selection}\n"
+            f"       {translation}\n"
+            f"       ({used.model}, {time.monotonic() - started:.1f} s,"
+            f" {used.input_tokens} tokens in, {used.output_tokens} out)"
+        )
+        self._reply(
+            HTTPStatus.OK,
+            {
+                "translation": translation,
+                "passage": asdict(passage),
+                "usage": [describe_usage(used)],
+            },
+        )
+
+    def _answer(self, translator: Translator, api_key: str | None) -> None:
+        """Answers the last of the `messages` of a `{"passage": ...,
+        "translation": ..., "messages": [...], "language": ..., "into": ...,
+        "model": ...}` request: what was asked and answered so far about a
+        selection that was translated, each a `{"role": ..., "content":
+        ...}`. The passage and the translation are those the translating
+        replied with. Nothing of the chat is kept here."""
+        body = self._read_body()
+        given = body.get("passage")
+        parts = [
+            part
+            for name in ("before", "selection", "after")
+            if isinstance(given, dict) and isinstance(part := given.get(name), str)
+        ]
+        translation = body.get("translation")
+        if len(parts) != 3 or not isinstance(translation, str):
+            raise ValueError('expected {"passage": {...}, "translation": "..."}')
+        messages = read_messages(body.get("messages"))
+        language, into, model = self._read_translating(body)
+        try:
+            reply, used = translator.answer(
+                Passage(*parts),
+                translation,
+                messages,
+                language,
+                into,
+                api_key or "",
+                model,
+            )
+        except TranslationError as error:
+            self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
+            return
+        self._reply(HTTPStatus.OK, {"reply": reply, "usage": [describe_usage(used)]})
+
+    def _read_translating(self, body: dict[str, Any]) -> tuple[str, str, str | None]:
+        """The language being learned, the one to translate into and the
+        model to ask, as a request about a selection names them. The first
+        is the one the account goes by if the request names none."""
+        named = []
+        for name in ("language", "into", "model"):
+            value = body.get(name)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"{name} must be text or null")
+            named.append((value or "").strip())
+        language = named[0][:MAX_LANGUAGE_LENGTH] or self.account.language
+        into = named[1][:MAX_LANGUAGE_LENGTH] or DEFAULT_INTO
+        return language, into, named[2] or None
 
     def _import(self, importer: AnkiImporter, api_key: str | None) -> None:
         """Takes the `{"enabled": ..., "model": ..., "decision_model": ...,
@@ -447,7 +837,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if anki_language is not None and not isinstance(anki_language, str):
             raise ValueError("anki_language must be text or null")
         importer.configure(
-            body.get("enabled") is not False,
+            # the Anki words of one user are not taken in for another
+            self.account.anki and body.get("enabled") is not False,
             api_key or "",
             models[0],
             models[1],
@@ -496,6 +887,68 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 "usage": [describe_usage(profile) for profile in used],
             },
         )
+
+    def _take_selection(self, intake: Intake, api_key: str | None) -> None:
+        """Takes the words of the `selection` of a `{"selection": ...,
+        "before": ..., "after": ..., "language": ..., "model": ...,
+        "decision_model": ...}` request into the vocabulary of the
+        `language`, each with the sentence it is in, as the words of the
+        chats and the texts are taken. `before` and `after` are the text
+        around the selection. This is done in the background: the reply is
+        the `task` that was started, and `GET /tasks` says how far it is,
+        and in the end what became of each word and what the requests to
+        the models used."""
+        body = self._read_body()
+        selection = body.get("selection")
+        before, after = body.get("before", ""), body.get("after", "")
+        if not (
+            isinstance(selection, str)
+            and isinstance(before, str)
+            and isinstance(after, str)
+        ):
+            raise ValueError('expected {"selection": "...", "before": "..."}')
+        words = words_in(
+            before[-MAX_AROUND_LENGTH:], selection, after[:MAX_AROUND_LENGTH]
+        )
+        if not words:
+            raise ValueError("there are no words in the selection")
+        if len(words) > MAX_WORDS:
+            raise ValueError(f"more than {MAX_WORDS} words are selected")
+        language, _, model = self._read_translating(body)
+        decision_model = body.get("decision_model")
+        if decision_model is not None and not isinstance(decision_model, str):
+            raise ValueError("decision_model must be text or null")
+
+        def take(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+            outcomes, used = intake.take(
+                words,
+                api_key or "",
+                model,
+                decision_model or None,
+                on_outcome=lambda outcome: step(),
+                language=language,
+            )
+            log(
+                f"{datetime.now():%H:%M:%S} words of a selection taken in\n"
+                f"{describe_outcomes(outcomes)}"
+            )
+            return (
+                [
+                    {
+                        "word": outcome.word,
+                        "status": outcome.status,
+                        "reason": outcome.reason,
+                    }
+                    for outcome in outcomes
+                ],
+                [describe_usage(profile) for profile in used],
+            )
+
+        # a word that is there twice in a sentence is worked on once
+        distinct = len({(word.word, word.sentence) for word in words})
+        title = " ".join(selection.split())[:MAX_TITLE_LENGTH]
+        task = self.account.tasks.start("words", title, distinct, take)
+        self._reply(HTTPStatus.OK, {"task": task})
 
     def _check_sentences(self, api_key: str | None) -> None:
         text, caret, model, questions, rate_words = self._read_request()
@@ -605,6 +1058,7 @@ if __name__ == "__main__":
         local = LocalModel(local_endpoint, on_change=print_local_model)
     data_directory = Path(os.environ.get("CHECKER_DATA") or DATA_DIRECTORY)
     deck_status_url = os.environ.get("ANKI_STATUS_URL", DECK_STATUS_URL)
+    anki_user = os.environ.get("CHECKER_ANKI_USER") or ANKI_USER
 
     def make_account(user: str) -> Account:
         """Everything a user has, with the vocabularies in a directory of
@@ -644,10 +1098,26 @@ if __name__ == "__main__":
             importer,
             kept,
             processor,
+            anki=user == anki_user,
+            book_sync=BookSync(
+                kept,
+                on_synced=lambda added, removed: log(
+                    f"{datetime.now():%H:%M:%S} books of {user} synced with the"
+                    f" folder: {added} added, {removed} removed"
+                ),
+            ),
+            # the language model asked when a request names none
+            translator=Translator(model=os.environ.get("CHECKER_CHAT_MODEL", "")),
+            speaker=Speaker(kept),
         )
+        assert account.book_sync
+        account.book_sync.watch()
         processor.watch()
         account.study(language)
-        importer.watch()
+        if account.anki:
+            importer.watch()
+        else:
+            importer.configure(False, "", None, None)
         return account
 
     users = Users(os.environ.get("CHECKER_USERS") or USERS_FILE, data_directory)
@@ -675,7 +1145,7 @@ if __name__ == "__main__":
             ' {"name": "password"}.',
             flush=True,
         )
-    print(f"Anki words are imported from {deck_status_url}", flush=True)
+    print(f"Anki words are imported from {deck_status_url} for {anki_user}", flush=True)
     if local:
         print(f"Looking for a local model at {local.endpoint}", flush=True)
         local.watch(float(os.environ.get("CHECKER_LOCAL_POLL_SECS", LOCAL_POLL_SECS)))

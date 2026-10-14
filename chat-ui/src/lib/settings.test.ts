@@ -101,3 +101,12 @@ test("a set is asked for by its name, however the name is capitalised", () => {
 test("a set that there is not gives no words", () => {
     expect(expandPrompt("Use: {{words:Gone}}.", lists(["sitzen"]), "German", "B1")).toBe("Use: .");
 });
+
+test("the app looks as it was set to, and as usual where what is stored is not a way to look", () => {
+    const stored = { theme: "dark", accent: "green", textSize: "large" };
+    const unusable = { theme: "pink", accent: "toString", textSize: 3 };
+
+    expect(normalizeSettings(stored)).toMatchObject(stored);
+    expect(normalizeSettings(unusable)).toMatchObject({ theme: "system", accent: "blue", textSize: "normal" });
+    expect(normalizeSettings({})).toMatchObject({ theme: "system", accent: "blue", textSize: "normal" });
+});

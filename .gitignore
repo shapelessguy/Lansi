@@ -16,3 +16,4 @@ node_modules
 /chat-ui/dist
 /checker/data
 /users.json
+/books-test

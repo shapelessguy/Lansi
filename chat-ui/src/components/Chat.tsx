@@ -1,11 +1,11 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 
-import type { StoredChat } from "../lib/chats";
+import { isAtEnd, type StoredChat } from "../lib/chats";
 import {
     applySuggestion,
     doubt,
@@ -22,6 +22,7 @@ import { type ChatMessage, streamChat } from "../lib/openrouter";
 import { requestQuestions } from "../lib/questions";
 import type { WordLists } from "../lib/sets";
 import { expandPrompt, type Settings } from "../lib/settings";
+import { allowPlaying, speakMark } from "../lib/speaking";
 import type { UsageEntry } from "../lib/usage";
 import { ChecksPanel } from "./ChecksPanel";
 
@@ -39,6 +40,8 @@ interface Props {
     picked: { word: string; nonce: number } | null;
     onOpenSettings: () => void;
     onUsage: (entry: UsageEntry) => void;
+    /** Has a message of a chat read aloud: the one at that place among its messages, which says that. */
+    onSpeak: (chatId: string, place: number, text: string) => void;
     /** The chat shown. Give the component this chat's id as its key, so a reply still arriving stops on a switch. */
     chat: StoredChat;
     /** Changes the messages of the chat with that id, which may no longer be the one shown. */
@@ -73,6 +76,7 @@ export function Chat(
         picked,
         onOpenSettings,
         onUsage,
+        onSpeak,
         chat,
         onMessages,
         onContext,
@@ -85,7 +89,11 @@ export function Chat(
     const [error, setError] = useState<string | null>(null);
     const [abort, setAbort] = useState<AbortController | null>(null);
     const abortRef = useRef<AbortController | null>(null);
-    const endRef = useRef<HTMLDivElement>(null);
+    // The messages, and whether they are scrolled to their end, which is
+    // where they are kept as more arrives. Scrolled up to read something
+    // earlier, they stay where they are.
+    const listRef = useRef<HTMLDivElement>(null);
+    const atEnd = useRef(true);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
     const busy = abort !== null;
@@ -95,9 +103,24 @@ export function Chat(
     // stop a reply that is still arriving when another chat is shown
     useEffect(() => () => abortRef.current?.abort(), []);
 
+    const keepAtEnd = useCallback(() => {
+        const list = listRef.current;
+        if (list && atEnd.current) {
+            list.scrollTop = list.scrollHeight;
+        }
+    }, []);
+    // whatever makes the messages longer: a message, a piece of a reply, an error, the button under a finished reply
+    useLayoutEffect(keepAtEnd, [keepAtEnd, messages, error, abort]);
+    // and whatever makes the room for them smaller, or shows them again after they were hidden
     useEffect(() => {
-        endRef.current?.scrollIntoView({ block: "end" });
-    }, [messages]);
+        const list = listRef.current;
+        if (!list) {
+            return;
+        }
+        const observer = new ResizeObserver(keepAtEnd);
+        observer.observe(list);
+        return () => observer.disconnect();
+    }, [keepAtEnd]);
 
     // where the caret is in the draft, or null while the box is not in use
     const [caret, setCaret] = useState<number | null>(null);
@@ -199,6 +222,13 @@ export function Chat(
         if (!text || busy) {
             return;
         }
+        // The reply is read aloud only once it is there, by when the click
+        // or the key that sends this no longer counts for the browser.
+        if (settings.speakReplies) {
+            allowPlaying();
+        }
+        // what is sent is shown, wherever the messages were scrolled to
+        atEnd.current = true;
         const history: ChatMessage[] = [...messages, { role: "user", content: text }];
         setMessages(() => [...history, { role: "assistant", content: "" }]);
         setDraft("");
@@ -207,6 +237,8 @@ export function Chat(
         const controller = new AbortController();
         abortRef.current = controller;
         setAbort(controller);
+        // what the reply says, as it arrives
+        let reply = "";
         try {
             // a set is worked out from the counts as they are now; if they cannot be had, from the last ones
             const lists = context.prompt.includes("{{words") ? await loadWords().catch(() => words) : words;
@@ -216,12 +248,18 @@ export function Chat(
                 model: settings.model,
                 messages: system ? [{ role: "system", content: system }, ...history] : history,
                 signal: controller.signal,
-                onText: (piece) =>
+                onText: (piece) => {
+                    reply += piece;
                     setMessages((current) => {
-                        const reply = current[current.length - 1];
-                        return [...current.slice(0, -1), { ...reply, content: reply.content + piece }];
-                    }),
+                        const arriving = current[current.length - 1];
+                        return [...current.slice(0, -1), { ...arriving, content: arriving.content + piece }];
+                    });
+                },
             });
+            // the reply is the message after those that were sent
+            if (settings.speakReplies && reply.trim()) {
+                onSpeak(chatId, history.length, reply);
+            }
             if (usage) {
                 onUsage({
                     at: Date.now(),
@@ -278,10 +316,28 @@ export function Chat(
                             ))}
                         </select>
                     </label>
+                    <label className="check" title="Reads each reply aloud once it has arrived. The audio is kept.">
+                        <input
+                            type="checkbox"
+                            checked={settings.speakReplies}
+                            onChange={(event) => onSettingsChange({ ...settings, speakReplies: event.target.checked })}
+                        />
+                        Speak replies
+                    </label>
                     <button onClick={onNewChat}>New chat</button>
                 </header>
 
-                <div className="messages">
+                <div
+                    className="messages"
+                    ref={listRef}
+                    onScroll={(event) => {
+                        const list = event.currentTarget;
+                        // nothing is shown, and so nothing scrolled, while another activity is
+                        if (list.clientHeight > 0) {
+                            atEnd.current = isAtEnd(list.scrollHeight, list.scrollTop, list.clientHeight);
+                        }
+                    }}
+                >
                     {messages.length === 0 && (
                         <div className="empty">
                             <h2>{context.name}</h2>
@@ -294,14 +350,32 @@ export function Chat(
                     {messages.map((message, index) => (
                         <div key={index} className={`message ${message.role}`}>
                             {message.role === "assistant"
-                                ? (message.content
-                                    ? <Markdown>{message.content}</Markdown>
-                                    : <span className="typing">…</span>)
+                                ? (
+                                    <>
+                                        {/* to the left of the reply; one that is still arriving is not read yet */}
+                                        <button
+                                            className="icon-button message-speak"
+                                            data-speak={speakMark(chatId, index)}
+                                            onClick={() => onSpeak(chatId, index, message.content)}
+                                            disabled={!message.content || (busy && index === messages.length - 1)}
+                                            title="Read aloud"
+                                            aria-label="Read this reply aloud"
+                                        >
+                                            🔊
+                                        </button>
+                                        <div className="message-body">
+                                            <div className="message-text">
+                                                {message.content
+                                                    ? <Markdown>{message.content}</Markdown>
+                                                    : <span className="typing">…</span>}
+                                            </div>
+                                        </div>
+                                    </>
+                                )
                                 : message.content}
                         </div>
                     ))}
                     {error && <div className="message error" role="alert">{error}</div>}
-                    <div ref={endRef} />
                 </div>
 
                 {!settings.apiKey && (

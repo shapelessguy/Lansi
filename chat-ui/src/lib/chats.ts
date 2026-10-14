@@ -142,3 +142,14 @@ export function deleteChat(store: ChatStore, id: string, contextId: string, lang
 export function updateChat(store: ChatStore, id: string, change: (chat: StoredChat) => StoredChat): ChatStore {
     return { ...store, chats: store.chats.map((chat) => (chat.id === id ? change(chat) : chat)) };
 }
+
+/** How near to its end a list has to be scrolled to count as being at its end, in pixels. */
+const END_SLACK = 48;
+
+/**
+ * Whether a list that is `scrollHeight` long, and shown through a window
+ * `clientHeight` high, is scrolled to its end, or near enough to it.
+ */
+export function isAtEnd(scrollHeight: number, scrollTop: number, clientHeight: number): boolean {
+    return scrollHeight - scrollTop - clientHeight <= END_SLACK;
+}

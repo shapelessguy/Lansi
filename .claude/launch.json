@@ -6,6 +6,18 @@
             "runtimeExecutable": "npm",
             "runtimeArgs": ["--prefix", "C:\\Users\\shape\\Documents\\codebase\\anki\\chat-ui", "run", "dev"],
             "port": 5173
+        },
+        {
+            "name": "test-checker",
+            "runtimeExecutable": "C:\\Users\\shape\\Documents\\codebase\\Lansi\\checker\\.venv\\Scripts\\python.exe",
+            "runtimeArgs": ["C:\\Users\\shape\\AppData\\Local\\Temp\\claude\\C--Users-shape-Documents-codebase-Lansi\\59c5d183-60ff-4c37-81a3-b6cdc0ee2ca1\\scratchpad\\run_checker3.py"],
+            "port": 8192
+        },
+        {
+            "name": "test-ui",
+            "runtimeExecutable": "pwsh",
+            "runtimeArgs": ["-NoLogo", "-Command", "$env:CHECKER_URL='http://127.0.0.1:8192'; Set-Location 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\chat-ui'; npx vite --port 5184 --strictPort"],
+            "port": 5184
         }
     ]
 }

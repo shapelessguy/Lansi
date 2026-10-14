@@ -3,7 +3,13 @@
 
 import { expect, test } from "vitest";
 
-import { dueDate, plainText, type Timing, wordsFromRows } from "./anki";
+import { dueDate, plainText, seesAnkiWords, type Timing, wordsFromRows } from "./anki";
+
+test("the Anki words are shown to the user whose collection they are from, and to nobody else", () => {
+    expect(seesAnkiWords("cian_cl")).toBe(true);
+    expect(seesAnkiWords("someone_else")).toBe(false);
+    expect(seesAnkiWords("")).toBe(false);
+});
 
 // day 137 of the collection, which ends at local midnight after 2026-10-12
 const timing: Timing = {

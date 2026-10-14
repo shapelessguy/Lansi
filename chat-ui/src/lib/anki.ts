@@ -5,6 +5,13 @@ import type { Word } from "./words";
 
 /** Where the dev server forwards requests to the deck-status server. */
 const BASE = "/anki";
+/** The user whose collection the deck-status server keeps. */
+const ANKI_USER = "cian_cl";
+
+/** Whether the Anki words are `user`'s to see. */
+export function seesAnkiWords(user: string): boolean {
+    return user === ANKI_USER;
+}
 
 export interface Timing {
     /** Days since the collection was created; review cards are due on such a day. */

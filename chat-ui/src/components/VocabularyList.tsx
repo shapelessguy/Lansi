@@ -35,8 +35,11 @@ interface Props {
     onEditSet: (set: WordSet | null) => void;
     /** The language the Anki words are imported as. */
     ankiLanguage: string;
-    /** What the import of the Anki words is doing. It is switched on and off in the settings. */
-    importing: ImportStatus;
+    /**
+     * What the import of the Anki words is doing, or null for a user who has
+     * none. It is switched on and off in the settings.
+     */
+    importing: ImportStatus | null;
 }
 
 /** What the import is doing, in a line. */
@@ -167,12 +170,14 @@ export function VocabularyList(
                     <button disabled={!activeSet} onClick={() => activeSet && onEditSet(activeSet)}>Edit</button>
                     <button onClick={() => onEditSet(null)}>New set</button>
                 </div>
-                <small
-                    className={importing.state === "unavailable" ? "import-status error" : "import-status"}
-                    title={importing.message}
-                >
-                    Anki import ({ankiLanguage}): {describeImport(importing)}
-                </small>
+                {importing && (
+                    <small
+                        className={importing.state === "unavailable" ? "import-status error" : "import-status"}
+                        title={importing.message}
+                    >
+                        Anki import ({ankiLanguage}): {describeImport(importing)}
+                    </small>
+                )}
             </div>
             {state.status === "loading" && <p className="sidebar-note">Loading vocabulary…</p>}
             {state.status === "error" && (

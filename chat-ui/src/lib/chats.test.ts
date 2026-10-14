@@ -8,6 +8,7 @@ import {
     chatsToTell,
     chatTitle,
     deleteChat,
+    isAtEnd,
     listedChats,
     selectChat,
     startChat,
@@ -145,4 +146,12 @@ test("the server is told of a new chat once it is written in, and of one that is
     const toTell = chatsToTell(new Map([["a", a]]), { chats: [written, empty], activeId: "c" });
 
     expect(toTell).toEqual({ changed: [written], removed: ["a"] });
+});
+
+test("a list counts as scrolled to its end when it is there or nearly there", () => {
+    expect(isAtEnd(1000, 600, 400)).toBe(true);
+    expect(isAtEnd(1000, 560, 400)).toBe(true);
+    expect(isAtEnd(1000, 300, 400)).toBe(false);
+    // one that is not longer than its window
+    expect(isAtEnd(300, 0, 400)).toBe(true);
 });

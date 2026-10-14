@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
@@ -13,14 +14,21 @@ from typing import Any
 
 import pytest
 from anki_import import AnkiImporter
+from book_sync import BookSync
 from intake import Intake
 from live import LiveChecker
 from profiling import Answer, Profile, Profiler, Questions, WordRating
 from sentences import Sentence
 from server import Account, Accounts, describe, make_server
+from speaking import Speaker
 from spelling import Speller, SpellingIssue
 from storage import UserStore
+from tasks import Tasks
+from test_books import epub, page
 from test_intake import FakeChat, FakeProfiler
+from test_speaking import FakeVoice
+from test_translating import FakeModel
+from translating import Translator
 from users import Users, user_directory
 from vocabulary import Form, Vocabularies, Vocabulary
 
@@ -540,6 +548,29 @@ def test_the_import_is_told_which_language_the_anki_words_are_of(url: str) -> No
     assert IMPORTERS[url]._language == "German"  # noqa: SLF001
 
 
+def test_the_import_stays_off_for_a_user_the_anki_words_are_not_of() -> None:
+    intake = Intake(Vocabulary(), FakeProfiler(), FakeChat())
+    importer = AnkiImporter(intake, lambda: ["der Hund"])
+    account = Account(LiveChecker(Speller(language=None)), intake, importer, anki=False)
+    server = make_server(0, accounts=Accounts(lambda user: account))
+    thread = threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+    )
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        post(f"{url}/vocabulary/import", b'{"enabled": true}', key="the-key")
+        importer.look()
+        _, after = post(f"{url}/vocabulary/import", b'{"enabled": true}')
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert isinstance(after, dict)
+    assert (after["state"], after["taken"]) == ("off", 0)
+
+
 @pytest.fixture
 def with_users(tmp_path: Path) -> Iterator[str]:
     """A server that two users can log in to, each with a vocabulary of
@@ -552,10 +583,17 @@ def with_users(tmp_path: Path) -> Iterator[str]:
     def make_account(user: str) -> Account:
         vocabularies = Vocabularies(user_directory(tmp_path, user))
         intake = Intake(vocabularies, FakeProfiler(), FakeChat())
+        store = UserStore(user_directory(tmp_path, user))
         return Account(
             LiveChecker(Speller(language=None)),
             intake,
-            store=UserStore(user_directory(tmp_path, user)),
+            store=store,
+            # the folder is looked through before the request is answered
+            book_sync=BookSync(store, background=lambda job: job()),
+            translator=Translator(FakeModel()),
+            speaker=Speaker(store, FakeVoice()),
+            # what is started is done before the request is answered
+            tasks=Tasks(background=lambda job: job()),
         )
 
     server = make_server(0, users=users, accounts=Accounts(make_account))
@@ -746,3 +784,276 @@ def test_the_sets_of_a_vocabulary_are_kept_for_its_user_and_language(
     assert json.loads(left) == {"sets": []}
     # asking after a language made no vocabulary of it
     assert not Vocabularies(user_directory(tmp_path, "ada")).has("Italian")
+
+
+def test_a_book_is_kept_as_its_text_for_its_user_only_and_removed_when_asked(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    ben = log_in(with_users, "ben", "another one")
+    file = epub(page("<h1>Der Hund</h1><p>Es war einmal ein Hund, der gern las.</p>"))
+
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    listed = json.loads(added)
+    _, of_ada, _ = send(f"{with_users}/books", "GET", ada)
+    _, of_ben, _ = send(f"{with_users}/books", "GET", ben)
+    _, whole, _ = send(f"{with_users}/books/{listed['id']}", "GET", ada)
+    not_bens, _, _ = send(f"{with_users}/books/{listed['id']}", "GET", ben)
+    send(f"{with_users}/books/{listed['id']}", "DELETE", ada)
+    gone, _, _ = send(f"{with_users}/books/{listed['id']}", "GET", ada)
+
+    assert listed["title"] == "Der Hund"
+    assert json.loads(of_ada) == {"books": [listed]}
+    assert json.loads(of_ben) == {"books": []}
+    assert json.loads(whole)["blocks"] == [
+        {"text": "Der Hund", "size": 2},
+        {"text": "Es war einmal ein Hund, der gern las.", "size": 1},
+    ]
+    assert (not_bens, gone) == (404, 404)
+
+
+def test_a_file_that_is_not_a_book_is_refused_with_the_reason(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+
+    status, reply, _ = send(f"{with_users}/books", "POST", ada, b"%PDF-1.7")
+    _, books, _ = send(f"{with_users}/books", "GET", ada)
+
+    assert (status, json.loads(reply)) == (
+        400,
+        {"error": "the file is not an EPUB book"},
+    )
+    assert json.loads(books) == {"books": []}
+
+
+def test_the_books_of_a_folder_a_user_chooses_are_kept_for_that_user(
+    with_users: str, tmp_path: Path
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    ben = log_in(with_users, "ben", "another one")
+    folder = tmp_path / "OneDrive" / "Books" / "German"
+    folder.mkdir(parents=True)
+    (folder / "hund.epub").write_bytes(epub(page("<p>Es war einmal.</p>")))
+    chosen = json.dumps({"folder": str(folder.parent)}).encode()
+
+    _, before, _ = send(f"{with_users}/books/folder", "GET", ada)
+    _, after, _ = send(f"{with_users}/books/folder", "PUT", ada, chosen)
+    (folder / "katze.epub").write_bytes(epub(page("<p>Text.</p>")))
+    _, looked, _ = send(f"{with_users}/books/sync", "POST", ada)
+    _, of_ada, _ = send(f"{with_users}/books", "GET", ada)
+    _, of_ben, _ = send(f"{with_users}/books", "GET", ben)
+    refused, _, _ = send(f"{with_users}/books/folder", "PUT", ada, b'{"folder": 3}')
+
+    assert json.loads(before)["state"] == "off"
+    assert (json.loads(after)["state"], json.loads(after)["found"]) == ("synced", 1)
+    assert (json.loads(looked)["found"], json.loads(looked)["revision"]) == (2, 2)
+    assert sorted(book["source"] for book in json.loads(of_ada)["books"]) == [
+        "German/hund.epub",
+        "German/katze.epub",
+    ]
+    assert json.loads(of_ben) == {"books": []}
+    assert refused == 400
+
+
+def test_the_cover_of_a_book_is_given_as_the_file_it_is(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    file = epub(
+        page("<p>Es war einmal.</p>"),
+        files={"OEBPS/cover.png": "PNG-and-so-on"},
+        manifest='<item id="c" href="cover.png" media-type="image/png"'
+        ' properties="cover-image"/>',
+    )
+    plain = epub(page("<p>Es war einmal.</p>"))
+
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    _, without, _ = send(f"{with_users}/books", "POST", ada, plain)
+    at = f"{with_users}/books/{json.loads(added)['id']}/cover"
+    status, picture, kind = send(at, "GET", ada)
+    none, _, _ = send(
+        f"{with_users}/books/{json.loads(without)['id']}/cover", "GET", ada
+    )
+
+    assert (json.loads(added)["cover"], json.loads(without)["cover"]) == (True, False)
+    assert (status, picture, kind) == (200, b"PNG-and-so-on", "image/png")
+    assert none == 404
+
+
+def test_a_selection_is_translated_with_the_sentences_around_it(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {
+        "selection": "Hund",
+        "before": "Null. Eins. Zwei. Drei. Vier. Fünf. Der ",
+        "after": " schläft. Danach.",
+        "language": "German",
+        "into": "English",
+        "model": "some/model",
+    }
+
+    status, reply = post(
+        f"{with_users}/translate", json.dumps(body).encode(), key="sk-test", token=ada
+    )
+
+    assert status == 200 and isinstance(reply, dict)
+    assert reply["translation"] == "the dog"
+    assert reply["passage"] == {
+        "before": "Eins. Zwei. Drei. Vier. Fünf. Der ",
+        "selection": "Hund",
+        "after": " schläft.",
+    }
+    assert reply["usage"] == [
+        {
+            "id": "gen-1",
+            "model": "some/model",
+            "input_tokens": 40,
+            "output_tokens": 3,
+            "cost": 0.001,
+        }
+    ]
+
+
+def test_a_translation_that_cannot_be_had_is_answered_with_the_reason(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = json.dumps({"selection": "Hund", "model": "some/model"}).encode()
+
+    without_a_key, reply = post(f"{with_users}/translate", body, token=ada)
+    nothing_selected, _ = post(
+        f"{with_users}/translate", b'{"selection": " "}', key="sk-test", token=ada
+    )
+    not_logged_in, _ = post(f"{with_users}/translate", body, key="sk-test")
+
+    assert (without_a_key, nothing_selected, not_logged_in) == (502, 400, 401)
+    assert reply == {"error": "an OpenRouter key is needed"}
+
+
+def test_what_is_asked_about_a_translated_selection_is_answered(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {
+        "passage": {"before": "Der ", "selection": "Hund", "after": " schläft."},
+        "translation": "the dog",
+        "messages": [{"role": "user", "content": "Which gender?"}],
+        "model": "some/model",
+    }
+
+    status, reply = post(
+        f"{with_users}/translate/chat",
+        json.dumps(body).encode(),
+        key="sk-test",
+        token=ada,
+    )
+    without_messages, _ = post(
+        f"{with_users}/translate/chat",
+        json.dumps({**body, "messages": []}).encode(),
+        key="sk-test",
+        token=ada,
+    )
+
+    assert status == 200 and isinstance(reply, dict)
+    assert reply["reply"] == "the dog"
+    assert reply["usage"][0]["id"] == "gen-1"
+    assert without_messages == 400
+
+
+def test_the_words_of_a_selection_are_taken_into_the_vocabulary(url: str) -> None:
+    body = {
+        "selection": "Hunde Katzze",
+        "before": "Zwei ",
+        "after": " hier.",
+        "model": "some/model",
+    }
+
+    status, reply = post(
+        f"{url}/vocabulary/selection", json.dumps(body).encode(), key="the-key"
+    )
+    nothing, _ = post(f"{url}/vocabulary/selection", b'{"selection": "7.05"}')
+
+    assert status == 200 and isinstance(reply, dict)
+    assert reply["task"]["title"] == "Hunde Katzze"
+    # it is done in the background, and asked after until it is done
+    for _ in range(200):
+        _, listed = get(f"{url}/tasks")
+        (task,) = listed["tasks"]
+        if task["state"] != "running":
+            break
+        time.sleep(0.01)
+    assert (task["id"], task["state"]) == (reply["task"]["id"], "done")
+    assert (task["done"], task["total"]) == (2, 2)
+    assert task["result"] == [
+        {"word": "Hunde", "status": "known", "reason": ""},
+        {"word": "Katzze", "status": "rejected", "reason": "misspelt"},
+    ]
+    assert [used["id"] for used in task["usage"]][-1] == "chat-1"
+    assert nothing == 400
+
+
+def test_the_sentences_of_a_book_are_read_aloud_once_and_their_audio_kept(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    file = epub(page("<p>Der Hund schläft. Die Katze nicht. Danach?</p>"))
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    book = f"{with_users}/books/{json.loads(added)['id']}"
+    # from the middle of the first sentence to the middle of the second
+    body = {"start_block": 0, "start": 4, "end_block": 0, "end": 24}
+    voiced = json.dumps({**body, "model": "some/tts", "voice": "Kore"}).encode()
+
+    status, first = post(f"{book}/speech", voiced, key="sk-test", token=ada)
+    _, again = post(f"{book}/speech", voiced, token=ada)
+    heard, audio, kind = send(f"{book}/speech/0.1", "GET", ada)
+    unread, _, _ = send(f"{book}/speech/0.2", "GET", ada)
+    unvoiced, _ = post(f"{book}/speech", json.dumps(body).encode(), token=ada)
+    _, tasks, _ = send(f"{with_users}/tasks", "GET", ada)
+
+    assert status == 200 and isinstance(first, dict) and isinstance(again, dict)
+    assert [(one["id"], one["text"], one["ready"]) for one in first["sentences"]] == [
+        ("0.0", "Der Hund schläft.", False),
+        ("0.1", "Die Katze nicht.", False),
+    ]
+    assert first["task"]["kind"] == "speech" and first["task"]["reading"]
+    # the second time there is nothing to make, and so no key is needed
+    assert [one["ready"] for one in again["sentences"]] == [True, True]
+    assert again["task"] is None
+    assert (heard, kind, unread, unvoiced) == (200, "audio/wav", 404, 400)
+    assert "Die Katze nicht.".encode() in audio
+    (task,) = json.loads(tasks)["tasks"]
+    assert (task["state"], task["done"], task["total"]) == ("done", 2, 2)
+    assert [one["status"] for one in task["result"]] == ["made", "made"]
+
+
+def test_a_reading_is_told_where_the_listener_is_and_to_stop(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    place = json.dumps({"at": 3}).encode()
+
+    told, _, _ = send(f"{with_users}/books/b/speech/r", "PUT", ada, place)
+    not_a_place, _, _ = send(f"{with_users}/books/b/speech/r", "PUT", ada, b"{}")
+    stopped, _, _ = send(f"{with_users}/books/b/speech/r", "DELETE", ada)
+
+    assert (told, not_a_place, stopped) == (200, 400, 200)
+
+
+def test_a_message_of_a_chat_is_read_aloud_and_its_audio_removed_with_the_chat(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    chat = f"{with_users}/chats/chat-1"
+    body = {"message": 1, "text": "**Gut!** Weiter so.", "model": "m", "voice": "v"}
+
+    status, reply = post(
+        f"{chat}/speech", json.dumps(body).encode(), key="sk-test", token=ada
+    )
+    heard, audio, _ = send(f"{chat}/speech/1.1", "GET", ada)
+    without_text, _ = post(f"{chat}/speech", b'{"message": 1}', token=ada)
+    send(chat, "DELETE", ada)
+    gone, _, _ = send(f"{chat}/speech/1.1", "GET", ada)
+
+    assert status == 200 and isinstance(reply, dict)
+    assert [(one["id"], one["text"]) for one in reply["sentences"]] == [
+        ("1.0", "Gut!"),
+        ("1.1", "Weiter so."),
+    ]
+    assert (heard, without_text, gone) == (200, 400, 404)
+    assert "Weiter so.".encode() in audio

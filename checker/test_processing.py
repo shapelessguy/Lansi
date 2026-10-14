@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 from intake import Intake, Word
-from processing import MAX_TRIES, Processor, words_of
+from processing import MAX_TRIES, Processor, words_in, words_of
 from storage import UserStore
 from test_intake import KEY, MODEL, FakeChat, FakeProfiler, savable
 from vocabulary import Form, Vocabularies
@@ -291,3 +291,24 @@ def test_a_message_with_a_word_that_fails_is_tried_again_and_then_processed_with
     assert looks == [0] * (MAX_TRIES - 1) + [1]
     assert processed(store) == [True]
     assert listed["Hund"].used == 1
+
+
+def test_the_words_of_a_selection_come_with_the_whole_sentence_each_is_in() -> None:
+    words = words_in("Der Hund ", "schläft. Die Katze", " nicht. Danach.")
+
+    assert words == [
+        Word("schläft", "Der Hund schläft."),
+        Word("Die", "Die Katze nicht."),
+        Word("Katze", "Die Katze nicht."),
+    ]
+
+
+def test_a_word_a_selection_has_part_of_is_one_of_its_words() -> None:
+    assert words_in("Der Hu", "nd schl", "äft.") == [
+        Word("Hund", "Der Hund schläft."),
+        Word("schläft", "Der Hund schläft."),
+    ]
+
+
+def test_a_selection_without_letters_has_no_words() -> None:
+    assert words_in("Um 7", ".05 ", "Uhr.") == []

@@ -20,9 +20,13 @@ export interface Settings {
     ankiLanguage: string;
     /** How far along the learner is in the language being learned, such as "B1". */
     level: string;
+    /** The language what is selected is translated into, by its English name. */
+    translateInto: string;
     /** The set of words `{{words}}` stands for, by its id, for each language. Without one it is every word. */
     activeSets: Record<string, string>;
     model: string;
+    /** The model that translates what is selected. Left empty, it is the one of the chat. */
+    translationModel: string;
     contexts: ChatContext[];
     /** The context new chats start with. */
     defaultContextId: string;
@@ -40,8 +44,50 @@ export interface Settings {
     enterSends: boolean;
     /** Whether the words of each sentence are rated once the questions about it are answered. */
     rateWords: boolean;
+    /** Whether each reply in the chat is read aloud once it has arrived. */
+    speakReplies: boolean;
     /** Whether the Anki words the vocabulary lacks are taken into it as the app runs. */
     importAnki: boolean;
+    /** Whether the app is light or dark, or as the machine it is shown on is. */
+    theme: keyof typeof THEMES;
+    /** The colour of what stands out, such as the buttons that send. */
+    accent: keyof typeof ACCENTS;
+    /** How large the app is written. */
+    textSize: keyof typeof TEXT_SIZES;
+}
+
+export const THEMES = { system: "As the system", light: "Light", dark: "Dark" } as const;
+
+/** The colours to choose from for what stands out, each as it is on a light and on a dark app. */
+export const ACCENTS = {
+    blue: { label: "Blue", light: "#2f6fde", dark: "#6ea0f5" },
+    teal: { label: "Teal", light: "#0b7285", dark: "#4fc3d9" },
+    green: { label: "Green", light: "#1f7a4d", dark: "#5cc48d" },
+    orange: { label: "Orange", light: "#b85c00", dark: "#f0a04b" },
+    rose: { label: "Rose", light: "#c2255c", dark: "#f783ac" },
+    purple: { label: "Purple", light: "#6b4fd8", dark: "#a594f9" },
+} as const;
+
+/** How large the app can be written, in pixels. */
+export const TEXT_SIZES = {
+    small: { label: "Small", px: 13.5 },
+    normal: { label: "Normal", px: 15 },
+    large: { label: "Large", px: 16.5 },
+    larger: { label: "Larger", px: 18 },
+} as const;
+
+/** Has the page look as the settings say. */
+export function applyAppearance(settings: Pick<Settings, "theme" | "accent" | "textSize">): void {
+    const page = document.documentElement;
+    // without a theme, the page is as the machine is
+    if (settings.theme === "system") {
+        delete page.dataset.theme;
+    } else {
+        page.dataset.theme = settings.theme;
+    }
+    page.style.setProperty("--accent-light", ACCENTS[settings.accent].light);
+    page.style.setProperty("--accent-dark", ACCENTS[settings.accent].dark);
+    page.style.fontSize = `${TEXT_SIZES[settings.textSize].px}px`;
 }
 
 /** Replaced in a prompt by the words of the set that is in use. */
@@ -76,6 +122,21 @@ export const LANGUAGES = [
     "Spanish",
 ] as const;
 
+/** The languages what is selected can be translated into, by their English names. */
+export const TRANSLATION_LANGUAGES = [
+    ...LANGUAGES,
+    "Chinese",
+    "Greek",
+    "Hindi",
+    "Japanese",
+    "Korean",
+    "Polish",
+    "Romanian",
+    "Swedish",
+    "Turkish",
+    "Ukrainian",
+].sort();
+
 const STORAGE_KEY = "chat-ui.settings";
 
 export function defaultSettings(): Settings {
@@ -84,8 +145,10 @@ export function defaultSettings(): Settings {
         language: "German",
         ankiLanguage: "German",
         level: "B1",
+        translateInto: "English",
         activeSets: {},
         model: "openrouter/auto",
+        translationModel: "",
         contexts: [
             {
                 id: "tutor",
@@ -114,7 +177,11 @@ export function defaultSettings(): Settings {
         questions: defaultQuestions(),
         enterSends: true,
         rateWords: true,
+        speakReplies: false,
         importAnki: true,
+        theme: "system",
+        accent: "blue",
+        textSize: "normal",
     };
 }
 
@@ -132,17 +199,22 @@ export function normalizeSettings(stored: unknown): Settings {
         ? candidate.defaultContextId!
         : contexts[0].id;
     // settings saved before a field existed, or left blank where a value is needed, get the default
-    const text = (key: "model" | "textPrompt" | "speechModel" | "speechVoice" | "profileModel") =>
-        typeof candidate[key] === "string" && candidate[key] ? candidate[key] : defaults[key];
+    const text = (
+        key: "model" | "textPrompt" | "speechModel" | "speechVoice" | "profileModel" | "translateInto",
+    ) => typeof candidate[key] === "string" && candidate[key].trim() ? candidate[key] : defaults[key];
     return {
         apiKey: typeof candidate.apiKey === "string" ? candidate.apiKey : defaults.apiKey,
         language: LANGUAGES.find((language) => language === candidate.language) ?? defaults.language,
         ankiLanguage: LANGUAGES.find((language) => language === candidate.ankiLanguage) ?? defaults.ankiLanguage,
         level: LEVELS.find((level) => level === candidate.level) ?? defaults.level,
+        translateInto: text("translateInto"),
         activeSets: typeof candidate.activeSets === "object" && candidate.activeSets !== null
             ? candidate.activeSets
             : defaults.activeSets,
         model: text("model"),
+        translationModel: typeof candidate.translationModel === "string"
+            ? candidate.translationModel
+            : defaults.translationModel,
         contexts,
         defaultContextId,
         textPrompt: text("textPrompt"),
@@ -158,7 +230,11 @@ export function normalizeSettings(stored: unknown): Settings {
             : defaults.questions,
         enterSends: typeof candidate.enterSends === "boolean" ? candidate.enterSends : defaults.enterSends,
         rateWords: typeof candidate.rateWords === "boolean" ? candidate.rateWords : defaults.rateWords,
+        speakReplies: typeof candidate.speakReplies === "boolean" ? candidate.speakReplies : defaults.speakReplies,
         importAnki: typeof candidate.importAnki === "boolean" ? candidate.importAnki : defaults.importAnki,
+        theme: Object.hasOwn(THEMES, candidate.theme ?? "") ? candidate.theme! : defaults.theme,
+        accent: Object.hasOwn(ACCENTS, candidate.accent ?? "") ? candidate.accent! : defaults.accent,
+        textSize: Object.hasOwn(TEXT_SIZES, candidate.textSize ?? "") ? candidate.textSize! : defaults.textSize,
     };
 }
 

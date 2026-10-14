@@ -3,18 +3,36 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { BookList } from "./components/BookList";
+import { BookReader } from "./components/BookReader";
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
+import { SelectionTools } from "./components/SelectionTools";
 import { SetEditor } from "./components/SetEditor";
 import { SettingsPanel, type SettingsTab } from "./components/SettingsPanel";
 import { SidePanel } from "./components/SidePanel";
+import { SpeechPlayer } from "./components/SpeechPlayer";
+import { SubChat } from "./components/SubChat";
+import { TaskSign } from "./components/TaskSign";
 import { TextList } from "./components/TextList";
 import { TextStudio } from "./components/TextStudio";
 import { UsagePanel } from "./components/UsagePanel";
 import { VocabularyList } from "./components/VocabularyList";
 import { WordList } from "./components/WordList";
-import { fetchKnownWords } from "./lib/anki";
+import { fetchKnownWords, seesAnkiWords } from "./lib/anki";
 import { useAnkiImport } from "./lib/ankiImport";
+import {
+    addBook,
+    changeReading,
+    chooseFolder,
+    deleteBook,
+    fetchBooks,
+    fetchFolderSync,
+    type FolderSync,
+    type ListedBook,
+    loadReading,
+    syncFolder,
+} from "./lib/books";
 import {
     activeChat,
     type ChatStore,
@@ -31,10 +49,14 @@ import {
 } from "./lib/chats";
 import { loadLayout, type Panel, saveLayout } from "./lib/layout";
 import type { ChatMessage } from "./lib/openrouter";
+import { fetchGenerationUsage } from "./lib/openrouter";
 import { logOut } from "./lib/session";
 import { deleteSet, fetchSets, newSet, saveSet, wordLists, type WordSet } from "./lib/sets";
-import { saveSettings, type Settings } from "./lib/settings";
+import { applyAppearance, saveSettings, type Settings } from "./lib/settings";
+import { bookSource, messageSource, type SpeechSource, type Voice } from "./lib/speaking";
+import { type BackgroundTask, fetchTasks, TASKS_INTERVAL_MS, withTask } from "./lib/tasks";
 import { fetchTexts, type SavedText } from "./lib/texts";
+import { type Asking, type Translated, usageEntry } from "./lib/translate";
 import { addUsage, loadUsage, saveUsage, type UsageEntry } from "./lib/usage";
 import { fetchVocabulary, type Vocabulary } from "./lib/vocabulary";
 import type { Word } from "./lib/words";
@@ -49,6 +71,11 @@ export type TextsState =
     | { status: "error"; message: string }
     | { status: "ready"; texts: SavedText[] };
 
+export type BooksState =
+    | { status: "loading" }
+    | { status: "error"; message: string }
+    | { status: "ready"; books: ListedBook[] };
+
 interface Props {
     /** Who is logged in. */
     user: string;
@@ -62,25 +89,40 @@ export function App({ user, initialSettings, initialChats }: Props) {
     // the panel on the left, with the words, the chats and the texts
     const [libraryOpen, setLibraryOpen] = useState(() => loadLayout().libraryOpen);
     // the panels on the right share one place, so one is shown at a time
-    const [openPanel, setOpenPanel] = useState<Panel | null>(() => loadLayout().panel);
-    // the panels are found as they were left the next time the page is opened
-    useEffect(() => saveLayout({ libraryOpen, panel: openPanel }), [libraryOpen, openPanel]);
+    const [openPanel, setOpenPanel] = useState<Panel | "subchat" | null>(() => loadLayout().panel);
+    // The panels are found as they were left the next time the page is
+    // opened, but for the chat about a selection, which is gone by then.
+    useEffect(
+        () => saveLayout({ libraryOpen, panel: openPanel === "subchat" ? null : openPanel }),
+        [libraryOpen, openPanel],
+    );
+    // the selection the chat at the side is about, with a number that tells it from the one before
+    const [asked, setAsked] = useState<{ translated: Translated; nonce: number } | null>(null);
     const [settingsTab, setSettingsTab] = useState<SettingsTab>("models");
     // where the chat puts the sentence checks, which are made of what it knows
     const [panelSlot, setPanelSlot] = useState<HTMLElement | null>(null);
     const [wordsState, setWordsState] = useState<WordsState>({ status: "loading" });
+    // the Anki words are those of one user, and the tab with them is that user's alone
+    const ankiWords = seesAnkiWords(user);
     // text a clicked word adds to the message being written
     const [picked, setPicked] = useState<{ word: string; nonce: number } | null>(null);
     const [usage, setUsage] = useState<UsageEntry[]>(loadUsage);
     const [chatStore, setChatStore] = useState<ChatStore>(() =>
         storeOf(initialChats, initialSettings.defaultContextId, initialSettings.language)
     );
-    const [sidebarTab, setSidebarTab] = useState<"words" | "vocabulary" | "chats" | "texts">("vocabulary");
+    const [sidebarTab, setSidebarTab] = useState<"words" | "vocabulary" | "chats" | "texts" | "books">(
+        "vocabulary",
+    );
     // how many words the vocabulary has, once it has been listed
     const [vocabularyCount, setVocabularyCount] = useState<number | null>(null);
-    const [activity, setActivity] = useState<"chat" | "texts">("chat");
+    const [activity, setActivity] = useState<"chat" | "texts" | "books">("chat");
     const [textsState, setTextsState] = useState<TextsState>({ status: "loading" });
     const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+    const [booksState, setBooksState] = useState<BooksState>({ status: "loading" });
+    // the book in the reader, which is the one that was read last
+    const [bookId, setBookId] = useState<string | null>(() => loadReading().bookId);
+    const [addingBook, setAddingBook] = useState(false);
+    const [bookError, setBookError] = useState<string | null>(null);
     const chat = activeChat(chatStore);
     const chats = listedChats(chatStore);
     // The words a prompt is given come from the vocabulary of the language
@@ -98,6 +140,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
     const selectedText = texts.find((text) => text.id === selectedTextId) ?? null;
 
     useEffect(() => saveUsage(usage), [usage]);
+    useEffect(() => applyAppearance(settings), [settings.theme, settings.accent, settings.textSize]);
 
     // The server is told of the chats that change, and of those that are
     // deleted. A reply changes its chat many times a second while it
@@ -154,6 +197,86 @@ export function App({ user, initialSettings, initialChats }: Props) {
 
     useEffect(loadTexts, [loadTexts]);
 
+    const loadBooks = useCallback(() => {
+        setBooksState({ status: "loading" });
+        fetchBooks().then(
+            (books) => setBooksState({ status: "ready", books }),
+            (error: Error) => setBooksState({ status: "error", message: error.message }),
+        );
+    }, []);
+
+    useEffect(loadBooks, [loadBooks]);
+
+    // The server takes the books of a folder by itself. It is asked how that
+    // is going, often while it looks through the folder and seldom
+    // otherwise, and the books are listed again when it has changed them.
+    const [bookSync, setBookSync] = useState<FolderSync | null>(null);
+    const syncRevision = useRef<number | null>(null);
+    const followSync = useCallback((sync: FolderSync) => {
+        setBookSync(sync);
+        if (syncRevision.current !== null && syncRevision.current !== sync.revision) {
+            fetchBooks().then((books) => setBooksState({ status: "ready", books }), () => undefined);
+        }
+        syncRevision.current = sync.revision;
+    }, []);
+    const syncing = bookSync?.state === "syncing";
+    useEffect(() => {
+        let stopped = false;
+        const look = () => fetchFolderSync().then((sync) => stopped || followSync(sync), () => undefined);
+        look();
+        const timer = setInterval(look, syncing ? 1500 : 15000);
+        return () => {
+            stopped = true;
+            clearInterval(timer);
+        };
+    }, [syncing, followSync]);
+
+    function tellSync(asked: Promise<FolderSync>) {
+        setBookError(null);
+        asked.then(followSync, (error: Error) => setBookError(error.message));
+    }
+
+    function openBook(id: string | null) {
+        setBookId(changeReading((reading) => ({ ...reading, bookId: id })).bookId);
+        if (id !== null) {
+            setActivity("books");
+        }
+    }
+
+    function takeBook(file: File) {
+        setAddingBook(true);
+        setBookError(null);
+        addBook(file).then(
+            (added) => {
+                setBooksState((state) => ({
+                    status: "ready",
+                    books: [added, ...(state.status === "ready" ? state.books : [])],
+                }));
+                openBook(added.id);
+            },
+            (error: Error) => setBookError(error.message),
+        ).finally(() => setAddingBook(false));
+    }
+
+    function removeBook(id: string) {
+        setBookError(null);
+        deleteBook(id).then(
+            () => {
+                setBooksState((state) =>
+                    state.status === "ready"
+                        ? { status: "ready", books: state.books.filter((book) => book.id !== id) }
+                        : state
+                );
+                // how far it was read is forgotten with it
+                changeReading(({ places: { [id]: _, ...places }, ...reading }) => ({ ...reading, places }));
+                if (id === bookId) {
+                    openBook(null);
+                }
+            },
+            (error: Error) => setBookError(error.message),
+        );
+    }
+
     const changeTexts = useCallback(
         (change: (texts: SavedText[]) => SavedText[]) =>
             setTextsState((state) => ({
@@ -169,12 +292,15 @@ export function App({ user, initialSettings, initialChats }: Props) {
     );
 
     const loadWords = useCallback(() => {
+        if (!ankiWords) {
+            return;
+        }
         setWordsState({ status: "loading" });
         fetchKnownWords().then(
             (words) => setWordsState({ status: "ready", words }),
             (error: Error) => setWordsState({ status: "error", message: error.message }),
         );
-    }, []);
+    }, [ankiWords]);
 
     useEffect(loadWords, [loadWords]);
 
@@ -235,7 +361,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
         setEditedSet(null);
     }
     const importing = useAnkiImport({
-        enabled: settings.importAnki,
+        enabled: settings.importAnki && ankiWords,
         apiKey: settings.apiKey,
         model: settings.model,
         decisionModel: settings.profileModel,
@@ -257,8 +383,92 @@ export function App({ user, initialSettings, initialChats }: Props) {
         onImported: useCallback(() => setVocabularyRevision((revision) => revision + 1), []),
     });
 
-    // the sentence checks belong to the chat
-    const panel = openPanel === "checks" && activity !== "chat" ? null : openPanel;
+    // What the server does in the background is asked after while any of
+    // it is still running, and once at the start, as it goes on while the
+    // page is away. What a task used is counted when it is done, and the
+    // words are listed again, as it may have added some.
+    const [tasks, setTasks] = useState<BackgroundTask[]>([]);
+    const finished = useRef(new Set<string>());
+    // who reads the sentences of a book aloud, and how
+    const voice = useMemo<Voice>(
+        () => ({
+            apiKey: settings.apiKey,
+            model: settings.speechModel,
+            voice: settings.speechVoice,
+            instructions: settings.speechInstructions,
+        }),
+        [settings.apiKey, settings.speechModel, settings.speechVoice, settings.speechInstructions],
+    );
+    const latestVoice = useRef(voice);
+    latestVoice.current = voice;
+    const followTasks = useCallback((fetched: BackgroundTask[]) => {
+        setTasks(fetched);
+        for (const task of fetched) {
+            if (task.state === "running" || finished.current.has(task.id)) {
+                continue;
+            }
+            finished.current.add(task.id);
+            task.usage.forEach((used) => addUsageEntry(usageEntry(used, Date.now())));
+            if (task.kind === "words") {
+                setVocabularyRevision((revision) => revision + 1);
+            }
+            // Audio comes without what it cost, which is looked up
+            // afterwards, by what each request for it goes by.
+            const { apiKey, model } = latestVoice.current;
+            for (const { generation } of task.result) {
+                if (generation && apiKey) {
+                    void fetchGenerationUsage(apiKey, generation).then((used) =>
+                        addUsageEntry({
+                            id: generation,
+                            at: Date.now(),
+                            chatId: "speech",
+                            model: used?.model ?? model,
+                            promptTokens: used?.promptTokens ?? 0,
+                            completionTokens: used?.completionTokens ?? 0,
+                            cost: used?.cost ?? null,
+                        })
+                    );
+                }
+            }
+        }
+    }, [addUsageEntry]);
+    // what is read aloud, with a number that tells it from what was read before
+    const [listening, setListening] = useState<{ source: SpeechSource; nonce: number } | null>(null);
+    const speakMessage = useCallback(
+        (chatId: string, place: number, text: string) =>
+            setListening({ source: messageSource(chatId, place, text), nonce: Date.now() }),
+        [],
+    );
+    const tasksRunning = tasks.some((task) => task.state === "running");
+    useEffect(() => {
+        let stopped = false;
+        const look = () => fetchTasks().then((fetched) => stopped || followTasks(fetched), () => undefined);
+        look();
+        const timer = tasksRunning ? setInterval(look, TASKS_INTERVAL_MS) : undefined;
+        return () => {
+            stopped = true;
+            clearInterval(timer);
+        };
+    }, [tasksRunning, followTasks]);
+
+    // the sentence checks belong to the chat, and the chat at the side to a selection
+    const panel = (openPanel === "checks" && activity !== "chat") || (openPanel === "subchat" && !asked)
+        ? null
+        : openPanel;
+    // who answers what is asked about a selection, and who translates it, which may be a quicker model
+    const asking = useMemo<Asking>(
+        () => ({
+            apiKey: settings.apiKey,
+            model: settings.model,
+            language: settings.language,
+            into: settings.translateInto,
+        }),
+        [settings.apiKey, settings.model, settings.language, settings.translateInto],
+    );
+    const translating = useMemo<Asking>(
+        () => ({ ...asking, model: settings.translationModel || asking.model }),
+        [asking, settings.translationModel],
+    );
 
     function togglePanel(wanted: Panel) {
         setOpenPanel(panel === wanted ? null : wanted);
@@ -288,19 +498,21 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 aria-selected={sidebarTab === "vocabulary"}
                                 onClick={() => setSidebarTab("vocabulary")}
                             >
-                                Vocabulary
+                                Words
                                 <span className="count">{vocabularyCount ?? vocabulary?.words.length}</span>
                             </button>
-                            <button
-                                role="tab"
-                                aria-selected={sidebarTab === "words"}
-                                onClick={() => setSidebarTab("words")}
-                            >
-                                Anki words
-                                <span className="count">
-                                    {wordsState.status === "ready" && wordsState.words.length}
-                                </span>
-                            </button>
+                            {ankiWords && (
+                                <button
+                                    role="tab"
+                                    aria-selected={sidebarTab === "words"}
+                                    onClick={() => setSidebarTab("words")}
+                                >
+                                    Anki
+                                    <span className="count">
+                                        {wordsState.status === "ready" && wordsState.words.length}
+                                    </span>
+                                </button>
+                            )}
                             <button
                                 role="tab"
                                 aria-selected={sidebarTab === "chats"}
@@ -317,17 +529,30 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 Texts
                                 <span className="count">{texts.length > 0 && texts.length}</span>
                             </button>
+                            <button
+                                role="tab"
+                                aria-selected={sidebarTab === "books"}
+                                onClick={() => setSidebarTab("books")}
+                            >
+                                Books
+                                <span className="count">
+                                    {booksState.status === "ready" && booksState.books.length > 0
+                                        && booksState.books.length}
+                                </span>
+                            </button>
                         </div>
                     }
                 >
                     {/* kept in place while hidden, so the word filter and sort order survive a visit to the chats */}
-                    <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "words"}>
-                        <WordList
-                            state={wordsState}
-                            onReload={loadWords}
-                            onPick={(word) => setPicked({ word: word.word, nonce: Date.now() })}
-                        />
-                    </div>
+                    {ankiWords && (
+                        <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "words"}>
+                            <WordList
+                                state={wordsState}
+                                onReload={loadWords}
+                                onPick={(word) => setPicked({ word: word.word, nonce: Date.now() })}
+                            />
+                        </div>
+                    )}
                     <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "vocabulary"}>
                         <VocabularyList
                             active={libraryOpen && sidebarTab === "vocabulary"}
@@ -339,7 +564,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             onActiveSet={pickSet}
                             onEditSet={(set) => setEditedSet(set ?? newSet())}
                             onCount={setVocabularyCount}
-                            importing={importing}
+                            importing={ankiWords ? importing : null}
                         />
                     </div>
                     <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "chats"}>
@@ -368,6 +593,21 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             onReload={loadTexts}
                         />
                     </div>
+                    <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "books"}>
+                        <BookList
+                            state={booksState}
+                            selectedId={bookId}
+                            adding={addingBook}
+                            addError={bookError}
+                            sync={bookSync}
+                            onFolder={(folder) => tellSync(chooseFolder(folder))}
+                            onSync={() => tellSync(syncFolder())}
+                            onSelect={openBook}
+                            onAdd={takeBook}
+                            onDelete={removeBook}
+                            onReload={loadBooks}
+                        />
+                    </div>
                 </SidePanel>
             </aside>
             <main className="main">
@@ -380,8 +620,12 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         <button role="tab" aria-selected={activity === "texts"} onClick={() => setActivity("texts")}>
                             Texts
                         </button>
+                        <button role="tab" aria-selected={activity === "books"} onClick={() => setActivity("books")}>
+                            Books
+                        </button>
                     </div>
                     <span className="model" title="Model">{settings.model}</span>
+                    <TaskSign tasks={tasks} />
                     {activity === "chat" && (
                         <button
                             aria-pressed={panel === "checks"}
@@ -410,6 +654,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         picked={activity === "chat" ? picked : null}
                         onOpenSettings={() => openSettings("models")}
                         onUsage={addUsageEntry}
+                        onSpeak={speakMessage}
                         chat={chat}
                         onMessages={changeMessages}
                         onContext={(contextId) =>
@@ -433,6 +678,9 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         storageError={textsState.status === "error" ? textsState.message : null}
                     />
                 </div>
+                <div className="pane" hidden={activity !== "books"}>
+                    <BookReader bookId={bookId} active={activity === "books"} />
+                </div>
             </main>
             <aside
                 className="side-panel"
@@ -442,14 +690,24 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 {panel === "usage" && (
                     <UsagePanel
                         entries={usage}
-                        currentLabel={activity === "chat" ? "This chat" : "This text"}
-                        chatId={activity === "chat" ? chat.id : `text:${selectedTextId}`}
+                        currentLabel={activity === "texts" ? "This text" : "This chat"}
+                        chatId={activity === "texts" ? `text:${selectedTextId}` : chat.id}
+                        onClose={() => setOpenPanel(null)}
+                    />
+                )}
+                {panel === "subchat" && asked && (
+                    <SubChat
+                        key={asked.nonce}
+                        translated={asked.translated}
+                        asking={asking}
+                        onUsage={addUsageEntry}
                         onClose={() => setOpenPanel(null)}
                     />
                 )}
                 {panel === "settings" && (
                     <SettingsPanel
                         settings={settings}
+                        ankiWords={ankiWords}
                         tab={settingsTab}
                         onTab={setSettingsTab}
                         onChange={updateSettings}
@@ -457,6 +715,28 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     />
                 )}
             </aside>
+            <SelectionTools
+                translating={translating}
+                describing={asking}
+                decisionModel={settings.profileModel}
+                onUsage={addUsageEntry}
+                onTask={(task) => setTasks((current) => withTask(current, task))}
+                onPlay={(selection) =>
+                    bookId && setListening({ source: bookSource(bookId, selection), nonce: Date.now() })}
+                onChat={(translated) => {
+                    setAsked({ translated, nonce: Date.now() });
+                    setOpenPanel("subchat");
+                }}
+            />
+            {listening && (
+                <SpeechPlayer
+                    key={listening.nonce}
+                    source={listening.source}
+                    voice={voice}
+                    onTask={(task) => setTasks((current) => withTask(current, task))}
+                    onClose={() => setListening(null)}
+                />
+            )}
             {editedSet && vocabulary && (
                 <SetEditor
                     key={editedSet.id}

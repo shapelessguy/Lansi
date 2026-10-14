@@ -48,6 +48,26 @@ def words_of(text: str) -> list[Word]:
     return words
 
 
+def words_in(before: str, selection: str, after: str) -> list[Word]:
+    """The words of a `selection` out of a text, each with the sentence it
+    is in. `before` is the text up to the selection and `after` the text
+    from its end, so that a sentence the selection has only part of is
+    given whole. A word the selection has only part of is one of its words."""
+    text = before + selection + after
+    start, end = len(before), len(before) + len(selection)
+    words = []
+    for sentence in split_sentences(text):
+        if sentence.end <= start or sentence.start >= end:
+            continue
+        for word in _WORD.finditer(sentence.text):
+            if (
+                sentence.start + word.end() > start
+                and sentence.start + word.start() < end
+            ):
+                words.append(Word(word.group(), sentence.text))
+    return words
+
+
 class Processor:
     def __init__(
         self,

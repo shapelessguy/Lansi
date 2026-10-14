@@ -221,3 +221,100 @@ def test_what_a_user_has_is_still_there_when_it_is_opened_again(
     assert [kept["id"] for kept in again.chats()] == ["chat-1"]
     assert again.settings() == {"level": "B1"}
     assert UserStore(tmp_path / "ben").chats() == []
+
+
+def test_a_book_is_listed_without_what_it_says_and_given_whole_when_asked_for(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path / "ada", now=lambda: 12.5)
+    blocks = [{"text": "Der Hund", "size": 2}, {"text": "Es war einmal.", "size": 1}]
+
+    listed = store.add_book("book-1", "Der Hund", "Ada Autorin", "de", blocks)
+
+    assert listed == {
+        "id": "book-1",
+        "title": "Der Hund",
+        "author": "Ada Autorin",
+        "language": "de",
+        "addedAt": 12500,
+        "source": None,
+        "cover": False,
+    }
+    assert store.books() == [listed]
+    assert store.book("book-1") == {**listed, "blocks": blocks}
+
+
+def test_a_book_that_is_removed_is_gone(store: UserStore) -> None:
+    store.add_book("book-1", "Der Hund", "", "", [{"text": "Text.", "size": 1}])
+
+    store.delete_book("book-1")
+
+    assert store.books() == []
+    assert store.book("book-1") is None
+
+
+def test_books_can_be_kept_where_things_were_kept_before_there_were_books(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.save_settings({"level": "B1"})
+    before._db.execute("DROP TABLE books")  # noqa: SLF001
+    before._db.execute("DROP TABLE book_speech")  # noqa: SLF001
+    before._db.execute("PRAGMA user_version = 1")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+    store.add_book("book-1", "Der Hund", "", "", [])
+
+    assert [book["title"] for book in store.books()] == ["Der Hund"]
+    assert store.settings() == {"level": "B1"}
+
+
+def test_a_book_from_the_folder_is_known_by_its_file_and_stays_as_long_ago_added(
+    tmp_path: Path,
+) -> None:
+    times = iter([10.0, 20.0, 30.0])
+    store = UserStore(tmp_path / "ada", now=lambda: next(times))
+    store.add_book("book-1", "Der Hund", "", "", [], "tiere/hund.epub", "1:100")
+    store.add_book("by-hand", "Die Katze", "", "", [])
+
+    read_again = store.add_book(
+        "book-1", "Der große Hund", "", "", [], "tiere/hund.epub", "2:120"
+    )
+
+    assert store.books_from_folder() == {"tiere/hund.epub": ("book-1", "2:120")}
+    assert (read_again["title"], read_again["addedAt"]) == ("Der große Hund", 10000)
+    assert read_again["source"] == "tiere/hund.epub"
+
+
+def test_the_folder_of_books_is_kept(store: UserStore) -> None:
+    nowhere = store.books_folder()
+
+    store.save_books_folder(r"C:\Users\ada\OneDrive\Bücher")
+
+    assert (nowhere, store.books_folder()) == ("", r"C:\Users\ada\OneDrive\Bücher")
+
+
+def test_the_cover_of_a_book_is_kept_with_it_and_removed_with_it(
+    store: UserStore,
+) -> None:
+    picture = (b"\x89PNG-and-so-on", "image/png")
+    with_cover = store.add_book("book-1", "Der Hund", "", "", [], cover=picture)
+    store.add_book("book-2", "Die Katze", "", "", [])
+
+    kept = store.cover("book-1")
+    store.delete_book("book-1")
+
+    assert with_cover["cover"] is True
+    assert kept == picture
+    assert (store.cover("book-2"), store.cover("book-1")) == (None, None)
+
+
+def test_a_book_that_is_read_again_without_a_cover_has_none_any_more(
+    store: UserStore,
+) -> None:
+    store.add_book("book-1", "Der Hund", "", "", [], cover=(b"GIF89a", "image/gif"))
+
+    again = store.add_book("book-1", "Der Hund", "", "", [])
+
+    assert (again["cover"], store.cover("book-1")) == (False, None)

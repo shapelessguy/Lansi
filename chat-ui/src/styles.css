@@ -1,13 +1,18 @@
+/* The colours of the app. It is light, or dark where the machine is, unless
+   the settings say which, by a theme on the page. The colour of what stands
+   out is one of two, by which of them the app is. */
 :root {
-    color-scheme: light dark;
+    color-scheme: light;
+    --accent-light: #2f6fde;
+    --accent-dark: #6ea0f5;
     --bg: #ffffff;
     --panel: #f6f6f4;
     --border: #e2e1dc;
     --text: #1d1d1b;
     --muted: #6d6c66;
-    --accent: #2f6fde;
+    --accent: var(--accent-light);
     --accent-text: #ffffff;
-    --user-bubble: #e9f0fd;
+    --user-bubble: color-mix(in srgb, var(--accent) 11%, var(--bg));
     --danger: #b3261e;
     --danger-bg: #fdecea;
     --done-bg: rgb(46 160 67 / 14%);
@@ -19,20 +24,38 @@
 }
 
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
         --bg: #1b1b1a;
         --panel: #232322;
         --border: #3a3a37;
         --text: #ecebe6;
         --muted: #a3a29b;
-        --accent: #6ea0f5;
+        --accent: var(--accent-dark);
         --accent-text: #10141c;
-        --user-bubble: #2a3550;
+        --user-bubble: color-mix(in srgb, var(--accent) 24%, var(--bg));
         --danger: #f2b8b5;
         --danger-bg: #4a2523;
         --done-bg: rgb(63 185 80 / 16%);
         --doubt: 248 81 73;
     }
+}
+
+/* the same as above, for where the settings say dark and the machine does not */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #1b1b1a;
+    --panel: #232322;
+    --border: #3a3a37;
+    --text: #ecebe6;
+    --muted: #a3a29b;
+    --accent: var(--accent-dark);
+    --accent-text: #10141c;
+    --user-bubble: color-mix(in srgb, var(--accent) 24%, var(--bg));
+    --danger: #f2b8b5;
+    --danger-bg: #4a2523;
+    --done-bg: rgb(63 185 80 / 16%);
+    --doubt: 248 81 73;
 }
 
 * {
@@ -145,6 +168,7 @@ a {
 
 .tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     padding: 10px 10px 0;
     border-bottom: 1px solid var(--border);
@@ -904,6 +928,155 @@ a {
     padding: 8px 16px;
 }
 
+/* books */
+
+.reader {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.reader-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.reader-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reader-note {
+    margin: 0;
+    padding: 20px 16px;
+    color: var(--muted);
+}
+
+.reader-note.error {
+    color: var(--danger);
+}
+
+.reader-note p {
+    margin: 0 0 8px;
+}
+
+/* how the book looks: its font, its colours and how far apart its lines are */
+.reader-options {
+    display: flex;
+    align-items: center;
+    gap: 8px 16px;
+    flex-wrap: wrap;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+}
+
+.reader-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+}
+
+.swatches {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.swatch {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.swatch[aria-checked="true"] {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.reader-page {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    padding: 20px clamp(16px, 4%, 56px);
+}
+
+/* what the pages are seen through, one at a time */
+.reader-view {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* the text, in columns as wide and as high as a page, one beside the other */
+.reader-columns {
+    /* the paragraphs say where they are from its start */
+    position: relative;
+    height: 100%;
+    column-count: 1;
+    column-fill: auto;
+    overflow-wrap: anywhere;
+}
+
+.reader-columns p {
+    margin: 0;
+    padding: 0.4em 0;
+    /* a line break in a paragraph is one the book has */
+    white-space: pre-line;
+}
+
+/* a link is told by its line, as the page may be of any colour */
+.reader-columns a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentcolor 50%, transparent);
+    text-underline-offset: 0.18em;
+    cursor: pointer;
+}
+
+.reader-columns a:hover {
+    text-decoration-color: currentcolor;
+}
+
+/* books in the library */
+
+.book-cover {
+    flex-shrink: 0;
+    width: 34px;
+    height: 50px;
+    margin-left: 6px;
+    border-radius: 3px;
+    object-fit: cover;
+    background: var(--border);
+}
+
+/* a book without a picture has the first letter of its title */
+div.book-cover {
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.book-folder {
+    flex: 1;
+    min-width: 0;
+}
+
 /* chat */
 
 .chat-header {
@@ -984,11 +1157,13 @@ a {
     white-space: pre-wrap;
 }
 
-.message.assistant > :first-child {
+.message.assistant > :first-child,
+.message-text > :first-child {
     margin-top: 0;
 }
 
-.message.assistant > :last-child {
+.message.assistant > :last-child,
+.message-text > :last-child {
     margin-bottom: 0;
 }
 
@@ -1137,6 +1312,251 @@ a {
 
 .composer button {
     padding: 10px 16px;
+}
+
+/* The buttons over text that is selected, and the box with its translation.
+   They are placed by the selection, over everything else. */
+.selection-bar,
+.selection-box {
+    position: fixed;
+    z-index: 30;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+    color: var(--text);
+    font-size: 0.93rem;
+}
+
+.selection-bar {
+    display: flex;
+    padding: 3px;
+    border-radius: 10px;
+    background: var(--bg);
+    white-space: nowrap;
+}
+
+/* the buttons are told apart by a line between them, and have no edge of their own */
+.selection-bar button {
+    padding: 5px 12px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    font-weight: 500;
+}
+
+.selection-bar button:hover {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+}
+
+.selection-bar button + button {
+    margin-left: 7px;
+}
+
+.selection-bar button + button::before {
+    content: "";
+    position: absolute;
+    top: 9px;
+    bottom: 9px;
+    margin-left: -16px;
+    border-left: 1px solid var(--border);
+    pointer-events: none;
+}
+
+/* the sign that something is done in the background, with the list it opens under it */
+.task-sign {
+    position: relative;
+}
+
+.task-sign > button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.spinner {
+    width: 0.8em;
+    height: 0.8em;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.task-list {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 25;
+    display: grid;
+    width: min(380px, calc(100vw - 16px));
+    max-height: min(70vh, 520px);
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+    list-style: none;
+}
+
+.task {
+    display: grid;
+    gap: 4px;
+    padding: 10px 14px;
+}
+
+.task + .task {
+    border-top: 1px solid var(--border);
+}
+
+.task-kind {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.task-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-state {
+    color: var(--muted);
+    font-size: 0.87rem;
+}
+
+.task.failed .task-state {
+    color: var(--danger);
+}
+
+.task progress {
+    width: 100%;
+    height: 6px;
+    accent-color: var(--accent);
+}
+
+.selection-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.87rem;
+}
+
+.selection-words li {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.selection-words li.failed {
+    background: var(--danger-bg);
+    color: var(--danger);
+}
+
+.selection-box {
+    display: grid;
+    gap: 8px;
+    width: max-content;
+    max-width: min(380px, calc(100vw - 16px));
+    max-height: min(60vh, 420px);
+    padding: 12px 14px;
+    overflow-y: auto;
+}
+
+.selection-box p {
+    margin: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+/* what was selected, cut short if it is long */
+.selection-source {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.87rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+.selection-translation {
+    font-size: 1.05rem;
+}
+
+.selection-error {
+    color: var(--danger);
+}
+
+.selection-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.selection-actions button {
+    padding: 3px 12px;
+}
+
+/* the chat at the side about a selection */
+.subchat-log {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+    overflow-y: auto;
+}
+
+.subchat-passage {
+    margin: 0;
+    padding: 2px 0 2px 12px;
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+    font-size: 0.93rem;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.subchat-passage mark {
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    color: var(--text);
+}
+
+/* the box and the button to send are as tall as each other */
+.subchat-composer {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+}
+
+.subchat-composer textarea {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    resize: none;
+}
+
+.subchat-composer button {
+    margin: 0;
+    padding: 6px 16px;
 }
 
 /* usage */
@@ -1561,4 +1981,112 @@ a {
     .chat-header {
         flex-wrap: wrap;
     }
+}
+
+/* The player of what is read aloud of a book, at the foot of the window,
+   and the sentence that is heard, marked in the book. */
+.speech-player {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    z-index: 20;
+    display: grid;
+    gap: 6px;
+    width: min(460px, calc(100vw - 32px));
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+    transform: translateX(-50%);
+}
+
+.speech-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.speech-controls .count {
+    margin-left: auto;
+}
+
+.speech-speed {
+    margin-left: 6px;
+    padding: 4px 6px;
+}
+
+.speech-status {
+    margin: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.87rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.speech-status.error {
+    color: var(--danger);
+    white-space: normal;
+}
+
+::highlight(spoken) {
+    background-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* a reply of the chat, with the button that has it read aloud to its left; a chat at the side has none */
+.messages .message.assistant {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.message-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.message-speak {
+    flex-shrink: 0;
+    opacity: 0.55;
+}
+
+.message-speak:hover:not(:disabled) {
+    opacity: 1;
+}
+
+.message-speak:disabled {
+    opacity: 0.2;
+}
+
+.chat-header .check {
+    margin-left: auto;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* The player beside the reply of the chat that it plays: a row of buttons
+   to the left of the button of the reply, which it follows as the chat is
+   scrolled. */
+.speech-player.beside {
+    bottom: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: auto;
+    max-width: calc(100vw - 16px);
+    padding: 5px 10px 5px 6px;
+    transform: none;
+}
+
+.speech-player.beside .speech-controls {
+    gap: 4px;
+}
+
+.speech-player.beside .count {
+    margin-left: 6px;
+}
+
+.speech-player .count.error {
+    color: var(--danger);
 }

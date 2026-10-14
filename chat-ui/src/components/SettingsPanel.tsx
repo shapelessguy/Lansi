@@ -6,27 +6,34 @@ import { useEffect, useState } from "react";
 import { fetchProfileModels } from "../lib/checker";
 import { isAskable, newQuestion, type ProfileQuestion, type QuestionOption } from "../lib/questions";
 import {
+    ACCENTS,
     type ChatContext,
     LANGUAGE_PLACEHOLDER,
     LANGUAGES,
     LEVEL_PLACEHOLDER,
     LEVELS,
     type Settings,
+    TEXT_SIZES,
+    THEMES,
+    TRANSLATION_LANGUAGES,
     WORDS_PLACEHOLDER,
 } from "../lib/settings";
 import { fetchSpeechModels, type SpeechModel } from "../lib/speech";
 import { SidePanel } from "./SidePanel";
 
-export type SettingsTab = "models" | "content" | "questions";
+export type SettingsTab = "models" | "content" | "questions" | "look";
 
 const TABS: { id: SettingsTab; label: string }[] = [
     { id: "models", label: "Key & models" },
     { id: "content", label: "Prompts" },
     { id: "questions", label: "Questions" },
+    { id: "look", label: "Look" },
 ];
 
 interface Props {
     settings: Settings;
+    /** Whether the user has Anki words, and so the settings of their import. */
+    ankiWords: boolean;
     tab: SettingsTab;
     onTab: (tab: SettingsTab) => void;
     onChange: (settings: Settings) => void;
@@ -38,7 +45,7 @@ interface TabProps {
     onChange: (settings: Settings) => void;
 }
 
-function ModelsTab({ settings, onChange }: TabProps) {
+function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: boolean }) {
     const [showKey, setShowKey] = useState(false);
     const [speechModels, setSpeechModels] = useState<SpeechModel[]>([]);
     const [profileModels, setProfileModels] = useState<string[]>([]);
@@ -75,27 +82,40 @@ function ModelsTab({ settings, onChange }: TabProps) {
                     Fills <code>{LEVEL_PLACEHOLDER}</code> in your prompts.
                 </small>
             </label>
-            <label className="toggle">
-                <span>
-                    Import Anki words
-                    <small>Adds your Anki words to the vocabulary.</small>
-                </span>
-                <input
-                    type="checkbox"
-                    checked={settings.importAnki}
-                    onChange={(event) => onChange({ ...settings, importAnki: event.target.checked })}
-                />
-            </label>
             <label className="field">
-                <span>Import them as</span>
-                <select
-                    value={settings.ankiLanguage}
-                    onChange={(event) => onChange({ ...settings, ankiLanguage: event.target.value })}
-                >
-                    {LANGUAGES.map((language) => <option key={language} value={language}>{language}</option>)}
-                </select>
-                <small>The language your Anki words are in.</small>
+                <span>Translate into</span>
+                <Choice
+                    options={TRANSLATION_LANGUAGES}
+                    value={settings.translateInto}
+                    onChange={(translateInto) => onChange({ ...settings, translateInto })}
+                />
+                <small>The language text you select is translated into.</small>
             </label>
+            {ankiWords && (
+                <>
+                    <label className="toggle">
+                        <span>
+                            Import Anki words
+                            <small>Adds your Anki words to the vocabulary.</small>
+                        </span>
+                        <input
+                            type="checkbox"
+                            checked={settings.importAnki}
+                            onChange={(event) => onChange({ ...settings, importAnki: event.target.checked })}
+                        />
+                    </label>
+                    <label className="field">
+                        <span>Import them as</span>
+                        <select
+                            value={settings.ankiLanguage}
+                            onChange={(event) => onChange({ ...settings, ankiLanguage: event.target.value })}
+                        >
+                            {LANGUAGES.map((language) => <option key={language} value={language}>{language}</option>)}
+                        </select>
+                        <small>The language your Anki words are in.</small>
+                    </label>
+                </>
+            )}
             <h3>OpenRouter</h3>
             <label className="field">
                 <span>API key</span>
@@ -133,55 +153,127 @@ function ModelsTab({ settings, onChange }: TabProps) {
                 </small>
             </label>
             <label className="field">
-                <span>Sentence check model</span>
+                <span>Translation model</span>
                 <input
                     type="text"
                     spellCheck={false}
-                    list="profile-models"
-                    placeholder="typesafe/jev-1.13"
-                    value={settings.profileModel}
-                    onChange={(event) => onChange({ ...settings, profileModel: event.target.value.trim() })}
+                    placeholder={settings.model}
+                    value={settings.translationModel}
+                    onChange={(event) => onChange({ ...settings, translationModel: event.target.value.trim() })}
                 />
-                <datalist id="profile-models">
-                    {profileModels.map((model) => <option key={model} value={model} />)}
-                </datalist>
                 <small>
-                    Answers the questions about each sentence you finish typing in the chat.
-                    {profileModels.length > 0
-                        && ` ${profileModels.length} models can do this; clear the field to see them.`}
+                    Translates the text you select. A small, quick model does this well. Left empty, the chat model is
+                    used.
                 </small>
             </label>
             <label className="field">
-                <span>Speech model</span>
-                <input
-                    type="text"
-                    spellCheck={false}
-                    list="speech-models"
-                    value={settings.speechModel}
-                    onChange={(event) => onChange({ ...settings, speechModel: event.target.value.trim() })}
+                <span>Sentence check model</span>
+                <Choice
+                    options={profileModels}
+                    placeholder="typesafe/jev-1.13"
+                    value={settings.profileModel}
+                    onChange={(profileModel) => onChange({ ...settings, profileModel })}
                 />
-                <datalist id="speech-models">
-                    {speechModels.map((model) => <option key={model.id} value={model.id} />)}
-                </datalist>
+                <small>Answers the questions about each sentence you finish typing in the chat.</small>
+            </label>
+            <label className="field">
+                <span>Speech model</span>
+                <Choice
+                    options={speechModels.map((model) => model.id)}
+                    value={settings.speechModel}
+                    onChange={(speechModel) => onChange({ ...settings, speechModel })}
+                />
                 <small>Reads the texts aloud.</small>
             </label>
             <label className="field">
                 <span>Voice</span>
-                <input
-                    type="text"
-                    spellCheck={false}
-                    list="speech-voices"
+                <Choice
+                    options={voices}
                     value={settings.speechVoice}
-                    onChange={(event) => onChange({ ...settings, speechVoice: event.target.value.trim() })}
+                    onChange={(speechVoice) => onChange({ ...settings, speechVoice })}
                 />
-                <datalist id="speech-voices">
-                    {voices.map((voice) => <option key={voice} value={voice} />)}
-                </datalist>
-                <small>
-                    {voices.length > 0
-                        ? `${voices.length} voices are available for this model; clear the field to see them.`
-                        : "Voice names depend on the speech model."}
-                </small>
+                <small>Voice names depend on the speech model.</small>
+            </label>
+        </>
+    );
+}
+
+interface ChoiceProps {
+    /** What can be chosen, once that is known. */
+    options: string[];
+    value: string;
+    /** What is used while the value is empty. */
+    placeholder?: string;
+    onChange: (value: string) => void;
+}
+
+/**
+ * A list to choose from, with everything in it on show. Until it is known
+ * what there is to choose from, the value is typed instead.
+ */
+function Choice({ options, value, placeholder, onChange }: ChoiceProps) {
+    if (options.length === 0) {
+        return (
+            <input
+                type="text"
+                spellCheck={false}
+                placeholder={placeholder}
+                value={value}
+                onChange={(event) => onChange(event.target.value.trim())}
+            />
+        );
+    }
+    return (
+        <select value={value} onChange={(event) => onChange(event.target.value)}>
+            {/* a value that is not in the list stays as it is until another is chosen */}
+            {!options.includes(value) && <option value={value}>{value || placeholder}</option>}
+            {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+    );
+}
+
+function LookTab({ settings, onChange }: TabProps) {
+    return (
+        <>
+            <h3>Theme</h3>
+            <label className="field">
+                <span>Light or dark</span>
+                <select
+                    value={settings.theme}
+                    onChange={(event) => onChange({ ...settings, theme: event.target.value as Settings["theme"] })}
+                >
+                    {Object.entries(THEMES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                </select>
+            </label>
+            <div className="field">
+                <span>Colour</span>
+                <div className="swatches" role="radiogroup" aria-label="Colour">
+                    {Object.entries(ACCENTS).map(([id, accent]) => (
+                        <button
+                            key={id}
+                            type="button"
+                            role="radio"
+                            aria-checked={settings.accent === id}
+                            className="swatch"
+                            title={accent.label}
+                            aria-label={accent.label}
+                            style={{ background: `light-dark(${accent.light}, ${accent.dark})` }}
+                            onClick={() => onChange({ ...settings, accent: id as Settings["accent"] })}
+                        />
+                    ))}
+                </div>
+                <small>Used for buttons, links and what is selected.</small>
+            </div>
+            <label className="field">
+                <span>Text size</span>
+                <select
+                    value={settings.textSize}
+                    onChange={(event) =>
+                        onChange({ ...settings, textSize: event.target.value as Settings["textSize"] })}
+                >
+                    {Object.entries(TEXT_SIZES).map(([id, size]) => <option key={id} value={id}>{size.label}</option>)}
+                </select>
+                <small>The size of the app. A book has a size of its own, set in the reader.</small>
             </label>
         </>
     );
@@ -428,7 +520,7 @@ function QuestionsTab({ settings, onChange }: TabProps) {
     );
 }
 
-export function SettingsPanel({ settings, tab, onTab, onChange, onClose }: Props) {
+export function SettingsPanel({ settings, ankiWords, tab, onTab, onChange, onClose }: Props) {
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onClose();
         window.addEventListener("keydown", onKeyDown);
@@ -455,9 +547,10 @@ export function SettingsPanel({ settings, tab, onTab, onChange, onClose }: Props
             }
         >
             <div className="settings-body" role="tabpanel">
-                {tab === "models" && <ModelsTab settings={settings} onChange={onChange} />}
+                {tab === "models" && <ModelsTab settings={settings} onChange={onChange} ankiWords={ankiWords} />}
                 {tab === "content" && <ContentTab settings={settings} onChange={onChange} />}
                 {tab === "questions" && <QuestionsTab settings={settings} onChange={onChange} />}
+                {tab === "look" && <LookTab settings={settings} onChange={onChange} />}
             </div>
         </SidePanel>
     );
