@@ -75,6 +75,11 @@ fn add_translation_root(
     repo: &str,
     ignore_templates: bool,
 ) {
+    // the translations are not kept with this repository, only the English
+    // templates are
+    if !root.exists() {
+        return;
+    }
     for entry in fs::read_dir(root).unwrap() {
         let entry = entry.unwrap();
         let lang = entry.file_name().to_string_lossy().to_string();

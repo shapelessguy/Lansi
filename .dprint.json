@@ -13,8 +13,6 @@
         "**/node_modules",
         "out/**",
         "**/*-lock.json",
-        "ftl/qt-repo",
-        "ftl/core-repo",
         "rslib",
         "target",
         ".mypy_cache",
