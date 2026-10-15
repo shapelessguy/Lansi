@@ -13,9 +13,11 @@ what it was not given, but is no sandbox against an exercise written to do
 harm: the exercises are trusted to be the user's own.
 
 What a step returns is kept at once: the state for the next step, what the
-interface is to show, the logs of what the learner answered, and what the
+interface is to show, the grades of what the learner answered, and what the
 learner and the models wrote, whose words are taken into the vocabulary
-once the exercise is over.
+once the exercise is over. Then a model writes the log of the exercise from
+them, as logs.py describes, in the background, so that the learner can go on
+meanwhile.
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ from typing import Any
 
 from grammar import Grammar
 from intake import read_usage
+from logs import LogError, Task, has_anything, write_log
 from profiling import Profile, ProfileError
 from storage import UserStore
 from topics import (
@@ -100,6 +103,9 @@ Asker = Callable[[list[dict[str, Any]]], tuple[str, Profile]]
 # Has an image model draw a prompt in an aspect ratio, and replies with the
 # picture, as a data URL, and what drawing it used. Raises TranslationError.
 Drawer = Callable[[str, str], tuple[str, Profile]]
+# Has a job done in the background, named in a few words. The job returns
+# what the models it asked used, and raises ExerciseError if it fails.
+Later = Callable[[str, Callable[[], list[Profile]]], None]
 # the aspect ratios a picture may be drawn in
 ASPECT_RATIOS = ("1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3")
 
@@ -131,11 +137,12 @@ class Manifest:
     title: str
     description: str
     # Whether it teaches rather than asks: it comes first, is done once,
-    # and keeps no logs.
+    # and is graded on nothing, so it has no log.
     theory: bool = False
     # What the learner chooses besides how many times it is done, by name:
     # each `{"label": ..., "choices": {value: label}}`, the first choice the
-    # one taken unless another is.
+    # one taken unless another is, or `{"label": ..., "min": ..., "max": ...,
+    # "default": ...}`, a whole number.
     options: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
@@ -169,34 +176,67 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
     return sorted(found, key=lambda manifest: (not manifest.theory, manifest.title))
 
 
+def _whole(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _read_options(value: object) -> dict[str, dict[str, Any]]:
     """The options of a manifest, those that are not as kit.py describes
     left out."""
     options: dict[str, dict[str, Any]] = {}
     for name, option in value.items() if isinstance(value, dict) else []:
-        choices = option.get("choices") if isinstance(option, dict) else None
-        if not (
-            _ID.fullmatch(name)
-            and isinstance(choices, dict)
-            and choices
-            and all(isinstance(label, str) for label in choices.values())
-        ):
+        if not (_ID.fullmatch(name) and isinstance(option, dict)):
             continue
-        options[name] = {"label": str(option.get("label") or name), "choices": choices}
+        label = str(option.get("label") or name)
+        choices = option.get("choices")
+        if (
+            isinstance(choices, dict)
+            and choices
+            and all(isinstance(each, str) for each in choices.values())
+        ):
+            options[name] = {"label": label, "choices": choices}
+            continue
+        least, most, default = (option.get(each) for each in ("min", "max", "default"))
+        if (
+            _whole(least)
+            and _whole(most)
+            and _whole(default)
+            and least <= default <= most  # type: ignore[operator]
+        ):
+            options[name] = {
+                "label": label,
+                "min": least,
+                "max": most,
+                "default": default,
+            }
     return options
 
 
-def chosen_options(manifest: Manifest, given: object) -> dict[str, str]:
-    """A value for each option of `manifest`: the one `given`, or else its
-    first choice. Raises ValueError for a value that is not a choice."""
+def default_of(option: dict[str, Any]) -> Any:
+    """The value of an option taken unless another is chosen."""
+    return next(iter(option["choices"])) if "choices" in option else option["default"]
+
+
+def chosen_options(manifest: Manifest, given: object) -> dict[str, Any]:
+    """A value for each option of `manifest`: the one `given`, or else the
+    one taken unless another is. Raises ValueError for a value it cannot
+    have."""
     given = given or {}
     if not isinstance(given, dict):
         raise ValueError("the options of an exercise are given by their names")
     values = {}
     for name, option in manifest.options.items():
-        value = given.get(name, next(iter(option["choices"])))
-        if value not in option["choices"]:
-            raise ValueError(f"{value} is not a choice of {manifest.title}: {name}")
+        value = given.get(name, default_of(option))
+        if "choices" in option:
+            if value not in option["choices"]:
+                raise ValueError(
+                    f"{value} is not a choice of {manifest.title}: {option['label']}"
+                )
+        elif not (_whole(value) and option["min"] <= value <= option["max"]):
+            raise ValueError(
+                f"{option['label']} of {manifest.title} is a whole number"
+                f" from {option['min']} to {option['max']}"
+            )
         values[name] = value
     return values
 
@@ -260,6 +300,11 @@ def model_drawer(api_key: str, model: str, send: Send = send_to_openrouter) -> D
             raise TranslationError(str(error)) from None
 
     return draw_picture
+
+
+def do_now(title: str, job: Callable[[], list[Profile]]) -> None:
+    """Does a job that could be done in the background at once."""
+    job()
 
 
 def cannot_draw(prompt: str, aspect_ratio: str) -> tuple[str, Profile]:
@@ -458,13 +503,15 @@ def _read_drawing(request: dict[str, Any]) -> tuple[str, str]:
 def _read_reply(reply: object) -> dict[str, Any]:
     if not isinstance(reply, dict):
         raise ExerciseError("the exercise replied with nothing")
-    logs = reply.get("logs") or []
-    if not isinstance(logs, list) or not all(isinstance(each, dict) for each in logs):
-        raise ExerciseError("the logs of an exercise must be a list of objects")
+    graded = reply.get("graded") or []
+    if not isinstance(graded, list) or not all(
+        isinstance(each, dict) for each in graded
+    ):
+        raise ExerciseError("the grades of an exercise must be a list of objects")
     written = reply.get("written") or {}
     if not isinstance(written, dict):
         raise ExerciseError("what an exercise wrote must be an object of lists")
-    return {**reply, "logs": logs, "written": written}
+    return {**reply, "graded": graded, "written": written}
 
 
 class Practice:
@@ -481,6 +528,7 @@ class Practice:
         draw: Callable[[list[str]], str] = random.choice,
         on_words: Callable[[str], None] = lambda line: None,
         send: Send = send_to_openrouter,
+        later: Later = do_now,
     ) -> None:
         self._store = store
         self._grammar = grammar or Grammar()
@@ -494,6 +542,8 @@ class Practice:
         self._draw = draw
         # what is told of the words a session was given
         self._on_words = on_words
+        # what has the logs of the exercises written once they are over
+        self._later = later
         # the embedding models that are embedding a vocabulary in the background
         self.embedding: set[str] = set()
         # one step at a time, so that two never start from the same state
@@ -708,21 +758,68 @@ class Practice:
                 "message": message,
             }
             reply, used = self._runner.run(exercise, request, ask, draw, look)
-            # the logs are kept first, as they are what matters most
+            # the grades are kept first, as they are what matters most
             try:
-                self._store.add_logs(session_id, exercise, reply["logs"])
+                self._store.add_grades(session_id, exercise, reply["graded"])
                 self._store.add_written(
                     session_id, exercise, reply.get("written") or {}
                 )
             except ValueError as error:
                 raise ExerciseError(str(error)) from None
-            if op == "finish":
-                self._store.finish_exercise(session_id, exercise, reply.get("results"))
-                return None, used
-            self._store.save_exercise_state(
-                session_id, exercise, reply.get("state"), reply.get("show")
-            )
-            return reply.get("show"), used
+            if op != "finish":
+                self._store.save_exercise_state(
+                    session_id, exercise, reply.get("state"), reply.get("show")
+                )
+                return reply.get("show"), used
+            self._store.finish_exercise(session_id, exercise, reply.get("results"))
+        self._log_later(session, exercise, request["context"], ask)
+        return None, used
+
+    def _log_later(
+        self,
+        session: dict[str, Any],
+        exercise: str,
+        context: dict[str, Any],
+        ask: Asker,
+    ) -> None:
+        """Have the log of an exercise that is over written in the
+        background, if the learner did anything in it."""
+        manifest = next(
+            (each for each in exercises(self._directory) if each.id == exercise), None
+        )
+        grades = self._store.grades(session["id"], exercise)
+        written = self._store.written(session["id"], exercise)
+        if manifest is None or manifest.theory or not has_anything(grades, written):
+            return
+        title = manifest.title
+        chosen = session["options"].get(exercise, {})
+        task = Task(
+            manifest.title,
+            manifest.description,
+            context["language"],
+            context["level"],
+            context["lesson"],
+            [topic["title"] for topic in context["topics"]],
+            context["instances"],
+            [
+                f"{option['label']}:"
+                f" {option.get('choices', {}).get(chosen[name], chosen[name])}"
+                for name, option in manifest.options.items()
+                if name in chosen
+            ],
+        )
+
+        def write() -> list[Profile]:
+            try:
+                content, used = write_log(ask, task, grades, written)
+            except (LogError, TranslationError) as error:
+                raise ExerciseError(
+                    f"the log of {title} could not be written: {error}"
+                ) from None
+            self._store.set_log(session["id"], exercise, content)
+            return [used]
+
+        self._later(title, write)
 
     def end_session(
         self,
@@ -756,7 +853,7 @@ class Practice:
                     )
                     used += finishing
                 except ExerciseError:
-                    # the logs it reported are kept all the same
+                    # the grades it reported are kept all the same
                     pass
             self._store.end_session(session_id, status)
         ended = self._store.session(session_id)

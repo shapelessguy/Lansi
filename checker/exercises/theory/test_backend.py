@@ -74,7 +74,7 @@ def test_the_theory_is_shown_from_its_first_page_without_asking_a_model() -> Non
         "page": 0,
         "chat": [],
     }
-    assert (model.asked, step.logs) == ([], [])
+    assert (model.asked, step.graded) == ([], [])
 
 
 def test_a_lesson_without_theory_cannot_be_shown() -> None:
@@ -103,7 +103,7 @@ def test_a_question_is_answered_with_the_lesson_and_the_page_it_is_asked_on() ->
         }
     ]
     assert step.show["page"] == 1
-    assert step.logs == []
+    assert step.graded == []
 
 
 def test_a_question_is_asked_with_the_last_questions_before_it() -> None:
@@ -137,7 +137,7 @@ def test_finishing_keeps_how_many_questions_there_were_and_no_logs() -> None:
 
     step = finish(CONTEXT, state, model)
 
-    assert (step.results, step.logs) == ({"questions": 1}, [])
+    assert (step.results, step.graded) == ({"questions": 1}, [])
 
 
 def test_the_lessons_that_are_kept_have_theory_to_show() -> None:

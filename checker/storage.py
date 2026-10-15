@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 14
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -227,6 +227,45 @@ ALTER TABLE session_exercises ADD COLUMN options TEXT NOT NULL DEFAULT '{}';
 DROP TABLE IF EXISTS texts;
 """
 
+# What came with version 12: the grades of what the learner answered, which
+# were the logs before; and the log of each exercise of a session, written
+# by a model once it is over. The logs there were are not kept.
+_LOGS = """
+DROP TABLE IF EXISTS logs;
+CREATE TABLE grades (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+    exercise TEXT NOT NULL,
+    -- "right", "wrong" or "partial"
+    result TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    correction TEXT NOT NULL,
+    note TEXT NOT NULL
+);
+CREATE TABLE logs (
+    session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+    exercise TEXT NOT NULL,
+    -- what worked and what did not, for the app rather than the learner
+    content TEXT NOT NULL,
+    -- in seconds since the epoch
+    written_at REAL NOT NULL,
+    PRIMARY KEY (session_id, exercise)
+);
+"""
+
+# What came with version 13: the findings of the logs, left from a sorting of
+# errors that was taken out again, are no more. They named the logs there
+# were before, and kept any log from being written.
+_FINDINGS = """
+DROP TABLE IF EXISTS findings;
+"""
+
+# What came with version 14: what the exercise gave the learner to answer,
+# for each grade, so that it is told from what the learner wrote.
+_TASKS = """
+ALTER TABLE grades ADD COLUMN task TEXT NOT NULL DEFAULT '';
+"""
+
 # what the learner and the models are, as what they wrote is kept
 ROLES = ("user", "assistant")
 
@@ -237,7 +276,7 @@ _TOTALS = (
     " COALESCE(MAX(cost IS NULL), 0)"
 )
 
-# What a log says of an answer.
+# What a grade says of an answer.
 RESULTS = ("right", "wrong", "partial")
 
 # the id of a sentence of a book: the place of its paragraph, and its own in it
@@ -341,6 +380,12 @@ class UserStore:
                 self._db.executescript(_REVIEWS)
             if version < 11:
                 self._db.executescript(_WRITTEN)
+            if version < 12:
+                self._db.executescript(_LOGS)
+            if version < 13:
+                self._db.executescript(_FINDINGS)
+            if version < 14:
+                self._db.executescript(_TASKS)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -758,13 +803,13 @@ class UserStore:
                 )
             )
         }
-        # how many logs of each result each exercise kept
-        logged: dict[tuple[str, str], dict[str, int]] = {}
+        # how many grades of each result each exercise kept
+        graded: dict[tuple[str, str], dict[str, int]] = {}
         for session_id, exercise, result, count in self._db.execute(
-            "SELECT session_id, exercise, result, COUNT(*) FROM logs GROUP BY 1, 2, 3"
+            "SELECT session_id, exercise, result, COUNT(*) FROM grades GROUP BY 1, 2, 3"
         ):
             if session_id in sessions:
-                logged.setdefault((session_id, exercise), {})[result] = count
+                graded.setdefault((session_id, exercise), {})[result] = count
         for (
             session_id,
             exercise,
@@ -789,9 +834,9 @@ class UserStore:
                 else "started"
                 if started
                 else "pending",
-                "logs": sum(logged.get((session_id, exercise), {}).values()),
+                "answered": sum(graded.get((session_id, exercise), {}).values()),
                 "results": {
-                    result: logged.get((session_id, exercise), {}).get(result, 0)
+                    result: graded.get((session_id, exercise), {}).get(result, 0)
                     for result in ("right", "partial", "wrong")
                 },
             }
@@ -878,25 +923,31 @@ class UserStore:
             ).fetchone()
         return json.loads(row[0]) if row and row[0] is not None else None
 
-    def add_logs(
-        self, session_id: str, exercise: str, logs: list[dict[str, str]]
+    def add_grades(
+        self, session_id: str, exercise: str, grades: list[dict[str, str]]
     ) -> None:
-        """Keep the logs an exercise reported, each a `{"result": ...,
-        "answer": ..., "correction": ..., "note": ...}`. Raises ValueError,
-        and keeps none, if one is not a log."""
+        """Keep the grades an exercise reported, each a `{"result": ...,
+        "task": ..., "answer": ..., "correction": ..., "note": ...}`. Raises
+        ValueError, and keeps none, if one is not a grade."""
         rows = []
-        for log in logs:
-            if log.get("result") not in RESULTS:
-                raise ValueError(f"the result of a log is one of {', '.join(RESULTS)}")
-            parts = [log.get(name, "") for name in ("answer", "correction", "note")]
+        for grade in grades:
+            if grade.get("result") not in RESULTS:
+                raise ValueError(
+                    f"the result of a grade is one of {', '.join(RESULTS)}"
+                )
+            parts = [
+                grade.get(name, "") for name in ("task", "answer", "correction", "note")
+            ]
             if not all(isinstance(part, str) for part in parts):
-                raise ValueError("the answer, correction and note of a log are text")
-            rows.append((session_id, exercise, log["result"], *parts))
+                raise ValueError(
+                    "the task, answer, correction and note of a grade are text"
+                )
+            rows.append((session_id, exercise, grade["result"], *parts))
         with self._lock, self._db:
             self._db.executemany(
-                "INSERT INTO logs"
-                " (session_id, exercise, result, answer, correction, note)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO grades"
+                " (session_id, exercise, result, task, answer, correction, note)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
 
@@ -942,16 +993,46 @@ class UserStore:
             found[role].append(content)
         return found
 
-    def logs(self, session_id: str) -> list[dict[str, str]]:
-        """The logs of a session, in the order they were kept."""
+    def grades(
+        self, session_id: str, exercise: str | None = None
+    ) -> list[dict[str, str]]:
+        """The grades of a session, or of one exercise of it, in the order
+        they were kept."""
         with self._lock:
             rows = self._db.execute(
-                "SELECT session_id, exercise, result, answer, correction, note"
-                " FROM logs WHERE session_id = ? ORDER BY id",
+                "SELECT session_id, exercise, result, task, answer, correction, note"
+                " FROM grades WHERE session_id = ? AND exercise = COALESCE(?, exercise)"
+                " ORDER BY id",
+                (session_id, exercise),
+            ).fetchall()
+        names = (
+            "session",
+            "exercise",
+            "result",
+            "task",
+            "answer",
+            "correction",
+            "note",
+        )
+        return [dict(zip(names, row)) for row in rows]
+
+    def set_log(self, session_id: str, exercise: str, content: str) -> None:
+        """Keep the log of an exercise of a session, in place of any it had."""
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO logs (session_id, exercise, content, written_at)"
+                " VALUES (?, ?, ?, ?)",
+                (session_id, exercise, content, self._now()),
+            )
+
+    def logs(self, session_id: str) -> dict[str, str]:
+        """The logs of the exercises of a session that have one, by exercise."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT exercise, content FROM logs WHERE session_id = ?",
                 (session_id,),
             ).fetchall()
-        names = ("session", "exercise", "result", "answer", "correction", "note")
-        return [dict(zip(names, row)) for row in rows]
+        return dict(rows)
 
     def used_before(self, exercise: str, sessions: int) -> list[str]:
         """What `exercise` was answered with in the last `sessions` sessions
@@ -959,14 +1040,14 @@ class UserStore:
         that had one, and else the answer."""
         with self._lock:
             rows = self._db.execute(
-                "SELECT CASE WHEN logs.correction != '' THEN logs.correction"
-                " ELSE logs.answer END FROM logs"
-                " JOIN sessions ON sessions.id = logs.session_id"
-                " WHERE logs.exercise = ? AND logs.session_id IN ("
+                "SELECT CASE WHEN grades.correction != '' THEN grades.correction"
+                " ELSE grades.answer END FROM grades"
+                " JOIN sessions ON sessions.id = grades.session_id"
+                " WHERE grades.exercise = ? AND grades.session_id IN ("
                 "  SELECT session_id FROM session_exercises"
                 "  JOIN sessions ON sessions.id = session_exercises.session_id"
                 "  WHERE exercise = ? ORDER BY sessions.started_at DESC LIMIT ?)"
-                " ORDER BY sessions.started_at DESC, logs.id",
+                " ORDER BY sessions.started_at DESC, grades.id",
                 (exercise, exercise, sessions),
             ).fetchall()
         return list(dict.fromkeys(text for (text,) in rows if text.strip()))

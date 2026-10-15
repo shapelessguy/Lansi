@@ -154,6 +154,15 @@ def test_a_set_of_five_sentences_with_gaps_is_made_when_it_starts() -> None:
     assert "4 to 8 words" in prompt
 
 
+def test_a_set_has_as_many_sentences_as_the_learner_chose() -> None:
+    model = FakeModel(ITEMS)
+
+    step = start({**CONTEXT, "options": {"sentences": 3}}, model)
+
+    assert len(step.state["sets"][0]) == 3
+    assert "3 different sentences" in model.asked[0][0]["content"]
+
+
 def test_each_gap_has_its_own_hint_but_none_that_gives_the_answer_away() -> None:
     model = FakeModel(ITEMS)
 
@@ -200,19 +209,22 @@ def test_a_model_that_makes_no_sentence_with_a_gap_is_a_failure() -> None:
         start(CONTEXT, FakeModel({"items": [{"text": "Keine Lücke."}]}))
 
 
-def test_a_set_is_checked_together_and_logged_once_with_its_corrections() -> None:
+def test_a_set_is_graded_once_on_what_went_into_the_gaps_apart_from_the_task() -> None:
     model = FakeModel(ITEMS)
     state = start(CONTEXT, model).state
 
     step = act(CONTEXT, state, {"answers": [["aufstehe", ""], *RIGHT[1:]]}, model)
 
-    assert step.logs == [
+    assert step.graded == [
         {
             "result": "partial",
-            "answer": "Ich aufstehe um 6 Uhr . / Er kauft heute ein. / Wir rufen dich an."
-            " / Du machst die Tür zu. / Sie kommt mit.",
-            "correction": "Ich stehe um 6 Uhr auf. / Er kauft heute ein."
-            " / Wir rufen dich an. / Du machst die Tür zu. / Sie kommt mit.",
+            "task": "1. Ich ___ (stehen) um 6 Uhr ___.\n2. Er ___ (kaufen) heute ___."
+            "\n3. Wir ___ dich ___.\n4. Du ___ (machen) die Tür ___."
+            "\n5. Sie ___ (kommen) ___.",
+            "answer": "1. aufstehe; (empty)\n2. kauft; ein\n3. rufen; an"
+            "\n4. machst; zu\n5. kommt; mit",
+            "correction": "1. stehe; auf\n2. (right)\n3. (right)\n4. (right)"
+            "\n5. (right)",
             "note": "",
         }
     ]
@@ -269,7 +281,7 @@ def test_no_set_is_made_once_every_instance_was_done() -> None:
     step = act({**CONTEXT, "instances": 1}, state, {"answers": RIGHT}, model)
     step = act({**CONTEXT, "instances": 1}, step.state, {"prepare": True}, model)
 
-    assert step.show["more"] is False and step.logs == []
+    assert step.show["more"] is False and step.graded == []
     assert step.show["feedback"][0]["result"] == "right"
     assert len(model.asked) == 1
 

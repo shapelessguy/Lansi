@@ -15,7 +15,7 @@ What a thing is called is never decided ahead: what was planned only shapes
 the picture. The learner labels the points, changing them as they like, and
 when they ask for the labels to be checked, the model that sees pictures is
 shown the picture with each point marked by its number, and judges every
-label by what is under it. Each point is logged then, a point left blank as
+label by what is under it. Each point is graded then, a point left blank as
 wrong. Each instance is a picture, drawn once the one before it is checked.
 """
 
@@ -35,8 +35,9 @@ from kit import (
     ask_json,
     describe_guidance,
     describe_topics,
-    log,
+    grade,
     loose,
+    option,
     serve,
     written,
 )
@@ -308,7 +309,7 @@ def make_picture(
         topics=describe_topics(context),
         words=describe_words(context),
         guidance=describe_guidance(context),
-        count=PLANNED,
+        count=int(option(context, "things", PLANNED)),
         avoid=avoid,
     )
     try:
@@ -423,7 +424,7 @@ def judge(
     context: dict[str, Any], model: Model, picture: dict[str, Any]
 ) -> list[dict[str, str]]:
     """Have the labels of a picture judged, keep the judgements on it, and
-    return the logs of them: one for each point. Raises ModelError."""
+    return their grades: one for each point. Raises ModelError."""
     lines = []
     for number, (item, label) in enumerate(zip(picture["items"], picture["labels"]), 1):
         given = json.dumps(label, ensure_ascii=False) if label else "(nothing)"
@@ -445,13 +446,16 @@ def judge(
             judgement["result"] = "wrong"
     picture["judged"] = judged
     return [
-        log(
+        grade(
             judgement["result"],
             label,
             "" if judgement["result"] == "right" else judgement["correct"],
             judgement["note"],
+            f"Label point {number} of a picture of {picture['scene']}",
         )
-        for judgement, label in zip(judged, picture["labels"])
+        for number, (judgement, label) in enumerate(
+            zip(judged, picture["labels"]), start=1
+        )
     ]
 
 
@@ -536,9 +540,9 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     if message.get("check"):
         if picture.get("judged") or not any(picture["labels"]):
             return Step(state=state, show=_show(state))
-        logs = judge(context, model, picture)
+        graded = judge(context, model, picture)
         return Step(
-            state=state, show=_show(state), logs=logs, written=written_on(picture)
+            state=state, show=_show(state), graded=graded, written=written_on(picture)
         )
     if message.get("next"):
         if not _show(state)["more"]:
@@ -564,19 +568,19 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
 
 def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
     picture = state["picture"]
-    logs: list[dict[str, str]] = []
+    graded: list[dict[str, str]] = []
     said: dict[str, list[str]] = {}
-    # what was labelled and not checked is judged now, so that it is logged
+    # what was labelled and not checked is judged now, so that it is graded
     if not picture.get("judged") and any(picture["labels"]):
         try:
-            logs = judge(context, model, picture)
+            graded = judge(context, model, picture)
             said = written_on(picture)
         except ModelError:
             pass
     done = state["done"] + _done(picture)
     return Step(
         state=state,
-        logs=logs,
+        graded=graded,
         results={"items": done, "pictures": state["drawn"]},
         written=said,
     )

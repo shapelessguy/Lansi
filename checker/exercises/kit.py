@@ -10,18 +10,24 @@ An exercise is a directory of its own here, with:
     ui/index.js     what the learner sees, a module the app mounts, as
                     kit.js describes, with ui/style.css if it has one
 
-The `options` of a manifest, if it has any, are what the learner chooses
-when they choose the exercise, besides how many times it is done: each a
-choice among a few, by its name, with a label to show and the choices by
-their values, the first of them the one taken unless another is chosen:
+The `options` of a manifest, if it has any, are the settings of the
+exercise the learner may change, besides how many times it is done, by
+their names, each with a label to show. One is a choice among a few, with
+the choices by their values, the first of them the one taken unless another
+is chosen; or a whole number between a `min` and a `max`, the `default`
+taken unless another is chosen:
 
     "options": {"then": {"label": "Then",
                          "choices": {"questions": "Answer questions",
-                                     "retell": "Retell it"}}}
+                                     "retell": "Retell it"}},
+                "questions": {"label": "Questions", "min": 1, "max": 8,
+                              "default": 3}}
+
+The app remembers what the learner chose of each, for the next time.
 
 An exercise whose manifest has `"theory": true` teaches rather than asks:
 it is listed first and done first in a session, is not done a number of
-times, and keeps no logs.
+times, and is graded on nothing.
 
 The backend is three functions, given to `serve`:
 
@@ -32,8 +38,8 @@ The backend is three functions, given to `serve`:
 `start` makes the exercise, `act` takes what the interface sent, such as an
 answer, and `finish` is called once the learner is done or leaves, however
 far they got. Each returns a Step: the `state` to be handed back with the
-next call, what the interface is to `show`, the `logs` of what the learner
-answered, what was `written` in the step, and, from `finish`, the
+next call, what the interface is to `show`, how what the learner answered
+was `graded`, what was `written` in the step, and, from `finish`, the
 `results` the exercise keeps for itself.
 
 The context is the same for every call:
@@ -71,7 +77,7 @@ come from anything in the app, and may be empty. Every exercise is to put
 it into what it asks the models that make it, as `describe_guidance` does.
 
 `options` has a value for each option of the manifest, as the learner
-chose it.
+chose it, which `option` gives.
 
 What is `written` is `{"user": [...], "assistant": [...]}`: the texts in the
 language learned that the learner wrote in the step, such as their answers
@@ -83,12 +89,19 @@ are taken into the learner's vocabulary and counted as used by the learner
 or seen, as the words of the chats are; a word that is no word, such as one
 misspelt, is left out there.
 
-`into` is the language the learner reads explanations in. A log is a
-`{"result": "right" | "wrong" | "partial", "answer": ..., "correction": ...,
-"note": ...}`, one for each instance the learner did; an instance made of
-several answers, such as a few sentences, is logged once, as `log_of`
-does. The logs are kept as soon as a step returns them, so an exercise
-left halfway still counts.
+`into` is the language the learner reads explanations in. A grade is a
+`{"result": "right" | "wrong" | "partial", "task": ..., "answer": ...,
+"correction": ..., "note": ...}`, one for each instance the learner did.
+The `task` is what the exercise gave the learner, written by a model, such
+as a sentence with its gaps, a sentence to translate or a question; the
+`answer` is only what the learner wrote themselves, such as what they put
+into the gaps, and never the task with it: the log is written from the
+grades, and must not take what a model wrote for the learner's. An
+instance made of several answers, such as a few sentences, is graded once,
+as `grade_of` does. The grades are kept as soon as a step returns them, so an exercise
+left halfway still counts. Once the exercise is over, the app has a model
+write its log from them and from what was written: a short account, for
+the app rather than the learner, of what worked and what did not.
 
 `level` is the learner's, and may be empty, when the level of the lesson is
 taken: `describe_level` tells a model how hard what it writes is to be.
@@ -127,8 +140,6 @@ LEVEL_SENTENCES = {
     "C1": "sentences of natural length, up to about 25 words, with complex structures",
     "C2": "sentences as a native speaker writes them, of any length and structure",
 }
-# what the answers of an instance are joined with in its log
-ANSWERS_JOINED = " / "
 
 
 class ModelError(Exception):
@@ -156,7 +167,7 @@ class Model(Protocol):
 class Step:
     state: Any = None
     show: Any = None
-    logs: list[dict[str, str]] = field(default_factory=list)
+    graded: list[dict[str, str]] = field(default_factory=list)
     results: Any = None
     written: dict[str, list[str]] = field(default_factory=dict)
 
@@ -168,12 +179,24 @@ def written(
     return {"user": list(user or []), "assistant": list(assistant or [])}
 
 
-def log(
-    result: str, answer: str, correction: str = "", note: str = ""
+def grade(
+    result: str, answer: str, correction: str = "", note: str = "", task: str = ""
 ) -> dict[str, str]:
-    """A log of one instance the learner did."""
+    """The grade of one instance the learner did: `answer` is what they
+    wrote, and `task` what the exercise gave them to answer."""
     assert result in RESULTS
-    return {"result": result, "answer": answer, "correction": correction, "note": note}
+    return {
+        "result": result,
+        "task": task,
+        "answer": answer,
+        "correction": correction,
+        "note": note,
+    }
+
+
+def numbered(texts: list[str]) -> str:
+    """Texts one to a line, each with its number."""
+    return "\n".join(f"{number}. {text}" for number, text in enumerate(texts, 1))
 
 
 def overall(results: list[str]) -> str:
@@ -186,26 +209,30 @@ def overall(results: list[str]) -> str:
     return "partial"
 
 
-def log_of(logs: list[dict[str, str]]) -> dict[str, str]:
-    """The one log of an instance of several answers, each logged as `log`
-    logs one: its result `overall`, the answers one after the other, the
-    correction of each that was not right, with each that was as it was,
-    and the notes by the number of the answer."""
-    result = overall([each["result"] for each in logs])
+def grade_of(grades: list[dict[str, str]]) -> dict[str, str]:
+    """The one grade of an instance of several answers, each graded as
+    `grade` grades one: its result `overall`, and the tasks, the answers
+    and the correction of each, one to a line by their numbers, where each
+    that was right is said to be, and the notes by the number of the
+    answer."""
+    result = overall([each["result"] for each in grades])
     corrected = [
-        each["answer"] if each["result"] == "right" else each["correction"]
-        for each in logs
+        "(right)" if each["result"] == "right" else each["correction"]
+        for each in grades
     ]
     notes = [
         f"{number}. {each['note']}"
-        for number, each in enumerate(logs, start=1)
+        for number, each in enumerate(grades, start=1)
         if each["note"]
     ]
-    return log(
+    return grade(
         result,
-        ANSWERS_JOINED.join(each["answer"] for each in logs),
-        "" if result == "right" else ANSWERS_JOINED.join(corrected),
+        numbered([each["answer"] or "(nothing)" for each in grades]),
+        "" if result == "right" else numbered(corrected),
         "; ".join(notes),
+        numbered([each["task"] for each in grades])
+        if any(each["task"] for each in grades)
+        else "",
     )
 
 
@@ -301,6 +328,13 @@ def describe_plan(context: dict[str, Any], count: int, start: int = 0) -> str:
         + "\n".join(lines)
         + "\n"
     )
+
+
+def option(context: dict[str, Any], name: str, default: Any) -> Any:
+    """The value the learner chose of an option of the manifest, or
+    `default` if they were given none, as in a session started before it
+    was there."""
+    return (context.get("options") or {}).get(name, default)
 
 
 def level_of(context: dict[str, Any]) -> str:
@@ -435,7 +469,7 @@ def serve(start: Start, act: Act, finish: Finish) -> None:
             "reply": {
                 "state": step.state,
                 "show": step.show,
-                "logs": step.logs,
+                "graded": step.graded,
                 "results": step.results,
                 "written": step.written,
             }

@@ -4,12 +4,13 @@
 """Short stories written by a model for the lesson and the topics, to read
 and to listen to, and then, as the learner chose in the option `then`:
 
-    questions   answer `QUESTIONS` questions on the story, in the language
+    questions   answer questions on the story, as many as the option
+                `questions` says, in the language
                 learned, judged together by a model
     retell      retell the story in a few sentences, judged by a model
-    read        nothing more: the story is read, and nothing is logged
+    read        nothing more: the story is read, and nothing is graded
 
-An instance is a story, logged once. The stories are made one at a time:
+An instance is a story, graded once. The stories are made one at a time:
 the first when the exercise starts, and each other once the one before was
 answered, when the interface asks for it to be `prepare`d while the
 learner reads how it went, or else when it goes on to the `next`.
@@ -34,18 +35,21 @@ from kit import (
     describe_level,
     describe_topics,
     describe_words,
+    grade,
+    grade_of,
     level_of,
-    log,
-    log_of,
+    option,
     serve,
     written,
 )
 
-# how many questions are asked on a story
+# how many questions are asked on a story, unless the learner chose otherwise
 QUESTIONS = 3
 # about how many words a story is at each level, and at a level not known
 LENGTHS = {"A1": 80, "A2": 120, "B1": 180, "B2": 240, "C1": 300, "C2": 350}
 DEFAULT_LENGTH = 150
+# how much longer than that a story is, by the option `length`
+LENGTH_FACTORS = {"level": 1.0, "shorter": 0.6, "longer": 1.6}
 # more than anyone writes in one answer, or in a retelling
 MAX_ANSWER_LENGTH = 1000
 MAX_RETELLING_LENGTH = 4000
@@ -64,9 +68,9 @@ end, told in plain paragraphs, with no headings or lists.{asking}
 
 Reply with JSON alone: {{"title": "...", "text": "..."{shape}}}"""
 
-ASKING = f"""
+ASKING = """
 
-Then write {QUESTIONS} questions on the story in {{language}}, at the \
+Then write {count} questions on the story in {language}, at the \
 learner's level, each answered by the story in a short sentence, with that \
 answer."""
 
@@ -115,13 +119,21 @@ Reply with JSON alone: {{"result": "...", "correction": "...", "note": "..."}}""
 
 def mode_of(context: dict[str, Any]) -> str:
     """What the learner does once they read a story."""
-    mode = (context.get("options") or {}).get("then")
+    mode = option(context, "then", MODES[0])
     return mode if mode in MODES else MODES[0]
 
 
+def questions_of(context: dict[str, Any]) -> int:
+    """How many questions are asked on a story."""
+    return int(option(context, "questions", QUESTIONS))
+
+
 def length_of(context: dict[str, Any]) -> int:
-    """About how many words a story is, at the learner's level."""
-    return LENGTHS.get(level_of(context).strip().upper(), DEFAULT_LENGTH)
+    """About how many words a story is, at the learner's level, made
+    shorter or longer as they chose."""
+    usual = LENGTHS.get(level_of(context).strip().upper(), DEFAULT_LENGTH)
+    factor = LENGTH_FACTORS.get(option(context, "length", "level"), 1.0)
+    return round(usual * factor / 10) * 10
 
 
 def describe_stories(stories: list[dict[str, Any]]) -> str:
@@ -140,9 +152,9 @@ def _text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def read_story(reply: Any, mode: str) -> dict[str, Any]:
+def read_story(reply: Any, mode: str, count: int = QUESTIONS) -> dict[str, Any]:
     """The story the model wrote, with its questions if they were asked
-    for, no more than `QUESTIONS` of them. Raises ModelError if there is no
+    for, no more than `count` of them. Raises ModelError if there is no
     story, or no question when there are to be some."""
     reply = reply if isinstance(reply, dict) else {}
     text = _text(reply.get("text"))
@@ -158,7 +170,7 @@ def read_story(reply: Any, mode: str) -> dict[str, Any]:
         ]
         if not questions:
             raise ModelError("the model asked no question on the story")
-        story["questions"] = questions[:QUESTIONS]
+        story["questions"] = questions[:count]
     return story
 
 
@@ -194,13 +206,13 @@ def make_story(context: dict[str, Any], state: dict[str, Any], model: Model) -> 
         words=describe_words(context),
         guidance=describe_guidance(context),
         made=describe_stories(stories),
-        asking=ASKING.format(language=context["language"])
+        asking=ASKING.format(language=context["language"], count=questions_of(context))
         if mode == "questions"
         else "",
         shape=ASKED_SHAPE if mode == "questions" else "",
     )
     reply = ask_json(model, [{"role": "user", "content": prompt}])
-    stories.append(read_story(reply, mode))
+    stories.append(read_story(reply, mode, questions_of(context)))
 
 
 def judge_answers(
@@ -330,11 +342,11 @@ def _answered(
     message: dict[str, Any],
     model: Model,
 ) -> Step | None:
-    """Judges what the learner did with the story on show, and logs it;
+    """Judges what the learner did with the story on show, and grades it;
     None if there was nothing to judge."""
     mode = mode_of(context)
     story = state["stories"][len(state["done"])]
-    logs: list[dict[str, str]] = []
+    graded: list[dict[str, str]] = []
     if mode == "questions" and isinstance(message.get("answers"), list):
         count = len(story["questions"])
         answers = [
@@ -346,13 +358,19 @@ def _answered(
         if not any(answers):
             return None
         feedback = judge_answers(context, story, answers, model)
-        logged = log_of(
+        one = grade_of(
             [
-                log(each["result"], each["answer"], each["correction"], each["note"])
+                grade(
+                    each["result"],
+                    each["answer"],
+                    each["correction"],
+                    each["note"],
+                    f"Answer a question on the story: {each['question']}",
+                )
                 for each in feedback
             ]
         )
-        logs, result = [logged], logged["result"]
+        graded, result = [one], one["result"]
         said = written(
             [answer for answer in answers if answer],
             [
@@ -368,7 +386,8 @@ def _answered(
             return None
         verdict = judge_retelling(context, story, retelling, model)
         feedback = [verdict]
-        logs, result = [log(**verdict)], verdict["result"]
+        task = f'Retell the story "{story["title"]}" in a few sentences'
+        graded, result = [grade(**verdict, task=task)], verdict["result"]
         said = written([retelling], [verdict["correction"]])
     elif mode == "read" and message.get("read"):
         feedback, result, said = [], "", {}
@@ -376,7 +395,7 @@ def _answered(
         return None
     state["done"].append({"feedback": feedback, "result": result})
     state["reviewing"] = True
-    return Step(state=state, show=_show(context, state), logs=logs, written=said)
+    return Step(state=state, show=_show(context, state), graded=graded, written=said)
 
 
 def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step:

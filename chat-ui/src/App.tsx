@@ -100,6 +100,7 @@ const TASK_CATEGORIES: Record<string, UsageCategory> = {
     embeddings: "vocabulary",
     speech: "speech",
     icon: "practice",
+    log: "practice",
 };
 
 export function App({ user, initialSettings, initialChats }: Props) {
@@ -718,6 +719,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             embedding={embeddingTask}
                             onUsage={addPracticeUsage}
                             onTask={addTask}
+                            onChangeSettings={updateSettings}
                             onOpenSettings={() => openSettings("general")}
                             onReadAloud={(sessionId, exercise, number, text) =>
                                 setListening({

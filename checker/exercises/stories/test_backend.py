@@ -120,11 +120,13 @@ def test_the_answers_are_judged_together_and_logged_once_with_what_was_written()
 
     step = act(CONTEXT, state, {"answers": ["Um  sieben.", ""]}, model)
 
-    assert step.logs == [
+    assert step.graded == [
         {
             "result": "wrong",
-            "answer": "Um sieben. / ",
-            "correction": "Um sechs. / Den Arzt.",
+            "task": "1. Answer a question on the story: Wann steht Anna auf?"
+            "\n2. Answer a question on the story: Wen ruft sie an?",
+            "answer": "1. Um sieben.\n2. (nothing)",
+            "correction": "1. Um sechs.\n2. Den Arzt.",
             "note": "1. Read again.",
         }
     ]
@@ -145,7 +147,7 @@ def test_a_story_with_nothing_answered_is_not_judged() -> None:
 
     step = act(CONTEXT, state, {"answers": ["", " "]}, model)
 
-    assert step.logs == [] and "feedback" not in step.show
+    assert step.graded == [] and "feedback" not in step.show
     assert len(model.asked) == 1
 
 
@@ -157,9 +159,10 @@ def test_a_retelling_is_judged_and_logged_with_its_correction() -> None:
 
     step = act(context, state, {"retelling": " Anna aufsteht. "}, model)
 
-    assert step.logs == [
+    assert step.graded == [
         {
             "result": "partial",
+            "task": 'Retell the story "T" in a few sentences',
             "answer": "Anna aufsteht.",
             "correction": "Anna steht auf.",
             "note": "n",
@@ -178,7 +181,7 @@ def test_a_story_that_is_only_read_logs_nothing() -> None:
 
     step = act(context, state, {"read": True}, model)
 
-    assert step.logs == []
+    assert step.graded == []
     assert step.show["feedback"] == [] and step.show["more"] is True
 
 
@@ -211,3 +214,14 @@ def test_what_was_done_is_in_the_results_however_far_it_got() -> None:
     (done,) = results["stories"]
     assert done["story"]["title"] == "Ein langer Morgen"
     assert done["result"] == "right"
+
+
+def test_a_story_has_as_many_questions_and_is_as_long_as_the_learner_chose() -> None:
+    model = FakeModel(STORY)
+    options = {"then": "questions", "questions": 1, "length": "longer"}
+
+    step = start({**CONTEXT, "options": options}, model)
+
+    (prompt,) = model.asked
+    assert "about 190 words" in prompt and "write 1 questions" in prompt
+    assert step.show["questions"] == ["Wann steht Anna auf?"]

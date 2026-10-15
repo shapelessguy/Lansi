@@ -17,8 +17,8 @@ from kit import (
     describe_topics,
     describe_words,
     focuses,
-    log,
-    log_of,
+    grade,
+    grade_of,
 )
 
 DOCTOR = {"title": "Beim Arzt", "description": "symptoms"}
@@ -156,31 +156,32 @@ def test_the_sentences_made_before_are_told_so_that_others_are_made() -> None:
         (["partial", "partial"], "partial"),
     ],
 )
-def test_an_instance_of_several_answers_is_logged_once(
+def test_an_instance_of_several_answers_is_graded_once(
     results: list[str], overall: str
 ) -> None:
-    logs = [
-        log(result, f"answer {number}", f"fixed {number}", "")
+    graded = [
+        grade(result, f"answer {number}", f"fixed {number}", "")
         for number, result in enumerate(results, start=1)
     ]
 
-    assert log_of(logs)["result"] == overall
-    assert log_of(logs)["answer"] == "answer 1 / answer 2"
+    assert grade_of(graded)["result"] == overall
+    assert grade_of(graded)["answer"] == "1. answer 1\n2. answer 2"
 
 
-def test_the_log_of_an_instance_corrects_only_what_was_not_right() -> None:
-    logged = log_of(
+def test_the_grade_of_an_instance_keeps_its_tasks_apart_from_the_answers() -> None:
+    graded = grade_of(
         [
-            log("right", "Ich stehe auf."),
-            log("wrong", "Er anruft.", "Er ruft an.", "The prefix goes last."),
+            grade("right", "stehe; auf", task="Ich ___ um 6 Uhr ___."),
+            grade("wrong", "", "ruft; an", "Left empty.", "Er ___ dich ___."),
         ]
     )
 
-    assert logged == {
+    assert graded == {
         "result": "partial",
-        "answer": "Ich stehe auf. / Er anruft.",
-        "correction": "Ich stehe auf. / Er ruft an.",
-        "note": "2. The prefix goes last.",
+        "task": "1. Ich ___ um 6 Uhr ___.\n2. Er ___ dich ___.",
+        "answer": "1. stehe; auf\n2. (nothing)",
+        "correction": "1. (right)\n2. ruft; an",
+        "note": "2. Left empty.",
     }
 
 

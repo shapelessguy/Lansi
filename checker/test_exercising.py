@@ -30,7 +30,7 @@ LESSON = "trennbare-verben"
 # told to, written with the kit as every backend is.
 ECHO = """\
 import os
-from kit import Step, log, serve, written
+from kit import Step, grade, serve, written
 
 def start(context, model):
     return Step(state={"done": 0}, show={"instances": context["instances"]})
@@ -62,7 +62,7 @@ def act(context, state, message, model):
         said = written(["Ich stehe auf."], ["Wann stehst du auf?"])
         return Step(state=state, show=None, written=said)
     state["done"] += 1
-    return Step(state=state, show=state["done"], logs=[log("right", message)])
+    return Step(state=state, show=state["done"], graded=[grade("right", message)])
 
 def finish(context, state, model):
     return Step(results={"done": state["done"]})
@@ -94,6 +94,14 @@ def answering(text: str = "hello") -> Any:
     return ask
 
 
+# what a model replies when it is asked for the log of an exercise
+LOG_REPLY = (
+    '{"summary": ["1 of 3 done.", "Separable verb split correctly."],'
+    ' "worked": [{"text": "Ich stehe auf.", "why": "prefix at the end"}],'
+    ' "failed": []}'
+)
+
+
 def failing(messages: list[dict[str, str]]) -> tuple[str, Profile]:
     raise TranslationError("an OpenRouter key is needed")
 
@@ -110,7 +118,7 @@ def test_a_step_of_a_backend_is_its_reply(directory: Path) -> None:
 
     assert reply["state"] == {"done": 0}
     assert reply["show"] == {"instances": 2}
-    assert (reply["logs"], used) == ([], [])
+    assert (reply["graded"], used) == ([], [])
 
 
 def test_a_backend_asks_the_model_through_the_server(directory: Path) -> None:
@@ -262,7 +270,9 @@ def practice(directory: Path, tmp_path: Path) -> Practice:
 LEARNER = {"into": "English", "level": "A1"}
 
 
-def test_the_logs_of_a_step_are_kept_as_soon_as_it_is_made(practice: Practice) -> None:
+def test_the_grades_of_a_step_are_kept_as_soon_as_it_is_made(
+    practice: Practice,
+) -> None:
     session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
 
     practice.step(session["id"], "echo", "start", None, LEARNER, answering())
@@ -271,12 +281,13 @@ def test_the_logs_of_a_step_are_kept_as_soon_as_it_is_made(practice: Practice) -
     )
 
     assert shown == 1
-    kept = practice._store.logs(session["id"])
+    kept = practice._store.grades(session["id"])
     assert kept == [
         {
             "session": session["id"],
             "exercise": "echo",
             "result": "right",
+            "task": "",
             "answer": "Ich stehe auf.",
             "correction": "",
             "note": "",
@@ -299,7 +310,7 @@ def test_an_exercise_is_told_the_lesson_with_its_points(
             look: Any = None,
         ) -> Any:
             told.append(request["context"])
-            return {"state": {}, "show": None, "logs": []}, []
+            return {"state": {}, "show": None, "graded": []}, []
 
     practice._runner = Recording(directory)
     session, _ = practice.start_session("German", LESSON, [], {"echo": 4})
@@ -335,7 +346,10 @@ def with_options(directory: Path) -> None:
     (directory / "echo" / "manifest.json").write_text(
         '{"title": "Echo", "options": {"then": {"label": "Then", "choices":'
         ' {"questions": "Answer questions", "retell": "Retell it"}},'
-        ' "broken": {"choices": []}}}',
+        ' "questions": {"label": "Questions", "min": 1, "max": 8, "default": 3},'
+        ' "broken": {"choices": []},'
+        ' "outside": {"min": 1, "max": 3, "default": 5},'
+        ' "half": {"min": 1, "max": 3, "default": 1.5}}}',
         encoding="utf-8",
     )
 
@@ -351,7 +365,8 @@ def test_the_options_of_an_exercise_are_listed_without_those_that_are_not_option
         "then": {
             "label": "Then",
             "choices": {"questions": "Answer questions", "retell": "Retell it"},
-        }
+        },
+        "questions": {"label": "Questions", "min": 1, "max": 8, "default": 3},
     }
 
 
@@ -364,19 +379,23 @@ def test_an_exercise_is_told_the_options_it_was_chosen_with_or_else_the_first(
     class Recording(Runner):
         def run(self, exercise: str, request: dict[str, Any], *rest: Any) -> Any:
             told.append(request["context"])
-            return {"state": {}, "show": None, "logs": []}, []
+            return {"state": {}, "show": None, "graded": []}, []
 
     practice._runner = Recording(directory)
     chosen, _ = practice.start_session(
-        "German", LESSON, [], {"echo": 1}, options={"echo": {"then": "retell"}}
+        "German",
+        LESSON,
+        [],
+        {"echo": 1},
+        options={"echo": {"then": "retell", "questions": 5}},
     )
     practice.step(chosen["id"], "echo", "start", None, LEARNER, answering())
     left, _ = practice.start_session("German", LESSON, [], {"echo": 1})
     practice.step(left["id"], "echo", "start", None, LEARNER, answering())
 
     assert [context["options"] for context in told] == [
-        {"then": "retell"},
-        {"then": "questions"},
+        {"then": "retell", "questions": 5},
+        {"then": "questions", "questions": 3},
     ]
 
 
@@ -388,6 +407,23 @@ def test_a_session_with_an_option_that_is_no_choice_is_not_started(
     with pytest.raises(ValueError, match="not a choice"):
         practice.start_session(
             "German", LESSON, [], {"echo": 1}, options={"echo": {"then": "sing"}}
+        )
+    assert practice._store.sessions() == []
+
+
+@pytest.mark.parametrize("questions", [0, 9, 2.5, "3", True])
+def test_a_session_with_a_number_out_of_its_option_is_not_started(
+    practice: Practice, directory: Path, questions: Any
+) -> None:
+    with_options(directory)
+
+    with pytest.raises(ValueError, match="whole number from 1 to 8"):
+        practice.start_session(
+            "German",
+            LESSON,
+            [],
+            {"echo": 1},
+            options={"echo": {"questions": questions}},
         )
     assert practice._store.sessions() == []
 
@@ -413,17 +449,79 @@ def test_a_finished_exercise_keeps_its_results_and_takes_no_more_steps(
     practice.step(session["id"], "echo", "start", None, LEARNER, answering())
     practice.step(session["id"], "echo", "act", "Eins.", LEARNER, answering())
 
-    practice.step(session["id"], "echo", "finish", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "finish", None, LEARNER, answering(LOG_REPLY))
 
     assert practice._store.results(session["id"], "echo") == {"done": 1}
     progress = practice._store.session(session["id"])
     assert progress and progress["progress"]["echo"] == {
         "status": "finished",
-        "logs": 1,
+        "answered": 1,
         "results": {"right": 1, "partial": 0, "wrong": 0},
     }
     with pytest.raises(ValueError, match="finished"):
         practice.step(session["id"], "echo", "act", "Zwei.", LEARNER, answering())
+
+
+def test_the_log_of_an_exercise_is_written_from_its_grades_after_it_finishes(
+    directory: Path, tmp_path: Path
+) -> None:
+    jobs: list[tuple[str, Any]] = []
+    practice = Practice(
+        UserStore(tmp_path / "user"),
+        directory=directory,
+        later=lambda title, job: jobs.append((title, job)),
+    )
+    asked: list[list[dict[str, Any]]] = []
+
+    def ask(messages: list[dict[str, Any]]) -> tuple[str, Profile]:
+        asked.append(messages)
+        return LOG_REPLY, Profile({}, id="gen-log", model="some/model")
+
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "Ich stehe auf.", LEARNER, answering())
+
+    _, finishing = practice.step(session["id"], "echo", "finish", None, LEARNER, ask)
+    # the step is over before the log is written
+    assert (finishing, asked, practice._store.logs(session["id"])) == ([], [], {})
+    title, job = jobs[0]
+    used = job()
+
+    prompt = asked[0][0]["content"]
+    assert title == "Echo"
+    assert "Echo" in prompt and "Instances to do: 3" in prompt
+    assert "Written by the learner:\n    Ich stehe auf." in prompt
+    assert [profile.id for profile in used] == ["gen-log"]
+    assert practice._store.logs(session["id"]) == {
+        "echo": "1 of 3 done.\nSeparable verb split correctly.\nWorked:\n"
+        '- "Ich stehe auf.": prefix at the end'
+    }
+
+
+def test_an_exercise_in_which_nothing_was_done_gets_no_log(
+    practice: Practice,
+) -> None:
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+
+    _, used = practice.step(session["id"], "echo", "finish", None, LEARNER, failing)
+
+    assert (used, practice._store.logs(session["id"])) == ([], {})
+
+
+def test_an_exercise_whose_log_cannot_be_written_is_finished_all_the_same(
+    practice: Practice,
+) -> None:
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "Eins.", LEARNER, answering())
+
+    with pytest.raises(ExerciseError, match="log of Echo could not be written"):
+        practice.step(session["id"], "echo", "finish", None, LEARNER, failing)
+
+    found = practice._store.session(session["id"])
+    assert found and found["progress"]["echo"]["status"] == "finished"
+    assert practice._store.logs(session["id"]) == {}
 
 
 def test_ending_a_session_finishes_the_exercises_that_were_started(
@@ -512,14 +610,14 @@ def test_logs_that_are_not_logs_are_refused_and_none_is_kept(
             look: Any = None,
         ) -> Any:
             logs = [{"result": "right", "answer": "a"}, {"result": "great"}]
-            return {"state": {}, "show": None, "logs": logs}, []
+            return {"state": {}, "show": None, "graded": logs}, []
 
     practice._runner = Wrong(directory)
     session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
 
     with pytest.raises(ExerciseError, match="result"):
         practice.step(session["id"], "echo", "start", None, LEARNER, answering())
-    assert practice._store.logs(session["id"]) == []
+    assert practice._store.grades(session["id"]) == []
 
 
 @pytest.mark.parametrize(
@@ -588,7 +686,7 @@ def recording(practice: Practice, directory: Path) -> list[dict[str, Any]]:
             look: Any = None,
         ) -> Any:
             told.append(request["context"])
-            return {"state": {}, "show": None, "logs": []}, []
+            return {"state": {}, "show": None, "graded": []}, []
 
     practice._runner = Recording(directory)
     return told
@@ -726,10 +824,10 @@ def test_an_exercise_is_told_what_it_was_answered_with_in_the_sessions_before(
             look: Any = None,
         ) -> Any:
             told.append(request["context"])
-            return {"state": {}, "show": None, "logs": []}, []
+            return {"state": {}, "show": None, "graded": []}, []
 
     first, _ = practice.start_session("German", LESSON, [], {"echo": 2})
-    practice._store.add_logs(
+    practice._store.add_grades(
         first["id"],
         "echo",
         [
@@ -754,7 +852,7 @@ def test_what_an_exercise_is_told_of_the_sessions_before_is_kept_short(
 ) -> None:
     monkeypatch.setattr(exercising, "MAX_GUIDANCE", 30)
     first, _ = practice.start_session("German", LESSON, [], {"echo": 1})
-    practice._store.add_logs(
+    practice._store.add_grades(
         first["id"],
         "echo",
         [{"result": "right", "answer": f"Satz Nummer {number}"} for number in range(9)],

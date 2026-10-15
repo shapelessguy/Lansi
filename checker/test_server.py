@@ -20,7 +20,7 @@ from intake import Intake
 from live import LiveChecker
 from profiling import Answer, Profile, Profiler, Questions, WordRating
 from sentences import Sentence
-from server import Account, Accounts, describe, make_server
+from server import Account, Accounts, describe, in_background, make_server
 from speaking import Speaker
 from spelling import Speller, SpellingIssue
 from storage import UserStore
@@ -600,6 +600,8 @@ def with_users(tmp_path: Path) -> Iterator[str]:
         vocabularies = Vocabularies(user_directory(tmp_path, user))
         intake = Intake(vocabularies, FakeProfiler(), FakeChat())
         store = UserStore(user_directory(tmp_path, user))
+        # what is started is done before the request is answered
+        tasks = Tasks(background=lambda job: job())
         return Account(
             LiveChecker(Speller(language=None)),
             intake,
@@ -608,13 +610,13 @@ def with_users(tmp_path: Path) -> Iterator[str]:
             book_sync=BookSync(store, background=lambda job: job()),
             translator=Translator(FakeModel()),
             speaker=Speaker(store, FakeVoice()),
-            # what is started is done before the request is answered
-            tasks=Tasks(background=lambda job: job()),
+            tasks=tasks,
             practice=Practice(
                 store,
                 runner=FakeRunner(),
                 lemmas_of=lambda language: ["der Arzt", "krank", "gehen"],
                 send=FakeOpenRouter(),
+                later=in_background(tasks, "log"),
             ),
         )
 
@@ -1108,7 +1110,7 @@ class FakeRunner(Runner):
                 {"result": "wrong", "answer": request["message"], "correction": "Ja."}
             ]
         show = {"done": state["done"], "level": request["context"]["level"]}
-        return {"state": state, "show": show, "logs": logs, "results": state}, []
+        return {"state": state, "show": show, "graded": logs, "results": state}, []
 
 
 def test_a_session_of_practice_keeps_the_logs_of_its_exercises(with_users: str) -> None:
@@ -1143,15 +1145,24 @@ def test_a_session_of_practice_keeps_the_logs_of_its_exercises(with_users: str) 
     _, kept, _ = send(f"{with_users}/sessions/{session['id']}", "GET", ada)
 
     assert session["exercises"] == {"cloze": 2}
-    assert json.loads(acted) == {"show": {"done": 1, "level": "A2"}, "usage": []}
+    assert json.loads(acted) == {
+        "show": {"done": 1, "level": "A2"},
+        "usage": [],
+        "tasks": [],
+    }
     assert json.loads(ended)["session"]["status"] == "finished"
+    # the log of the exercise is written in the background
+    # with no key here, it fails, as the learner is told
+    assert [(task["kind"], task["state"]) for task in json.loads(ended)["tasks"]] == [
+        ("log", "failed")
+    ]
     found = json.loads(kept)
     assert found["progress"]["cloze"] == {
         "status": "finished",
-        "logs": 1,
+        "answered": 1,
         "results": {"right": 0, "partial": 0, "wrong": 1},
     }
-    assert [(log["answer"], log["correction"]) for log in found["logs"]] == [
+    assert [(log["answer"], log["correction"]) for log in found["grades"]] == [
         ("Nein.", "Ja.")
     ]
 

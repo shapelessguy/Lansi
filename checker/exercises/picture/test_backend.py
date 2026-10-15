@@ -212,7 +212,7 @@ def test_labels_may_be_changed_and_nothing_is_logged_until_they_are_checked() ->
     first = act(CONTEXT, state, {"point": 0, "label": " der  Tisch "}, model)
     changed = act(CONTEXT, first.state, {"point": 0, "label": "Tisch"}, model)
 
-    assert first.logs == [] and changed.logs == []
+    assert first.graded == [] and changed.graded == []
     assert [point["label"] for point in changed.show["points"]] == ["Tisch", ""]
     assert changed.show["judged"] is False and model.looked == [1]
 
@@ -233,16 +233,30 @@ def test_the_labels_are_judged_on_the_marked_picture_and_each_point_is_logged() 
 
     checked = act(CONTEXT, state, {"check": True}, model)
 
-    assert checked.logs == [
-        {"result": "right", "answer": "Der Tisch", "correction": "", "note": ""},
+    task = "Label point {} of a picture of A kitchen.".format
+    assert checked.graded == [
+        {
+            "result": "right",
+            "task": task(1),
+            "answer": "Der Tisch",
+            "correction": "",
+            "note": "",
+        },
         {
             "result": "wrong",
+            "task": task(2),
             "answer": "der Preis",
             "correction": "der Pokal",
             "note": "Preis is a prize.",
         },
         # a point left blank is not known, whatever the judge says
-        {"result": "wrong", "answer": "", "correction": "die Pflanze", "note": ""},
+        {
+            "result": "wrong",
+            "task": task(3),
+            "answer": "",
+            "correction": "die Pflanze",
+            "note": "",
+        },
     ]
     judging = model.asked[-1][0]["content"]
     assert (
@@ -333,7 +347,7 @@ def test_labels_not_checked_are_judged_when_the_exercise_is_left() -> None:
 
     step = finish(CONTEXT, state, model)
 
-    assert [(each["result"], each["answer"]) for each in step.logs] == [
+    assert [(each["result"], each["answer"]) for each in step.graded] == [
         ("wrong", ""),
         ("wrong", "der Hund"),
     ]
@@ -347,7 +361,7 @@ def test_a_picture_with_no_label_is_left_without_asking_the_judge() -> None:
 
     step = finish(CONTEXT, state, model)
 
-    assert step.logs == [] and len(model.asked) == 2
+    assert step.graded == [] and len(model.asked) == 2
 
 
 def test_each_picture_is_planned_from_some_of_the_words_drawn_afresh() -> None:

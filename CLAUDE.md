@@ -25,9 +25,12 @@ A language-learning chat built on an Anki collection. Three parts:
   with a backend run in a process of its own and an interface, a module
   the app mounts in a shadow root, as `exercises/kit.py` and
   `exercises/kit.js` describe;
-  sessions of practice, the logs of what was answered and what was written
+  sessions of practice, the grades of what was answered and what was written
   in each exercise, whose words go into the vocabulary as those of the
-  chats do (`processing.py`), are kept by `exercising.py` and `storage.py`. Who may log in is in
+  chats do (`processing.py`), are kept by `exercising.py` and `storage.py`;
+  once an exercise is over, a model writes its log from them (`logs.py`), a
+  short account of what worked and what did not, for the models that
+  profile the learner rather than for the learner. Who may log in is in
   `users.json` at the top of the repository, which holds passwords: do not
   read it.
 

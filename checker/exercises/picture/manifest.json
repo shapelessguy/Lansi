@@ -1,4 +1,12 @@
 {
     "title": "Label the picture",
-    "description": "Label the things marked on a picture drawn for the topic, then have them checked. Each instance is a picture."
+    "description": "Label the things marked on a picture drawn for the topic, then have them checked. Each instance is a picture.",
+    "options": {
+        "things": {
+            "label": "Things on a picture",
+            "min": 4,
+            "max": 20,
+            "default": 14
+        }
+    }
 }

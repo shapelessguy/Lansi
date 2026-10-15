@@ -8,7 +8,7 @@ The pages are the `more_info` of the lesson, written in Markdown, with a
 line of `---` between one page and the next. Turning the pages is done by
 the interface alone; the backend is asked only when the learner asks
 something, and is told which page they are on. Nothing is answered here
-that counts, so no logs are kept: what was asked stays in the state, and
+that counts, so no grades are kept: what was asked stays in the state, and
 how many questions there were in the results.
 """
 

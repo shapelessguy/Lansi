@@ -76,6 +76,7 @@ export function describeTask(task: BackgroundTask): string {
             speech: "Making the audio",
             icon: "Making the icon",
             embeddings: "Embedding the words",
+            log: "Writing the log",
         }[task.kind] ?? "Looking into the words";
         return `${doing}: ${task.done} of ${task.total}`;
     }
@@ -87,6 +88,9 @@ export function describeTask(task: BackgroundTask): string {
     }
     if (task.kind === "embeddings") {
         return "The words are embedded.";
+    }
+    if (task.kind === "log") {
+        return "The log is written.";
     }
     return speech ? describeRead(task.result) : describeTaken(task.result);
 }
@@ -104,7 +108,12 @@ export function describeRead(sentences: TakenWord[]): string {
 
 /** What a task of each kind is called. */
 export function taskName(task: BackgroundTask): string {
-    return { speech: "Read aloud", icon: "Topic icon", embeddings: "Embed vocabulary" }[task.kind]
+    return {
+        speech: "Read aloud",
+        icon: "Topic icon",
+        embeddings: "Embed vocabulary",
+        log: "Exercise log",
+    }[task.kind]
         ?? "Add to vocabulary";
 }
 

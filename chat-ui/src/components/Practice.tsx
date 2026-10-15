@@ -9,7 +9,6 @@ import {
     choosingOf,
     clampInstances,
     DEFAULT_INSTANCES,
-    defaultOptions,
     endSession,
     type ExerciseInfo,
     fetchExercises,
@@ -19,7 +18,8 @@ import {
     type Lesson,
     lessonsRead,
     lessonsToReview,
-    MAX_INSTANCES,
+    optionsOf,
+    type OptionValue,
     type PracticeSession,
     resumeAt,
     scoreOf,
@@ -37,6 +37,7 @@ import {
     remakeIcon,
     type Topic,
 } from "../lib/topics";
+import { type ChosenExercise, ExerciseSettings } from "./ExerciseSettings";
 import { ExerciseView } from "./ExerciseView";
 import { LevelBadge } from "./Level";
 import { SessionHistory } from "./SessionHistory";
@@ -55,6 +56,8 @@ interface Props {
     embedding: BackgroundTask | null;
     onUsage: (used: ProfileUsage[]) => void;
     onTask: (task: BackgroundTask) => void;
+    /** Keeps the settings changed, such as the options of an exercise. */
+    onChangeSettings: (next: Settings) => void;
     onOpenSettings: () => void;
     /** Has a text of an exercise of a session read aloud, which the exercise numbers `number`. */
     onReadAloud: (sessionId: string, exercise: string, number: number, text: string) => void;
@@ -77,6 +80,7 @@ export function Practice(
         embedding,
         onUsage,
         onTask,
+        onChangeSettings,
         onOpenSettings,
         onReadAloud,
     }: Props,
@@ -91,8 +95,6 @@ export function Practice(
     const [lessonId, setLessonId] = useState<string | null>(null);
     // the exercises chosen, with how many instances of each, in the order they were chosen
     const [chosen, setChosen] = useState<Record<string, number>>({});
-    // the options chosen for the exercises, by exercise, kept while an exercise is left out
-    const [chosenOptions, setChosenOptions] = useState<Record<string, Record<string, string>>>({});
     const [session, setSession] = useState<PracticeSession | null>(null);
     // which of the exercises of the session is being done
     const [at, setAt] = useState(0);
@@ -247,12 +249,41 @@ export function Practice(
     }
 
     /** Chooses an exercise or leaves it out. Theory is done once, before the others. */
+    /** The options of an exercise, as they were last set. */
+    function optionsFor(exercise: ExerciseInfo): Record<string, OptionValue> {
+        return optionsOf(exercise, settings.exerciseOptions[exercise.id]);
+    }
+
+    function setOption(exercise: ExerciseInfo, name: string, value: OptionValue) {
+        onChangeSettings({
+            ...settings,
+            exerciseOptions: {
+                ...settings.exerciseOptions,
+                [exercise.id]: { ...optionsFor(exercise), [name]: value },
+            },
+        });
+    }
+
+    /** How many times an exercise is done, as it was last set. */
+    function instancesOf(id: string): number {
+        const remembered = settings.exerciseInstances[id];
+        return remembered === undefined ? DEFAULT_INSTANCES : clampInstances(remembered);
+    }
+
+    function setInstances(exercise: ExerciseInfo, instances: number) {
+        setChosen((current) => ({ ...current, [exercise.id]: instances }));
+        onChangeSettings({
+            ...settings,
+            exerciseInstances: { ...settings.exerciseInstances, [exercise.id]: instances },
+        });
+    }
+
     function toggle(id: string) {
         setChosen(({ [id]: had, ...rest }) => {
             if (had !== undefined) {
                 return rest;
             }
-            return isTheory(id) ? { [id]: 1, ...rest } : { ...rest, [id]: DEFAULT_INSTANCES };
+            return isTheory(id) ? { [id]: 1, ...rest } : { ...rest, [id]: instancesOf(id) };
         });
     }
 
@@ -270,7 +301,11 @@ export function Practice(
                 chosenTopics,
                 choosingOf(settings, vocabulary, setWords),
                 learner.apiKey,
-                chosenOptions,
+                Object.fromEntries(
+                    (exercises.status === "ready" ? exercises.items : [])
+                        .filter((exercise) => chosen[exercise.id] !== undefined)
+                        .map((exercise) => [exercise.id, optionsFor(exercise)]),
+                ),
             )
         ).then(
             ({ usage, ...started }) => {
@@ -293,8 +328,10 @@ export function Practice(
     function end(current: PracticeSession) {
         setBusy(true);
         endSession(current.id, "finished", learner).then(
-            ({ session: done, usage }) => {
+            ({ session: done, usage, tasks }) => {
                 onUsage(usage);
+                // the logs of the exercises it finished, written in the background
+                tasks?.forEach(onTask);
                 setSession(null);
                 setEnded(done);
             },
@@ -308,8 +345,10 @@ export function Practice(
         setBusy(true);
         setError(null);
         stepExercise(current.id, order[at], "finish", null, learner).then(
-            ({ usage }) => {
+            ({ usage, tasks }) => {
                 onUsage(usage);
+                // the log of the exercise, written in the background
+                tasks?.forEach(onTask);
                 if (at + 1 < order.length) {
                     setAt(at + 1);
                     setBusy(false);
@@ -383,6 +422,10 @@ export function Practice(
     }
 
     const chosenCount = Object.keys(chosen).length;
+    // the exercises chosen that have something to set, as they are listed
+    const configured: ChosenExercise[] = (exercises.status === "ready" ? exercises.items : [])
+        .filter((exercise) => chosen[exercise.id] !== undefined && !exercise.theory)
+        .map((exercise) => ({ exercise, instances: chosen[exercise.id], values: optionsFor(exercise) }));
     // what a session without a lesson goes over
     const reviewed = lessons.status === "ready" ? lessonsToReview(history, lessons.items, language) : [];
     return (
@@ -392,7 +435,9 @@ export function Practice(
                     <p className="practice-note">
                         Session over: {Object.entries(ended.progress)
                             .map(([id, progress]) =>
-                                ended.exercises[id] ? `${titleOf(id)} ${progress.logs} answered` : `${titleOf(id)} read`
+                                ended.exercises[id]
+                                    ? `${titleOf(id)} ${progress.answered} answered`
+                                    : `${titleOf(id)} read`
                             )
                             .join(", ")}
                         {scoreOf(ended).percent !== null && ` · ${scoreOf(ended).percent}%`}.
@@ -522,58 +567,23 @@ export function Practice(
                                             <span className="practice-title">{exercise.title}</span>
                                             <span className="practice-detail">{exercise.description}</span>
                                         </button>
-                                        {chosen[exercise.id] !== undefined && !exercise.theory && (
-                                            <label className="practice-instances">
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    max={MAX_INSTANCES}
-                                                    value={chosen[exercise.id]}
-                                                    onChange={(event) =>
-                                                        setChosen((current) => ({
-                                                            ...current,
-                                                            [exercise.id]: clampInstances(event.target.valueAsNumber),
-                                                        }))}
-                                                />
-                                                times
-                                            </label>
-                                        )}
-                                        {chosen[exercise.id] !== undefined
-                                            && Object.entries(exercise.options ?? {}).map(([name, option]) => (
-                                                <label key={name} className="practice-instances">
-                                                    {option.label}
-                                                    <select
-                                                        value={chosenOptions[exercise.id]?.[name]
-                                                            ?? defaultOptions(exercise)[name]}
-                                                        onChange={(event) =>
-                                                            setChosenOptions((current) => ({
-                                                                ...current,
-                                                                [exercise.id]: {
-                                                                    ...defaultOptions(exercise),
-                                                                    ...current[exercise.id],
-                                                                    [name]: event.target.value,
-                                                                },
-                                                            }))}
-                                                    >
-                                                        {Object.entries(option.choices).map(([value, label]) => (
-                                                            <option key={value} value={value}>{label}</option>
-                                                        ))}
-                                                    </select>
-                                                </label>
-                                            ))}
                                     </li>
                                 ))}
                         </ul>
                     </section>
                 </div>
                 {error && <p className="practice-note error">{error}</p>}
-                <SessionHistory
-                    sessions={history}
-                    sessionTitle={sessionTitle}
-                    topicTitle={topicTitle}
-                    exerciseTitle={titleOf}
-                    onResume={resume}
-                />
+                {configured.length > 0
+                    ? <ExerciseSettings chosen={configured} onInstances={setInstances} onChange={setOption} />
+                    : (
+                        <SessionHistory
+                            sessions={history}
+                            sessionTitle={sessionTitle}
+                            topicTitle={topicTitle}
+                            exerciseTitle={titleOf}
+                            onResume={resume}
+                        />
+                    )}
             </div>
             <div className="practice-footer">
                 <span className="practice-summary">

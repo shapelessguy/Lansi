@@ -4,6 +4,7 @@
 import type { ProfileUsage } from "./checker";
 import { checkerFetch } from "./session";
 import type { Settings } from "./settings";
+import type { BackgroundTask } from "./tasks";
 import { describeError } from "./translate";
 import { profileUsage, type UsageEntry } from "./usage";
 
@@ -22,37 +23,78 @@ export interface Lesson {
     more_info: string;
 }
 
-/** What the learner chooses of an exercise besides how many times it is done: one of a few choices. */
-export interface ExerciseOption {
+/** A setting of an exercise that is one of a few choices. */
+export interface ChoiceOption {
     label: string;
     /** The labels of the choices by their values, the first the one taken unless another is. */
     choices: Record<string, string>;
 }
+
+/** A setting of an exercise that is a whole number from `min` to `max`. */
+export interface NumberOption {
+    label: string;
+    min: number;
+    max: number;
+    /** The one taken unless another is. */
+    default: number;
+}
+
+/** What the learner may set of an exercise besides how many times it is done. */
+export type ExerciseOption = ChoiceOption | NumberOption;
+
+/** What an option is set to. */
+export type OptionValue = string | number;
 
 /** An exercise there is, as its manifest describes it. */
 export interface ExerciseInfo {
     id: string;
     title: string;
     description: string;
-    /** Whether it teaches rather than asks: it comes first, is done once, and keeps no logs. */
+    /** Whether it teaches rather than asks: it comes first, is done once, and is graded on nothing. */
     theory: boolean;
     /** Its options, by their names. */
     options: Record<string, ExerciseOption>;
 }
 
-/** The value of each option of an exercise that is taken unless another is chosen: its first choice. */
-export function defaultOptions(exercise: ExerciseInfo): Record<string, string> {
+/** The value of an option that is taken unless another is chosen: its first choice, or its default. */
+function defaultOf(option: ExerciseOption): OptionValue {
+    return "choices" in option ? Object.keys(option.choices)[0] : option.default;
+}
+
+/** The value of each option of an exercise that is taken unless another is chosen. */
+export function defaultOptions(exercise: ExerciseInfo): Record<string, OptionValue> {
+    return optionsOf(exercise, {});
+}
+
+/**
+ * The value of each option of an exercise, as `remembered` has it where it
+ * is one the option can have, and else the one taken unless another is. A
+ * number out of its bounds is brought within them.
+ */
+export function optionsOf(
+    exercise: ExerciseInfo,
+    remembered: Record<string, OptionValue> = {},
+): Record<string, OptionValue> {
     return Object.fromEntries(
-        Object.entries(exercise.options ?? {}).map(([name, option]) => [name, Object.keys(option.choices)[0]]),
+        Object.entries(exercise.options ?? {}).map(([name, option]) => {
+            const value = remembered[name];
+            if ("choices" in option) {
+                return [name, typeof value === "string" && value in option.choices ? value : defaultOf(option)];
+            }
+            if (typeof value !== "number" || !Number.isFinite(value)) {
+                return [name, defaultOf(option)];
+            }
+            return [name, Math.min(option.max, Math.max(option.min, Math.round(value)))];
+        }),
     );
 }
 
 export interface ExerciseProgress {
     status: "pending" | "started" | "finished";
-    /** How many logs it has kept, one for each instance done. */
-    logs: number;
-    /** How many of the logs are of each result. */
-    results: Record<LoggedAnswer["result"], number>;
+    /** How many grades it has kept, one for each instance done. */
+    answered: number;
+    /** How many of the grades are of each result. */
+    results: Record<Grade["result"], number>;
 }
 
 export interface PracticeSession {
@@ -179,7 +221,7 @@ export function startSession(
     topics: string[],
     choosing: Choosing,
     apiKey: string,
-    options: Record<string, Record<string, string>> = {},
+    options: Record<string, Record<string, OptionValue>> = {},
 ): Promise<PracticeSession & { usage: ProfileUsage[] }> {
     const chosenOptions = Object.fromEntries(Object.entries(options).filter(([id]) => id in exercises));
     const init = posting({ language, lesson: lesson ?? "", topics, exercises, options: chosenOptions, ...choosing });
@@ -196,17 +238,20 @@ export function stepExercise(
     op: "start" | "act" | "finish",
     message: unknown,
     learner: Learner,
-): Promise<{ show: unknown; usage: ProfileUsage[] }> {
+): Promise<{ show: unknown; usage: ProfileUsage[]; tasks?: BackgroundTask[] }> {
     return call(
         `/sessions/${encodeURIComponent(sessionId)}/exercises/${encodeURIComponent(exercise)}/${op}`,
         posting({ message }, learner),
     );
 }
 
-/** What the learner answered once, as an exercise logged it. */
-export interface LoggedAnswer {
+/** What the learner answered once, as an exercise graded it. */
+export interface Grade {
     exercise: string;
     result: "right" | "wrong" | "partial";
+    /** What the exercise gave the learner to answer, written by a model. */
+    task: string;
+    /** Only what the learner wrote. */
     answer: string;
     correction: string;
     note: string;
@@ -218,8 +263,14 @@ export async function fetchSessions(): Promise<PracticeSession[]> {
     return sessions;
 }
 
-/** A session with what was answered in it. */
-export function fetchSession(id: string): Promise<PracticeSession & { logs: LoggedAnswer[] }> {
+/**
+ * A session with what was answered in it, and the log of each exercise that
+ * is over, by exercise: what worked and what did not, written by a model for
+ * the app rather than for the learner.
+ */
+export function fetchSession(
+    id: string,
+): Promise<PracticeSession & { grades: Grade[]; logs: Record<string, string> }> {
     return call(`/sessions/${encodeURIComponent(id)}`);
 }
 
@@ -234,15 +285,15 @@ export function resumeAt(session: PracticeSession): number {
 }
 
 /**
- * How many answers an exercise of a session has had logged, or nothing for
+ * How many answers an exercise of a session has had graded, or nothing for
  * one with no instances, such as theory. It is not said out of how many
- * instances, as an instance may log many answers, as a picture does.
+ * instances, as an instance may grade many answers, as a picture does.
  */
 export function answeredOf(session: PracticeSession, exercise: string): string {
     if (!session.exercises[exercise]) {
         return "";
     }
-    return `${session.progress[exercise]?.logs ?? 0} answered`;
+    return `${session.progress[exercise]?.answered ?? 0} answered`;
 }
 
 /** How a session went: how many of its instances had each result, out of how many there were to be. */
@@ -315,7 +366,7 @@ export function endSession(
     sessionId: string,
     status: "finished" | "abandoned",
     learner: Learner,
-): Promise<{ session: PracticeSession; usage: ProfileUsage[] }> {
+): Promise<{ session: PracticeSession; usage: ProfileUsage[]; tasks?: BackgroundTask[] }> {
     return call(`/sessions/${encodeURIComponent(sessionId)}/end`, posting({ status }, learner));
 }
 

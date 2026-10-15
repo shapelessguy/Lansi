@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 
-import { answeredOf, fetchSession, type LoggedAnswer, type PracticeSession, scoreOf } from "../lib/practice";
+import { answeredOf, fetchSession, type Grade, type PracticeSession, scoreOf } from "../lib/practice";
 
 interface Props {
     sessions: PracticeSession[];
@@ -59,19 +59,25 @@ function ScoreBar({ session }: { session: PracticeSession }) {
     );
 }
 
+/** What was answered in a session, and the logs of its exercises by exercise. */
+interface Done {
+    grades: Grade[];
+    logs: Record<string, string>;
+}
+
 /** The sessions there were, each with what was answered in it once it is opened. */
 export function SessionHistory({ sessions, sessionTitle, topicTitle, exerciseTitle, onResume }: Props) {
-    // what was answered in each session that was opened, by its id
-    const [logs, setLogs] = useState<Record<string, LoggedAnswer[] | "loading" | "failed">>({});
+    // what was done in each session that was opened, by its id
+    const [done, setDone] = useState<Record<string, Done | "loading" | "failed">>({});
 
     function open(id: string) {
-        if (logs[id] && logs[id] !== "failed") {
+        if (done[id] && done[id] !== "failed") {
             return;
         }
-        setLogs((current) => ({ ...current, [id]: "loading" }));
+        setDone((current) => ({ ...current, [id]: "loading" }));
         fetchSession(id).then(
-            (found) => setLogs((current) => ({ ...current, [id]: found.logs })),
-            () => setLogs((current) => ({ ...current, [id]: "failed" })),
+            (found) => setDone((current) => ({ ...current, [id]: { grades: found.grades, logs: found.logs } })),
+            () => setDone((current) => ({ ...current, [id]: "failed" })),
         );
     }
 
@@ -83,7 +89,7 @@ export function SessionHistory({ sessions, sessionTitle, topicTitle, exerciseTit
             <h2>Sessions</h2>
             <ul className="history-list">
                 {sessions.slice(0, SHOWN).map((session) => {
-                    const shown = logs[session.id];
+                    const shown = done[session.id];
                     return (
                         <li key={session.id} className={`history-item ${session.status}`}>
                             <details onToggle={(event) => event.currentTarget.open && open(session.id)}>
@@ -107,27 +113,38 @@ export function SessionHistory({ sessions, sessionTitle, topicTitle, exerciseTit
                                 {shown === "failed" && (
                                     <p className="practice-note error">The answers could not be had.</p>
                                 )}
-                                {Array.isArray(shown) && shown.length === 0 && (
+                                {typeof shown === "object" && shown.grades.length === 0 && (
                                     <p className="practice-note">Nothing was answered.</p>
                                 )}
-                                {Array.isArray(shown) && shown.length > 0 && (
-                                    <ol className="history-logs">
-                                        {shown.map((log, number) => (
-                                            <li key={number} className={log.result}>
-                                                <span className="history-result" title={log.result}>
-                                                    {RESULT[log.result]}
+                                {typeof shown === "object" && shown.grades.length > 0 && (
+                                    <ol className="history-grades">
+                                        {shown.grades.map((grade, number) => (
+                                            <li key={number} className={grade.result}>
+                                                <span className="history-result" title={grade.result}>
+                                                    {RESULT[grade.result]}
                                                 </span>
                                                 <span>
-                                                    {log.answer}
-                                                    {log.correction && (
-                                                        <span className="history-correction">→ {log.correction}</span>
+                                                    {grade.task && <span className="history-task">{grade.task}</span>}
+                                                    {grade.answer}
+                                                    {grade.correction && (
+                                                        <span className="history-correction">→ {grade.correction}</span>
                                                     )}
-                                                    {log.note && <span className="practice-detail">{log.note}</span>}
+                                                    {grade.note && (
+                                                        <span className="practice-detail">{grade.note}</span>
+                                                    )}
                                                 </span>
                                             </li>
                                         ))}
                                     </ol>
                                 )}
+                                {typeof shown === "object"
+                                    && Object.entries(shown.logs).map(([exercise, log]) => (
+                                        // what the app keeps of the exercise for the models that profile the learner
+                                        <div key={exercise} className="history-log">
+                                            <strong>Log of {exerciseTitle(exercise)}</strong>
+                                            <p>{log}</p>
+                                        </div>
+                                    ))}
                             </details>
                             {session.status === "running" && (
                                 <button

@@ -14,6 +14,7 @@ import {
     lessonsRead,
     lessonsToReview,
     MAX_INSTANCES,
+    optionsOf,
     type PracticeSession,
     practiceUsage,
     resumeAt,
@@ -93,7 +94,7 @@ describe("resuming a session", () => {
             progress: Object.fromEntries(
                 Object.entries(statuses).map(([id, status]) => {
                     const done = status === "pending" ? 0 : 1;
-                    return [id, { status, logs: 2 * done, results: { right: done, partial: done, wrong: 0 } }];
+                    return [id, { status, answered: 2 * done, results: { right: done, partial: done, wrong: 0 } }];
                 }),
             ),
         };
@@ -192,20 +193,31 @@ describe("exerciseKit", () => {
     });
 });
 
-describe("defaultOptions", () => {
-    it("takes the first choice of each option", () => {
-        const stories = {
-            id: "stories",
-            title: "Stories",
-            description: "",
-            theory: false,
-            options: {
-                then: { label: "Then", choices: { questions: "Answer questions", retell: "Retell it" } },
-            },
-        };
+describe("the options of an exercise", () => {
+    const stories = {
+        id: "stories",
+        title: "Stories",
+        description: "",
+        theory: false,
+        options: {
+            then: { label: "Then", choices: { questions: "Answer questions", retell: "Retell it" } },
+            questions: { label: "Questions", min: 1, max: 8, default: 3 },
+        },
+    };
 
-        expect(defaultOptions(stories)).toEqual({ then: "questions" });
+    it("are the first choice of each, or its default, unless set otherwise", () => {
+        expect(defaultOptions(stories)).toEqual({ then: "questions", questions: 3 });
         expect(defaultOptions({ ...stories, options: {} })).toEqual({});
+    });
+
+    it("are as they were remembered where they can be", () => {
+        expect(optionsOf(stories, { then: "retell", questions: 5 })).toEqual({ then: "retell", questions: 5 });
+        expect(optionsOf(stories, { then: "sing", questions: "5" })).toEqual({ then: "questions", questions: 3 });
+    });
+
+    it("bring a number remembered within the bounds of its option", () => {
+        expect(optionsOf(stories, { questions: 12 })).toMatchObject({ questions: 8 });
+        expect(optionsOf(stories, { questions: 2.6 })).toMatchObject({ questions: 3 });
     });
 });
 

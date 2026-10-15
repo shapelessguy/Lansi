@@ -2371,6 +2371,45 @@ div.book-cover {
     width: 4.5em;
 }
 
+/* the settings of the exercises chosen, in place of the sessions */
+.exercise-settings-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.exercise-settings-group {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 8px 12px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.exercise-settings-group legend {
+    padding: 0 4px;
+    font-weight: 600;
+}
+
+.exercise-setting {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 12px;
+}
+
+.exercise-setting-number {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.exercise-setting-number input {
+    width: 4.5em;
+}
+
 .practice-note {
     margin: 0;
     color: var(--muted);
@@ -2653,7 +2692,7 @@ div.book-cover {
 }
 
 /* the answers of one session, scrolling on their own when there are many */
-.history-logs {
+.history-grades {
     display: grid;
     gap: 4px;
     max-height: 320px;
@@ -2664,29 +2703,50 @@ div.book-cover {
     list-style: none;
 }
 
-.history-logs li {
+.history-grades li {
     display: flex;
     gap: 8px;
     padding: 4px 8px;
     border-radius: 6px;
 }
 
-.history-logs li > span:last-child {
+.history-grades li > span:last-child {
     display: grid;
     min-width: 0;
     overflow-wrap: anywhere;
+    white-space: pre-line;
 }
 
-.history-logs li.right {
+/* what the exercise gave, set apart from what the learner wrote */
+.history-task {
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
+.history-grades li.right {
     background: var(--done-bg);
 }
 
-.history-logs li.partial {
+.history-grades li.partial {
     background: color-mix(in srgb, var(--accent) 10%, var(--bg));
 }
 
-.history-logs li.wrong {
+.history-grades li.wrong {
     background: var(--danger-bg);
+}
+
+/* the log an exercise left, as the app keeps it for the models that profile the learner */
+.history-log {
+    margin: 10px 0 2px;
+    padding: 6px 8px;
+    border-left: 3px solid var(--muted);
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
+.history-log p {
+    margin: 4px 0 0;
+    white-space: pre-wrap;
 }
 
 .history-result {

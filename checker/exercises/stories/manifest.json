@@ -9,6 +9,20 @@
                 "retell": "Retell it",
                 "read": "Just read it"
             }
+        },
+        "questions": {
+            "label": "Questions on a story",
+            "min": 1,
+            "max": 8,
+            "default": 3
+        },
+        "length": {
+            "label": "Length of a story",
+            "choices": {
+                "level": "For my level",
+                "shorter": "Shorter",
+                "longer": "Longer"
+            }
         }
     }
 }

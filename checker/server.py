@@ -201,6 +201,23 @@ def print_local_model(model: str | None) -> None:
         log(f"{datetime.now():%H:%M:%S} local model gone. OpenRouter is asked now.")
 
 
+def in_background(
+    tasks: Tasks, kind: str
+) -> Callable[[str, Callable[[], list[Profile]]], None]:
+    """What does a job of practice as a task of `kind`, such as writing the
+    log of an exercise."""
+
+    def start(title: str, job: Callable[[], list[Profile]]) -> None:
+        tasks.start(
+            kind,
+            title,
+            1,
+            lambda step: ([], [describe_usage(profile) for profile in job()]),
+        )
+
+    return start
+
+
 def describe_usage(profile: Profile) -> dict[str, object]:
     """What one request to the model used, for whoever keeps count."""
     return {
@@ -701,7 +718,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             GET /lessons?language=L      the lessons of a language
             GET /exercises               the exercises there are
             GET /sessions                the sessions, the latest first
-            GET /sessions/S              a session, with its logs
+            GET /sessions/S              a session, with its grades and the
+                                         logs of its exercises, by exercise
             POST /sessions               start a session of `{"language": ...,
                                          "lesson": ..., "topics": [...],
                                          "exercises": {ID: instances},
@@ -715,7 +733,9 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                          make a step of an exercise: `start`,
                                          `act` on `{"message": ...}`, or
                                          `finish`; the reply is what it is to
-                                         `show`
+                                         `show`, and the `tasks` it started,
+                                         such as writing the log of an
+                                         exercise that is over
 
         A POST to a session brings the `model` an exercise asks, the
         `image_model` that draws its pictures, the `vision_model` that looks
@@ -746,8 +766,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 if session is None:
                     self._reply(HTTPStatus.NOT_FOUND, {"error": "no such session"})
                 else:
-                    logs = store.logs(session["id"])
-                    self._reply(HTTPStatus.OK, {**session, "logs": logs})
+                    grades, logs = (
+                        store.grades(session["id"]),
+                        store.logs(session["id"]),
+                    )
+                    self._reply(
+                        HTTPStatus.OK, {**session, "grades": grades, "logs": logs}
+                    )
             elif method == "POST" and url.path == "/sessions":
                 self._start_session(practice, api_key)
             elif method == "POST" and (end or step):
@@ -775,6 +800,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     else DEFAULT_IMAGE_MODEL,
                 )
                 reply: dict[str, Any]
+                before = {task["id"] for task in self.account.tasks.listing()}
                 if end:
                     status = str(body.get("status") or "finished")
                     session, used = practice.end_session(
@@ -796,7 +822,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     )
                     reply = {"show": show}
                 usage = [describe_usage(profile) for profile in used]
-                self._reply(HTTPStatus.OK, {**reply, "usage": usage})
+                # the logs of the exercises it finished, being written
+                started = [
+                    task
+                    for task in self.account.tasks.listing()
+                    if task["id"] not in before and task["kind"] == "log"
+                ]
+                self._reply(HTTPStatus.OK, {**reply, "usage": usage, "tasks": started})
             else:
                 return False
         except ValueError as error:
@@ -1464,6 +1496,7 @@ if __name__ == "__main__":
                 f" ({item.role}, {len(outcomes)} words)"
             ),
         )
+        tasks = Tasks()
         account = Account(
             LiveChecker(
                 speller, profiler, on_profiled=print_profile, on_rated=print_ratings
@@ -1483,10 +1516,12 @@ if __name__ == "__main__":
             # the language model asked when a request names none
             translator=Translator(model=os.environ.get("CHECKER_CHAT_MODEL", "")),
             speaker=Speaker(kept),
+            tasks=tasks,
             practice=Practice(
                 kept,
                 lemmas_of=partial(lemmas_of, intake),
                 on_words=log,
+                later=in_background(tasks, "log"),
             ),
         )
         assert account.book_sync

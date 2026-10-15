@@ -127,6 +127,22 @@ test("the exercise settings are kept, and those that cannot be are the usual one
     expect([unusable.exerciseMixTopics, unusable.exerciseVocabulary]).toEqual([false, {}]);
 });
 
+test("the options of the exercises are remembered, those that are not text or numbers left out", () => {
+    const kept = normalizeSettings({
+        exerciseOptions: { stories: { then: "retell", questions: 5, odd: [1] }, cloze: "five" },
+    });
+
+    expect(kept.exerciseOptions).toEqual({ stories: { then: "retell", questions: 5 } });
+    expect(normalizeSettings({ exerciseOptions: 3 }).exerciseOptions).toEqual({});
+});
+
+test("how many times each exercise is done is remembered, what is not a number left out", () => {
+    const kept = normalizeSettings({ exerciseInstances: { cloze: 3, stories: "two" } });
+
+    expect(kept.exerciseInstances).toEqual({ cloze: 3 });
+    expect(normalizeSettings({}).exerciseInstances).toEqual({});
+});
+
 test("the vision model is kept, and left blank for the chat model", () => {
     expect(normalizeSettings({ visionModel: " some/seeing " }).visionModel).toBe("some/seeing");
     expect(normalizeSettings({}).visionModel).toBe("");

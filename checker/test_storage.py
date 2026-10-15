@@ -337,6 +337,7 @@ def test_books_can_be_kept_where_things_were_kept_before_there_were_books(
     before._db.execute("DROP TABLE book_speech")  # noqa: SLF001
     later = (
         "written",
+        "grades",
         "logs",
         "session_exercises",
         "sessions",
@@ -413,6 +414,7 @@ def test_sessions_can_be_kept_where_things_were_kept_before_there_were_sessions(
     before.save_settings({"level": "B1"})
     later = (
         "written",
+        "grades",
         "logs",
         "session_exercises",
         "sessions",
@@ -427,9 +429,9 @@ def test_sessions_can_be_kept_where_things_were_kept_before_there_were_sessions(
 
     store = UserStore(tmp_path / "ada")
     store.start_session("s1", "German", "trennbare-verben", [], {"cloze": 3})
-    store.add_logs("s1", "cloze", [{"result": "right", "answer": "Ja."}])
+    store.add_grades("s1", "cloze", [{"result": "right", "answer": "Ja."}])
 
-    assert [log["answer"] for log in store.logs("s1")] == ["Ja."]
+    assert [log["answer"] for log in store.grades("s1")] == ["Ja."]
     assert store.settings() == {"level": "B1"}
 
 
@@ -439,6 +441,7 @@ def test_usage_can_be_kept_where_things_were_kept_before_there_was_usage(
     before = UserStore(tmp_path / "ada")
     before.save_settings({"level": "B1"})
     before._db.execute("DROP TABLE written")  # noqa: SLF001
+    before._db.execute("DROP TABLE grades")  # noqa: SLF001
     before._db.execute("DROP TABLE usage")  # noqa: SLF001
     before._db.execute("ALTER TABLE sessions DROP COLUMN lessons")  # noqa: SLF001
     before._db.execute(  # noqa: SLF001
@@ -460,6 +463,7 @@ def test_the_texts_kept_before_are_dropped_and_sessions_kept(
     before = UserStore(tmp_path / "ada")
     before.start_session("s1", "German", "lesson", [], {"cloze": 3})
     before._db.execute("DROP TABLE written")  # noqa: SLF001
+    before._db.execute("DROP TABLE grades")  # noqa: SLF001
     before._db.execute(  # noqa: SLF001
         "ALTER TABLE session_exercises DROP COLUMN options"
     )
@@ -491,7 +495,7 @@ def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> Non
         "s1", "German", "lesson", ["t1"], {"cloze": 3, "translation": 2}
     )
     store.save_exercise_state("s1", "cloze", {"at": 1}, {"shown": True})
-    store.add_logs("s1", "cloze", [{"result": "partial", "answer": "a", "note": "n"}])
+    store.add_grades("s1", "cloze", [{"result": "partial", "answer": "a", "note": "n"}])
 
     store.end_session("s1", "abandoned")
 
@@ -513,12 +517,12 @@ def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> Non
         "progress": {
             "cloze": {
                 "status": "started",
-                "logs": 1,
+                "answered": 1,
                 "results": {"right": 0, "partial": 1, "wrong": 0},
             },
             "translation": {
                 "status": "pending",
-                "logs": 0,
+                "answered": 0,
                 "results": {"right": 0, "partial": 0, "wrong": 0},
             },
         },
@@ -614,8 +618,8 @@ def test_what_an_exercise_was_answered_with_comes_from_its_last_sessions(
         ]
     ):
         store.start_session(f"s{number}", "German", "l", [], {"picture": 1, "cloze": 1})
-        store.add_logs(f"s{number}", "picture", logs)
-    store.add_logs("s2", "cloze", [{"result": "right", "answer": "Ich stehe auf."}])
+        store.add_grades(f"s{number}", "picture", logs)
+    store.add_grades("s2", "cloze", [{"result": "right", "answer": "Ich stehe auf."}])
 
     assert store.used_before("picture", 2) == ["die Lampe", "der Pokal", "der Tisch"]
     assert store.used_before("picture", 1) == ["die Lampe"]
@@ -638,3 +642,22 @@ def test_the_starter_topics_are_added_once_without_icons_and_after_none_of_the_s
         ("family", False),
         ("Work", False),
     ]
+
+
+def test_a_log_can_be_kept_where_findings_were_left_naming_the_logs_before(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before._db.executescript(  # noqa: SLF001
+        "CREATE TABLE findings (id INTEGER PRIMARY KEY,"
+        " log_id INTEGER NOT NULL REFERENCES logs (id) ON DELETE CASCADE);"
+        " ALTER TABLE grades DROP COLUMN task;"
+        " PRAGMA user_version = 12;"
+    )
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+    store.start_session("s1", "German", "trennbare-verben", [], {"cloze": 3})
+    store.set_log("s1", "cloze", "1 of 3 done.")
+
+    assert store.logs("s1") == {"cloze": "1 of 3 done."}

@@ -9,8 +9,8 @@ A sentence is written with its gaps in brackets, such as
 lists them with `|`. A sentence is right if every gap is, partial if some
 are, or if they differ only in capitals or umlauts, and wrong otherwise.
 
-An instance is a set of `SENTENCES` sentences, shown and checked together,
-and logged once. The sets are made one at a time: the first when the
+An instance is a set of sentences, as many as the option `sentences` says,
+shown and checked together, and graded once. The sets are made one at a time: the first when the
 exercise starts, and each other once the one before was checked, when the
 interface asks for it to be `prepare`d while the learner reads what was
 right, or else when it goes on to the `next`.
@@ -37,9 +37,10 @@ from kit import (
     describe_plan,
     describe_topics,
     describe_words,
-    log,
-    log_of,
+    grade,
+    grade_of,
     loose,
+    option,
     serve,
     written,
 )
@@ -47,6 +48,8 @@ from kit import (
 _GAP = re.compile(r"\[([^\[\]]+)\]")
 # how many sentences an instance is
 SENTENCES = 5
+# what the answers for the gaps of a sentence are joined with in its grade
+GAPS_JOINED = "; "
 
 MAKING = """\
 You write fill-in-the-gap exercises for someone learning {language}. Write \
@@ -93,6 +96,23 @@ def filled(text: str, answers: list[str]) -> str:
     """The sentence with its gaps filled in by `answers`."""
     given = iter(answers)
     return _GAP.sub(lambda gap: next(given, ""), text)
+
+
+def task_of(item: dict[str, Any]) -> str:
+    """The sentence as the learner was given it, each gap a ___ with its
+    hint, if it has one."""
+    hints = iter(item["hints"])
+
+    def gap(_: re.Match[str]) -> str:
+        hint = next(hints, "")
+        return f"___ ({hint})" if hint else "___"
+
+    return _GAP.sub(gap, item["text"])
+
+
+def fills(answers: list[str]) -> str:
+    """What went into the gaps of a sentence, in their order."""
+    return GAPS_JOINED.join(" ".join(answer.split()) or "(empty)" for answer in answers)
 
 
 def judge(text: str, given: list[str]) -> tuple[str, str]:
@@ -152,6 +172,11 @@ def read_items(reply: Any, count: int = SENTENCES) -> list[dict[str, Any]]:
     return items[:count]
 
 
+def sentences_of(context: dict[str, Any]) -> int:
+    """How many sentences a set is, as the learner chose."""
+    return int(option(context, "sentences", SENTENCES))
+
+
 def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> None:
     """Has the model make the next set of sentences, other than those made
     before, unless it was made already or every set was."""
@@ -160,23 +185,26 @@ def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> No
         return
     prompt = MAKING.format(
         language=context["language"],
-        count=SENTENCES,
+        count=sentences_of(context),
         level=describe_level(context),
         lesson=describe_lesson(context),
         # each set goes on from where the one before left the rules
-        plan=describe_plan(context, SENTENCES, sum(len(made) for made in sets)),
+        plan=describe_plan(
+            context, sentences_of(context), sum(len(made) for made in sets)
+        ),
         topics=describe_topics(context),
         words=describe_words(context),
         guidance=describe_guidance(context),
         made=describe_made([item["text"] for made in sets for item in made]),
         into=context["into"],
     )
-    sets.append(read_items(ask_json(model, [{"role": "user", "content": prompt}])))
+    reply = ask_json(model, [{"role": "user", "content": prompt}])
+    sets.append(read_items(reply, sentences_of(context)))
 
 
 def check(text: str, given: list[str]) -> dict[str, str]:
     """What the learner is told of the answers given for the gaps of a
-    sentence, which is logged as it is."""
+    sentence, which is graded as it is."""
     result, note = judge(text, given)
     correct = filled(text, [gap[0] for gap in answers_of(text)])
     answered = filled(text, given)
@@ -235,22 +263,32 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     elif isinstance(message.get("answers"), list) and not state["reviewing"]:
         items = state["sets"][len(checked)]
         answers = [*message["answers"], *[[]] * len(items)][: len(items)]
-        feedback = [
-            check(
-                item["text"],
-                [each if isinstance(each, str) else "" for each in given]
-                if isinstance(given, list)
-                else [],
-            )
-            for item, given in zip(items, answers)
+        given_gaps = [
+            [each if isinstance(each, str) else "" for each in given]
+            if isinstance(given, list)
+            else []
+            for given in answers
         ]
-        logged = log_of(
+        feedback = [
+            check(item["text"], given) for item, given in zip(items, given_gaps)
+        ]
+        # the learner wrote only what went into the gaps, and is graded on it
+        graded = grade_of(
             [
-                log(each["result"], each["answer"], each["correction"], each["note"])
-                for each in feedback
+                grade(
+                    each["result"],
+                    fills(given + [""] * (len(gaps) - len(given))),
+                    ""
+                    if each["result"] == "right"
+                    else fills([gap[0] for gap in gaps]),
+                    each["note"],
+                    task_of(item),
+                )
+                for item, given, each in zip(items, given_gaps, feedback)
+                for gaps in [answers_of(item["text"])]
             ]
         )
-        checked.append({"feedback": feedback, "result": logged["result"]})
+        checked.append({"feedback": feedback, "result": graded["result"]})
         state["reviewing"] = True
         said = written(
             [
@@ -261,7 +299,7 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
             [each["correct"] for each in feedback],
         )
         return Step(
-            state=state, show=_show(context, state), logs=[logged], written=said
+            state=state, show=_show(context, state), graded=[graded], written=said
         )
     return Step(state=state, show=_show(context, state))
 

@@ -67,6 +67,10 @@ export interface Settings {
     exerciseVocabulary: Record<string, string>;
     /** Whether the words given are those nearest the topics, rather than those used last. */
     exerciseTopicWords: boolean;
+    /** What the options of each exercise were last set to, by exercise and option. */
+    exerciseOptions: Record<string, Record<string, string | number>>;
+    /** How many times each exercise was last to be done, by exercise. */
+    exerciseInstances: Record<string, number>;
 }
 
 export const THEMES = { system: "As the system", light: "Light", dark: "Dark" } as const;
@@ -201,6 +205,8 @@ export function defaultSettings(): Settings {
         exerciseMixTopics: false,
         exerciseVocabulary: {},
         exerciseTopicWords: true,
+        exerciseOptions: {},
+        exerciseInstances: {},
     };
 }
 
@@ -294,7 +300,34 @@ export function normalizeSettings(stored: unknown): Settings {
         exerciseTopicWords: typeof candidate.exerciseTopicWords === "boolean"
             ? candidate.exerciseTopicWords
             : defaults.exerciseTopicWords,
+        exerciseOptions: exerciseOptionsOf(candidate.exerciseOptions),
+        exerciseInstances: typeof candidate.exerciseInstances === "object" && candidate.exerciseInstances !== null
+            ? Object.fromEntries(
+                Object.entries(candidate.exerciseInstances).filter(([, value]) =>
+                    typeof value === "number" && Number.isFinite(value)
+                ),
+            )
+            : defaults.exerciseInstances,
     };
+}
+
+/** The options of the exercises in stored settings, those that are not text or numbers left out. */
+function exerciseOptionsOf(stored: unknown): Record<string, Record<string, string | number>> {
+    if (typeof stored !== "object" || stored === null) {
+        return {};
+    }
+    return Object.fromEntries(
+        Object.entries(stored)
+            .filter(([, options]) => typeof options === "object" && options !== null)
+            .map(([exercise, options]) => [
+                exercise,
+                Object.fromEntries(
+                    Object.entries(options as Record<string, unknown>).filter(([, value]) =>
+                        typeof value === "string" || (typeof value === "number" && Number.isFinite(value))
+                    ),
+                ) as Record<string, string | number>,
+            ]),
+    );
 }
 
 /** Where the key is kept: in this browser only, and never by the server. */

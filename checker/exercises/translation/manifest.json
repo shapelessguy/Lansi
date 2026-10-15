@@ -1,4 +1,12 @@
 {
     "title": "Translate",
-    "description": "Translate sentences that need the lesson into the language you learn. Each instance is a set of five sentences, checked together."
+    "description": "Translate sentences that need the lesson into the language you learn. Each instance is a set of sentences, checked together.",
+    "options": {
+        "sentences": {
+            "label": "Sentences in a set",
+            "min": 1,
+            "max": 10,
+            "default": 5
+        }
+    }
 }

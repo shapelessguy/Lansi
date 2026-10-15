@@ -103,7 +103,7 @@ def test_a_set_of_five_sentences_is_made_for_the_points_taught_and_the_topics() 
     assert "level A1" in prompt and "4 to 8 words" in prompt
 
 
-def test_a_set_is_judged_in_one_request_and_logged_once() -> None:
+def test_a_set_is_judged_in_one_request_and_graded_once_with_its_tasks() -> None:
     wrong = {
         "result": "wrong",
         "correction": "Ich stehe um sechs auf.",
@@ -114,13 +114,18 @@ def test_a_set_is_judged_in_one_request_and_logged_once() -> None:
 
     step = act(CONTEXT, state, {"answers": ANSWERS}, model)
 
-    assert step.logs == [
+    assert step.graded == [
         {
             "result": "partial",
-            "answer": "Ich aufstehe um sechs. / Sie ruft mich an. /  / Wir kommen mit."
-            " / Du machst die Tür zu.",
-            "correction": "Ich stehe um sechs auf. / Sie ruft mich an."
-            " / Er kauft heute ein. / Wir kommen mit. / Du machst die Tür zu.",
+            "task": "1. Translate from English: I get up at six."
+            "\n2. Translate from English: She calls me."
+            "\n3. Translate from English: He shops today."
+            "\n4. Translate from English: We come along."
+            "\n5. Translate from English: You close the door.",
+            "answer": "1. Ich aufstehe um sechs.\n2. Sie ruft mich an.\n3. (nothing)"
+            "\n4. Wir kommen mit.\n5. Du machst die Tür zu.",
+            "correction": "1. Ich stehe um sechs auf.\n2. (right)"
+            "\n3. Er kauft heute ein.\n4. (right)\n5. (right)",
             "note": "1. The prefix goes to the end.",
         }
     ]
@@ -161,7 +166,7 @@ def test_a_set_with_nothing_written_is_not_judged() -> None:
 
     step = act(CONTEXT, state, {"answers": ["  ", ""]}, model)
 
-    assert (step.logs, step.show["at"], len(model.asked)) == ([], 0, 1)
+    assert (step.graded, step.show["at"], len(model.asked)) == ([], 0, 1)
 
 
 @pytest.mark.parametrize(

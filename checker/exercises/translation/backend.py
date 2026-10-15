@@ -5,8 +5,8 @@
 so that translating them takes the points of the lesson, and judged by a
 model against those points.
 
-An instance is a set of `SENTENCES` sentences, shown together, judged in one
-request to the model and logged once. The sets are made one at a time: the
+An instance is a set of sentences, as many as the option `sentences` says,
+shown together, judged in one request to the model and graded once. The sets are made one at a time: the
 first when the exercise starts, and each other once the one before was
 judged, when the interface asks for it to be `prepare`d while the learner
 reads the judgement, or else when it goes on to the `next`.
@@ -32,9 +32,10 @@ from kit import (
     describe_made,
     describe_topics,
     describe_words,
+    grade,
+    grade_of,
     level_of,
-    log,
-    log_of,
+    option,
     serve,
     written,
 )
@@ -117,6 +118,11 @@ def read_verdicts(reply: Any, count: int) -> list[tuple[str, str, str]]:
     return [read_verdict(each) for each in listed]
 
 
+def sentences_of(context: dict[str, Any]) -> int:
+    """How many sentences a set is, as the learner chose."""
+    return int(option(context, "sentences", SENTENCES))
+
+
 def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> None:
     """Has the model make the next set of sentences, other than those made
     before, unless it was made already or every set was."""
@@ -125,7 +131,7 @@ def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> No
         return
     prompt = MAKING.format(
         language=context["language"],
-        count=SENTENCES,
+        count=sentences_of(context),
         into=context["into"],
         level=describe_level(context),
         lesson=describe_lesson(context),
@@ -134,7 +140,8 @@ def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> No
         guidance=describe_guidance(context),
         made=describe_made([item["source"] for made in sets for item in made]),
     )
-    sets.append(read_items(ask_json(model, [{"role": "user", "content": prompt}])))
+    reply = ask_json(model, [{"role": "user", "content": prompt}])
+    sets.append(read_items(reply, sentences_of(context)))
 
 
 def judge(
@@ -144,7 +151,7 @@ def judge(
     model: Model,
 ) -> list[dict[str, str]]:
     """What the learner is told of each translation of a set, which is
-    logged as it is: those that were left empty are wrong, and the others
+    graded as it is: those that were left empty are wrong, and the others
     are judged by the model, together. Raises ModelError."""
     written = [number for number, answer in enumerate(answers) if answer]
     sentences = "\n\n".join(
@@ -226,15 +233,19 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
         ]
         if any(answers):
             feedback = judge(context, items, answers, model)
-            logged = log_of(
+            graded = grade_of(
                 [
-                    log(
-                        each["result"], each["answer"], each["correction"], each["note"]
+                    grade(
+                        each["result"],
+                        each["answer"],
+                        each["correction"],
+                        each["note"],
+                        f"Translate from {context['into']}: {item['source']}",
                     )
-                    for each in feedback
+                    for item, each in zip(items, feedback)
                 ]
             )
-            checked.append({"feedback": feedback, "result": logged["result"]})
+            checked.append({"feedback": feedback, "result": graded["result"]})
             state["reviewing"] = True
             said = written(
                 [answer for answer in answers if answer],
@@ -246,7 +257,7 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
                 ],
             )
             return Step(
-                state=state, show=_show(context, state), logs=[logged], written=said
+                state=state, show=_show(context, state), graded=[graded], written=said
             )
     return Step(state=state, show=_show(context, state))
 
