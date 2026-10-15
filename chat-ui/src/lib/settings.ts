@@ -30,12 +30,13 @@ export interface Settings {
     contexts: ChatContext[];
     /** The context new chats start with. */
     defaultContextId: string;
-    /** The instructions texts are generated with. */
-    textPrompt: string;
     speechModel: string;
     speechVoice: string;
-    /** How texts are read aloud, such as the pace. Not spoken. */
-    speechInstructions: string;
+    /**
+     * What the speech model is told about how to read, such as the language
+     * and the pace, with `{{language}}` and `{{level}}` filled in. Not spoken.
+     */
+    speechDirection: string;
     /** The model that profiles each sentence typed in the chat. */
     profileModel: string;
     /** What the model is asked about each sentence. */
@@ -111,6 +112,10 @@ export const LANGUAGE_PLACEHOLDER = "{{language}}";
 /** Replaced in a prompt by the learner's level in that language. */
 export const LEVEL_PLACEHOLDER = "{{level}}";
 
+/** What the speech model was always told before what it is told could be written in full. */
+const SPEAK_LANGUAGE = `Speak ${LANGUAGE_PLACEHOLDER}, with native ${LANGUAGE_PLACEHOLDER} pronunciation, `
+    + "even where a word looks like one of another language.";
+
 /** The levels a learner can be at, from beginner to proficient. */
 export const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
 
@@ -177,14 +182,10 @@ export function defaultSettings(): Settings {
             },
         ],
         defaultContextId: "tutor",
-        textPrompt: `Write a text in ${LANGUAGE_PLACEHOLDER}, which I am learning at level ${LEVEL_PLACEHOLDER}, `
-            + "for me to read and listen to. "
-            + "Use the words I know wherever you can; a few new words are fine. "
-            + "Start with a short title as a Markdown heading, then the text. Write nothing else.\n\n"
-            + `Words I know: ${WORDS_PLACEHOLDER}`,
         speechModel: "google/gemini-3.8-flash-tts",
         speechVoice: "Kore",
-        speechInstructions: "Read clearly and a little slowly, for a language learner.",
+        speechDirection:
+            `${SPEAK_LANGUAGE} Read clearly and a little slowly, for a learner at level ${LEVEL_PLACEHOLDER}.`,
         profileModel: "typesafe/jev-1.13",
         questions: defaultQuestions(),
         enterSends: true,
@@ -208,6 +209,22 @@ export function exerciseVocabularyOf(settings: Settings, language: string): stri
     return settings.exerciseVocabulary[language] ?? "all";
 }
 
+/**
+ * The direction for the speech model in stored settings. Those saved before
+ * it could be written in full kept only how to read, after which the
+ * language to speak was always put; that is put before it once, to be
+ * changed or taken out from then on.
+ */
+function speechDirectionOf(stored: { speechDirection?: unknown; speechInstructions?: unknown }, usual: string): string {
+    if (typeof stored.speechDirection === "string") {
+        return stored.speechDirection;
+    }
+    if (typeof stored.speechInstructions === "string") {
+        return [SPEAK_LANGUAGE, stored.speechInstructions.trim()].filter(Boolean).join(" ");
+    }
+    return usual;
+}
+
 /** Fills in anything missing or unusable in stored settings with the defaults. */
 export function normalizeSettings(stored: unknown): Settings {
     const defaults = defaultSettings();
@@ -225,7 +242,6 @@ export function normalizeSettings(stored: unknown): Settings {
     const text = (
         key:
             | "model"
-            | "textPrompt"
             | "speechModel"
             | "speechVoice"
             | "profileModel"
@@ -248,12 +264,9 @@ export function normalizeSettings(stored: unknown): Settings {
             : defaults.translationModel,
         contexts,
         defaultContextId,
-        textPrompt: text("textPrompt"),
         speechModel: text("speechModel"),
         speechVoice: text("speechVoice"),
-        speechInstructions: typeof candidate.speechInstructions === "string"
-            ? candidate.speechInstructions
-            : defaults.speechInstructions,
+        speechDirection: speechDirectionOf(candidate, defaults.speechDirection),
         profileModel: text("profileModel"),
         // every question may have been deleted on purpose, so an empty list is kept
         questions: Array.isArray(candidate.questions)

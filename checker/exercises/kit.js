@@ -19,6 +19,18 @@
 //                             with what it shows then, once the handler was
 //                             called with it, or rejects with why it could not
 //   exercise.finish()         the learner is done with the exercise
+//   exercise.readAloud(text, number)
+//                             has `text`, in the language learned, read
+//                             aloud by the voice the learner chose, in the
+//                             player of the app; `number` tells the texts
+//                             of the exercise apart, as the audio of each
+//                             is kept, and is 0 if not given
+//
+// Text the interface shows can be selected to have it translated or
+// taken into the vocabulary, as anywhere in the app, without anything done
+// for it here. So is the spelling of what is written in a <textarea>,
+// unless it has the attribute data-no-check; boxes of one line, <input>,
+// are left alone.
 //
 // What `mount` returns is called when the exercise is taken away, to undo
 // what it did outside `root`, such as listening to the document. The

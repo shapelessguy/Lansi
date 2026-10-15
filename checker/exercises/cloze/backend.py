@@ -14,6 +14,10 @@ and logged once. The sets are made one at a time: the first when the
 exercise starts, and each other once the one before was checked, when the
 interface asks for it to be `prepare`d while the learner reads what was
 right, or else when it goes on to the `next`.
+
+Once a set is checked, what the learner wrote into the gaps is reported as
+written by them, and the sentences as they are right as written by the
+model.
 """
 
 from __future__ import annotations
@@ -37,6 +41,7 @@ from kit import (
     log_of,
     loose,
     serve,
+    written,
 )
 
 _GAP = re.compile(r"\[([^\[\]]+)\]")
@@ -247,7 +252,17 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
         )
         checked.append({"feedback": feedback, "result": logged["result"]})
         state["reviewing"] = True
-        return Step(state=state, show=_show(context, state), logs=[logged])
+        said = written(
+            [
+                " ".join(each for each in given if isinstance(each, str) and each)
+                for given in answers
+                if isinstance(given, list)
+            ],
+            [each["correct"] for each in feedback],
+        )
+        return Step(
+            state=state, show=_show(context, state), logs=[logged], written=said
+        )
     return Step(state=state, show=_show(context, state))
 
 

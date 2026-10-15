@@ -17,6 +17,7 @@ import json
 import re
 import sqlite3
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -49,7 +50,8 @@ CREATE TABLE forms (
     UNIQUE (entry_id, form, tags)
 );
 CREATE INDEX forms_folded ON forms (folded);
--- words that were found not to belong in a category, so as not to ask again
+-- Words that were found not to belong in a category, so as not to ask again.
+-- One found to be no word at all is kept under the category ''.
 CREATE TABLE rejected (
     category TEXT NOT NULL,
     folded TEXT NOT NULL,
@@ -101,6 +103,9 @@ CREATE TABLE sets (
 """,
 ]
 
+
+# what a word that is no word of any category is rejected as
+NO_CATEGORY = ""
 
 _WORD = re.compile(r"[^\W\d_]+")
 
@@ -382,6 +387,43 @@ class Vocabulary:
             self._add_forms(entry_id, forms)
             return self._entry(entry_id)
 
+    def respell(self, category: str, spelt: Callable[[str], str]) -> None:
+        """Store every dictionary form of `category` as `spelt` writes it.
+        An entry that comes to be spelt as another one is merged into
+        it: its forms and its uses go to that one, and so do the sets that
+        named it."""
+        with self._lock, self._db:
+            rows = self._db.execute(
+                "SELECT id, lemma FROM entries WHERE category = ? ORDER BY id",
+                (category,),
+            ).fetchall()
+            by_lemma = {lemma: entry_id for entry_id, lemma in rows}
+            merged: dict[int, int] = {}
+            for entry_id, lemma in rows:
+                new = spelt(lemma)
+                if new == lemma:
+                    continue
+                del by_lemma[lemma]
+                twin = by_lemma.get(new)
+                if twin is None:
+                    self._db.execute(
+                        "UPDATE entries SET lemma = ? WHERE id = ?", (new, entry_id)
+                    )
+                    by_lemma[new] = entry_id
+                    continue
+                self._db.execute(
+                    "INSERT OR IGNORE INTO forms (entry_id, form, folded, tags)"
+                    " SELECT ?, form, folded, tags FROM forms WHERE entry_id = ?",
+                    (twin, entry_id),
+                )
+                self._db.execute(
+                    "UPDATE uses SET entry_id = ? WHERE entry_id = ?", (twin, entry_id)
+                )
+                self._db.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+                merged[entry_id] = twin
+            if merged:
+                self._renumber_sets(merged)
+
     def reject(
         self, category: str, word: str, reason: str, belongs_to: str = ""
     ) -> None:
@@ -403,6 +445,24 @@ class Vocabulary:
                 (category, fold(word)),
             ).fetchone()
             return Rejection(*row) if row else None
+
+    def discard(self, word: str, reason: str) -> None:
+        """Remember that `word` is no word of any category, such as one
+        misspelt, so that it is not sorted into one again."""
+        self.reject(NO_CATEGORY, word, reason)
+
+    def discarded(self, word: str) -> str | None:
+        """Why `word` was found to be no word, if it was. A word spelt as a
+        stored word is, whatever its capitals, is not taken to be no word,
+        since it may be that word where it is met."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT reason FROM rejected WHERE category = ? AND folded = ?"
+                " AND NOT EXISTS (SELECT 1 FROM forms WHERE folded = ?)"
+                " AND NOT EXISTS (SELECT 1 FROM entries WHERE lower(lemma) = ?)",
+                (NO_CATEGORY, *[fold(word)] * 3),
+            ).fetchone()
+            return row[0] if row else None
 
     def note_taken(self, word: str, status: str) -> None:
         """Remember that `word`, on its own, was taken in, and what became
@@ -432,6 +492,19 @@ class Vocabulary:
             " VALUES (?, ?, ?, ?)",
             [(entry_id, form.form, fold(form.form), form.tags) for form in forms],
         )
+
+    def _renumber_sets(self, merged: dict[int, int]) -> None:
+        """Have the sets name each entry of `merged` by the one it went into."""
+        for set_id, body in self._db.execute("SELECT id, body FROM sets").fetchall():
+            kept = json.loads(body)
+            for key in ("added", "removed"):
+                if isinstance(kept.get(key), list):
+                    ids = [merged.get(word, word) for word in kept[key]]
+                    kept[key] = list(dict.fromkeys(ids))
+            self._db.execute(
+                "UPDATE sets SET body = ? WHERE id = ?",
+                (json.dumps(kept, ensure_ascii=False), set_id),
+            )
 
     def _has_form(self, entry_id: int, word: str) -> bool:
         row = self._db.execute(

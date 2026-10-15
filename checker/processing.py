@@ -2,9 +2,10 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 """Processes what a user has written and been written: the messages of the
-chats and the generated texts.
+chats, and what the learner and the models wrote in the exercises of
+practice once each exercise is over.
 
-Processing a message means two things. Every word of it is taken into the
+Processing a message, or a text of an exercise, means two things. Every word of it is taken into the
 vocabulary of the language the chat is in, so that new words are added to
 it. And every word that is, or now is, in the vocabulary has a use recorded
 against it, with who wrote it and when. A message is processed once, and
@@ -35,7 +36,7 @@ MAX_TRIES = 3
 
 # a word, which may have an apostrophe or a hyphen inside it
 _WORD = re.compile(r"[^\W\d_]+(?:['’-][^\W\d_]+)*")
-# the marks of Markdown, which a generated text is written in
+# the marks of Markdown, which a reply or a story is written in
 _MARKUP = re.compile(r"[#*_`>~]+")
 
 

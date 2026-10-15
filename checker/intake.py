@@ -21,7 +21,7 @@ import uuid
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import Any
 
 from categories import (
@@ -30,6 +30,7 @@ from categories import (
     Category,
     Schema,
     categories_of,
+    dictionary_form,
     one_of,
     shape,
     writes_nouns_with_capitals,
@@ -243,6 +244,9 @@ class Intake:
         # One for each word being described, so that two forms of a new word
         # that come in together do not both have it described.
         self._describing: dict[tuple[str, str], threading.Lock] = {}
+        # The vocabularies, with their languages, whose dictionary forms were
+        # brought to the spelling they are now given, for those stored before.
+        self._respelt: set[tuple[int, str]] = set()
         self._lock = threading.Lock()
 
     @property
@@ -251,9 +255,20 @@ class Intake:
         return self.vocabulary_of(self.language)
 
     def vocabulary_of(self, language: str) -> Vocabulary:
-        if isinstance(self._vocabulary, Vocabularies):
-            return self._vocabulary.of(language)
-        return self._vocabulary
+        vocabulary = (
+            self._vocabulary.of(language)
+            if isinstance(self._vocabulary, Vocabularies)
+            else self._vocabulary
+        )
+        key = (id(vocabulary), language.strip().lower())
+        with self._lock:
+            if key not in self._respelt:
+                for name in CATEGORIES:
+                    vocabulary.respell(
+                        name, partial(dictionary_form, category=name, language=language)
+                    )
+                self._respelt.add(key)
+        return vocabulary
 
     def has_vocabulary(self, language: str) -> bool:
         """Whether anything was ever stored for `language`."""
@@ -327,6 +342,11 @@ class Intake:
         used: list[Profile],
     ) -> None:
         """Take one word in, and fill in what became of it."""
+        # One found to be no word at all is not sorted into a category again.
+        discarded = self.vocabulary.discarded(word.word)
+        if discarded is not None:
+            outcome.status, outcome.reason = "rejected", discarded
+            return
         name: str | None = self._classify(word, api_key, decision_model, used)
         tried: set[str] = set()
         while name:
@@ -379,6 +399,7 @@ class Intake:
             return said
         if verdict == "reject":
             self.vocabulary.reject(name, word.word, said)
+            self.vocabulary.discard(word.word, said)
             outcome.status, outcome.reason = "rejected", said
             return None
         self._store(said, verdict, category, word, outcome, api_key, model, used)
@@ -398,8 +419,15 @@ class Intake:
         """Put a word that was judged a form of `lemma`, or a new word with
         that dictionary form, where it belongs."""
         name = category.name
+        lemma = dictionary_form(lemma, name, self.language)
         with self._describing_lock(name, lemma):
             stored = self.vocabulary.entry(name, lemma)
+            # Another word taken in at the same time may have stored it
+            # while this one was judged, with this word among its forms.
+            found = self.vocabulary.find(name, word.word, word.sentence)
+            if stored and found and found.id == stored.id:
+                outcome.entry = found
+                return
             if stored:
                 # so that it is found the next time without asking
                 outcome.entry = self.vocabulary.add_forms(stored.id, [Form(word.word)])
@@ -468,6 +496,7 @@ class Intake:
             reason = reply["reason"].strip()
             if outcome.category in CATEGORIES:
                 self.vocabulary.reject(outcome.category, word.word, reason)
+            self.vocabulary.discard(word.word, reason)
             outcome.status, outcome.reason = "rejected", reason
             return
         category = self.categories.get(reply["category"])

@@ -133,6 +133,8 @@ export function mount(root, exercise) {
             placeholder: "Your question (Enter to send, Shift+Enter for a new line)",
             disabled: asking,
         });
+        // questions about the lesson may be asked in any language, so their spelling is not checked
+        input.dataset.noCheck = "";
         input.oninput = () => (draft = input.value);
         input.onkeydown = (event) => {
             if (event.key === "Enter" && !event.shiftKey) {

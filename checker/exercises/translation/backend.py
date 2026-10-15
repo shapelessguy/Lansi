@@ -10,6 +10,10 @@ request to the model and logged once. The sets are made one at a time: the
 first when the exercise starts, and each other once the one before was
 judged, when the interface asks for it to be `prepare`d while the learner
 reads the judgement, or else when it goes on to the `next`.
+
+Once a set is judged, the translations are reported as written by the
+learner, and the corrections and the other ways the learner is shown as
+written by the model.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from kit import (
     log,
     log_of,
     serve,
+    written,
 )
 
 # how many sentences an instance is
@@ -231,7 +236,18 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
             )
             checked.append({"feedback": feedback, "result": logged["result"]})
             state["reviewing"] = True
-            return Step(state=state, show=_show(context, state), logs=[logged])
+            said = written(
+                [answer for answer in answers if answer],
+                [
+                    shown
+                    for each in feedback
+                    for shown in dict.fromkeys([each["correction"], each["reference"]])
+                    if shown
+                ],
+            )
+            return Step(
+                state=state, show=_show(context, state), logs=[logged], written=said
+            )
     return Step(state=state, show=_show(context, state))
 
 

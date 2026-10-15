@@ -1,8 +1,6 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { useEffect, useRef, useState } from "react";
-
 import type { ProfileAnswer, RequestQuestions } from "./questions";
 import { checkerFetch } from "./session";
 
@@ -75,7 +73,7 @@ export interface LiveCheck {
 }
 
 /** The checker server's reply to a text. */
-interface CheckReply {
+export interface CheckReply {
     sentences: Sentence[];
     /**
      * The requests to the model that have come back since the last reply.
@@ -88,15 +86,14 @@ interface CheckReply {
     local_model: string | null;
 }
 
-const INTERVAL_MS = 300;
-
 /**
  * Has the checker server split `text` into sentences and check each. `caret`
  * is where the caret is in the text, or null if the text box is not in use;
  * the sentence it is in comes back as not complete. Finished sentences are
  * profiled by having `model` answer `questions`, if there is a key, and with
  * `rateWords` their words are then rated. `language` is the one being
- * learned, which the spelling and the sentences are checked by.
+ * learned, which the spelling and the sentences are checked by. Without
+ * `profile`, only the spelling is checked, and nothing is asked of a model.
  */
 export async function fetchCheck(
     text: string,
@@ -106,90 +103,18 @@ export async function fetchCheck(
     questions: RequestQuestions,
     rateWords: boolean,
     language: string,
+    profile = true,
 ): Promise<CheckReply> {
     const response = await checkerFetch("/sentences", {
         method: "POST",
         // the server profiles finished sentences with the key; it stays on this machine until then
         headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {},
-        body: JSON.stringify({ text, caret, model, questions, words: rateWords, language }),
+        body: JSON.stringify({ text, caret, model, questions, words: rateWords, language, profile }),
     });
     if (!response.ok) {
         throw new Error(`checker server: ${response.status}`);
     }
     return response.json();
-}
-
-/**
- * Sends the text being typed and the place of the caret to the checker server
- * a few times a second, whenever either has changed since they were last sent, or
- * what is asked about the sentences has, and returns the latest answer. The
- * answer may be about a slightly older text than the one given. It stays null
- * if the server is not running.
- *
- * `onUsage` is told of every request to the model that the server reports.
- */
-export function useLiveCheck(
-    text: string,
-    caret: number | null,
-    apiKey: string,
-    model: string,
-    questions: RequestQuestions,
-    rateWords: boolean,
-    language: string,
-    onUsage: (usage: ProfileUsage) => void,
-): LiveCheck | null {
-    const [check, setCheck] = useState<LiveCheck | null>(null);
-    // what is asked, as text, so that a change in it is easy to notice
-    const asked = JSON.stringify([model, questions, rateWords, language]);
-    const latest = useRef({ text, caret, asked });
-    if (latest.current.text !== text || latest.current.caret !== caret || latest.current.asked !== asked) {
-        latest.current = { text, caret, asked };
-    }
-    const profiling = useRef({ apiKey, model, questions, rateWords, language, onUsage });
-    profiling.current = { apiKey, model, questions, rateWords, language, onUsage };
-
-    useEffect(() => {
-        let sent: { text: string; caret: number | null; asked: string } = { text: "", caret: null, asked: "" };
-        // Requests to the model were still out at the last answer, so it is
-        // worth asking again. Some may also be left from before this started,
-        // such as from the chat shown before this one, so it asks once anyway.
-        let awaiting = true;
-        let stopped = false;
-        const timer = setInterval(() => {
-            const current = latest.current;
-            // an empty box has nothing to say about, wherever the caret is
-            const unchanged = current.text === sent.text
-                && (current.text === "" || (current.caret === sent.caret && current.asked === sent.asked));
-            if (unchanged && !awaiting) {
-                return;
-            }
-            sent = current;
-            awaiting = false;
-            const { apiKey, model, questions, rateWords, language } = profiling.current;
-            fetchCheck(current.text, current.caret, apiKey, model, questions, rateWords, language).then(
-                (reply) => {
-                    // The server reports a request only once, so it is counted
-                    // even if the rest of this answer is no longer of use.
-                    reply.usage.forEach(profiling.current.onUsage);
-                    awaiting ||= reply.pending;
-                    // an answer that arrives after something newer was sent is out of date
-                    if (stopped || sent !== current) {
-                        return;
-                    }
-                    setCheck({ text: current.text, sentences: reply.sentences, localModel: reply.local_model ?? null });
-                },
-                () => {
-                    // typing must not be disturbed by the checker being off
-                },
-            );
-        }, INTERVAL_MS);
-        return () => {
-            stopped = true;
-            clearInterval(timer);
-        };
-    }, []);
-
-    return check;
 }
 
 /**

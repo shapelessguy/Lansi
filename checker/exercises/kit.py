@@ -5,10 +5,19 @@
 
 An exercise is a directory of its own here, with:
 
-    manifest.json   {"title": ..., "description": ...}
+    manifest.json   {"title": ..., "description": ..., "options": ...}
     backend.py      what makes the exercise and checks what is answered
     ui/index.js     what the learner sees, a module the app mounts, as
                     kit.js describes, with ui/style.css if it has one
+
+The `options` of a manifest, if it has any, are what the learner chooses
+when they choose the exercise, besides how many times it is done: each a
+choice among a few, by its name, with a label to show and the choices by
+their values, the first of them the one taken unless another is chosen:
+
+    "options": {"then": {"label": "Then",
+                         "choices": {"questions": "Answer questions",
+                                     "retell": "Retell it"}}}
 
 An exercise whose manifest has `"theory": true` teaches rather than asks:
 it is listed first and done first in a session, is not done a number of
@@ -24,7 +33,8 @@ The backend is three functions, given to `serve`:
 answer, and `finish` is called once the learner is done or leaves, however
 far they got. Each returns a Step: the `state` to be handed back with the
 next call, what the interface is to `show`, the `logs` of what the learner
-answered, and, from `finish`, the `results` the exercise keeps for itself.
+answered, what was `written` in the step, and, from `finish`, the
+`results` the exercise keeps for itself.
 
 The context is the same for every call:
 
@@ -36,6 +46,7 @@ The context is the same for every call:
      "mix_topics": False,
      "words": {"mode": "only" | "prefer", "lemmas": [...]} or None,
      "instances": 10,
+     "options": {"then": "questions"},
      "guidance": "..."}
 
 A session of no lesson reviews the lessons practised last, and its
@@ -58,6 +69,19 @@ the models it asks to heed besides the lesson, the topics and the words,
 such as what the exercise was answered with in the sessions before. It may
 come from anything in the app, and may be empty. Every exercise is to put
 it into what it asks the models that make it, as `describe_guidance` does.
+
+`options` has a value for each option of the manifest, as the learner
+chose it.
+
+What is `written` is `{"user": [...], "assistant": [...]}`: the texts in the
+language learned that the learner wrote in the step, such as their answers
+as they gave them, and those the models wrote that the learner was shown,
+such as the sentences of the exercise, its story or the corrections. Each
+text is told once, in the step it was written or shown in, whole sentences
+where there are any. Once the exercise is over, the words of all of them
+are taken into the learner's vocabulary and counted as used by the learner
+or seen, as the words of the chats are; a word that is no word, such as one
+misspelt, is left out there.
 
 `into` is the language the learner reads explanations in. A log is a
 `{"result": "right" | "wrong" | "partial", "answer": ..., "correction": ...,
@@ -134,6 +158,14 @@ class Step:
     show: Any = None
     logs: list[dict[str, str]] = field(default_factory=list)
     results: Any = None
+    written: dict[str, list[str]] = field(default_factory=dict)
+
+
+def written(
+    user: list[str] | None = None, assistant: list[str] | None = None
+) -> dict[str, list[str]]:
+    """What was written in a step: by the learner, and by the models."""
+    return {"user": list(user or []), "assistant": list(assistant or [])}
 
 
 def log(
@@ -405,6 +437,7 @@ def serve(start: Start, act: Act, finish: Finish) -> None:
                 "show": step.show,
                 "logs": step.logs,
                 "results": step.results,
+                "written": step.written,
             }
         }
     except ModelError as error:

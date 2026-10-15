@@ -74,6 +74,7 @@ from speaking import (
     sentences_of_message,
 )
 from spelling import StudySpeller
+from starter_topics import STARTER_TOPICS
 from storage import UserStore
 from tasks import Tasks
 from topics import (
@@ -99,8 +100,6 @@ KEY_HEADER = "X-OpenRouter-Key"
 DEFAULT_PORT = 8092
 # far more than anyone types into a chat box
 MAX_BODY_BYTES = 1_000_000
-# the audio of a text of a few minutes, uncompressed, with room to spare
-MAX_AUDIO_BYTES = 60_000_000
 # a book with many pictures in it, which are not kept
 MAX_BOOK_BYTES = 200_000_000
 # the request header the name of the file of a book comes in, encoded as in a URL
@@ -246,9 +245,9 @@ class Account:
     checker: LiveChecker
     intake: Intake | None = None
     importer: AnkiImporter | None = None
-    # the chats, texts and settings of the user
+    # the chats, the practice and the settings of the user
     store: UserStore | None = None
-    # what takes the words of those chats and texts into the vocabulary
+    # what takes the words of the chats and the exercises into the vocabulary
     processor: Processor | None = None
     # whether the Anki words are this user's, and so are imported
     anki: bool = True
@@ -468,9 +467,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
         return True
 
     def _speech(self, method: str, api_key: str | None = None) -> bool:
-        """Answers a request about the reading aloud of a book, or of a
-        message of a chat, and returns whether the request was one. For a
-        chat the paths start with /chats/ID in place of /books/ID.
+        """Answers a request about the reading aloud of a book, of a
+        message of a chat, or of a text of an exercise of a session, and
+        returns whether the request was one. For a chat the paths start with
+        /chats/ID in place of /books/ID, and for an exercise of a session
+        with /sessions/SESSION-EXERCISE.
 
             POST /books/ID/speech        have the sentences read that a
                                          selection has all or part of
@@ -493,11 +494,15 @@ class CheckerHandler(BaseHTTPRequestHandler):
         A POST for a chat brings `{"message": ..., "text": ..., "model":
         ..., "voice": ..., "instructions": ...}` in place of a selection:
         the place of the message among the messages of the chat, and what
-        it says, every sentence of which is read.
+        it says, every sentence of which is read. A POST for a session
+        brings the same, with the number an exercise gives the text in
+        place of that of a message.
         """
         store, speaker = self.account.store, self.account.speaker
         path = urlsplit(self.path).path
-        found = re.fullmatch(r"/(books|chats)/([^/]+)/speech(?:/([^/]+))?", path)
+        found = re.fullmatch(
+            r"/(books|chats|sessions)/([^/]+)/speech(?:/([^/]+))?", path
+        )
         if store is None or speaker is None or not found:
             return False
         kind, book_id, name = found.groups()
@@ -531,8 +536,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
         self, speaker: Speaker, store: UserStore, kind: str, book_id: str, api_key: str
     ) -> None:
         """Has what a POST names read aloud: the sentences of a selection
-        of the book, or those of a message of the chat, that goes by
-        `book_id`. `kind` says which of the two it is."""
+        of the book, or those of a message of the chat or of a text of the
+        session, that goes by `book_id`. `kind` says which it is."""
         body = self._read_body()
         places: list[int] = [
             place
@@ -542,7 +547,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         message, text = body.get("message"), body.get("text")
         if kind == "books" and len(places) != 4:
             raise ValueError('expected {"start_block": ..., "start": ..., ...}')
-        if kind == "chats" and not (
+        if kind != "books" and not (
             isinstance(message, int)
             and not isinstance(message, bool)
             and message >= 0
@@ -556,7 +561,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if not isinstance(instructions, str):
             instructions = ""
         sentences: list[BookSentence]
-        if kind == "chats":
+        if kind != "books":
             # what they are was looked into above
             assert isinstance(text, str) and isinstance(message, int)
             sentences = sentences_of_message(text, message)
@@ -611,34 +616,28 @@ class CheckerHandler(BaseHTTPRequestHandler):
         )
 
     def _kept(self, method: str) -> bool:
-        """Answers a request about what the user has kept: the chats, the
-        texts with their audio, and the settings. Returns whether the
-        request was one of those.
+        """Answers a request about what the user has kept: the chats and
+        the settings. Returns whether the request was one of those.
 
             GET /chats                the chats, each with its messages
             PUT, DELETE /chats/ID     keep a chat as it is sent, or remove it
-            GET /texts                the texts
-            PUT, DELETE /texts/ID     keep a text as it is sent, or remove it
-            GET, PUT /texts/ID/audio  the audio of a text, as a file
             GET, PUT /settings        the settings
             POST /usage               keep what requests to models used,
                                       sent as {"entries": [...]}
             GET /usage?chat=ID&since=MS
-                                      the totals of the usage of a chat or
-                                      text, of that from a time on, and of
+                                      the totals of the usage of a chat, of
+                                      that from a time on, and of
                                       all of it, by category and model too
         """
         store = self.account.store
         path = urlsplit(self.path).path
-        one = re.fullmatch(r"/(chats|texts)/([^/]+)(/audio)?", path)
-        listed = ("/chats", "/texts", "/settings", "/usage")
+        one = re.fullmatch(r"/chats/([^/]+)", path)
+        listed = ("/chats", "/settings", "/usage")
         if store is None or not (one or path in listed):
             return False
         try:
             if method == "GET" and path == "/chats":
                 self._reply(HTTPStatus.OK, {"chats": store.chats()})
-            elif method == "GET" and path == "/texts":
-                self._reply(HTTPStatus.OK, store.texts())
             elif method == "GET" and path == "/settings":
                 self._reply(HTTPStatus.OK, {"settings": store.settings()})
             elif method == "PUT" and path == "/settings":
@@ -656,51 +655,20 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     raise ValueError("since is a time in milliseconds")
                 chat_id = query.get("chat", [""])[0]
                 self._reply(HTTPStatus.OK, store.usage(chat_id, int(since)))
-            elif one and one.group(3):
-                self._audio(method, store, one.group(2))
-            elif one and method == "PUT" and one.group(1) == "chats":
+            elif one and method == "PUT":
                 chat = self._read_body()
-                if chat.get("id") != one.group(2):
+                if chat.get("id") != one.group(1):
                     raise ValueError("a chat is kept under its own id")
                 store.save_chat(chat)
                 self._reply(HTTPStatus.OK, {})
-            elif one and method == "PUT":
-                store.save_text(one.group(2), self._read_body())
-                self._reply(HTTPStatus.OK, {})
-            elif one and method == "DELETE" and one.group(1) == "chats":
-                store.delete_chat(one.group(2))
-                self._reply(HTTPStatus.OK, {})
             elif one and method == "DELETE":
-                store.delete_text(one.group(2))
+                store.delete_chat(one.group(1))
                 self._reply(HTTPStatus.OK, {})
             else:
                 return False
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
         return True
-
-    def _audio(self, method: str, store: UserStore, text_id: str) -> None:
-        """Keeps the audio a PUT brings for a text, or sends the audio of a
-        text back for a GET, as the file it is."""
-        if method == "PUT":
-            length = int(self.headers.get("Content-Length") or 0)
-            if length > MAX_AUDIO_BYTES:
-                raise ValueError("the audio is too long")
-            content_type = self.headers.get("Content-Type") or "audio/wav"
-            if store.save_audio(text_id, self.rfile.read(length), content_type):
-                self._reply(HTTPStatus.OK, {})
-            else:
-                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such text"})
-            return
-        audio = store.audio(text_id) if method == "GET" else None
-        if audio is None:
-            self._reply(HTTPStatus.NOT_FOUND, {"error": "no audio"})
-            return
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", audio[1])
-        self.send_header("Content-Length", str(len(audio[0])))
-        self.end_headers()
-        self.wfile.write(audio[0])
 
     def _exercise_ui(self) -> bool:
         """Sends a file the interface of an exercise is made of, and returns
@@ -736,9 +704,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
             GET /sessions/S              a session, with its logs
             POST /sessions               start a session of `{"language": ...,
                                          "lesson": ..., "topics": [...],
-                                         "exercises": {ID: instances}}`; with
-                                         an empty lesson, it reviews the
-                                         lessons practised last
+                                         "exercises": {ID: instances},
+                                         "options": {ID: {NAME: VALUE}}}`;
+                                         with an empty lesson, it reviews
+                                         the lessons practised last
             POST /sessions/S/end         end it, `{"status": "finished" |
                                          "abandoned"}`, after finishing the
                                          exercises that were started
@@ -973,18 +942,26 @@ class CheckerHandler(BaseHTTPRequestHandler):
         body = self._read_body()
         language, lesson = body.get("language"), body.get("lesson")
         topics, chosen = body.get("topics", []), body.get("exercises")
+        options = body.get("options") or {}
         if not (
             isinstance(language, str)
             and isinstance(lesson, str)
             and isinstance(topics, list)
             and all(isinstance(topic, str) for topic in topics)
             and isinstance(chosen, dict)
+            and isinstance(options, dict)
         ):
             raise ValueError(
                 'expected {"language": ..., "lesson": ..., "exercises": {...}}'
             )
         session, used = practice.start_session(
-            language, lesson, topics, chosen, read_choosing(body), api_key or ""
+            language,
+            lesson,
+            topics,
+            chosen,
+            read_choosing(body),
+            api_key or "",
+            options,
         )
         usage = [describe_usage(profile) for profile in used]
         self._reply(HTTPStatus.OK, {**session, "usage": usage})
@@ -1185,7 +1162,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             (anki_language or "").strip()[:MAX_LANGUAGE_LENGTH] or None,
         )
         if self.account.processor:
-            # the messages and texts are processed with the same key and models
+            # the messages and the exercises are processed with the same key and models
             self.account.processor.configure(api_key or "", models[0], models[1])
         status, used = importer.status()
         self._reply(
@@ -1233,7 +1210,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         "before": ..., "after": ..., "language": ..., "model": ...,
         "decision_model": ...}` request into the vocabulary of the
         `language`, each with the sentence it is in, as the words of the
-        chats and the texts are taken. `before` and `after` are the text
+        chats and the exercises are taken. `before` and `after` are the text
         around the selection. This is done in the background: the reply is
         the `task` that was started, and `GET /tasks` says how far it is,
         and in the end what became of each word and what the requests to
@@ -1291,7 +1268,22 @@ class CheckerHandler(BaseHTTPRequestHandler):
         self._reply(HTTPStatus.OK, {"task": task})
 
     def _check_sentences(self, api_key: str | None) -> None:
-        text, caret, model, questions, rate_words = self._read_request()
+        text, caret, model, questions, rate_words, profile = self._read_request()
+        if not profile:
+            # the spelling of a text box whose sentences are not profiled;
+            # the requests to the model are left to be reported to the one
+            # that is
+            sentences = self.account.checker.spell(text, caret)
+            self._reply(
+                HTTPStatus.OK,
+                {
+                    "sentences": [asdict(sentence) for sentence in sentences],
+                    "usage": [],
+                    "pending": False,
+                    "local_model": self.account.checker.local_model(),
+                },
+            )
+            return
         sentences = self.account.checker.check(
             text, caret, api_key or None, model, questions, rate_words
         )
@@ -1314,12 +1306,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
     def _read_request(
         self,
-    ) -> tuple[str, int | None, str | None, Questions | None, bool]:
+    ) -> tuple[str, int | None, str | None, Questions | None, bool, bool]:
         """The parts of a `{"text": ..., "caret": ..., "model": ...,
-        "questions": ...}` request body. The caret may be left out or null,
-        for when the text box is not in use, and so may the model and the
-        questions, for the model the server was started with and the usual
-        questions."""
+        "questions": ..., "words": ..., "profile": ...}` request body. The
+        caret may be left out or null, for when the text box is not in use,
+        and so may the model and the questions, for the model the server was
+        started with and the usual questions. With `"profile": false` only
+        the spelling is checked."""
         body = self._read_body()
         self._take_language(body)
         text = body.get("text")
@@ -1339,7 +1332,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             questions = read_questions(questions)
         # whether to rate the words of each sentence once it is profiled
         rate_words = body.get("words") is True
-        return text, caret, model or None, questions, rate_words
+        profile = body.get("profile") is not False
+        return text, caret, model or None, questions, rate_words, profile
 
     def _read_body(self) -> dict[str, Any]:
         """The JSON object a request brought. Raises ValueError."""
@@ -1461,6 +1455,7 @@ if __name__ == "__main__":
             ),
         )
         kept = UserStore(user_directory(data_directory, user))
+        kept.add_starter_topics(STARTER_TOPICS)
         processor = Processor(
             kept,
             intake,

@@ -15,6 +15,8 @@ interface Props {
     onUsage: (used: ProfileUsage[]) => void;
     /** The learner is done with the exercise, as its interface says. */
     onFinish: () => void;
+    /** Has a text of the exercise read aloud, which it numbers `number`. */
+    onReadAloud: (text: string, number: number) => void;
 }
 
 /** How tall the room for the exercise is while it is being made, in pixels. */
@@ -25,7 +27,9 @@ const WAITING_HEIGHT = 240;
  * carries what it asks to its backend, as `exercises/kit.js` on the server
  * describes.
  */
-export function ExerciseView({ sessionId, exercise, theory = false, learner, onUsage, onFinish }: Props) {
+export function ExerciseView(
+    { sessionId, exercise, theory = false, learner, onUsage, onFinish, onReadAloud }: Props,
+) {
     const host = useRef<HTMLDivElement>(null);
     const [error, setError] = useState<string | null>(null);
     // Whether the interface shows what the backend made. Until then it is
@@ -33,8 +37,8 @@ export function ExerciseView({ sessionId, exercise, theory = false, learner, onU
     const [rendered, setRendered] = useState(false);
     // counted up to start again after a failure
     const [attempt, setAttempt] = useState(0);
-    const latest = useRef({ learner, onUsage, onFinish });
-    latest.current = { learner, onUsage, onFinish };
+    const latest = useRef({ learner, onUsage, onFinish, onReadAloud });
+    latest.current = { learner, onUsage, onFinish, onReadAloud };
 
     useEffect(() => {
         const element = host.current;
@@ -70,6 +74,7 @@ export function ExerciseView({ sessionId, exercise, theory = false, learner, onU
                         },
                     ),
                 () => latest.current.onFinish(),
+                (text, number) => latest.current.onReadAloud(text, number),
             );
             unmount = ui.mount(root, kit);
             show(first);
@@ -108,7 +113,7 @@ export function ExerciseView({ sessionId, exercise, theory = false, learner, onU
                     <button onClick={() => setAttempt((count) => count + 1)}>Try again</button>
                 </div>
             )}
-            <div ref={host} className="exercise-ui" hidden={!rendered || error !== null} />
+            <div ref={host} className="exercise-ui" data-selectable data-writing hidden={!rendered || error !== null} />
         </div>
     );
 }

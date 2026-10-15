@@ -247,6 +247,8 @@ export function BookReader({ bookId, active }: Props) {
                 <span className="reader-title">
                     {book ? [book.title, book.author].filter(Boolean).join(" · ") : ""}
                 </span>
+                {/* where the player of what is read aloud goes */}
+                <span className="speech-dock" data-speech-dock="book" />
                 {trail.length > 0 && (
                     <button onClick={goBack} title="Back to where the link was">
                         ↩ Back
@@ -370,6 +372,7 @@ export function BookReader({ bookId, active }: Props) {
                     <div className="reader-view" ref={view}>
                         <div
                             className="reader-columns"
+                            data-selectable="book"
                             ref={columns}
                             style={{
                                 columnGap: `${PAGE_GAP}px`,

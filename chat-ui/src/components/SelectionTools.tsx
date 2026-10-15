@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { regionOf, selectableShadowRoots, selectedRange } from "../lib/selection";
 import { type BookSelection, bookSelection } from "../lib/speaking";
 import type { BackgroundTask } from "../lib/tasks";
 import {
@@ -10,7 +11,6 @@ import {
     anchorFor,
     type Asking,
     type Picked,
-    SELECTABLE,
     takeWords,
     textAround,
     translate,
@@ -50,9 +50,6 @@ interface Found {
     book: BookSelection | null;
 }
 
-/** Where the book in the reader is, whose sentences can be read aloud. */
-const BOOK = ".reader-columns";
-
 type Box =
     & { found: Found; task: Task }
     & (
@@ -61,22 +58,24 @@ type Box =
         | { status: "translated"; translated: Translated }
     );
 
-/** What is selected where text can be translated, if anything is. */
+/** What is selected where text can be translated, if anything is, in the page or in the interface of an exercise. */
 function findSelection(): Found | null {
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !selection.toString().trim()) {
+    const range = selection ? selectedRange(selection, selectableShadowRoots()) : null;
+    if (!selection || !range) {
         return null;
     }
-    const range = selection.getRangeAt(0);
-    const within = range.commonAncestorContainer;
-    const root = (within instanceof Element ? within : within.parentElement)?.closest(SELECTABLE);
-    if (!root) {
+    const found = regionOf(range.commonAncestorContainer);
+    if (!found) {
         return null;
     }
+    const { region, root, book } = found;
+    // the selection of the document has only the host of a shadow root
+    const text = root === region ? selection.toString() : range.toString();
     return {
-        picked: textAround(range, root, selection.toString()),
+        picked: textAround(range, root, text),
         rect: range.getBoundingClientRect(),
-        book: root.matches(BOOK) ? bookSelection(range, root) : null,
+        book: book && region instanceof Element ? bookSelection(range, region) : null,
     };
 }
 

@@ -13,7 +13,9 @@ what it was not given, but is no sandbox against an exercise written to do
 harm: the exercises are trusted to be the user's own.
 
 What a step returns is kept at once: the state for the next step, what the
-interface is to show, and the logs of what the learner answered.
+interface is to show, the logs of what the learner answered, and what the
+learner and the models wrote, whose words are taken into the vocabulary
+once the exercise is over.
 """
 
 from __future__ import annotations
@@ -131,6 +133,10 @@ class Manifest:
     # Whether it teaches rather than asks: it comes first, is done once,
     # and keeps no logs.
     theory: bool = False
+    # What the learner chooses besides how many times it is done, by name:
+    # each `{"label": ..., "choices": {value: label}}`, the first choice the
+    # one taken unless another is.
+    options: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
@@ -157,9 +163,42 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
                     data["title"],
                     str(data.get("description") or ""),
                     data.get("theory") is True,
+                    _read_options(data.get("options")),
                 )
             )
     return sorted(found, key=lambda manifest: (not manifest.theory, manifest.title))
+
+
+def _read_options(value: object) -> dict[str, dict[str, Any]]:
+    """The options of a manifest, those that are not as kit.py describes
+    left out."""
+    options: dict[str, dict[str, Any]] = {}
+    for name, option in value.items() if isinstance(value, dict) else []:
+        choices = option.get("choices") if isinstance(option, dict) else None
+        if not (
+            _ID.fullmatch(name)
+            and isinstance(choices, dict)
+            and choices
+            and all(isinstance(label, str) for label in choices.values())
+        ):
+            continue
+        options[name] = {"label": str(option.get("label") or name), "choices": choices}
+    return options
+
+
+def chosen_options(manifest: Manifest, given: object) -> dict[str, str]:
+    """A value for each option of `manifest`: the one `given`, or else its
+    first choice. Raises ValueError for a value that is not a choice."""
+    given = given or {}
+    if not isinstance(given, dict):
+        raise ValueError("the options of an exercise are given by their names")
+    values = {}
+    for name, option in manifest.options.items():
+        value = given.get(name, next(iter(option["choices"])))
+        if value not in option["choices"]:
+            raise ValueError(f"{value} is not a choice of {manifest.title}: {name}")
+        values[name] = value
+    return values
 
 
 def ui_file(
@@ -422,7 +461,10 @@ def _read_reply(reply: object) -> dict[str, Any]:
     logs = reply.get("logs") or []
     if not isinstance(logs, list) or not all(isinstance(each, dict) for each in logs):
         raise ExerciseError("the logs of an exercise must be a list of objects")
-    return {**reply, "logs": logs}
+    written = reply.get("written") or {}
+    if not isinstance(written, dict):
+        raise ExerciseError("what an exercise wrote must be an object of lists")
+    return {**reply, "logs": logs, "written": written}
 
 
 class Practice:
@@ -472,10 +514,12 @@ class Practice:
         chosen: dict[str, int],
         choosing: Choosing | None = None,
         api_key: str = "",
+        options: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], list[Profile]]:
         """Start a session of `lesson`, with the exercises `chosen`, each
-        with how many instances of it there are to be, about `topics`, with
-        the words `choosing` says. An exercise of theory comes first, with
+        with how many instances of it there are to be and the `options` it
+        is chosen with, by exercise, about `topics`, with the words
+        `choosing` says. An exercise of theory comes first, with
         no instances, as it is not answered. Without a lesson, the session
         reviews the lessons practised last, and has no theory. Returns the
         session with what embedding the words used. Raises ValueError, and
@@ -495,6 +539,9 @@ class Practice:
             raise ValueError(f"there is no lesson {lesson} in {language}")
         if not chosen:
             raise ValueError("choose an exercise")
+        options = options or {}
+        if not isinstance(options, dict):
+            raise ValueError("the options are given by exercise")
         for exercise, instances in chosen.items():
             if exercise not in known:
                 raise ValueError(f"there is no exercise {exercise}")
@@ -517,6 +564,10 @@ class Practice:
         if len(topics) > 1 and not choosing.mix_topics:
             topics = [self._draw(topics)]
             about = [self._store.topic(topics[0])]
+        values = {
+            exercise: chosen_options(known[exercise], options.get(exercise))
+            for exercise in chosen
+        }
         words, used = self._words(
             language, [topic_text(each) for each in about if each], choosing, api_key
         )
@@ -530,6 +581,7 @@ class Practice:
             choosing.mix_topics and len(topics) > 1,
             {exercise: self.guidance(exercise) for exercise in chosen},
             reviewed,
+            values,
         )
         return session, used
 
@@ -659,6 +711,9 @@ class Practice:
             # the logs are kept first, as they are what matters most
             try:
                 self._store.add_logs(session_id, exercise, reply["logs"])
+                self._store.add_written(
+                    session_id, exercise, reply.get("written") or {}
+                )
             except ValueError as error:
                 raise ExerciseError(str(error)) from None
             if op == "finish":
@@ -736,5 +791,6 @@ class Practice:
             "mix_topics": session["mix_topics"],
             "words": session["words"],
             "instances": session["exercises"][exercise],
+            "options": session["options"].get(exercise, {}),
             "guidance": session["guidance"].get(exercise, ""),
         }

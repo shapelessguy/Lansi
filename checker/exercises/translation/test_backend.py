@@ -138,6 +138,23 @@ def test_a_set_is_judged_in_one_request_and_logged_once() -> None:
     assert (step.show["more"], step.show["prepared"]) == (True, False)
 
 
+def test_once_a_set_is_judged_the_translations_and_the_corrections_are_written() -> (
+    None
+):
+    wrong = {"result": "wrong", "correction": "Ich stehe um sechs auf.", "note": ""}
+    model = FakeModel(ITEMS, {"verdicts": [wrong, RIGHT, RIGHT, RIGHT]})
+    state = start(CONTEXT, model).state
+
+    step = act(CONTEXT, state, {"answers": ANSWERS}, model)
+
+    assert step.written["user"] == [
+        " ".join(answer.split()) for answer in ANSWERS if answer.strip()
+    ]
+    assert "Ich stehe um sechs auf." in step.written["assistant"]
+    # what was left empty is shown the way it is said
+    assert "Er kauft heute ein." in step.written["assistant"]
+
+
 def test_a_set_with_nothing_written_is_not_judged() -> None:
     model = FakeModel(ITEMS)
     state = start(CONTEXT, model).state

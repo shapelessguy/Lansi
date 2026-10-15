@@ -12,6 +12,10 @@ import {
     fetchVocabulary,
     groupWords,
     layOutForms,
+    type ListedWord,
+    listWords,
+    loadFlat,
+    saveFlat,
     type SortKey,
     sortLabels,
     type Vocabulary,
@@ -79,7 +83,10 @@ export function VocabularyList(
     const [state, setState] = useState<ListState>({ status: "loading" });
     const [query, setQuery] = useState("");
     const [sort, setSort] = useState<SortKey>("word");
-    const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+    // There are too many words in a category to have them all on show, so
+    // each is opened by hand, or by filtering.
+    const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+    const [flat, setFlat] = useState(loadFlat);
     const [openId, setOpenId] = useState<number | null>(null);
     const [entryState, setEntryState] = useState<EntryState>({ status: "loading" });
 
@@ -124,14 +131,50 @@ export function VocabularyList(
 
     const vocabulary = state.status === "ready" ? state.vocabulary : null;
     const activeSet = sets.find((set) => set.id === activeSetId);
-    const groups = useMemo(() => (vocabulary ? groupWords(vocabulary, query, sort) : []), [vocabulary, query, sort]);
+    const groups = useMemo(
+        () => (vocabulary && !flat ? groupWords(vocabulary, query, sort) : []),
+        [vocabulary, query, sort, flat],
+    );
+    const listed = useMemo(
+        () => (vocabulary && flat ? listWords(vocabulary, query, sort) : []),
+        [vocabulary, query, sort, flat],
+    );
+    const isOpen = (category: string) => query.trim() !== "" || opened.has(category);
 
     function toggleCategory(category: string) {
-        const next = new Set(closed);
+        const next = new Set(opened);
         if (!next.delete(category)) {
             next.add(category);
         }
-        setClosed(next);
+        setOpened(next);
+    }
+
+    function changeFlat(next: boolean) {
+        setFlat(next);
+        saveFlat(next);
+    }
+
+    function wordItem(word: ListedWord) {
+        return (
+            <li key={word.id}>
+                <button
+                    className="word"
+                    aria-expanded={openId === word.id}
+                    onClick={() => setOpenId(openId === word.id ? null : word.id)}
+                >
+                    <span className="word-text">{word.lemma}</span>
+                    <span className="word-detail">
+                        {[
+                            flat && word.category,
+                            describeUses(word),
+                            `${word.forms} ${word.forms === 1 ? "form" : "forms"}`,
+                        ]
+                            .filter(Boolean).join(" · ")}
+                    </span>
+                </button>
+                {openId === word.id && <Entry state={entryState} />}
+            </li>
+        );
     }
 
     return (
@@ -157,6 +200,10 @@ export function VocabularyList(
                         ↻
                     </button>
                 </div>
+                <label className="vocabulary-flat">
+                    <input type="checkbox" checked={flat} onChange={(event) => changeFlat(event.target.checked)} />
+                    One list, without categories
+                </label>
                 <div className="sort-row">
                     <select
                         aria-label="The set of words given to the model"
@@ -186,7 +233,7 @@ export function VocabularyList(
                     <button onClick={load}>Try again</button>
                 </div>
             )}
-            {vocabulary && groups.length === 0 && (
+            {vocabulary && groups.length === 0 && listed.length === 0 && (
                 <p className="sidebar-note">{query ? "No words match." : "No words are stored yet."}</p>
             )}
             <div className="vocabulary">
@@ -194,37 +241,16 @@ export function VocabularyList(
                     <section key={category}>
                         <button
                             className="vocabulary-category"
-                            aria-expanded={!closed.has(category)}
+                            aria-expanded={isOpen(category)}
                             onClick={() => toggleCategory(category)}
                         >
                             <span>{category}</span>
                             <span className="count">{words.length}</span>
                         </button>
-                        {!closed.has(category) && (
-                            <ul className="word-list">
-                                {words.map((word) => (
-                                    <li key={word.id}>
-                                        <button
-                                            className="word"
-                                            aria-expanded={openId === word.id}
-                                            onClick={() => setOpenId(openId === word.id ? null : word.id)}
-                                        >
-                                            <span className="word-text">{word.lemma}</span>
-                                            <span className="word-detail">
-                                                {[
-                                                    describeUses(word),
-                                                    `${word.forms} ${word.forms === 1 ? "form" : "forms"}`,
-                                                ]
-                                                    .filter(Boolean).join(" · ")}
-                                            </span>
-                                        </button>
-                                        {openId === word.id && <Entry state={entryState} />}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                        {isOpen(category) && <ul className="word-list">{words.map(wordItem)}</ul>}
                     </section>
                 ))}
+                {listed.length > 0 && <ul className="word-list">{listed.map(wordItem)}</ul>}
             </div>
         </>
     );

@@ -138,3 +138,20 @@ test("the exercises are given the whole vocabulary of a language unless the sett
     expect(exerciseVocabularyOf(settings, "German")).toBe("none");
     expect(exerciseVocabularyOf(settings, "Spanish")).toBe("all");
 });
+
+test("the speech direction asks for the language being learned and the level unless it is changed", () => {
+    expect(defaultSettings().speechDirection).toMatch(/^Speak \{\{language\}\}, .*level \{\{level\}\}\.$/);
+    expect(normalizeSettings({ speechDirection: "Read slowly." }).speechDirection).toBe("Read slowly.");
+    expect(normalizeSettings({ speechDirection: "" }).speechDirection).toBe("");
+});
+
+test("a speech direction saved before it could be written in full gets the language to speak put before it once", () => {
+    const moved = normalizeSettings({ speechInstructions: " Read slowly. " });
+
+    expect(moved.speechDirection).toBe(
+        "Speak {{language}}, with native {{language}} pronunciation, even where a word looks like one of another"
+            + " language. Read slowly.",
+    );
+    expect(normalizeSettings(moved).speechDirection).toBe(moved.speechDirection);
+    expect(normalizeSettings({ speechInstructions: "" }).speechDirection).toMatch(/language\.$/);
+});

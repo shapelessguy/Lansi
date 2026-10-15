@@ -22,6 +22,13 @@ export interface Lesson {
     more_info: string;
 }
 
+/** What the learner chooses of an exercise besides how many times it is done: one of a few choices. */
+export interface ExerciseOption {
+    label: string;
+    /** The labels of the choices by their values, the first the one taken unless another is. */
+    choices: Record<string, string>;
+}
+
 /** An exercise there is, as its manifest describes it. */
 export interface ExerciseInfo {
     id: string;
@@ -29,6 +36,15 @@ export interface ExerciseInfo {
     description: string;
     /** Whether it teaches rather than asks: it comes first, is done once, and keeps no logs. */
     theory: boolean;
+    /** Its options, by their names. */
+    options: Record<string, ExerciseOption>;
+}
+
+/** The value of each option of an exercise that is taken unless another is chosen: its first choice. */
+export function defaultOptions(exercise: ExerciseInfo): Record<string, string> {
+    return Object.fromEntries(
+        Object.entries(exercise.options ?? {}).map(([name, option]) => [name, Object.keys(option.choices)[0]]),
+    );
 }
 
 export interface ExerciseProgress {
@@ -56,6 +72,8 @@ export interface PracticeSession {
     mix_topics: boolean;
     /** The exercises, in the order they are done, with how many instances of each there are. */
     exercises: Record<string, number>;
+    /** The options each exercise was chosen with, by exercise. */
+    options: Record<string, Record<string, string>>;
     progress: Record<string, ExerciseProgress>;
 }
 
@@ -150,8 +168,9 @@ export function choosingOf(settings: Settings, vocabulary: string, setWords: str
 
 /**
  * Starts a session of `lesson`, with the exercises chosen and how many
- * instances of each, about `topics`, with the words `choosing` says.
- * Without a lesson, the session reviews the lessons practised last.
+ * instances of each, with the `options` of each, about `topics`, with the
+ * words `choosing` says. Without a lesson, the session reviews the
+ * lessons practised last.
  */
 export function startSession(
     language: string,
@@ -160,8 +179,10 @@ export function startSession(
     topics: string[],
     choosing: Choosing,
     apiKey: string,
+    options: Record<string, Record<string, string>> = {},
 ): Promise<PracticeSession & { usage: ProfileUsage[] }> {
-    const init = posting({ language, lesson: lesson ?? "", topics, exercises, ...choosing });
+    const chosenOptions = Object.fromEntries(Object.entries(options).filter(([id]) => id in exercises));
+    const init = posting({ language, lesson: lesson ?? "", topics, exercises, options: chosenOptions, ...choosing });
     return call("/sessions", { ...init, headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {} });
 }
 
@@ -313,6 +334,8 @@ export interface ExerciseKit {
     onShow(handler: (show: unknown) => void): void;
     act(message: unknown): Promise<unknown>;
     finish(): void;
+    /** Has `text` read aloud; `number` tells the texts of the exercise apart. */
+    readAloud(text: string, number?: number): void;
 }
 
 /** The interface of an exercise, ready to be mounted, as `exercises/kit.js` describes. */
@@ -374,6 +397,7 @@ export function loadInterface(exercise: string): Promise<ExerciseInterface> {
 export function exerciseKit(
     act: (message: unknown) => Promise<unknown>,
     finish: () => void,
+    readAloud: (text: string, number: number) => void = () => undefined,
 ): { kit: ExerciseKit; show: (show: unknown) => void } {
     let handler: (show: unknown) => void = () => undefined;
     const kit: ExerciseKit = {
@@ -386,6 +410,11 @@ export function exerciseKit(
                 return shown;
             }),
         finish,
+        readAloud(text, number = 0) {
+            if (typeof text === "string" && text.trim()) {
+                readAloud(text, Number.isSafeInteger(number) && number >= 0 ? number : 0);
+            }
+        },
     };
     return { kit, show: (shown) => handler(shown) };
 }

@@ -83,7 +83,7 @@ export function SubChat({ translated, asking, onUsage, onClose }: Props) {
 
     return (
         <SidePanel title="Ask about it" onClose={onClose} flush>
-            <div className="subchat-log">
+            <div className="subchat-log" data-selectable>
                 <blockquote className="subchat-passage">
                     {passage.before}
                     <mark>{passage.selection}</mark>

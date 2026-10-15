@@ -3,7 +3,7 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 
-import { iconOf, type Topic } from "../lib/topics";
+import { iconOf, matchesTopic, type Topic } from "../lib/topics";
 
 interface Props {
     topics: Topic[];
@@ -39,12 +39,15 @@ function TopicIcon({ topic }: { topic: Topic }) {
         : <span className="topic-icon empty" aria-hidden="true">{topic.title.slice(0, 1).toUpperCase()}</span>;
 }
 
-/** The topics to choose from, with a form to add one. */
+/** The topics to choose from, with a search among them and a form to add one. */
 export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, onDelete, onRemakeIcon }: Props) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     // whether the form to add a topic is shown, rather than the button that shows it
     const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState("");
+    // those chosen are listed whatever is looked for, so that they can be left out again
+    const shown = topics.filter((topic) => chosen.includes(topic.id) || matchesTopic(topic, query.trim()));
 
     function add(event: FormEvent) {
         event.preventDefault();
@@ -62,8 +65,19 @@ export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, o
 
     return (
         <>
+            {topics.length > 0 && (
+                <input
+                    type="search"
+                    className="topic-search"
+                    placeholder="Search topics"
+                    aria-label="Search topics"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    onKeyDown={(event) => event.key === "Escape" && setQuery("")}
+                />
+            )}
             <ul className="practice-list">
-                {topics.map((topic) => (
+                {shown.map((topic) => (
                     <li key={topic.id} className="topic-item">
                         <button
                             className="practice-choice topic-choice"
@@ -99,6 +113,7 @@ export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, o
                     </li>
                 ))}
             </ul>
+            {topics.length > 0 && shown.length === 0 && <p className="practice-note">No topic is about that.</p>}
             {topics.length === 0 && (
                 <p className="practice-note">
                     Add a topic to talk about. Without one, exercises are about everyday life.

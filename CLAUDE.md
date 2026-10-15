@@ -9,15 +9,14 @@
 A language-learning chat built on an Anki collection. Three parts:
 
 - `deck-status/`: Rust (axum) server that keeps a synced copy of the
-  collection and serves its contents as JSON; also stores generated texts
-  and their audio. Settings come from `deck-status/.env`, which may hold a
+  collection and serves its contents as JSON. Settings come from `deck-status/.env`, which may hold a
   password: do not read it.
 - `chat-ui/`: React + TypeScript GUI (Vite), talking to OpenRouter and to the
   two servers through the dev server's `/anki` and `/checker` proxies.
 - `checker/`: Python server that splits typed text into sentences,
   spell-checks them and profiles finished sentences with a decision model.
   It also keeps everything a user has, in `checker/data/users/<name>/`:
-  the chats, texts, books and settings (`storage.py`) and a vocabulary for
+  the chats, books, sessions of practice and settings (`storage.py`) and a vocabulary for
   each language (`intake.py`, `vocabulary.py`); a book is an EPUB file read
   into its text and font sizes (`books.py`); what the models are told about
   each category of word is in `categories.py`. Practice is made of
@@ -26,8 +25,9 @@ A language-learning chat built on an Anki collection. Three parts:
   with a backend run in a process of its own and an interface, a module
   the app mounts in a shadow root, as `exercises/kit.py` and
   `exercises/kit.js` describe;
-  sessions of practice and the logs of what was answered are kept by
-  `exercising.py` and `storage.py`. Who may log in is in
+  sessions of practice, the logs of what was answered and what was written
+  in each exercise, whose words go into the vocabulary as those of the
+  chats do (`processing.py`), are kept by `exercising.py` and `storage.py`. Who may log in is in
   `users.json` at the top of the repository, which holds passwords: do not
   read it.
 

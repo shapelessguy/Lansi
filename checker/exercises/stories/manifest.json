@@ -1,0 +1,14 @@
+{
+    "title": "Stories",
+    "description": "Read a short story written for the lesson and the topic, and listen to it, then answer questions on it or retell it. Each instance is a story.",
+    "options": {
+        "then": {
+            "label": "Then",
+            "choices": {
+                "questions": "Answer questions",
+                "retell": "Retell it",
+                "read": "Just read it"
+            }
+        }
+    }
+}

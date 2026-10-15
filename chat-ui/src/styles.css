@@ -832,8 +832,7 @@ a {
 
 .main,
 .pane,
-.chat,
-.studio {
+.chat {
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -841,8 +840,7 @@ a {
 }
 
 .pane,
-.chat,
-.studio {
+.chat {
     flex: 1;
 }
 
@@ -883,79 +881,6 @@ a {
     background: var(--bg);
     color: var(--text);
     box-shadow: 0 0 0 1px var(--border);
-}
-
-/* texts */
-
-.studio-body {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 20px max(16px, calc((100% - 720px) / 2)) 28px;
-    overflow-y: auto;
-}
-
-.studio-status,
-.studio-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.studio-status {
-    justify-content: space-between;
-    padding: 8px 14px;
-    border-radius: var(--radius);
-    background: var(--panel);
-    color: var(--muted);
-}
-
-.studio-rerecord {
-    margin-left: auto;
-    color: var(--muted);
-}
-
-.studio-audio {
-    width: 100%;
-}
-
-.studio-text {
-    font-size: 1.1rem;
-    line-height: 1.7;
-    overflow-wrap: anywhere;
-}
-
-.studio-text > :first-child {
-    margin-top: 0;
-}
-
-.studio-meta {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.87rem;
-}
-
-.studio-form {
-    display: grid;
-    gap: 4px;
-    max-width: 520px;
-}
-
-.studio-form h2 {
-    margin: 0;
-    font-size: 1.2rem;
-}
-
-.studio-form textarea {
-    resize: vertical;
-}
-
-.studio-form .primary {
-    justify-self: start;
-    padding: 8px 16px;
 }
 
 /* books */
@@ -1227,19 +1152,13 @@ div.book-cover {
     background: var(--bg);
 }
 
-/* The box and the copy of its text behind it must lay the text out the same
-   way, or the underlines would not sit under their words. */
-.composer textarea,
-.composer-backdrop {
+.composer textarea {
     padding: 10px 12px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     line-height: 1.5;
     white-space: pre-wrap;
     overflow-wrap: break-word;
-}
-
-.composer textarea {
     position: relative;
     display: block;
     width: 100%;
@@ -1249,55 +1168,16 @@ div.book-cover {
     field-sizing: content;
     min-height: calc(7.5em + 22px);
     max-height: calc(18em + 22px);
-    /* a scroll bar would make the box narrower than the copy behind it */
+    /* a scroll bar would take room from the text */
     scrollbar-width: none;
 }
 
-.composer-backdrop {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    border-color: transparent;
-    color: transparent;
-    pointer-events: none;
-}
-
-/* A sentence the caret has left is tinted, whatever else is known about it.
-   What is found out about it later is drawn on top of this. */
-.sentence {
-    border-radius: 4px;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-    transition: background-color 0.2s;
-}
-
-.sentence:not([data-state="typing"]) {
-    background-color: var(--done-bg);
-}
-
-/* With the words rated, a sentence would be green first and only then get its
-   red words, so it stays yellow until both are known. */
-.rating-words .sentence[data-state="checking"] {
-    background-color: var(--checking-bg);
-}
-
-/* a word that was rated as not quite right; how red it is, is set on it */
-.doubted {
-    border-radius: 3px;
-}
-
-.misspelled {
-    background: none;
-    color: inherit;
-    text-decoration: underline wavy var(--danger);
-    text-decoration-skip-ink: none;
-    text-underline-offset: 3px;
-}
-
-/* the suggestions for the misspelled word under the mouse, shown above it */
+/* the suggestions for the misspelled word under the mouse, shown above it,
+   in whatever text box it is */
 .spelling-hint {
-    position: absolute;
-    z-index: 1;
+    position: fixed;
+    z-index: 30;
+    transform: translateY(calc(-100% - 2px));
     display: flex;
     gap: 6px;
     padding: 6px;
@@ -1310,7 +1190,7 @@ div.book-cover {
     white-space: nowrap;
 }
 
-.composer .spelling-hint button {
+.spelling-hint button {
     padding: 2px 10px;
     color: var(--text);
 }
@@ -1781,6 +1661,14 @@ div.book-cover {
     color: var(--muted);
 }
 
+.vocabulary-flat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 0.85em;
+}
+
 /* the keywords of a prompt, each with what it stands for */
 .keywords {
     display: grid;
@@ -2070,6 +1958,7 @@ div.book-cover {
     display: flex;
     align-items: center;
     gap: 6px;
+    max-height: 28px;
 }
 
 .speech-controls .count {
@@ -2150,6 +2039,49 @@ div.book-cover {
 
 .speech-player.beside .count {
     margin-left: 6px;
+}
+
+/* The player in the bar above what it reads, a book or a story: a row of
+   buttons among the others of the bar. */
+.speech-dock:empty {
+    display: none;
+}
+
+.speech-player.docked {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: auto;
+    min-width: 0;
+    padding: 2px 8px 2px 4px;
+    border-radius: 10px;
+    box-shadow: none;
+    transform: none;
+}
+
+.speech-player.docked .speech-controls {
+    gap: 4px;
+}
+
+/* lower than the buttons of the bar, so that the player with its border is no taller than they are */
+.speech-player.docked .icon-button {
+    width: 28px;
+    padding: 1px 0;
+    line-height: 1.3;
+}
+
+.speech-player.docked .speech-speed {
+    padding: 1px 4px;
+}
+
+.speech-player.docked .count {
+    margin-left: 6px;
+}
+
+.speech-player.docked .speech-status.error {
+    max-width: 260px;
+    white-space: nowrap;
 }
 
 .speech-player .count.error {
@@ -2560,6 +2492,10 @@ div.book-cover {
 .topic-actions .icon-button:hover {
     border-color: var(--border);
     color: var(--text);
+}
+
+.topic-search {
+    width: 100%;
 }
 
 .topic-new {

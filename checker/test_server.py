@@ -241,6 +241,20 @@ def test_sentences_request_with_a_key_profiles_finished_sentences_with_it(
     assert after[0]["profile"]["answers"]["grammar_errors"]["choice"] == "from-the-chat"
 
 
+def test_sentences_request_checks_only_the_spelling_when_not_to_profile(
+    url: str,
+) -> None:
+    body = json.dumps({"text": "Wie geht Hundd.", "profile": False}).encode()
+
+    _, reply = post(f"{url}/sentences", body, key="a-key")
+
+    assert isinstance(reply, dict)
+    assert (reply["usage"], reply["pending"]) == ([], False)
+    (sentence,) = reply["sentences"]
+    assert [issue["word"] for issue in sentence["spelling"]] == ["Hundd"]
+    assert (sentence["processed"], sentence["profiling"]) == (False, False)
+
+
 def test_sentences_request_profiles_with_the_model_it_names(url: str) -> None:
     body = json.dumps({"text": "Wie geht Hund.", "model": "some/model"}).encode()
 
@@ -724,31 +738,6 @@ def test_a_chat_is_removed_and_one_under_another_id_is_refused(
 
     assert (under_another_id, removed) == (400, 200)
     assert json.loads(left) == {"chats": []}
-
-
-def test_a_text_is_kept_with_its_audio_and_removed_with_it(with_users: str) -> None:
-    ada = log_in(with_users, "ada", "a password")
-    text = {
-        "id": "die-reise",
-        "title": "Die Reise",
-        "text": "# Die Reise",
-        "audio": None,
-    }
-    at = f"{with_users}/texts/die-reise"
-
-    send(at, "PUT", ada, json.dumps(text).encode())
-    no_audio_yet, _, _ = send(f"{at}/audio", "GET", ada)
-    send(f"{at}/audio", "PUT", ada, b"RIFF-and-so-on", "audio/wav")
-    _, audio, kind = send(f"{at}/audio", "GET", ada)
-    _, texts, _ = send(f"{with_users}/texts", "GET", ada)
-    send(at, "DELETE", ada)
-    _, left, _ = send(f"{with_users}/texts", "GET", ada)
-    gone, _, _ = send(f"{at}/audio", "GET", ada)
-
-    assert no_audio_yet == 404
-    assert (audio, kind) == (b"RIFF-and-so-on", "audio/wav")
-    assert json.loads(texts) == [{**text, "processed": False}]
-    assert (json.loads(left), gone) == ([], 404)
 
 
 def test_the_settings_of_a_user_are_kept_and_given_back(with_users: str) -> None:

@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import {
     audioPlayer,
@@ -43,7 +44,24 @@ export const SPOKEN_EVENT = "lansi:spoken";
  * being made. The sentence that is heard is marked in the book.
  */
 export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
-    const { base, bookId, beside } = source;
+    const { base, bookId, beside, dock } = source;
+    // The slot in the bar above what is read, if the player has one and it
+    // is on show. It is looked for again, as the page may put it up later,
+    // and the player is at the foot of the window while the slot is hidden,
+    // as it is in another activity, so that it can still be stopped.
+    const [slot, setSlot] = useState<Element | null>(null);
+    useEffect(() => {
+        if (dock === null) {
+            return;
+        }
+        const find = () => {
+            const found = document.querySelector(dock);
+            setSlot(found && found.closest("[hidden]") === null ? found : null);
+        };
+        find();
+        const timer = setInterval(find, 500);
+        return () => clearInterval(timer);
+    }, [dock]);
     // Where the player is, if it is shown beside something. Without that it
     // is at the foot of the window, as it also is while the thing is not on show.
     const [spot, setSpot] = useState<Spot | null>(null);
@@ -262,11 +280,13 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
     // Beside a reply there is the reply to read, so the sentence is not
     // said again, but what is the matter is.
     const besideIt = beside !== null;
+    // In a bar, the text is on show below it, with the sentence marked in a book.
+    const docked = slot !== null;
     const wrong = error !== null || failed !== null || held;
-    return (
+    const player = (
         <div
             ref={shown}
-            className={besideIt ? "speech-player beside" : "speech-player"}
+            className={besideIt ? "speech-player beside" : docked ? "speech-player docked" : "speech-player"}
             // until it is known where it goes, it is laid out where it is not seen, to be measured
             style={besideIt
                 ? (spot ? { left: spot.left, top: spot.top } : { left: 0, top: 0, visibility: "hidden" })
@@ -318,11 +338,12 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                 </select>
                 {reading && <span className={wrong ? "count error" : "count"}>{index + 1} / {sentences.length}</span>}
             </div>
-            {(!besideIt || wrong) && (
+            {((!besideIt && !docked) || wrong) && (
                 <p className={wrong ? "speech-status error" : "speech-status"}>
                     {status ?? sentence?.text}
                 </p>
             )}
         </div>
     );
+    return slot ? createPortal(player, slot) : player;
 }

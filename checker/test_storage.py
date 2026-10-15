@@ -33,7 +33,6 @@ def chat(*contents: str, **more: Any) -> dict[str, Any]:
 
 def mark_processed(store: UserStore) -> None:
     store._db.execute("UPDATE messages SET processed_at = 1")  # noqa: SLF001
-    store._db.execute("UPDATE texts SET processed_at = 1")  # noqa: SLF001
     store._db.commit()  # noqa: SLF001
 
 
@@ -123,79 +122,68 @@ def test_what_is_not_a_chat_is_not_kept(
         store.save_chat(not_a_chat)
 
 
-def text(content: str = "# Die Reise\n\nWir fahren.", **more: Any) -> dict[str, Any]:
-    return {
-        "id": "die-reise",
-        "title": "Die Reise",
-        "text": content,
-        "language": "German",
-        "audio": None,
-        **more,
+def test_what_an_exercise_wrote_comes_back_by_who_wrote_it_in_order(
+    store: UserStore,
+) -> None:
+    store.start_session("s1", "German", "lesson", [], {"cloze": 3})
+
+    store.add_written(
+        "s1", "cloze", {"assistant": ["Ich gehe.", " "], "user": ["Ich ging."]}
+    )
+    store.add_written("s1", "cloze", {"assistant": ["Er geht."]})
+
+    assert store.written("s1", "cloze") == {
+        "user": ["Ich ging."],
+        "assistant": ["Ich gehe.", "Er geht."],
     }
 
 
-def test_a_text_comes_back_as_it_was_kept_and_not_processed(store: UserStore) -> None:
-    store.save_text("die-reise", text())
-
-    assert store.texts() == [{**text(), "processed": False}]
-
-
-def test_a_text_stays_processed_until_what_it_says_is_changed(
-    store: UserStore,
+@pytest.mark.parametrize(
+    "not_written",
+    [{"nobody": ["Ja."]}, {"user": "Ja."}, {"user": [1]}],
+)
+def test_what_is_not_written_by_the_learner_or_a_model_is_not_kept(
+    store: UserStore, not_written: dict[str, Any]
 ) -> None:
-    store.save_text("die-reise", text())
-    mark_processed(store)
+    store.start_session("s1", "German", "lesson", [], {"cloze": 3})
 
-    store.save_text("die-reise", text(audio={"voice": "Kore"}))
-    with_audio_noted = store.texts()[0]
-    store.save_text("die-reise", text("# Die Reise\n\nWir fliegen."))
-
-    assert (with_audio_noted["processed"], with_audio_noted["audio"]) == (
-        True,
-        {"voice": "Kore"},
-    )
-    assert store.texts()[0]["processed"] is False
-
-
-def test_the_audio_of_a_text_is_kept_with_the_kind_of_file_it_is(
-    store: UserStore,
-) -> None:
-    store.save_text("die-reise", text())
-
-    kept = store.save_audio("die-reise", b"RIFF....", "audio/wav")
-    store.save_text("die-reise", text(audio={"voice": "Kore"}))
-
-    assert kept is True
-    assert store.audio("die-reise") == (b"RIFF....", "audio/wav")
-
-
-def test_there_is_no_audio_for_a_text_that_has_none_or_is_not_there(
-    store: UserStore,
-) -> None:
-    store.save_text("die-reise", text())
-
-    assert store.audio("die-reise") is None
-    assert store.save_audio("another", b"x", "audio/wav") is False
-    assert store.audio("another") is None
-
-
-def test_a_deleted_text_is_gone_with_its_audio(
-    store: UserStore, tmp_path: Path
-) -> None:
-    store.save_text("die-reise", text())
-    store.save_audio("die-reise", b"RIFF....", "audio/wav")
-
-    store.delete_text("die-reise")
-
-    assert store.texts() == []
-    assert not (tmp_path / "ada" / "audio" / "die-reise").exists()
-
-
-def test_a_text_is_kept_only_under_its_own_id(store: UserStore) -> None:
     with pytest.raises(ValueError):
-        store.save_text("another", text())
-    with pytest.raises(ValueError):
-        store.save_text("../die-reise", text(id="../die-reise"))
+        store.add_written("s1", "cloze", not_written)
+    assert store.written("s1", "cloze") == {"user": [], "assistant": []}
+
+
+def test_what_an_exercise_wrote_is_processed_once_the_exercise_is_over(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path / "ada", now=lambda: 10.0)
+    store.start_session("s1", "German", "lesson", [], {"cloze": 3, "picture": 1})
+    store.add_written("s1", "cloze", {"user": ["Ich ging."]})
+    store.add_written("s1", "picture", {"assistant": ["Der Hund."]})
+
+    while_running = store.unprocessed(before=20.0)
+    store.finish_exercise("s1", "cloze", None)
+    once_finished = store.unprocessed(before=20.0)
+    store.end_session("s1", "abandoned")
+    once_ended = store.unprocessed(before=20.0)
+
+    assert while_running == []
+    assert [(item.source_id, item.role, item.content) for item in once_finished] == [
+        ("s1/cloze", "user", "Ich ging.")
+    ]
+    assert [item.content for item in once_ended] == ["Ich ging.", "Der Hund."]
+    assert {item.language for item in once_ended} == {"German"}
+
+
+def test_what_an_exercise_wrote_is_processed_once(store: UserStore) -> None:
+    store.start_session("s1", "German", "lesson", [], {"cloze": 3})
+    store.add_written("s1", "cloze", {"user": ["Ich ging."]})
+    store.end_session("s1", "finished")
+    (item,) = store.unprocessed(before=float("inf"))
+
+    noted = store.mark_processed(item, 99.0)
+
+    assert noted is True
+    assert store.unprocessed(before=float("inf")) == []
 
 
 def test_the_settings_come_back_as_they_were_kept(store: UserStore) -> None:
@@ -347,7 +335,15 @@ def test_books_can_be_kept_where_things_were_kept_before_there_were_books(
     before.save_settings({"level": "B1"})
     before._db.execute("DROP TABLE books")  # noqa: SLF001
     before._db.execute("DROP TABLE book_speech")  # noqa: SLF001
-    later = ("logs", "session_exercises", "sessions", "topics", "embeddings", "usage")
+    later = (
+        "written",
+        "logs",
+        "session_exercises",
+        "sessions",
+        "topics",
+        "embeddings",
+        "usage",
+    )
     for table in later:
         before._db.execute(f"DROP TABLE {table}")  # noqa: SLF001
     before._db.execute("PRAGMA user_version = 1")  # noqa: SLF001
@@ -415,7 +411,15 @@ def test_sessions_can_be_kept_where_things_were_kept_before_there_were_sessions(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.save_settings({"level": "B1"})
-    later = ("logs", "session_exercises", "sessions", "topics", "embeddings", "usage")
+    later = (
+        "written",
+        "logs",
+        "session_exercises",
+        "sessions",
+        "topics",
+        "embeddings",
+        "usage",
+    )
     for table in later:
         before._db.execute(f"DROP TABLE {table}")  # noqa: SLF001
     before._db.execute("PRAGMA user_version = 5")  # noqa: SLF001
@@ -434,8 +438,12 @@ def test_usage_can_be_kept_where_things_were_kept_before_there_was_usage(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.save_settings({"level": "B1"})
+    before._db.execute("DROP TABLE written")  # noqa: SLF001
     before._db.execute("DROP TABLE usage")  # noqa: SLF001
     before._db.execute("ALTER TABLE sessions DROP COLUMN lessons")  # noqa: SLF001
+    before._db.execute(  # noqa: SLF001
+        "ALTER TABLE session_exercises DROP COLUMN options"
+    )
     before._db.execute("PRAGMA user_version = 8")  # noqa: SLF001
     before.close()
 
@@ -444,6 +452,36 @@ def test_usage_can_be_kept_where_things_were_kept_before_there_was_usage(
 
     assert store.usage("chat-1", 0)["everything"]["requests"] == 1
     assert store.settings() == {"level": "B1"}
+
+
+def test_the_texts_kept_before_are_dropped_and_sessions_kept(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.start_session("s1", "German", "lesson", [], {"cloze": 3})
+    before._db.execute("DROP TABLE written")  # noqa: SLF001
+    before._db.execute(  # noqa: SLF001
+        "ALTER TABLE session_exercises DROP COLUMN options"
+    )
+    before._db.execute(  # noqa: SLF001
+        "CREATE TABLE texts (id TEXT PRIMARY KEY, body TEXT NOT NULL)"
+    )
+    before._db.execute("PRAGMA user_version = 10")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+    store.add_written("s1", "cloze", {"user": ["Ich ging."]})
+
+    tables = {
+        name
+        for (name,) in store._db.execute(  # noqa: SLF001
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        )
+    }
+    assert "texts" not in tables
+    session = store.session("s1")
+    assert session is not None and session["options"] == {"cloze": {}}
+    assert store.written("s1", "cloze")["user"] == ["Ich ging."]
 
 
 def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> None:
@@ -471,6 +509,7 @@ def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> Non
         "mix_topics": False,
         "exercises": {"cloze": 3, "translation": 2},
         "guidance": {"cloze": "", "translation": ""},
+        "options": {"cloze": {}, "translation": {}},
         "progress": {
             "cloze": {
                 "status": "started",
@@ -581,3 +620,21 @@ def test_what_an_exercise_was_answered_with_comes_from_its_last_sessions(
     assert store.used_before("picture", 2) == ["die Lampe", "der Pokal", "der Tisch"]
     assert store.used_before("picture", 1) == ["die Lampe"]
     assert store.used_before("translation", 20) == []
+
+
+def test_the_starter_topics_are_added_once_without_icons_and_after_none_of_the_same_title(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path / "ada", now=lambda: 100.0)
+    store.add_topic("t1", "family", "")
+    starters = [("Family", "relatives"), ("Travel", "trips"), ("Work", "jobs")]
+
+    added = store.add_starter_topics(starters)
+    store.delete_topic("starter-1")
+    again = store.add_starter_topics(starters)
+
+    assert (added, again) == (2, 0)
+    assert [(topic["title"], topic["icon"]) for topic in store.topics()] == [
+        ("family", False),
+        ("Work", False),
+    ]

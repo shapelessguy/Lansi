@@ -227,6 +227,37 @@ def test_a_word_judged_a_form_of_a_stored_word_is_added_to_its_forms(
     assert len(chat.bodies) == 1
 
 
+def test_a_new_noun_is_stored_with_a_capital_letter_when_the_model_gave_none(
+    intake: Intake, vocabulary: Vocabulary, chat: FakeChat
+) -> None:
+    chat.judged("hand", "new", "hand")
+    chat.descriptions["Hand"] = {"genders": []}
+
+    (outcome,), _ = intake.take([Word("hand", "Gib mir die hand.")], KEY, MODEL)
+
+    assert outcome.status == "added"
+    assert outcome.entry is not None and outcome.entry.lemma == "Hand"
+    assert chat.asked_for("noun") == [{"lemma": "Hand"}]
+
+
+def test_nouns_stored_without_a_capital_letter_are_given_one_and_merged_with_twins(
+    profiler: FakeProfiler, chat: FakeChat
+) -> None:
+    vocabulary = Vocabulary()
+    verb_in_small, _ = vocabulary.save("noun", "verb", {}, [Form("verbs")])
+    verb, _ = vocabulary.save("noun", "Verb", {}, [])
+    hand, _ = vocabulary.save("noun", "hand", {}, [])
+    vocabulary.save("verb", "gehen", {}, [])
+
+    Intake(vocabulary, profiler, chat).vocabulary  # noqa: B018
+
+    assert vocabulary.entry("noun", "Hand") == vocabulary.get(hand.id)
+    assert vocabulary.get(verb_in_small.id) is None
+    merged = vocabulary.find("noun", "verbs")
+    assert merged is not None and merged.id == verb.id
+    assert vocabulary.entry("verb", "gehen") is not None
+
+
 def test_a_word_that_cannot_be_placed_is_asked_about_again_with_what_went_wrong(
     intake: Intake, vocabulary: Vocabulary, chat: FakeChat
 ) -> None:
@@ -303,6 +334,46 @@ def test_a_rejected_word_is_not_stored_and_not_asked_about_again(
     assert (again.status, again.reason) == ("rejected", "misspelt")
     assert vocabulary.find("noun", "Hundd") is None
     assert len(chat.bodies) == 1
+
+
+def test_a_word_found_to_be_no_word_is_not_sorted_again_when_met_in_another_sentence(
+    intake: Intake, profiler: FakeProfiler, chat: FakeChat
+) -> None:
+    chat.judged("Hundd", "reject", reason="misspelt")
+
+    (outcome,), _ = intake.take([Word("Hundd", "Der Hundd bellt.")], KEY, MODEL)
+    (again,), _ = intake.take([Word("hundd", "Ich sehe den hundd.")], KEY, MODEL)
+
+    assert (outcome.status, outcome.reason) == ("rejected", "misspelt")
+    assert (again.status, again.reason) == ("rejected", "misspelt")
+    assert len(profiler.asked) == 1
+    assert len(chat.bodies) == 1
+
+
+def test_a_word_found_not_savable_when_asked_again_is_not_sorted_again(
+    intake: Intake, profiler: FakeProfiler, chat: FakeChat
+) -> None:
+    chat.judged("Hunds", "form", "Hund")
+
+    take(intake, "Hunds")
+    (again,), _ = intake.take([Word("Hunds", "Des Hunds Knochen.")], KEY, MODEL)
+
+    assert (again.status, again.reason) == ("rejected", "no word")
+    assert len(profiler.asked) == 1
+
+
+def test_a_word_found_to_be_no_word_is_still_known_when_spelt_as_a_stored_word(
+    vocabulary: Vocabulary, chat: FakeChat
+) -> None:
+    stored, _ = vocabulary.save("verb", "essen", {}, [Form("essen")])
+    chat.judged("Essen", "reject", reason="for the test")
+    profiler = FakeProfiler({"Essen": "noun", "essen": "verb"})
+    intake = Intake(vocabulary, profiler, chat)
+
+    take(intake, "Essen")
+    (outcome,), _ = intake.take([Word("essen", "Wir essen.")], KEY, MODEL)
+
+    assert (outcome.status, outcome.entry) == ("known", stored)
 
 
 def test_a_word_found_to_be_of_another_category_is_taken_in_as_one_of_that(
@@ -420,7 +491,7 @@ def test_two_forms_of_a_new_word_taken_in_together_have_it_described_once(
 
     outcomes = take(intake, "ging", "gehe")
 
-    assert sorted(outcome.status for outcome in outcomes) == ["added", "form"]
+    assert sorted(outcome.status for outcome in outcomes) == ["added", "known"]
     assert len(chat.asked_for("verb")) == 1
     assert outcomes[0].entry is not None and outcomes[1].entry is not None
     assert outcomes[0].entry.id == outcomes[1].entry.id
@@ -712,11 +783,11 @@ def test_words_of_another_language_go_by_its_rules_into_its_own_vocabulary(
 
 
 def test_a_small_letter_rules_out_a_noun_only_where_nouns_have_capitals(
-    vocabulary: Vocabulary, chat: FakeChat
+    tmp_path: Path, chat: FakeChat
 ) -> None:
     profiler = FakeProfiler({"cane": "noun"})
     profiler.also = {"verb": 0.4}
-    intake = Intake(vocabulary, profiler, chat)
+    intake = Intake(Vocabularies(tmp_path), profiler, chat)
     chat.judged("cane", "reject")
 
     (in_german,) = take(intake, "cane")

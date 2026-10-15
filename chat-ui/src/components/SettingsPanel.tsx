@@ -162,7 +162,7 @@ function ModelsTab({ settings, onChange }: TabProps) {
                     value={settings.model}
                     onChange={(event) => onChange({ ...settings, model: event.target.value.trim() })}
                 />
-                <small>Answers in the chat, writes the texts, and makes and checks the exercises.</small>
+                <small>Answers in the chat, and makes and checks the exercises.</small>
             </label>
             <label className="field">
                 <span>Translation model</span>
@@ -202,7 +202,7 @@ function ModelsTab({ settings, onChange }: TabProps) {
                     value={settings.speechModel}
                     onChange={(speechModel) => onChange({ ...settings, speechModel })}
                 />
-                <small>Reads the texts, the books and the replies aloud.</small>
+                <small>Reads the books, the replies and the stories aloud.</small>
             </label>
             <label className="field">
                 <span>Voice</span>
@@ -492,26 +492,19 @@ function ContentTab({ settings, onChange }: TabProps) {
             ))}
             <button type="button" onClick={addContext}>Add context</button>
 
-            <h3>Texts</h3>
-            <label className="field">
-                <span>Instructions for writing a text</span>
-                <textarea
-                    rows={6}
-                    value={settings.textPrompt}
-                    onChange={(event) => onChange({ ...settings, textPrompt: event.target.value })}
-                />
-            </label>
-
             <h3>Speech</h3>
             <label className="field">
                 <span>How to read</span>
-                <input
-                    type="text"
-                    placeholder="For example: slowly and clearly"
-                    value={settings.speechInstructions}
-                    onChange={(event) => onChange({ ...settings, speechInstructions: event.target.value })}
+                <textarea
+                    rows={4}
+                    placeholder="For example: Speak {{language}} slowly and clearly."
+                    value={settings.speechDirection}
+                    onChange={(event) => onChange({ ...settings, speechDirection: event.target.value })}
                 />
-                <small>Passed to the speech model as a direction. It is not read aloud.</small>
+                <small>
+                    Passed to the speech model as a direction, with <code>{LANGUAGE_PLACEHOLDER}</code> and{" "}
+                    <code>{LEVEL_PLACEHOLDER}</code> filled in. It is not read aloud.
+                </small>
             </label>
         </>
     );

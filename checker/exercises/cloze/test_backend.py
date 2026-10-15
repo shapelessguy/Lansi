@@ -233,6 +233,20 @@ def test_a_set_is_checked_together_and_logged_once_with_its_corrections() -> Non
     assert len(model.asked) == 1
 
 
+def test_once_a_set_is_checked_the_answers_and_the_right_sentences_are_written() -> (
+    None
+):
+    model = FakeModel(ITEMS)
+    state = start(CONTEXT, model).state
+
+    step = act(CONTEXT, state, {"answers": [["aufstehe", ""], *RIGHT[1:]]}, model)
+
+    assert step.written["user"][0] == "aufstehe"
+    assert len(step.written["user"]) == 5
+    assert step.written["assistant"][0] == "Ich stehe um 6 Uhr auf."
+    assert len(step.written["assistant"]) == 5
+
+
 def test_the_next_set_is_made_once_and_other_than_those_before() -> None:
     model = FakeModel(ITEMS)
     state = start(CONTEXT, model).state

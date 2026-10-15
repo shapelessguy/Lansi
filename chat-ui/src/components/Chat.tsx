@@ -6,18 +6,7 @@ import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
 
 import { isAtEnd, type StoredChat } from "../lib/chats";
-import {
-    applySuggestion,
-    doubt,
-    type MarkedPart,
-    type ProfileUsage,
-    sentenceAtCaret,
-    sentenceParts,
-    sentenceState,
-    type SpellingIssue,
-    spellingIssues,
-    useLiveCheck,
-} from "../lib/checker";
+import { type ProfileUsage, sentenceAtCaret } from "../lib/checker";
 import { type ChatMessage, streamChat } from "../lib/openrouter";
 import { requestQuestions } from "../lib/questions";
 import type { WordLists } from "../lib/sets";
@@ -25,6 +14,7 @@ import { expandPrompt, type Settings } from "../lib/settings";
 import { allowPlaying, speakMark } from "../lib/speaking";
 import type { UsageEntry } from "../lib/usage";
 import { ChecksPanel } from "./ChecksPanel";
+import { useWritingCheck } from "./WritingChecks";
 
 interface Props {
     settings: Settings;
@@ -48,20 +38,6 @@ interface Props {
     onMessages: (chatId: string, change: (messages: ChatMessage[]) => ChatMessage[]) => void;
     onContext: (contextId: string) => void;
     onNewChat: () => void;
-}
-
-/** A stretch of the copy of the text behind the box, underlined if it is misspelled. */
-function markedPart(part: MarkedPart, index: number) {
-    // a word that was rated is tinted red, the more the less right it is
-    const strength = part.value === null ? 0 : doubt(part.value);
-    const style = strength > 0 ? { backgroundColor: `rgb(var(--doubt) / ${(strength * 0.6).toFixed(2)})` } : undefined;
-    return part.issue
-        ? (
-            <mark key={index} className="misspelled" data-start={part.issue.start} style={style}>
-                {part.text}
-            </mark>
-        )
-        : <span key={index} className={style && "doubted"} style={style}>{part.text}</span>;
 }
 
 export function Chat(
@@ -122,8 +98,6 @@ export function Chat(
         return () => observer.disconnect();
     }, [keepAtEnd]);
 
-    // where the caret is in the draft, or null while the box is not in use
-    const [caret, setCaret] = useState<number | null>(null);
     const questions = useMemo(() => requestQuestions(settings.questions), [settings.questions]);
     // Every request that profiling the sentences makes is counted, under the
     // chat it was made in.
@@ -141,75 +115,20 @@ export function Chat(
             }),
         [chatId, onUsage],
     );
-    const check = useLiveCheck(
-        draft,
-        caret,
-        settings.apiKey,
-        settings.profileModel,
-        questions,
-        settings.rateWords,
-        settings.language,
+    // the spelling is checked as in every text box, and the sentences profiled as well
+    const { check, lastCaret } = useWritingCheck(
+        inputRef,
+        {
+            apiKey: settings.apiKey,
+            model: settings.profileModel,
+            questions,
+            rateWords: settings.rateWords,
+        },
         countProfiling,
     );
     // The checks panel goes on showing the sentence the caret was on after a
     // click in the panel has taken the caret out of the box.
-    const lastCaret = useRef<number | null>(null);
-    if (caret !== null) {
-        lastCaret.current = caret;
-    }
-    const sentenceShown = draft ? sentenceAtCaret(check, lastCaret.current) : null;
-    const backdropRef = useRef<HTMLDivElement>(null);
-    const issues = spellingIssues(check, draft, caret);
-
-    // The misspelled word the mouse is over, by where it starts in the draft,
-    // and where to show its suggestions within the box.
-    const [hint, setHint] = useState<{ start: number; left: number; bottom: number } | null>(null);
-    const hintTimer = useRef<number>();
-    const hintIssue = hint ? issues.find((issue) => issue.start === hint.start) : undefined;
-
-    useEffect(() => () => clearTimeout(hintTimer.current), []);
-
-    /**
-     * Shows the suggestions for the misspelled word under the mouse, if any.
-     * The mouse is over the text box, so the word is found through its
-     * underline in the copy of the text behind the box.
-     */
-    function hoverAt(x: number, y: number) {
-        const backdrop = backdropRef.current;
-        if (!backdrop) {
-            return;
-        }
-        const box = backdrop.getBoundingClientRect();
-        for (const mark of backdrop.querySelectorAll("mark")) {
-            // a word that is broken across two lines has two rectangles
-            const under = [...mark.getClientRects()].find((rect) =>
-                x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-            );
-            if (under) {
-                clearTimeout(hintTimer.current);
-                setHint({
-                    start: Number(mark.dataset.start),
-                    left: under.left - box.left,
-                    bottom: box.bottom - under.top + 2,
-                });
-                return;
-            }
-        }
-        closeHintSoon();
-    }
-
-    /** Leaves a moment to move the mouse from the word onto its suggestions. */
-    function closeHintSoon() {
-        clearTimeout(hintTimer.current);
-        hintTimer.current = window.setTimeout(() => setHint(null), 250);
-    }
-
-    function fix(issue: SpellingIssue, suggestion: string) {
-        setDraft(applySuggestion(draft, issue, suggestion));
-        setCaret(null);
-        setHint(null);
-        inputRef.current?.focus();
-    }
+    const sentenceShown = draft ? sentenceAtCaret(check, lastCaret) : null;
 
     useEffect(() => {
         if (picked) {
@@ -331,6 +250,7 @@ export function Chat(
 
                 <div
                     className="messages"
+                    data-selectable
                     ref={listRef}
                     onScroll={(event) => {
                         const list = event.currentTarget;
@@ -393,26 +313,7 @@ export function Chat(
                         void send();
                     }}
                 >
-                    <div className="composer-input">
-                        {/* a copy of the text behind the box, which is what carries the underlines */}
-                        <div
-                            className={settings.rateWords ? "composer-backdrop rating-words" : "composer-backdrop"}
-                            ref={backdropRef}
-                            aria-hidden="true"
-                        >
-                            {sentenceParts(draft, check, issues).map(({ sentence, parts }, index) =>
-                                sentence
-                                    ? (
-                                        // drawn by how far along the sentence is
-                                        <span key={index} className="sentence" data-state={sentenceState(sentence)}>
-                                            {parts.map(markedPart)}
-                                        </span>
-                                    )
-                                    : <span key={index}>{parts.map(markedPart)}</span>
-                            )}
-                            {/* keeps a last, empty line as tall as it is in the box */}
-                            {" "}
-                        </div>
+                    <div className="composer-input" data-writing>
                         <textarea
                             ref={inputRef}
                             rows={2}
@@ -421,42 +322,9 @@ export function Chat(
                             // the browser's own checker would underline the same words a second time
                             spellCheck={false}
                             value={draft}
-                            onChange={(event) => {
-                                setDraft(event.target.value);
-                                setCaret(event.target.selectionStart);
-                            }}
-                            onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
-                            onBlur={() => setCaret(null)}
-                            onScroll={(event) => {
-                                if (backdropRef.current) {
-                                    backdropRef.current.scrollTop = event.currentTarget.scrollTop;
-                                }
-                            }}
+                            onChange={(event) => setDraft(event.target.value)}
                             onKeyDown={onKeyDown}
-                            onMouseMove={(event) => hoverAt(event.clientX, event.clientY)}
-                            onMouseLeave={closeHintSoon}
                         />
-                        {hintIssue && hint && (
-                            <div
-                                className="spelling-hint"
-                                style={{ left: hint.left, bottom: hint.bottom }}
-                                // moving from the word onto the hint must not close it
-                                onMouseEnter={() => clearTimeout(hintTimer.current)}
-                                onMouseLeave={closeHintSoon}
-                            >
-                                {hintIssue.suggestions.length === 0 && <span>Not in the dictionary</span>}
-                                {hintIssue.suggestions.map((suggestion) => (
-                                    <button
-                                        key={suggestion}
-                                        type="button"
-                                        onClick={() => fix(hintIssue, suggestion)}
-                                        title={`Replace “${hintIssue.word}” with “${suggestion}”`}
-                                    >
-                                        {suggestion}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
                     </div>
                     <div className="composer-send">
                         <label

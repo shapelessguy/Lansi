@@ -6,7 +6,6 @@
 //! that other applications can read them.
 
 mod api;
-mod library;
 mod mirror;
 mod status;
 
@@ -28,7 +27,6 @@ use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
 use axum::body::Bytes;
-use axum::extract::DefaultBodyLimit;
 use axum::extract::Path;
 use axum::extract::Request;
 use axum::extract::State;
@@ -42,7 +40,6 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::routing::get;
 use axum::routing::post;
-use axum::routing::put;
 use axum::Json;
 use axum::Router;
 use serde::Deserialize;
@@ -99,13 +96,8 @@ struct AppState {
     backend: Backend,
     status: SharedStatus,
     media_folder: PathBuf,
-    /// Where generated texts and their audio are kept.
-    texts_folder: PathBuf,
     token: Option<String>,
 }
-
-/// A few minutes of uncompressed speech.
-const MAX_AUDIO_BYTES: usize = 64 * 1024 * 1024;
 
 // The backend runs its own async tasks to sync, so it is set up before ours
 // are started.
@@ -126,7 +118,6 @@ fn main() -> Result<()> {
         backend: backend.clone(),
         status: SharedStatus::default(),
         media_folder: media_folder(&collection_path),
-        texts_folder: config.data_dir.join("texts"),
         token,
     };
     let mirror = Mirror::new(backend, auth, config.sync_media);
@@ -145,14 +136,6 @@ async fn serve(addr: SocketAddr, state: AppState) -> Result<()> {
         .route("/api/{method}", get(api_call).post(api_call))
         .route("/sql", post(sql))
         .route("/media/{name}", get(media))
-        .route("/texts", get(texts))
-        .route("/texts/{id}", put(save_text).delete(delete_text))
-        .route(
-            "/texts/{id}/audio",
-            get(text_audio)
-                .put(save_text_audio)
-                .layer(DefaultBodyLimit::max(MAX_AUDIO_BYTES)),
-        )
         .layer(middleware::from_fn_with_state(state.clone(), require_token))
         .with_state(state);
     let listener = TcpListener::bind(addr)
@@ -270,57 +253,6 @@ async fn media(State(state): State<AppState>, Path(name): Path<String>) -> Respo
     }
     match tokio::fs::read(state.media_folder.join(&name)).await {
         Ok(data) => ([(CONTENT_TYPE, content_type(&name))], data).into_response(),
-        Err(_) => StatusCode::NOT_FOUND.into_response(),
-    }
-}
-
-async fn texts(State(state): State<AppState>) -> Response {
-    match library::list(&state.texts_folder) {
-        Ok(texts) => Json(texts).into_response(),
-        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{err:#}")).into_response(),
-    }
-}
-
-async fn save_text(State(state): State<AppState>, Path(id): Path<String>, body: Bytes) -> Response {
-    stored(library::save_text(&state.texts_folder, &id, &body))
-}
-
-async fn save_text_audio(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> Response {
-    let content_type = headers
-        .get(CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or_default();
-    stored(library::save_audio(
-        &state.texts_folder,
-        &id,
-        content_type,
-        &body,
-    ))
-}
-
-async fn delete_text(State(state): State<AppState>, Path(id): Path<String>) -> Response {
-    stored(library::delete(&state.texts_folder, &id))
-}
-
-/// What is refused is something about the request, such as its id or type.
-fn stored(result: Result<()>) -> Response {
-    match result {
-        Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(err) => (StatusCode::BAD_REQUEST, format!("{err:#}")).into_response(),
-    }
-}
-
-async fn text_audio(State(state): State<AppState>, Path(id): Path<String>) -> Response {
-    let Some((path, content_type)) = library::audio(&state.texts_folder, &id) else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
-    match tokio::fs::read(path).await {
-        Ok(data) => ([(CONTENT_TYPE, content_type)], data).into_response(),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
 }

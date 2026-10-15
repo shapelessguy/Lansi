@@ -3,7 +3,15 @@
 
 import { describe, expect, it } from "vitest";
 
-import { describeUses, detailRows, groupWords, layOutForms, type Vocabulary, type WordForm } from "./vocabulary";
+import {
+    describeUses,
+    detailRows,
+    groupWords,
+    layOutForms,
+    listWords,
+    type Vocabulary,
+    type WordForm,
+} from "./vocabulary";
 
 const unused = { created_at: "2026-10-13 12:00:00", used: 0, seen: 0, first_used: null, last_used: null };
 
@@ -206,5 +214,15 @@ describe("groupWords, in an order", () => {
 
     it("puts the word used last first, and those never used at the end", () => {
         expect(lemmas("lastUsed")).toEqual(["Zug", "Hund", "Apfel", "Ärger"]);
+    });
+});
+
+describe("listWords", () => {
+    it("lists the words of every category together, by the alphabet", () => {
+        expect(listWords(vocabulary, "").map((word) => word.lemma)).toEqual(["Apfel", "gehen", "Hund"]);
+    });
+
+    it("keeps to the words that match the filter", () => {
+        expect(listWords(vocabulary, " E ").map((word) => word.lemma)).toEqual(["Apfel", "gehen"]);
     });
 });

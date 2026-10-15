@@ -235,6 +235,17 @@ class LiveChecker:
             )
         return sentences
 
+    def spell(self, text: str, caret: int | None = None) -> list[Sentence]:
+        """Split `text` into sentences and check their spelling alone. Nothing
+        is profiled, and what is out or known about the text that `check` is
+        given is left as it is, so that other text boxes can be checked
+        alongside the one whose sentences are profiled."""
+        sentences = split_sentences(text, caret)
+        with self._lock:
+            for sentence in sentences:
+                sentence.spelling = self._speller.check(sentence.text)
+        return sentences
+
     def local_model(self) -> str | None:
         """The model on this machine that sentences are profiled by at
         present, if they are."""

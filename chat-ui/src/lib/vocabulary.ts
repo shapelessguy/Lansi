@@ -132,6 +132,33 @@ export function groupWords(vocabulary: Vocabulary, query: string, sort: SortKey 
         .map(([category, words]) => ({ category, words: words.sort(comparing(sort)) }));
 }
 
+/** The words whose dictionary form has `query` in it, of every category together, in the order asked for. */
+export function listWords(vocabulary: Vocabulary, query: string, sort: SortKey = "word"): ListedWord[] {
+    const wanted = query.trim().toLowerCase();
+    return vocabulary.words
+        .filter((word) => !wanted || word.lemma.toLowerCase().includes(wanted))
+        .sort(comparing(sort));
+}
+
+const FLAT_KEY = "chat-ui.vocabulary-flat";
+
+/** Whether the words were last shown as one list rather than by category, in this browser. */
+export function loadFlat(): boolean {
+    try {
+        return JSON.parse(localStorage.getItem(FLAT_KEY) ?? "false") === true;
+    } catch {
+        return false;
+    }
+}
+
+export function saveFlat(flat: boolean): void {
+    try {
+        localStorage.setItem(FLAT_KEY, JSON.stringify(flat));
+    } catch {
+        // without storage, the choice lasts until the page is closed
+    }
+}
+
 export interface DetailRow {
     label: string;
     value: string;

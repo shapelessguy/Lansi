@@ -38,6 +38,7 @@ from kit import (
     log,
     loose,
     serve,
+    written,
 )
 from PIL import Image, ImageDraw, ImageFont
 
@@ -425,8 +426,8 @@ def judge(
     return the logs of them: one for each point. Raises ModelError."""
     lines = []
     for number, (item, label) in enumerate(zip(picture["items"], picture["labels"]), 1):
-        written = json.dumps(label, ensure_ascii=False) if label else "(nothing)"
-        lines.append(f"{number}. {written} (the illustrator meant: {item['thing']})")
+        given = json.dumps(label, ensure_ascii=False) if label else "(nothing)"
+        lines.append(f"{number}. {given} (the illustrator meant: {item['thing']})")
     prompt = JUDGING.format(
         language=context["language"],
         level=_level(context),
@@ -452,6 +453,21 @@ def judge(
         )
         for judgement, label in zip(judged, picture["labels"])
     ]
+
+
+def written_on(picture: dict[str, Any]) -> dict[str, list[str]]:
+    """What was written on a picture that was judged: the labels, by the
+    learner, and what each that was not right should have been, by the
+    model."""
+    judged = picture.get("judged") or []
+    return written(
+        [label for label in picture["labels"] if label],
+        [
+            judgement["correct"]
+            for judgement in judged
+            if judgement["result"] != "right" and judgement["correct"]
+        ],
+    )
 
 
 def _show(state: dict[str, Any]) -> dict[str, Any]:
@@ -521,7 +537,9 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
         if picture.get("judged") or not any(picture["labels"]):
             return Step(state=state, show=_show(state))
         logs = judge(context, model, picture)
-        return Step(state=state, show=_show(state), logs=logs)
+        return Step(
+            state=state, show=_show(state), logs=logs, written=written_on(picture)
+        )
     if message.get("next"):
         if not _show(state)["more"]:
             return Step(state=state, show=_show(state))
@@ -547,15 +565,20 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
 def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
     picture = state["picture"]
     logs: list[dict[str, str]] = []
+    said: dict[str, list[str]] = {}
     # what was labelled and not checked is judged now, so that it is logged
     if not picture.get("judged") and any(picture["labels"]):
         try:
             logs = judge(context, model, picture)
+            said = written_on(picture)
         except ModelError:
             pass
     done = state["done"] + _done(picture)
     return Step(
-        state=state, logs=logs, results={"items": done, "pictures": state["drawn"]}
+        state=state,
+        logs=logs,
+        results={"items": done, "pictures": state["drawn"]},
+        written=said,
     )
 
 

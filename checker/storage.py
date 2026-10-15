@@ -2,12 +2,13 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 """What a user has written and been written: the chats with their messages,
-the generated texts with their audio, and the settings. The books a user
-reads are kept here as well.
+what was written in the exercises of practice, and the settings. The books a
+user reads are kept here as well.
 
-Every message and every text carries when it was processed, which is not yet
-until its words have been taken into the vocabulary and counted. A message
-or text that is changed is to be processed again.
+Every message and everything written in an exercise carries when it was
+processed, which is not yet until its words have been taken into the
+vocabulary and counted. A message that is changed is to be processed again.
+What was written in an exercise is processed once the exercise is over.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -49,18 +50,6 @@ CREATE TABLE messages (
     -- when its words were taken into the vocabulary and counted, if they were
     processed_at REAL,
     UNIQUE (chat_id, position)
-);
-CREATE TABLE texts (
-    id TEXT PRIMARY KEY,
-    -- the text with what is known about it, as the app keeps it, in JSON
-    body TEXT NOT NULL,
-    -- the text itself, to tell when it has changed
-    content TEXT NOT NULL DEFAULT '',
-    language TEXT NOT NULL DEFAULT '',
-    changed_at REAL NOT NULL,
-    processed_at REAL,
-    -- the kind of file its audio is, if it has any
-    audio_type TEXT
 );
 -- single things kept as JSON, such as the settings
 CREATE TABLE kept (
@@ -216,6 +205,31 @@ _REVIEWS = """
 ALTER TABLE sessions ADD COLUMN lessons TEXT NOT NULL DEFAULT '[]';
 """
 
+# What came with version 11: what the learner and the models wrote in each
+# exercise of a session, so that its words are taken into the vocabulary
+# once the exercise is over; and the options each exercise was chosen with,
+# in JSON. The generated texts, which were kept before, are no more.
+_WRITTEN = """
+CREATE TABLE written (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+    exercise TEXT NOT NULL,
+    -- "user" for what the learner wrote, "assistant" for what a model did
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    -- in seconds since the epoch
+    written_at REAL NOT NULL,
+    -- when its words were taken into the vocabulary and counted, if they were
+    processed_at REAL
+);
+CREATE INDEX written_by_exercise ON written (session_id, exercise);
+ALTER TABLE session_exercises ADD COLUMN options TEXT NOT NULL DEFAULT '{}';
+DROP TABLE IF EXISTS texts;
+"""
+
+# what the learner and the models are, as what they wrote is kept
+ROLES = ("user", "assistant")
+
 # What is added up of some of the usage.
 _TOTALS = (
     "COUNT(*), COALESCE(SUM(prompt_tokens), 0),"
@@ -232,20 +246,22 @@ _SENTENCE_ID = re.compile(r"\d{1,9}\.\d{1,9}")
 # What is listed of a book.
 _LISTED = "id, title, author, language, added_at, source, cover_type"
 
-# An id is given by the app, and is part of the name of a file for a text.
+# An id is given by the app, and is part of the name of a file for a topic.
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,119}")
 
 
 @dataclass
 class Unprocessed:
-    """A message or a text whose words have not been taken into the
-    vocabulary and counted yet."""
+    """A message, or what was written in an exercise, whose words have not
+    been taken into the vocabulary and counted yet."""
 
-    # "message" or "text"
+    # "message" or "exercise"
     kind: str
-    # the id of the chat the message is in, or of the text
+    # The id of the chat the message is in, or that of the session and the
+    # exercise, as "SESSION/EXERCISE".
     source_id: str
-    # where the message is in its chat, from 0; 0 for a text
+    # Where the message is in its chat, from 0, or what was written goes by
+    # among all that was written in exercises.
     position: int
     # "user" if the user wrote it, "assistant" if a model did
     role: str
@@ -284,15 +300,14 @@ def _listed(
 
 
 class UserStore:
-    """The chats, texts and settings of one user, in a directory of the
-    user's own. It can be used from several threads."""
+    """The chats, the practice and the settings of one user, in a directory
+    of the user's own. It can be used from several threads."""
 
     def __init__(
         self, directory: str | Path, now: Callable[[], float] = time.time
     ) -> None:
         self._directory = Path(directory)
         self._directory.mkdir(parents=True, exist_ok=True)
-        self._audio = self._directory / "audio"
         self._covers = self._directory / "covers"
         self._speech = self._directory / "speech"
         self._icons = self._directory / "topics"
@@ -324,6 +339,8 @@ class UserStore:
                 self._db.executescript(_USAGE)
             if version < 10:
                 self._db.executescript(_REVIEWS)
+            if version < 11:
+                self._db.executescript(_WRITTEN)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -417,84 +434,6 @@ class UserStore:
             self._db.execute("DELETE FROM book_speech WHERE book_id = ?", (chat_id,))
         if is_id(chat_id):
             shutil.rmtree(self._speech / chat_id, ignore_errors=True)
-
-    # texts
-
-    def texts(self) -> list[dict[str, Any]]:
-        """Every text, as the app keeps them."""
-        with self._lock:
-            rows = self._db.execute("SELECT body, processed_at FROM texts").fetchall()
-        return [
-            {**json.loads(body), "processed": processed_at is not None}
-            for body, processed_at in rows
-        ]
-
-    def save_text(self, text_id: str, text: dict[str, Any]) -> None:
-        """Keep a text as it is now. Its audio stays, and so does its having
-        been processed if what it says is as it was. Raises ValueError for a
-        text that is not one."""
-        content = text.get("text")
-        if not is_id(text_id) or text.get("id") != text_id:
-            raise ValueError("a text needs the id it is kept under")
-        if not isinstance(content, str):
-            raise ValueError("a text needs its text")
-        body = json.dumps(
-            {name: value for name, value in text.items() if name != "processed"},
-            ensure_ascii=False,
-        )
-        with self._lock, self._db:
-            row = self._db.execute(
-                "SELECT content FROM texts WHERE id = ?", (text_id,)
-            ).fetchone()
-            if row and row[0] == content:
-                self._db.execute(
-                    "UPDATE texts SET body = ? WHERE id = ?", (body, text_id)
-                )
-            else:
-                self._db.execute(
-                    "INSERT INTO texts (id, body, content, language, changed_at)"
-                    " VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET"
-                    " body = excluded.body, content = excluded.content,"
-                    " changed_at = excluded.changed_at, processed_at = NULL",
-                    (
-                        text_id,
-                        body,
-                        content,
-                        str(text.get("language") or ""),
-                        self._now(),
-                    ),
-                )
-
-    def delete_text(self, text_id: str) -> None:
-        """Remove a text and its audio."""
-        with self._lock, self._db:
-            self._db.execute("DELETE FROM texts WHERE id = ?", (text_id,))
-        if is_id(text_id):
-            (self._audio / text_id).unlink(missing_ok=True)
-
-    def save_audio(self, text_id: str, audio: bytes, content_type: str) -> bool:
-        """Keep the audio of a text. Returns whether there is such a text."""
-        with self._lock, self._db:
-            changed = self._db.execute(
-                "UPDATE texts SET audio_type = ? WHERE id = ?",
-                (content_type, text_id),
-            ).rowcount
-            if not changed:
-                return False
-            self._audio.mkdir(exist_ok=True)
-            (self._audio / text_id).write_bytes(audio)
-        return True
-
-    def audio(self, text_id: str) -> tuple[bytes, str] | None:
-        """The audio of a text with the kind of file it is, if it has any."""
-        with self._lock:
-            row = self._db.execute(
-                "SELECT audio_type FROM texts WHERE id = ?", (text_id,)
-            ).fetchone()
-            file = self._audio / text_id
-            if not row or not row[0] or not file.exists():
-                return None
-            return file.read_bytes(), row[0]
 
     # books
 
@@ -662,9 +601,11 @@ class UserStore:
     # processing
 
     def unprocessed(self, before: float) -> list[Unprocessed]:
-        """The messages and texts that are not processed, and were last
-        changed before `before`, the oldest first. What the app wrote to
-        start a chat with, the "system" messages, is never processed."""
+        """The messages that are not processed, and were last changed
+        before `before`, with what was written in the exercises that are
+        over, the oldest first. An exercise is over once it is finished or
+        its session has ended. What the app wrote to start a chat with, the
+        "system" messages, is never processed."""
         with self._lock:
             messages = self._db.execute(
                 "SELECT 'message', chat_id, position, role, content, language,"
@@ -673,22 +614,30 @@ class UserStore:
                 " AND role IN ('user', 'assistant')",
                 (before,),
             ).fetchall()
-            texts = self._db.execute(
-                "SELECT 'text', id, 0, 'assistant', content, language, changed_at"
-                " FROM texts WHERE processed_at IS NULL AND changed_at < ?",
+            written = self._db.execute(
+                "SELECT 'exercise', written.session_id || '/' || written.exercise,"
+                " written.id, role, content, sessions.language, written_at"
+                " FROM written JOIN sessions ON sessions.id = written.session_id"
+                " JOIN session_exercises ON"
+                " session_exercises.session_id = written.session_id"
+                " AND session_exercises.exercise = written.exercise"
+                " WHERE written.processed_at IS NULL AND written_at < ?"
+                " AND (session_exercises.finished_at IS NOT NULL"
+                " OR sessions.status != 'running')",
                 (before,),
             ).fetchall()
-        waiting = [Unprocessed(*row) for row in messages + texts]
+        waiting = [Unprocessed(*row) for row in messages + written]
         return sorted(waiting, key=lambda item: item.changed_at)
 
     def mark_processed(self, item: Unprocessed, at: float) -> bool:
-        """Note that a message or a text has been processed, unless it was
-        changed since it was read. Returns whether it was noted."""
+        """Note that a message, or what was written in an exercise, has been
+        processed, unless it was changed since it was read. Returns whether
+        it was noted."""
         with self._lock, self._db:
-            if item.kind == "text":
+            if item.kind == "exercise":
                 cursor = self._db.execute(
-                    "UPDATE texts SET processed_at = ? WHERE id = ? AND changed_at = ?",
-                    (at, item.source_id, item.changed_at),
+                    "UPDATE written SET processed_at = ? WHERE id = ?",
+                    (at, item.position),
                 )
             else:
                 cursor = self._db.execute(
@@ -711,14 +660,16 @@ class UserStore:
         mix_topics: bool = False,
         guidance: dict[str, str] | None = None,
         lessons: list[str] | None = None,
+        options: dict[str, dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Start a session of practice with the exercises given, each with
         how many instances of it there are to be, the `words` they are to
-        use, if any, and the `guidance` each is given, by exercise. A
-        review has no `lesson`, and goes over `lessons`. A session that is
-        still running is abandoned: there is one at a time. Raises
-        ValueError."""
+        use, if any, and the `guidance` each is given and the `options` it
+        was chosen with, by exercise. A review has no `lesson`, and goes
+        over `lessons`. A session that is still running is abandoned: there
+        is one at a time. Raises ValueError."""
         guidance = guidance or {}
+        options = options or {}
         if not is_id(session_id):
             raise ValueError("a session needs an id")
         if not exercises:
@@ -747,8 +698,8 @@ class UserStore:
             )
             self._db.executemany(
                 "INSERT INTO session_exercises"
-                " (session_id, exercise, position, instances, guidance)"
-                " VALUES (?, ?, ?, ?, ?)",
+                " (session_id, exercise, position, instances, guidance, options)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
                 [
                     (
                         session_id,
@@ -756,6 +707,7 @@ class UserStore:
                         position,
                         instances,
                         guidance.get(exercise, ""),
+                        json.dumps(options.get(exercise, {}), ensure_ascii=False),
                     )
                     for position, (exercise, instances) in enumerate(exercises.items())
                 ],
@@ -781,6 +733,8 @@ class UserStore:
                 "exercises": {},
                 # what each exercise was told to heed, by exercise
                 "guidance": {},
+                # the options each exercise was chosen with, by exercise
+                "options": {},
                 # what can be told of each exercise from what was kept of it
                 "progress": {},
             }
@@ -818,15 +772,17 @@ class UserStore:
             started,
             finished,
             guidance,
+            options,
         ) in self._db.execute(
             "SELECT session_id, exercise, instances, state IS NOT NULL,"
-            " finished_at IS NOT NULL, guidance FROM session_exercises"
+            " finished_at IS NOT NULL, guidance, options FROM session_exercises"
             " ORDER BY position"
         ):
             if session_id not in sessions:
                 continue
             sessions[session_id]["exercises"][exercise] = instances
             sessions[session_id]["guidance"][exercise] = guidance
+            sessions[session_id]["options"][exercise] = json.loads(options)
             sessions[session_id]["progress"][exercise] = {
                 "status": "finished"
                 if finished
@@ -944,6 +900,48 @@ class UserStore:
                 rows,
             )
 
+    def add_written(
+        self, session_id: str, exercise: str, written: dict[str, list[str]]
+    ) -> None:
+        """Keep what an exercise reported was written in a step, as
+        `{"user": [...], "assistant": [...]}`: what the learner wrote, and
+        what the models did. Raises ValueError, and keeps none of it, if it
+        is not that."""
+        rows = []
+        now = self._now()
+        for role, texts in written.items():
+            if role not in ROLES:
+                raise ValueError(f"what was written is by one of {', '.join(ROLES)}")
+            if not isinstance(texts, list) or not all(
+                isinstance(text, str) for text in texts
+            ):
+                raise ValueError("what was written is a list of texts")
+            rows += [
+                (session_id, exercise, role, text, now)
+                for text in texts
+                if text.strip()
+            ]
+        with self._lock, self._db:
+            self._db.executemany(
+                "INSERT INTO written (session_id, exercise, role, content, written_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                rows,
+            )
+
+    def written(self, session_id: str, exercise: str) -> dict[str, list[str]]:
+        """What was written in an exercise of a session, by the learner as
+        "user" and by the models as "assistant", in the order it was."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT role, content FROM written"
+                " WHERE session_id = ? AND exercise = ? ORDER BY id",
+                (session_id, exercise),
+            ).fetchall()
+        found: dict[str, list[str]] = {role: [] for role in ROLES}
+        for role, content in rows:
+            found[role].append(content)
+        return found
+
     def logs(self, session_id: str) -> list[dict[str, str]]:
         """The logs of a session, in the order they were kept."""
         with self._lock:
@@ -1011,6 +1009,37 @@ class UserStore:
         topic = self.topic(topic_id)
         assert topic
         return topic
+
+    def add_starter_topics(self, topics: list[tuple[str, str]]) -> int:
+        """Keep `topics`, each a title and what it is about, without icons,
+        the first of them listed first, unless they were added before: they
+        are added once, so that one deleted stays deleted. A topic of the
+        same title as one there is is left out. Returns how many were
+        added."""
+        with self._lock, self._db:
+            if self._db.execute(
+                "SELECT 1 FROM kept WHERE name = 'starter_topics'"
+            ).fetchone():
+                return 0
+            had = {
+                title.casefold()
+                for (title,) in self._db.execute("SELECT title FROM topics")
+            }
+            now = self._now()
+            rows = [
+                (f"starter-{number}", title, description, now - number)
+                for number, (title, description) in enumerate(topics)
+                if title.casefold() not in had
+            ]
+            self._db.executemany(
+                "INSERT OR IGNORE INTO topics (id, title, description, created_at)"
+                " VALUES (?, ?, ?, ?)",
+                rows,
+            )
+            self._db.execute(
+                "INSERT INTO kept (name, body) VALUES ('starter_topics', 'true')"
+            )
+        return len(rows)
 
     def delete_topic(self, topic_id: str) -> None:
         """Remove a topic and its icon. The sessions about it keep its id."""

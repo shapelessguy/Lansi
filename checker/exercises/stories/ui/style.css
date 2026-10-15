@@ -1,0 +1,49 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+   License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+.story {
+    font-size: 1.1em;
+    line-height: 1.65;
+}
+
+.story-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.story h2 {
+    margin: 0 0 8px;
+    font-size: 1.2em;
+}
+
+.story p {
+    margin: 0 0 10px;
+}
+
+.listen {
+    flex: none;
+    font-size: 0.87em;
+}
+
+h3 {
+    margin: 16px 0 0;
+    font-size: 1em;
+}
+
+textarea {
+    width: 100%;
+    min-height: 2.8em;
+    margin: 8px 0 0;
+    resize: vertical;
+}
+
+details {
+    margin-top: 16px;
+}
+
+summary {
+    color: var(--muted);
+    cursor: pointer;
+}

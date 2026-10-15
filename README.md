@@ -4,12 +4,13 @@ A language-learning chat built on an Anki collection.
 
 - `deck-status/` keeps a synced copy of the collection and serves its contents
   as JSON on http://127.0.0.1:8090. Settings are read from `deck-status/.env`.
-- `chat-ui/` is the GUI, on http://localhost:5173: a chat and a text studio
-  that use the words you know, through OpenRouter.
+- `chat-ui/` is the GUI, on http://localhost:5173: a chat, a reader of books
+  and practice with lessons and exercises, which use the words you know,
+  through OpenRouter.
 - `checker/` splits what is typed in the chat into sentences, spell-checks
   them and has each finished sentence profiled, on http://127.0.0.1:8092. It
-  is also where everything a user has is kept: the chats, the texts with
-  their audio, the settings and the vocabulary.
+  is also where everything a user has is kept: the chats, the books, the
+  sessions of practice, the settings and the vocabulary.
 
 `rslib/`, `proto/` and `ftl/` are Anki's Rust core, which `deck-status` is
 built on. They come from [Anki](https://github.com/ankitects/anki) and are

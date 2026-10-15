@@ -8,6 +8,7 @@ import {
     choosingOf,
     clampInstances,
     DEFAULT_INSTANCES,
+    defaultOptions,
     exerciseKit,
     interfaceAddress,
     lessonsRead,
@@ -88,6 +89,7 @@ describe("resuming a session", () => {
             words: null,
             mix_topics: false,
             exercises: Object.fromEntries(Object.keys(statuses).map((id) => [id, 5])),
+            options: {},
             progress: Object.fromEntries(
                 Object.entries(statuses).map(([id, status]) => {
                     const done = status === "pending" ? 0 : 1;
@@ -176,6 +178,35 @@ describe("exerciseKit", () => {
 
         expect(finished).toBe(1);
     });
+
+    it("has a text read aloud with its number, and nothing read that is not text", () => {
+        const read: [string, number][] = [];
+        const { kit } = exerciseKit(async () => null, () => undefined, (text, number) => read.push([text, number]));
+
+        kit.readAloud("Anna steht auf.", 2);
+        kit.readAloud("Ben kommt mit.");
+        kit.readAloud("  ");
+        kit.readAloud("Wer?", -1);
+
+        expect(read).toEqual([["Anna steht auf.", 2], ["Ben kommt mit.", 0], ["Wer?", 0]]);
+    });
+});
+
+describe("defaultOptions", () => {
+    it("takes the first choice of each option", () => {
+        const stories = {
+            id: "stories",
+            title: "Stories",
+            description: "",
+            theory: false,
+            options: {
+                then: { label: "Then", choices: { questions: "Answer questions", retell: "Retell it" } },
+            },
+        };
+
+        expect(defaultOptions(stories)).toEqual({ then: "questions" });
+        expect(defaultOptions({ ...stories, options: {} })).toEqual({});
+    });
 });
 
 describe("lessonsToReview", () => {
@@ -192,6 +223,7 @@ describe("lessonsToReview", () => {
             words: null,
             mix_topics: false,
             exercises: {},
+            options: {},
             progress: {},
         };
     }

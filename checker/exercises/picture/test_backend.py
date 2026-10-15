@@ -258,6 +258,28 @@ def test_the_labels_are_judged_on_the_marked_picture_and_each_point_is_logged() 
     assert again.show["points"][1]["label"] == "der Preis"
 
 
+def test_once_the_labels_are_judged_they_and_what_was_not_right_are_written() -> None:
+    model, state = started("a table", "a silver trophy", "a plant")
+    state = act(CONTEXT, state, {"point": 0, "label": "Der Tisch"}, model).state
+    state = act(CONTEXT, state, {"point": 1, "label": "der Preis"}, model).state
+    model.replies.append(
+        {
+            "labels": [
+                verdict(1, "right", "der Tisch"),
+                verdict(2, "wrong", "der Pokal"),
+                verdict(3, "partial", "die Pflanze"),
+            ]
+        }
+    )
+
+    checked = act(CONTEXT, state, {"check": True}, model)
+
+    assert checked.written == {
+        "user": ["Der Tisch", "der Preis"],
+        "assistant": ["der Pokal", "die Pflanze"],
+    }
+
+
 def test_a_judge_that_leaves_a_label_out_is_a_failure() -> None:
     with pytest.raises(ModelError, match="every label"):
         read_judgements({"labels": [verdict(1, "right")]}, 2)

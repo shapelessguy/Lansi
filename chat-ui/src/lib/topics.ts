@@ -108,3 +108,9 @@ export function embedVocabulary(
 ): Promise<{ missing: number; task: BackgroundTask | null }> {
     return call("/embeddings", { method: "POST", body: JSON.stringify({ language, model }) }, apiKey);
 }
+
+/** Whether a topic is one of those `query` looks for: its title or what it is about has each word of it. */
+export function matchesTopic(topic: Pick<Topic, "title" | "description">, query: string): boolean {
+    const text = `${topic.title} ${topic.description}`.toLocaleLowerCase();
+    return query.toLocaleLowerCase().split(/\s+/).every((word) => text.includes(word));
+}

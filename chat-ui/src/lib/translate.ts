@@ -33,8 +33,6 @@ export interface Asking {
     into: string;
 }
 
-/** Where text can be selected to have it translated: the chat, a text, a book and the chat about a selection. */
-export const SELECTABLE = ".messages, .studio-text, .reader-columns, .subchat-log";
 /** What starts on a line of its own, so that text on either side of its edge is not of one sentence. */
 const BLOCKS = "p, li, div, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th, article, section";
 /** How much of the text before and after a selection is sent with it, in characters. The server drops what it does not need. */
@@ -43,7 +41,7 @@ export const AFTER_LENGTH = 1000;
 /** What the requests about selections are counted under. */
 export const USAGE_ID = "translate";
 
-function blockOf(node: Node, root: Element): Element {
+function blockOf(node: Node, root: Node): Node {
     const block = node.parentElement?.closest(BLOCKS);
     return block && root.contains(block) ? block : root;
 }
@@ -57,10 +55,11 @@ function lastWithin(node: Node): Node {
 }
 
 /**
- * The text of `range` with the text around it in `root`, as far as is sent
- * with it. Where one paragraph ends and the next starts there is a new line.
+ * The text of `range` with the text around it in `root`, an element or a
+ * shadow root, as far as is sent with it. Where one paragraph ends and the
+ * next starts there is a new line.
  */
-export function textAround(range: Range, root: Element, selection = range.toString()): Picked {
+export function textAround(range: Range, root: Node, selection = range.toString()): Picked {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const { startContainer, startOffset, endContainer, endOffset } = range;
 

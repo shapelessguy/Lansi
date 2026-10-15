@@ -162,6 +162,31 @@ def test_a_sentence_the_caret_is_on_is_still_spell_checked(
     assert [issue.word for issue in first.spelling] == ["Hundd"]
 
 
+def test_spell_checks_the_spelling_of_each_sentence_without_profiling_it(
+    checker: LiveChecker, profiler: FakeProfiler
+) -> None:
+    sentences = checker.spell("Ich habe einen Hundd. Er ist gut.")
+
+    assert [[issue.word for issue in s.spelling] for s in sentences] == [["Hundd"], []]
+    assert not any(sentence.processed or sentence.profiling for sentence in sentences)
+
+
+def test_spelling_another_text_leaves_the_questions_out_about_the_checked_one(
+    profiler: FakeProfiler,
+) -> None:
+    jobs: list[Callable[[], None]] = []
+    checker = LiveChecker(
+        Speller(language=None, words=WORDS), profiler, background=jobs.append
+    )
+    ask(checker, "Er ist gut.")
+
+    checker.spell("Ein anderer Text.")
+    for job in jobs:
+        job()
+
+    assert [sentence.processed for sentence in ask(checker, "Er ist gut.")] == [True]
+
+
 # when a sentence is profiled
 
 

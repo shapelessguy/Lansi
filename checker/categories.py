@@ -477,6 +477,15 @@ def writes_nouns_with_capitals(language: str) -> bool:
     return language.strip().lower() == "german"
 
 
+def dictionary_form(lemma: str, category: str, language: str) -> str:
+    """`lemma` written as a dictionary of `language` has it, whatever the
+    model that gave it wrote: a noun begins with a capital letter in a
+    language that writes nouns so."""
+    if category == "noun" and writes_nouns_with_capitals(language):
+        return lemma[:1].upper() + lemma[1:]
+    return lemma
+
+
 # What a word can be found to be that is not stored, as the decision model is
 # told to recognise it.
 NOT_STORED = {

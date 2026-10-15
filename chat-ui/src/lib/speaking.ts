@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { checkerFetch } from "./session";
+import { LANGUAGE_PLACEHOLDER, LEVEL_PLACEHOLDER } from "./settings";
 import { pcmToWav } from "./speech";
 import type { BackgroundTask } from "./tasks";
 import { describeError } from "./translate";
@@ -42,6 +43,14 @@ export interface Voice {
     voice: string;
     /** How to read, such as "slowly and clearly". Not spoken. */
     instructions: string;
+}
+
+/**
+ * The direction a speech model is given, as the learner wrote it, with the
+ * language being learned and their level in it filled in.
+ */
+export function speechInstructions(direction: string, language: string, level: string): string {
+    return direction.replaceAll(LANGUAGE_PLACEHOLDER, language).replaceAll(LEVEL_PLACEHOLDER, level).trim();
 }
 
 /** How many sentences from the one that is listened to have their audio asked for ahead of time. */
@@ -122,6 +131,13 @@ export interface SpeechSource {
     bookId: string | null;
     /** What on the page the player is shown beside, as a selector, if it is anything: the button of a reply in the chat. */
     beside: string | null;
+    /** The slot in the bar above what is read that the player is shown in, as a selector, if it has one. */
+    dock: string | null;
+}
+
+/** The slot the player is shown in, in the bar of the book reader or of practice. */
+export function dockOf(place: "book" | "practice"): string {
+    return `[data-speech-dock="${place}"]`;
 }
 
 /** What was selected of a book, as something to read aloud. */
@@ -136,6 +152,22 @@ export function bookSource(bookId: string, selection: BookSelection): SpeechSour
         },
         bookId,
         beside: null,
+        dock: dockOf("book"),
+    };
+}
+
+/**
+ * A text of an exercise of a session, which the exercise numbers `number`,
+ * as something to read aloud. Its audio is kept under the session and the
+ * exercise together.
+ */
+export function exerciseSource(sessionId: string, exercise: string, number: number, text: string): SpeechSource {
+    return {
+        base: `/sessions/${sessionId}-${exercise}`,
+        wanted: { message: number, text },
+        bookId: null,
+        beside: null,
+        dock: dockOf("practice"),
     };
 }
 
@@ -146,6 +178,7 @@ export function messageSource(chatId: string, place: number, text: string): Spee
         wanted: { message: place, text },
         bookId: null,
         beside: `[data-speak="${speakMark(chatId, place)}"]`,
+        dock: null,
     };
 }
 

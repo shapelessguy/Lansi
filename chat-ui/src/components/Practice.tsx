@@ -9,6 +9,7 @@ import {
     choosingOf,
     clampInstances,
     DEFAULT_INSTANCES,
+    defaultOptions,
     endSession,
     type ExerciseInfo,
     fetchExercises,
@@ -55,6 +56,8 @@ interface Props {
     onUsage: (used: ProfileUsage[]) => void;
     onTask: (task: BackgroundTask) => void;
     onOpenSettings: () => void;
+    /** Has a text of an exercise of a session read aloud, which the exercise numbers `number`. */
+    onReadAloud: (sessionId: string, exercise: string, number: number, text: string) => void;
 }
 
 type Loaded<T> = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; items: T[] };
@@ -65,7 +68,18 @@ type Loaded<T> = { status: "loading" } | { status: "error"; message: string } | 
  * another in a session. What is answered is logged by the server as it goes.
  */
 export function Practice(
-    { active, settings, learner, wordsOfSet, topicsRevision, embedding, onUsage, onTask, onOpenSettings }: Props,
+    {
+        active,
+        settings,
+        learner,
+        wordsOfSet,
+        topicsRevision,
+        embedding,
+        onUsage,
+        onTask,
+        onOpenSettings,
+        onReadAloud,
+    }: Props,
 ) {
     const language = settings.language;
     const [lessons, setLessons] = useState<Loaded<Lesson>>({ status: "loading" });
@@ -77,6 +91,8 @@ export function Practice(
     const [lessonId, setLessonId] = useState<string | null>(null);
     // the exercises chosen, with how many instances of each, in the order they were chosen
     const [chosen, setChosen] = useState<Record<string, number>>({});
+    // the options chosen for the exercises, by exercise, kept while an exercise is left out
+    const [chosenOptions, setChosenOptions] = useState<Record<string, Record<string, string>>>({});
     const [session, setSession] = useState<PracticeSession | null>(null);
     // which of the exercises of the session is being done
     const [at, setAt] = useState(0);
@@ -254,6 +270,7 @@ export function Practice(
                 chosenTopics,
                 choosingOf(settings, vocabulary, setWords),
                 learner.apiKey,
+                chosenOptions,
             )
         ).then(
             ({ usage, ...started }) => {
@@ -327,6 +344,8 @@ export function Practice(
                                 } ${session.words.lemmas.length} of your words`}
                         </span>
                     </span>
+                    {/* where the player of a story read aloud goes */}
+                    <span className="speech-dock" data-speech-dock="practice" />
                     <span className="practice-actions">
                         {at + 1 < order.length && (
                             <button
@@ -356,6 +375,7 @@ export function Practice(
                         learner={learner}
                         onUsage={onUsage}
                         onFinish={() => next(session)}
+                        onReadAloud={(text, number) => onReadAloud(session.id, exercise, number, text)}
                     />
                 </div>
             </div>
@@ -518,6 +538,29 @@ export function Practice(
                                                 times
                                             </label>
                                         )}
+                                        {chosen[exercise.id] !== undefined
+                                            && Object.entries(exercise.options ?? {}).map(([name, option]) => (
+                                                <label key={name} className="practice-instances">
+                                                    {option.label}
+                                                    <select
+                                                        value={chosenOptions[exercise.id]?.[name]
+                                                            ?? defaultOptions(exercise)[name]}
+                                                        onChange={(event) =>
+                                                            setChosenOptions((current) => ({
+                                                                ...current,
+                                                                [exercise.id]: {
+                                                                    ...defaultOptions(exercise),
+                                                                    ...current[exercise.id],
+                                                                    [name]: event.target.value,
+                                                                },
+                                                            }))}
+                                                    >
+                                                        {Object.entries(option.choices).map(([value, label]) => (
+                                                            <option key={value} value={value}>{label}</option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                            ))}
                                     </li>
                                 ))}
                         </ul>

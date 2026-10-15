@@ -30,7 +30,7 @@ LESSON = "trennbare-verben"
 # told to, written with the kit as every backend is.
 ECHO = """\
 import os
-from kit import Step, log, serve
+from kit import Step, log, serve, written
 
 def start(context, model):
     return Step(state={"done": 0}, show={"instances": context["instances"]})
@@ -58,6 +58,9 @@ def act(context, state, message, model):
         time.sleep(30)
     if message == "print":
         print("not a reply")
+    if message == "write":
+        said = written(["Ich stehe auf."], ["Wann stehst du auf?"])
+        return Step(state=state, show=None, written=said)
     state["done"] += 1
     return Step(state=state, show=state["done"], logs=[log("right", message)])
 
@@ -311,6 +314,82 @@ def test_an_exercise_is_told_the_lesson_with_its_points(
     )
     assert context["lesson"]["id"] == LESSON
     assert context["lesson"]["points"][0]["statement"]
+
+
+def test_what_the_learner_and_the_models_wrote_in_a_step_is_kept(
+    practice: Practice,
+) -> None:
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+
+    practice.step(session["id"], "echo", "act", "write", LEARNER, answering())
+
+    assert practice._store.written(session["id"], "echo") == {
+        "user": ["Ich stehe auf."],
+        "assistant": ["Wann stehst du auf?"],
+    }
+
+
+def with_options(directory: Path) -> None:
+    """Gives the exercise `echo` an option of what to do after a story."""
+    (directory / "echo" / "manifest.json").write_text(
+        '{"title": "Echo", "options": {"then": {"label": "Then", "choices":'
+        ' {"questions": "Answer questions", "retell": "Retell it"}},'
+        ' "broken": {"choices": []}}}',
+        encoding="utf-8",
+    )
+
+
+def test_the_options_of_an_exercise_are_listed_without_those_that_are_not_options(
+    directory: Path,
+) -> None:
+    with_options(directory)
+
+    (echo,) = exercises(directory)
+
+    assert echo.options == {
+        "then": {
+            "label": "Then",
+            "choices": {"questions": "Answer questions", "retell": "Retell it"},
+        }
+    }
+
+
+def test_an_exercise_is_told_the_options_it_was_chosen_with_or_else_the_first(
+    practice: Practice, directory: Path
+) -> None:
+    with_options(directory)
+    told: list[dict[str, Any]] = []
+
+    class Recording(Runner):
+        def run(self, exercise: str, request: dict[str, Any], *rest: Any) -> Any:
+            told.append(request["context"])
+            return {"state": {}, "show": None, "logs": []}, []
+
+    practice._runner = Recording(directory)
+    chosen, _ = practice.start_session(
+        "German", LESSON, [], {"echo": 1}, options={"echo": {"then": "retell"}}
+    )
+    practice.step(chosen["id"], "echo", "start", None, LEARNER, answering())
+    left, _ = practice.start_session("German", LESSON, [], {"echo": 1})
+    practice.step(left["id"], "echo", "start", None, LEARNER, answering())
+
+    assert [context["options"] for context in told] == [
+        {"then": "retell"},
+        {"then": "questions"},
+    ]
+
+
+def test_a_session_with_an_option_that_is_no_choice_is_not_started(
+    practice: Practice, directory: Path
+) -> None:
+    with_options(directory)
+
+    with pytest.raises(ValueError, match="not a choice"):
+        practice.start_session(
+            "German", LESSON, [], {"echo": 1}, options={"echo": {"then": "sing"}}
+        )
+    assert practice._store.sessions() == []
 
 
 def test_an_exercise_that_is_opened_again_is_shown_what_it_showed(

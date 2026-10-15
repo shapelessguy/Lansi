@@ -128,6 +128,29 @@ def test_a_rejected_word_is_remembered_with_the_reason_for_its_category_only(
     assert vocabulary.rejection("noun", "Hund") is None
 
 
+def test_a_discarded_word_is_remembered_with_the_reason_however_it_is_capitalised(
+    vocabulary: Vocabulary,
+) -> None:
+    vocabulary.discard("Hundd", "misspelt")
+
+    assert vocabulary.discarded("hundd") == "misspelt"
+    assert vocabulary.discarded("Hund") is None
+    assert vocabulary.rejection("noun", "Hundd") is None
+
+
+def test_a_discarded_word_is_not_taken_for_no_word_once_it_is_spelt_as_a_stored_one(
+    vocabulary: Vocabulary,
+) -> None:
+    vocabulary.discard("Essen", "for the test")
+    vocabulary.discard("ging", "for the test")
+
+    vocabulary.save("verb", "essen", {}, [])
+    vocabulary.save("verb", "gehen", {}, [Form("ging")])
+
+    assert vocabulary.discarded("Essen") is None
+    assert vocabulary.discarded("ging") is None
+
+
 def test_the_words_are_still_there_when_the_file_is_opened_again(
     tmp_path: Path,
 ) -> None:
@@ -299,3 +322,22 @@ def test_a_set_without_a_name_or_under_another_id_is_not_kept(
 ) -> None:
     with pytest.raises(ValueError):
         vocabulary.save_set("set-1", body)
+
+
+def test_an_entry_respelt_as_another_is_merged_into_it_with_its_uses_and_sets(
+    vocabulary: Vocabulary,
+) -> None:
+    small, _ = vocabulary.save("noun", "verb", {}, [Form("verbs")])
+    capital, _ = vocabulary.save("noun", "Verb", {}, [])
+    hand, _ = vocabulary.save("noun", "hand", {}, [])
+    vocabulary.record_uses("message", "chat", 0, "user", 1.0, [(small.id, "verbs")])
+    vocabulary.save_set("s", {"id": "s", "name": "S", "added": [small.id, capital.id]})
+
+    vocabulary.respell("noun", str.capitalize)
+
+    assert vocabulary.get(small.id) is None
+    assert [listed.lemma for listed in vocabulary.listing()] == ["Hand", "Verb"]
+    assert vocabulary.get(hand.id) == vocabulary.entry("noun", "Hand")
+    assert vocabulary.find("noun", "verbs") == vocabulary.get(capital.id)
+    assert vocabulary.uses_of(capital.id) == [("verbs", "user", 1.0)]
+    assert vocabulary.sets()[0]["added"] == [capital.id]

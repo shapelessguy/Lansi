@@ -222,24 +222,23 @@ def test_a_message_changed_while_it_was_processed_is_processed_again(
     assert processed(store) == [True]
 
 
-def test_a_text_is_processed_as_something_the_model_wrote(
+def test_what_an_exercise_wrote_is_processed_once_it_is_over_by_who_wrote_it(
     processor: Processor, store: UserStore, vocabularies: Vocabularies, clock: Clock
 ) -> None:
-    store.save_text(
-        "der-hund",
-        {
-            "id": "der-hund",
-            "text": "# Der Hund\n\nDer Hund geht.",
-            "language": "German",
-        },
+    store.start_session("s1", "German", "lesson", [], {"cloze": 3})
+    store.add_written(
+        "s1", "cloze", {"assistant": ["Der Hund geht."], "user": ["Hunde."]}
     )
     clock.now += 6
 
-    processor.look()
+    while_running = processor.look()
+    store.finish_exercise("s1", "cloze", None)
+    once_over = processor.look()
 
     listed = {word.lemma: word for word in vocabularies.of("German").listing()}
-    assert store.texts()[0]["processed"] is True
-    assert (listed["Hund"].used, listed["Hund"].seen) == (0, 2)
+    assert (while_running, once_over) == (0, 2)
+    assert (listed["Hund"].used, listed["Hund"].seen) == (1, 1)
+    assert (listed["gehen"].used, listed["gehen"].seen) == (0, 1)
 
 
 def test_a_message_goes_into_the_vocabulary_of_the_language_of_its_chat(
