@@ -19,7 +19,9 @@ export interface BackgroundTask {
     id: string;
     /**
      * What kind of thing is done. "words" is taking the words of a selection
-     * into the vocabulary, and "speech" making the audio of sentences of a book.
+     * into the vocabulary, "speech" making the audio of sentences of a book,
+     * "icon" making the icon of a topic, and "embeddings" embedding the words
+     * of the vocabulary.
      */
     kind: string;
     /** What it is done to, in a few words. */
@@ -70,10 +72,21 @@ export function describeTaken(words: TakenWord[]): string {
 export function describeTask(task: BackgroundTask): string {
     const speech = task.kind === "speech";
     if (task.state === "running") {
-        return `${speech ? "Making the audio" : "Looking into the words"}: ${task.done} of ${task.total}`;
+        const doing = {
+            speech: "Making the audio",
+            icon: "Making the icon",
+            embeddings: "Embedding the words",
+        }[task.kind] ?? "Looking into the words";
+        return `${doing}: ${task.done} of ${task.total}`;
     }
     if (task.state === "failed") {
         return `Failed: ${task.error}`;
+    }
+    if (task.kind === "icon") {
+        return "The icon is made.";
+    }
+    if (task.kind === "embeddings") {
+        return "The words are embedded.";
     }
     return speech ? describeRead(task.result) : describeTaken(task.result);
 }
@@ -91,11 +104,15 @@ export function describeRead(sentences: TakenWord[]): string {
 
 /** What a task of each kind is called. */
 export function taskName(task: BackgroundTask): string {
-    return task.kind === "speech" ? "Read aloud" : "Add to vocabulary";
+    return { speech: "Read aloud", icon: "Topic icon", embeddings: "Embed vocabulary" }[task.kind]
+        ?? "Add to vocabulary";
 }
 
 /** The words of a task that are worth a mention: those that are new, and those that could not be taken. */
 export function mentioned(task: BackgroundTask): TakenWord[] {
+    if (task.kind === "icon" || task.kind === "embeddings") {
+        return [];
+    }
     const worth = task.kind === "speech" ? ["failed"] : ["added", "form", "failed"];
     return task.result.filter((word) => worth.includes(word.status));
 }

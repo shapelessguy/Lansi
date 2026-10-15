@@ -1,79 +1,57 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
-import { addUsage, formatCost, totalUsage, type UsageEntry, usageOnDay } from "./usage";
+import { formatCost, legacyUsage, profileUsage, startOfDay } from "./usage";
 
-function entry(fields: Partial<UsageEntry>): UsageEntry {
-    return { at: 0, chatId: "chat", model: "test/model", promptTokens: 0, completionTokens: 0, cost: 0, ...fields };
+afterEach(() => vi.unstubAllGlobals());
+
+/** Has localStorage hold `stored` under the key the usage was kept in. */
+function keptInTheBrowser(stored: string | null) {
+    vi.stubGlobal("localStorage", { getItem: (key: string) => (key === "chat-ui.usage" ? stored : null) });
 }
 
-test("totals add up tokens and cost across requests", () => {
-    const totals = totalUsage([
-        entry({ promptTokens: 6000, completionTokens: 120, cost: 0.0031 }),
-        entry({ promptTokens: 6200, completionTokens: 80, cost: 0.0029 }),
-    ]);
+test("what the checker server said a request used is counted under its category", () => {
+    const used = { id: "gen-1", model: "some/model", input_tokens: 40, output_tokens: 3, cost: 0.001 };
 
-    expect(totals).toEqual({
-        requests: 2,
-        promptTokens: 12200,
-        completionTokens: 200,
-        cost: 0.006,
-        costIncomplete: false,
+    expect(profileUsage(used, 1000, "vocabulary")).toEqual({
+        id: "gen-1",
+        at: 1000,
+        category: "vocabulary",
+        chatId: "vocabulary",
+        model: "some/model",
+        promptTokens: 40,
+        completionTokens: 3,
+        cost: 0.001,
     });
+    expect(profileUsage(used, 1000, "checking", "chat-1").chatId).toBe("chat-1");
 });
 
-test("totals of no requests are zero", () => {
-    expect(totalUsage([])).toEqual({
-        requests: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        cost: 0,
-        costIncomplete: false,
-    });
+test("a day starts at its local midnight", () => {
+    const afternoon = new Date(2026, 9, 15, 17, 30).getTime();
+
+    expect(startOfDay(afternoon)).toBe(new Date(2026, 9, 15).getTime());
 });
 
-test("a request without a reported cost marks the total as incomplete", () => {
-    const totals = totalUsage([entry({ cost: 0.5 }), entry({ cost: null })]);
+test("the usage kept in the browser before is given the category its chat id tells", () => {
+    const entry = { at: 0, model: "test/model", promptTokens: 1, completionTokens: 1, cost: 0 };
+    keptInTheBrowser(JSON.stringify([
+        { ...entry, chatId: "4b6f0c9e-1111-4222-8333-944445555666" },
+        { ...entry, chatId: "text:die-reise" },
+        { ...entry, chatId: "translate" },
+        { ...entry, chatId: "practice" },
+        "not an entry",
+    ]));
 
-    expect(totals.cost).toBe(0.5);
-    expect(totals.costIncomplete).toBe(true);
+    expect(legacyUsage().map((left) => left.category)).toEqual(["chat", "text", "translation", "practice"]);
 });
 
-test("a day's usage is what was used between its local midnights", () => {
-    const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute).getTime();
-    const lateYesterday = entry({ at: at(11, 23, 59) });
-    const earlyToday = entry({ at: at(12, 0, 0) });
-    const lateToday = entry({ at: at(12, 23, 59) });
-    const tomorrow = entry({ at: at(13, 0, 0) });
-
-    const today = usageOnDay([lateYesterday, earlyToday, lateToday, tomorrow], at(12, 17, 30));
-
-    expect(today).toEqual([earlyToday, lateToday]);
-});
-
-test("adding usage keeps earlier entries and appends the new one", () => {
-    const first = entry({ at: 1 });
-    const second = entry({ at: 2 });
-
-    expect(addUsage([first], second)).toEqual([first, second]);
-});
-
-test("a request reported a second time under the same id is counted once", () => {
-    const profile = entry({ id: "gen-dec-1", cost: 0.00001 });
-    const counted = addUsage([], profile);
-
-    const again = addUsage(counted, { ...profile, at: 99 });
-
-    expect(again).toBe(counted);
-    expect(addUsage(counted, entry({ id: "gen-dec-2" }))).toHaveLength(2);
-});
-
-test("requests without an id are always counted", () => {
-    const reply = entry({ cost: 0.001 });
-
-    expect(addUsage(addUsage([], reply), reply)).toHaveLength(2);
+test("there is no usage left from before when the browser kept none, or something else", () => {
+    keptInTheBrowser(null);
+    expect(legacyUsage()).toEqual([]);
+    keptInTheBrowser("{broken");
+    expect(legacyUsage()).toEqual([]);
 });
 
 test("costs show more digits the smaller they are", () => {

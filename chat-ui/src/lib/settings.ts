@@ -54,6 +54,18 @@ export interface Settings {
     accent: keyof typeof ACCENTS;
     /** How large the app is written. */
     textSize: keyof typeof TEXT_SIZES;
+    /** The model that makes the icon of a topic, and the pictures of exercises. */
+    imageModel: string;
+    /** The model that looks at the pictures of exercises, or blank for the chat model. */
+    visionModel: string;
+    /** The model that embeds the words of the vocabulary and the topics, to find the words of a topic. */
+    embeddingModel: string;
+    /** Whether the exercises bring all the topics chosen together, rather than one of them drawn for the session. */
+    exerciseMixTopics: boolean;
+    /** The words the exercises are given, for each language: "none", "all" of the vocabulary, or a set by its id. */
+    exerciseVocabulary: Record<string, string>;
+    /** Whether the words given are those nearest the topics, rather than those used last. */
+    exerciseTopicWords: boolean;
 }
 
 export const THEMES = { system: "As the system", light: "Light", dark: "Dark" } as const;
@@ -182,7 +194,18 @@ export function defaultSettings(): Settings {
         theme: "system",
         accent: "blue",
         textSize: "normal",
+        imageModel: "google/gemini-3.1-flash-lite-image",
+        visionModel: "",
+        embeddingModel: "baai/bge-m3",
+        exerciseMixTopics: false,
+        exerciseVocabulary: {},
+        exerciseTopicWords: true,
     };
+}
+
+/** What the exercises are given of the vocabulary of `language`: "none", "all", or the id of a set. */
+export function exerciseVocabularyOf(settings: Settings, language: string): string {
+    return settings.exerciseVocabulary[language] ?? "all";
 }
 
 /** Fills in anything missing or unusable in stored settings with the defaults. */
@@ -200,7 +223,15 @@ export function normalizeSettings(stored: unknown): Settings {
         : contexts[0].id;
     // settings saved before a field existed, or left blank where a value is needed, get the default
     const text = (
-        key: "model" | "textPrompt" | "speechModel" | "speechVoice" | "profileModel" | "translateInto",
+        key:
+            | "model"
+            | "textPrompt"
+            | "speechModel"
+            | "speechVoice"
+            | "profileModel"
+            | "translateInto"
+            | "imageModel"
+            | "embeddingModel",
     ) => typeof candidate[key] === "string" && candidate[key].trim() ? candidate[key] : defaults[key];
     return {
         apiKey: typeof candidate.apiKey === "string" ? candidate.apiKey : defaults.apiKey,
@@ -235,6 +266,21 @@ export function normalizeSettings(stored: unknown): Settings {
         theme: Object.hasOwn(THEMES, candidate.theme ?? "") ? candidate.theme! : defaults.theme,
         accent: Object.hasOwn(ACCENTS, candidate.accent ?? "") ? candidate.accent! : defaults.accent,
         textSize: Object.hasOwn(TEXT_SIZES, candidate.textSize ?? "") ? candidate.textSize! : defaults.textSize,
+        imageModel: text("imageModel"),
+        // blank on purpose, for the chat model
+        visionModel: typeof candidate.visionModel === "string" ? candidate.visionModel.trim() : defaults.visionModel,
+        embeddingModel: text("embeddingModel"),
+        exerciseMixTopics: typeof candidate.exerciseMixTopics === "boolean"
+            ? candidate.exerciseMixTopics
+            : defaults.exerciseMixTopics,
+        exerciseVocabulary: typeof candidate.exerciseVocabulary === "object" && candidate.exerciseVocabulary !== null
+            ? Object.fromEntries(
+                Object.entries(candidate.exerciseVocabulary).filter(([, value]) => typeof value === "string"),
+            )
+            : defaults.exerciseVocabulary,
+        exerciseTopicWords: typeof candidate.exerciseTopicWords === "boolean"
+            ? candidate.exerciseTopicWords
+            : defaults.exerciseTopicWords,
     };
 }
 

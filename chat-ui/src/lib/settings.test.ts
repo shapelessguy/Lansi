@@ -4,7 +4,7 @@
 import { expect, test } from "vitest";
 
 import type { WordLists } from "./sets";
-import { defaultSettings, expandPrompt, normalizeSettings, withoutKey } from "./settings";
+import { defaultSettings, exerciseVocabularyOf, expandPrompt, normalizeSettings, withoutKey } from "./settings";
 
 /** The lists of words a prompt can ask for, with these as the ones in use. */
 function lists(active: string[] = [], named: Record<string, string[]> = {}): WordLists {
@@ -109,4 +109,32 @@ test("the app looks as it was set to, and as usual where what is stored is not a
     expect(normalizeSettings(stored)).toMatchObject(stored);
     expect(normalizeSettings(unusable)).toMatchObject({ theme: "system", accent: "blue", textSize: "normal" });
     expect(normalizeSettings({})).toMatchObject({ theme: "system", accent: "blue", textSize: "normal" });
+});
+
+test("the exercise settings are kept, and those that cannot be are the usual ones", () => {
+    const kept = normalizeSettings({
+        exerciseMixTopics: true,
+        exerciseVocabulary: { German: "set-1", Spanish: 3 },
+        exerciseTopicWords: false,
+        imageModel: "some/image",
+        embeddingModel: " ",
+    });
+    const unusable = normalizeSettings({ exerciseMixTopics: "yes", exerciseVocabulary: "all" });
+
+    expect([kept.exerciseMixTopics, kept.exerciseTopicWords]).toEqual([true, false]);
+    expect(kept.exerciseVocabulary).toEqual({ German: "set-1" });
+    expect([kept.imageModel, kept.embeddingModel]).toEqual(["some/image", defaultSettings().embeddingModel]);
+    expect([unusable.exerciseMixTopics, unusable.exerciseVocabulary]).toEqual([false, {}]);
+});
+
+test("the vision model is kept, and left blank for the chat model", () => {
+    expect(normalizeSettings({ visionModel: " some/seeing " }).visionModel).toBe("some/seeing");
+    expect(normalizeSettings({}).visionModel).toBe("");
+});
+
+test("the exercises are given the whole vocabulary of a language unless the settings say otherwise", () => {
+    const settings = { ...defaultSettings(), exerciseVocabulary: { German: "none" } };
+
+    expect(exerciseVocabularyOf(settings, "German")).toBe("none");
+    expect(exerciseVocabularyOf(settings, "Spanish")).toBe("all");
 });

@@ -41,6 +41,7 @@ test("what a request about a selection used is counted under its own heading, on
     expect(usageEntry(used, 1000)).toEqual({
         id: "gen-1",
         at: 1000,
+        category: "translation",
         chatId: "translate",
         model: "some/model",
         promptTokens: 40,

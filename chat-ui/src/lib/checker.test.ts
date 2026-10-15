@@ -150,6 +150,7 @@ test.each(
         ["done", {}],
         ["checking", { profiling: true }],
         ["checked", { processed: true }],
+        ["checking", { processed: true, rating_words: true }],
         ["failed", { profile_error: "no credit left" }],
         // going back onto a sentence that was checked is typing again
         ["typing", { complete: false, processed: true }],

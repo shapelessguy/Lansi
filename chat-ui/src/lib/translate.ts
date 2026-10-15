@@ -5,7 +5,7 @@ import type { ProfileUsage } from "./checker";
 import type { ChatMessage } from "./openrouter";
 import { checkerFetch } from "./session";
 import type { BackgroundTask } from "./tasks";
-import type { UsageEntry } from "./usage";
+import { profileUsage, type UsageEntry } from "./usage";
 
 /** What was selected, with the text around it in what it was selected in. */
 export interface Picked {
@@ -133,15 +133,7 @@ export function anchorFor(
 
 /** What a request to the model used, as the usage is counted. */
 export function usageEntry(used: ProfileUsage, at: number): UsageEntry {
-    return {
-        id: used.id,
-        at,
-        chatId: USAGE_ID,
-        model: used.model,
-        promptTokens: used.input_tokens,
-        completionTokens: used.output_tokens,
-        cost: used.cost,
-    };
+    return profileUsage(used, at, "translation", USAGE_ID);
 }
 
 async function ask<Reply>(path: string, body: object, asking: Asking, signal?: AbortSignal): Promise<Reply> {

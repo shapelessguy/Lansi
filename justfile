@@ -15,7 +15,8 @@ dev:
 deck-status:
     cargo run --target-dir out/rust -p anki-deck-status
 
-# Run the chat GUI on http://localhost:5173. It reads the known words from the
+# Run the chat GUI on port 5173, open to the LAN (http://<this machine>:5173
+# from another one; Windows may ask to let Node through the firewall). It reads the known words from the
 # deck-status server, so start `just deck-status` first.
 chat-ui:
     cd chat-ui && npm install && npm run dev

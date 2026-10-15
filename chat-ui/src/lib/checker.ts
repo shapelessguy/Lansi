@@ -300,8 +300,9 @@ export function markedParts(text: string, issues: SpellingIssue[]): MarkedPart[]
  * How far along a sentence is, which is what it is drawn by:
  * - "typing": the caret is on it
  * - "done": the caret has left it
- * - "checking": it is done, and questions about it are out
- * - "checked": it is done, and every question about it has been answered
+ * - "checking": it is done, and questions about it, or the rating of its words, are out
+ * - "checked": it is done, every question about it has been answered and its
+ *   words, if they are rated, have been
  * - "failed": it is done, and a question about it could not be answered
  */
 export type SentenceState = "typing" | "done" | "checking" | "checked" | "failed";
@@ -310,10 +311,10 @@ export function sentenceState(sentence: Sentence): SentenceState {
     if (!sentence.complete) {
         return "typing";
     }
-    if (sentence.processed) {
+    if (sentence.processed && !sentence.rating_words) {
         return "checked";
     }
-    if (sentence.profiling) {
+    if (sentence.profiling || sentence.rating_words) {
         return "checking";
     }
     return sentence.profile_error ? "failed" : "done";

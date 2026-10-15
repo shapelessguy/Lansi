@@ -12,9 +12,9 @@ import {
     type Reading,
     saveSpeed,
     type SpeechSource,
+    SPEEDS,
     type Spot,
     spotBeside,
-    SPEEDS,
     startReading,
     stepped,
     stopReading,
@@ -268,7 +268,9 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
             ref={shown}
             className={besideIt ? "speech-player beside" : "speech-player"}
             // until it is known where it goes, it is laid out where it is not seen, to be measured
-            style={besideIt ? (spot ? { left: spot.left, top: spot.top } : { left: 0, top: 0, visibility: "hidden" }) : undefined}
+            style={besideIt
+                ? (spot ? { left: spot.left, top: spot.top } : { left: 0, top: 0, visibility: "hidden" })
+                : undefined}
             role="region"
             aria-label="Reading aloud"
         >

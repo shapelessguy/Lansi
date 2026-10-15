@@ -2,16 +2,18 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { useEffect, useState } from "react";
+import { newId } from "../lib/ids";
 
 import { fetchProfileModels } from "../lib/checker";
 import { isAskable, newQuestion, type ProfileQuestion, type QuestionOption } from "../lib/questions";
+import type { WordSet } from "../lib/sets";
 import {
     ACCENTS,
     type ChatContext,
+    exerciseVocabularyOf,
     LANGUAGE_PLACEHOLDER,
     LANGUAGES,
     LEVEL_PLACEHOLDER,
-    LEVELS,
     type Settings,
     TEXT_SIZES,
     THEMES,
@@ -19,14 +21,17 @@ import {
     WORDS_PLACEHOLDER,
 } from "../lib/settings";
 import { fetchSpeechModels, type SpeechModel } from "../lib/speech";
+import { LevelPicker } from "./Level";
 import { SidePanel } from "./SidePanel";
 
-export type SettingsTab = "models" | "content" | "questions" | "look";
+export type SettingsTab = "general" | "models" | "content" | "questions" | "exercises" | "look";
 
 const TABS: { id: SettingsTab; label: string }[] = [
-    { id: "models", label: "Key & models" },
+    { id: "general", label: "General" },
+    { id: "models", label: "Models" },
     { id: "content", label: "Prompts" },
     { id: "questions", label: "Questions" },
+    { id: "exercises", label: "Exercises" },
     { id: "look", label: "Look" },
 ];
 
@@ -34,6 +39,8 @@ interface Props {
     settings: Settings;
     /** Whether the user has Anki words, and so the settings of their import. */
     ankiWords: boolean;
+    /** The sets of words of the language being learned, which the exercises can be given. */
+    sets: WordSet[];
     tab: SettingsTab;
     onTab: (tab: SettingsTab) => void;
     onChange: (settings: Settings) => void;
@@ -45,17 +52,8 @@ interface TabProps {
     onChange: (settings: Settings) => void;
 }
 
-function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: boolean }) {
+function GeneralTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: boolean }) {
     const [showKey, setShowKey] = useState(false);
-    const [speechModels, setSpeechModels] = useState<SpeechModel[]>([]);
-    const [profileModels, setProfileModels] = useState<string[]>([]);
-    const voices = speechModels.find((model) => model.id === settings.speechModel)?.voices ?? [];
-
-    // suggestions only; the fields work without them
-    useEffect(() => {
-        fetchSpeechModels().then(setSpeechModels, () => undefined);
-        fetchProfileModels().then(setProfileModels, () => undefined);
-    }, []);
 
     return (
         <>
@@ -70,18 +68,17 @@ function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: bo
                 </select>
                 <small>Used for spelling, sentence checks, prompts and the vocabulary.</small>
             </label>
-            <label className="field">
+            <div className="field">
                 <span>Your level</span>
-                <select
+                <LevelPicker
+                    label="Your level"
                     value={settings.level}
-                    onChange={(event) => onChange({ ...settings, level: event.target.value })}
-                >
-                    {LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
-                </select>
+                    onChange={(level) => onChange({ ...settings, level })}
+                />
                 <small>
                     Fills <code>{LEVEL_PLACEHOLDER}</code> in your prompts.
                 </small>
-            </label>
+            </div>
             <label className="field">
                 <span>Translate into</span>
                 <Choice
@@ -89,7 +86,7 @@ function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: bo
                     value={settings.translateInto}
                     onChange={(translateInto) => onChange({ ...settings, translateInto })}
                 />
-                <small>The language text you select is translated into.</small>
+                <small>The language text you select is translated into, and exercises explain in.</small>
             </label>
             {ankiWords && (
                 <>
@@ -134,8 +131,28 @@ function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: bo
                 </span>
                 <small>Kept in this browser only, and sent to openrouter.ai with each message.</small>
             </label>
+        </>
+    );
+}
 
-            <h3>Models</h3>
+function ModelsTab({ settings, onChange }: TabProps) {
+    const [speechModels, setSpeechModels] = useState<SpeechModel[]>([]);
+    const [profileModels, setProfileModels] = useState<string[]>([]);
+    const voices = speechModels.find((model) => model.id === settings.speechModel)?.voices ?? [];
+
+    // suggestions only; the fields work without them
+    useEffect(() => {
+        fetchSpeechModels().then(setSpeechModels, () => undefined);
+        fetchProfileModels().then(setProfileModels, () => undefined);
+    }, []);
+
+    return (
+        <>
+            <p className="hint">
+                Every model is an id from{" "}
+                <a href="https://openrouter.ai/models" target="_blank" rel="noreferrer">openrouter.ai/models</a>.
+            </p>
+            <h3>Writing</h3>
             <label className="field">
                 <span>Chat and text model</span>
                 <input
@@ -145,12 +162,7 @@ function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: bo
                     value={settings.model}
                     onChange={(event) => onChange({ ...settings, model: event.target.value.trim() })}
                 />
-                <small>
-                    Answers in the chat and writes the texts. A model id from{" "}
-                    <a href="https://openrouter.ai/models" target="_blank" rel="noreferrer">
-                        openrouter.ai/models
-                    </a>.
-                </small>
+                <small>Answers in the chat, writes the texts, and makes and checks the exercises.</small>
             </label>
             <label className="field">
                 <span>Translation model</span>
@@ -166,6 +178,8 @@ function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: bo
                     used.
                 </small>
             </label>
+
+            <h3>Checking</h3>
             <label className="field">
                 <span>Sentence check model</span>
                 <Choice
@@ -174,8 +188,13 @@ function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: bo
                     value={settings.profileModel}
                     onChange={(profileModel) => onChange({ ...settings, profileModel })}
                 />
-                <small>Answers the questions about each sentence you finish typing in the chat.</small>
+                <small>
+                    Answers the questions about each sentence you finish typing in the chat, and sorts new words into
+                    categories.
+                </small>
             </label>
+
+            <h3>Speech</h3>
             <label className="field">
                 <span>Speech model</span>
                 <Choice
@@ -183,7 +202,7 @@ function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: bo
                     value={settings.speechModel}
                     onChange={(speechModel) => onChange({ ...settings, speechModel })}
                 />
-                <small>Reads the texts aloud.</small>
+                <small>Reads the texts, the books and the replies aloud.</small>
             </label>
             <label className="field">
                 <span>Voice</span>
@@ -193,6 +212,47 @@ function ModelsTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: bo
                     onChange={(speechVoice) => onChange({ ...settings, speechVoice })}
                 />
                 <small>Voice names depend on the speech model.</small>
+            </label>
+
+            <h3>Topics</h3>
+            <label className="field">
+                <span>Embedding model</span>
+                <input
+                    type="text"
+                    spellCheck={false}
+                    placeholder="baai/bge-m3"
+                    value={settings.embeddingModel}
+                    onChange={(event) => onChange({ ...settings, embeddingModel: event.target.value.trim() })}
+                />
+                <small>
+                    Embeds every word of your vocabulary once, and each topic, to find the words of a topic. One that
+                    knows many languages works best.
+                </small>
+            </label>
+            <label className="field">
+                <span>Image model</span>
+                <input
+                    type="text"
+                    spellCheck={false}
+                    placeholder="google/gemini-3.1-flash-lite-image"
+                    value={settings.imageModel}
+                    onChange={(event) => onChange({ ...settings, imageModel: event.target.value.trim() })}
+                />
+                <small>Makes the icon of each topic you add, and the pictures of exercises.</small>
+            </label>
+            <label className="field">
+                <span>Vision model</span>
+                <input
+                    type="text"
+                    spellCheck={false}
+                    placeholder="the chat model"
+                    value={settings.visionModel}
+                    onChange={(event) => onChange({ ...settings, visionModel: event.target.value.trim() })}
+                />
+                <small>
+                    Finds where each thing is on the picture of an exercise. It must see pictures, and a small model
+                    often points beside them: one such as Gemini Flash, rather than Flash Lite, is far better at it.
+                </small>
             </label>
         </>
     );
@@ -229,6 +289,71 @@ function Choice({ options, value, placeholder, onChange }: ChoiceProps) {
             {!options.includes(value) && <option value={value}>{value || placeholder}</option>}
             {options.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
+    );
+}
+
+function ExercisesTab({ settings, onChange, sets }: TabProps & { sets: WordSet[] }) {
+    const vocabulary = exerciseVocabularyOf(settings, settings.language);
+    const known = vocabulary === "all" || vocabulary === "none" || sets.some((set) => set.id === vocabulary);
+
+    return (
+        <>
+            <h3>Topics</h3>
+            <label className="toggle">
+                <span>
+                    Mix topics
+                    <small>
+                        Bring all the topics you choose together in the exercises. Off, one of them is drawn for each
+                        session.
+                    </small>
+                </span>
+                <input
+                    type="checkbox"
+                    checked={settings.exerciseMixTopics}
+                    onChange={(event) => onChange({ ...settings, exerciseMixTopics: event.target.checked })}
+                />
+            </label>
+
+            <h3>Words</h3>
+            <label className="field">
+                <span>Words of your vocabulary</span>
+                <select
+                    value={known ? vocabulary : "all"}
+                    onChange={(event) =>
+                        onChange({
+                            ...settings,
+                            exerciseVocabulary: {
+                                ...settings.exerciseVocabulary,
+                                [settings.language]: event.target.value,
+                            },
+                        })}
+                >
+                    <option value="all">Every word</option>
+                    {sets.map((set) => <option key={set.id} value={set.id}>Set: {set.name || "Untitled"}</option>)}
+                    <option value="none">None</option>
+                </select>
+                <small>
+                    The exercises are given at most 200 of these words, for{" "}
+                    {settings.language}. With none, they use any words of your level.
+                </small>
+            </label>
+            <label className="toggle">
+                <span>
+                    Words that fit the topics
+                    <small>
+                        Give the 200 words nearest the topics, found with embeddings, rather than the 200 used last.
+                        With 20 or more to choose from, the exercises use those words alone; with fewer, they lean on
+                        them.
+                    </small>
+                </span>
+                <input
+                    type="checkbox"
+                    checked={settings.exerciseTopicWords}
+                    disabled={vocabulary === "none"}
+                    onChange={(event) => onChange({ ...settings, exerciseTopicWords: event.target.checked })}
+                />
+            </label>
+        </>
     );
 }
 
@@ -288,7 +413,7 @@ function ContentTab({ settings, onChange }: TabProps) {
     }
 
     function addContext() {
-        const context = { id: crypto.randomUUID(), name: "New context", prompt: "" };
+        const context = { id: newId(), name: "New context", prompt: "" };
         onChange({ ...settings, contexts: [...settings.contexts, context] });
     }
 
@@ -520,7 +645,7 @@ function QuestionsTab({ settings, onChange }: TabProps) {
     );
 }
 
-export function SettingsPanel({ settings, ankiWords, tab, onTab, onChange, onClose }: Props) {
+export function SettingsPanel({ settings, ankiWords, sets, tab, onTab, onChange, onClose }: Props) {
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onClose();
         window.addEventListener("keydown", onKeyDown);
@@ -547,9 +672,11 @@ export function SettingsPanel({ settings, ankiWords, tab, onTab, onChange, onClo
             }
         >
             <div className="settings-body" role="tabpanel">
-                {tab === "models" && <ModelsTab settings={settings} onChange={onChange} ankiWords={ankiWords} />}
+                {tab === "general" && <GeneralTab settings={settings} onChange={onChange} ankiWords={ankiWords} />}
+                {tab === "models" && <ModelsTab settings={settings} onChange={onChange} />}
                 {tab === "content" && <ContentTab settings={settings} onChange={onChange} />}
                 {tab === "questions" && <QuestionsTab settings={settings} onChange={onChange} />}
+                {tab === "exercises" && <ExercisesTab settings={settings} onChange={onChange} sets={sets} />}
                 {tab === "look" && <LookTab settings={settings} onChange={onChange} />}
             </div>
         </SidePanel>

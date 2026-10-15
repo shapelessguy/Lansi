@@ -1,0 +1,124 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+   License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+/* What every exercise looks like unless it says otherwise, in the shadow
+   root it is shown in. The colours are the app's, whose CSS variables reach
+   in. */
+:host {
+    display: block;
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+.root {
+    padding: 4px 2px 16px;
+}
+
+button,
+input,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+button {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    cursor: pointer;
+}
+
+button.primary {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-text);
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+input,
+textarea {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+}
+
+input:focus,
+textarea:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+}
+
+.progress {
+    color: var(--muted);
+    font-size: 0.87em;
+}
+
+.card {
+    margin: 12px 0;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.feedback {
+    margin: 12px 0;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+}
+
+.feedback.right {
+    background: var(--done-bg);
+}
+
+.feedback.partial {
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+
+.feedback.wrong {
+    background: var(--danger-bg);
+}
+
+.error {
+    color: var(--danger);
+}
+
+/* a set of sentences, each in a card of its own, or with how it went */
+.sentences {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0;
+    padding: 0;
+    list-style: none;
+}
+
+.sentences > .card,
+.sentences > .feedback {
+    margin: 0;
+}
+
+.sentences > .card {
+    padding: 10px 14px;
+}

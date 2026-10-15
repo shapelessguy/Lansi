@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from anki_import import AnkiImporter
 from book_sync import BookSync
+from exercising import Practice, Runner
 from intake import Intake
 from live import LiveChecker
 from profiling import Answer, Profile, Profiler, Questions, WordRating
@@ -27,6 +28,7 @@ from tasks import Tasks
 from test_books import epub, page
 from test_intake import FakeChat, FakeProfiler
 from test_speaking import FakeVoice
+from test_topics import FakeOpenRouter
 from test_translating import FakeModel
 from translating import Translator
 from users import Users, user_directory
@@ -594,6 +596,12 @@ def with_users(tmp_path: Path) -> Iterator[str]:
             speaker=Speaker(store, FakeVoice()),
             # what is started is done before the request is answered
             tasks=Tasks(background=lambda job: job()),
+            practice=Practice(
+                store,
+                runner=FakeRunner(),
+                lemmas_of=lambda language: ["der Arzt", "krank", "gehen"],
+                send=FakeOpenRouter(),
+            ),
         )
 
     server = make_server(0, users=users, accounts=Accounts(make_account))
@@ -756,6 +764,38 @@ def test_the_settings_of_a_user_are_kept_and_given_back(with_users: str) -> None
     assert json.loads(before) == {"settings": None}
     assert json.loads(after) == {"settings": {"language": "German", "level": "B2"}}
     assert json.loads(of_ben) == {"settings": None}
+
+
+def test_the_usage_of_a_user_is_kept_and_added_up_for_them_alone(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    ben = log_in(with_users, "ben", "another one")
+    entry = {
+        "at": 2_000,
+        "category": "chat",
+        "chatId": "chat-1",
+        "model": "openai/gpt-5",
+        "promptTokens": 100,
+        "completionTokens": 20,
+        "cost": 0.5,
+    }
+
+    kept, reply, _ = send(
+        f"{with_users}/usage", "POST", ada, json.dumps({"entries": [entry]}).encode()
+    )
+    _, of_ada, _ = send(f"{with_users}/usage?chat=chat-1&since=1000", "GET", ada)
+    _, of_ben, _ = send(f"{with_users}/usage?chat=chat-1&since=1000", "GET", ben)
+    refused, _, _ = send(
+        f"{with_users}/usage", "POST", ada, json.dumps({"entries": [{}]}).encode()
+    )
+
+    assert (kept, json.loads(reply)) == (200, {"kept": 1})
+    assert json.loads(of_ada)["chat"]["cost"] == 0.5
+    assert json.loads(of_ada)["since"]["requests"] == 1
+    assert json.loads(of_ada)["byModel"][0]["model"] == "openai/gpt-5"
+    assert json.loads(of_ben)["everything"]["requests"] == 0
+    assert refused == 400
 
 
 def test_the_sets_of_a_vocabulary_are_kept_for_its_user_and_language(
@@ -1057,3 +1097,224 @@ def test_a_message_of_a_chat_is_read_aloud_and_its_audio_removed_with_the_chat(
     ]
     assert (heard, without_text, gone) == (200, 400, 404)
     assert "Weiter so.".encode() in audio
+
+
+class FakeRunner(Runner):
+    """Runs every exercise as one that logs each message it is sent, in
+    place of starting its backend."""
+
+    def run(
+        self,
+        exercise: str,
+        request: dict[str, Any],
+        ask: Any,
+        draw: Any = None,
+        look: Any = None,
+    ) -> tuple[dict[str, Any], list[Profile]]:
+        state = request["state"] or {"done": 0}
+        logs = []
+        if request["op"] == "act":
+            state["done"] += 1
+            logs = [
+                {"result": "wrong", "answer": request["message"], "correction": "Ja."}
+            ]
+        show = {"done": state["done"], "level": request["context"]["level"]}
+        return {"state": state, "show": show, "logs": logs, "results": state}, []
+
+
+def test_a_session_of_practice_keeps_the_logs_of_its_exercises(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    _, listed, _ = send(f"{with_users}/lessons?language=German", "GET", ada)
+    lesson = json.loads(listed)["lessons"][0]["id"]
+    _, made, _ = send(
+        f"{with_users}/sessions",
+        "POST",
+        ada,
+        json.dumps(
+            {"language": "German", "lesson": lesson, "exercises": {"cloze": 2}}
+        ).encode(),
+    )
+    session = json.loads(made)
+    steps = f"{with_users}/sessions/{session['id']}/exercises/cloze"
+    learner = {"into": "English", "level": "A2", "model": "some/model"}
+
+    send(f"{steps}/start", "POST", ada, json.dumps(learner).encode())
+    _, acted, _ = send(
+        f"{steps}/act",
+        "POST",
+        ada,
+        json.dumps({**learner, "message": "Nein."}).encode(),
+    )
+    _, ended, _ = send(
+        f"{with_users}/sessions/{session['id']}/end",
+        "POST",
+        ada,
+        json.dumps(learner).encode(),
+    )
+    _, kept, _ = send(f"{with_users}/sessions/{session['id']}", "GET", ada)
+
+    assert session["exercises"] == {"cloze": 2}
+    assert json.loads(acted) == {"show": {"done": 1, "level": "A2"}, "usage": []}
+    assert json.loads(ended)["session"]["status"] == "finished"
+    found = json.loads(kept)
+    assert found["progress"]["cloze"] == {
+        "status": "finished",
+        "logs": 1,
+        "results": {"right": 0, "partial": 0, "wrong": 1},
+    }
+    assert [(log["answer"], log["correction"]) for log in found["logs"]] == [
+        ("Nein.", "Ja.")
+    ]
+
+
+def test_the_sessions_of_one_user_are_not_those_of_another(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    ben = log_in(with_users, "ben", "another one")
+    body = {
+        "language": "German",
+        "lesson": "trennbare-verben",
+        "exercises": {"cloze": 1},
+    }
+    _, made, _ = send(f"{with_users}/sessions", "POST", ada, json.dumps(body).encode())
+    session_id = json.loads(made)["id"]
+
+    _, of_ben, _ = send(f"{with_users}/sessions", "GET", ben)
+    status, _, _ = send(f"{with_users}/sessions/{session_id}", "GET", ben)
+
+    assert json.loads(of_ben) == {"sessions": []}
+    assert status == 404
+
+
+def test_a_session_of_a_lesson_there_is_not_is_refused(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {"language": "German", "lesson": "nothing", "exercises": {"cloze": 1}}
+
+    status, reply, _ = send(
+        f"{with_users}/sessions", "POST", ada, json.dumps(body).encode()
+    )
+
+    assert status == 400
+    assert "no lesson" in json.loads(reply)["error"]
+
+
+def test_the_interface_of_an_exercise_is_given_without_logging_in(
+    with_users: str,
+) -> None:
+    with urllib.request.urlopen(f"{with_users}/exercises/cloze/ui/index.js") as page:
+        kind = page.headers["Content-Type"]
+        script = page.read()
+    with urllib.request.urlopen(f"{with_users}/exercises/kit.css") as kit:
+        style = kit.headers["Content-Type"]
+    backend, _ = get(f"{with_users}/exercises/cloze/backend.py")
+    listing, _ = get(f"{with_users}/exercises")
+
+    assert kind.startswith("text/javascript") and style.startswith("text/css")
+    assert b"export function mount" in script
+    # what is not part of an interface is not given, nor is the list to anyone
+    assert (backend, listing) == (404, 401)
+
+
+def test_a_topic_is_made_with_an_icon_and_removed(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {"title": "Beim Arzt", "description": "symptoms", "image_model": "m/image"}
+    request = urllib.request.Request(
+        f"{with_users}/topics",
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {ada}", "X-OpenRouter-Key": "sk-test"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request) as response:
+        made = json.load(response)
+
+    topic_id = made["topic"]["id"]
+    _, listed, _ = send(f"{with_users}/topics", "GET", ada)
+    status, icon, kind = send(f"{with_users}/topics/{topic_id}/icon", "GET", ada)
+    send(f"{with_users}/topics/{topic_id}", "DELETE", ada)
+    _, after, _ = send(f"{with_users}/topics", "GET", ada)
+
+    assert made["topic"]["title"] == "Beim Arzt"
+    assert made["task"]["kind"] == "icon"
+    assert json.loads(listed)["topics"][0]["icon"] is True
+    assert (status, icon[:4], kind) == (200, b"\x89PNG", "image/png")
+    assert json.loads(after) == {"topics": []}
+
+
+def test_a_topic_made_without_a_key_has_no_icon_yet(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+
+    _, made, _ = send(
+        f"{with_users}/topics", "POST", ada, json.dumps({"title": "Fußball"}).encode()
+    )
+
+    topic = json.loads(made)
+    assert (topic["task"], topic["topic"]["icon"]) == (None, False)
+
+
+def test_the_vocabulary_is_embedded_in_the_background(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = json.dumps({"language": "German", "model": "m/embed"}).encode()
+    request = urllib.request.Request(
+        f"{with_users}/embeddings",
+        data=body,
+        headers={"Authorization": f"Bearer {ada}", "X-OpenRouter-Key": "sk-test"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request) as response:
+        first = json.load(response)
+    _, again, _ = send(f"{with_users}/embeddings", "POST", ada, body)
+
+    assert (first["missing"], first["task"]["kind"]) == (3, "embeddings")
+    assert json.loads(again) == {"missing": 0, "task": None}
+
+
+def test_a_session_is_started_with_the_words_its_topic_needs(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    _, made, _ = send(
+        f"{with_users}/topics",
+        "POST",
+        ada,
+        json.dumps({"title": "Beim Arzt", "description": "symptoms"}).encode(),
+    )
+    topic_id = json.loads(made)["topic"]["id"]
+    body = {
+        "language": "German",
+        "lesson": "trennbare-verben",
+        "exercises": {"cloze": 2},
+        "topics": [topic_id],
+        "vocabulary": "all",
+    }
+    request = urllib.request.Request(
+        f"{with_users}/sessions",
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {ada}", "X-OpenRouter-Key": "sk-test"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request) as response:
+        session = json.load(response)
+
+    assert session["topics"] == [topic_id]
+    # three words are too few to make sentences of alone
+    assert session["words"] == {
+        "mode": "prefer",
+        "lemmas": ["der Arzt", "krank", "gehen"],
+    }
+    assert session["usage"]
+
+
+def test_a_session_with_words_chosen_in_a_way_there_is_not_is_refused(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {
+        "language": "German",
+        "lesson": "trennbare-verben",
+        "exercises": {"cloze": 2},
+        "vocabulary": "everything",
+    }
+
+    status, reply, _ = send(
+        f"{with_users}/sessions", "POST", ada, json.dumps(body).encode()
+    )
+
+    assert status == 400
+    assert "words are chosen" in json.loads(reply)["error"]

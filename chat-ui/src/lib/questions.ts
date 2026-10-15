@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { newId } from "./ids";
 /** One of the answers a question can be given. */
 export interface QuestionOption {
     /** What the answer is called, such as "none". */
@@ -80,7 +81,7 @@ export function defaultQuestions(): ProfileQuestion[] {
 
 export function newQuestion(): ProfileQuestion {
     return {
-        id: `question_${crypto.randomUUID().slice(0, 8)}`,
+        id: `question_${newId().slice(0, 8)}`,
         title: "New question",
         kind: "choice",
         instructions: "",

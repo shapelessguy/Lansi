@@ -130,6 +130,7 @@ export function TextStudio(
         void (generationId ? fetchGenerationUsage(apiKey, generationId) : Promise.resolve(null)).then((usage) =>
             onUsage({
                 at: createdAt,
+                category: "speech",
                 chatId: `text:${text.id}`,
                 model: usage?.model ?? speechModel,
                 promptTokens: usage?.promptTokens ?? 0,
@@ -187,6 +188,7 @@ export function TextStudio(
         if (usage) {
             onUsage({
                 at: createdAt,
+                category: "text",
                 chatId: `text:${text.id}`,
                 model: text.model,
                 promptTokens: usage.promptTokens,

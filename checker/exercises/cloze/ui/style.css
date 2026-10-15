@@ -1,0 +1,18 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+   License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+.sentence {
+    font-size: 1.15em;
+    line-height: 2;
+}
+
+.sentence input {
+    width: 9ch;
+    margin: 0 2px;
+    padding: 2px 6px;
+    text-align: center;
+}
+
+.hint {
+    margin-top: 2px;
+}

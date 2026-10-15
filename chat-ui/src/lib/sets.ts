@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { newId } from "./ids";
 import { checkerFetch } from "./session";
 import type { ListedWord } from "./vocabulary";
 
@@ -55,7 +56,7 @@ export function defaultRule(): CategoryRule {
 }
 
 export function newSet(name = ""): WordSet {
-    return { id: crypto.randomUUID(), name, rules: {}, otherwise: defaultRule(), added: [], removed: [] };
+    return { id: newId(), name, rules: {}, otherwise: defaultRule(), added: [], removed: [] };
 }
 
 /** The rule a set has for a category. */

@@ -4,20 +4,89 @@
         {
             "name": "chat-ui",
             "runtimeExecutable": "npm",
-            "runtimeArgs": ["--prefix", "C:\\Users\\shape\\Documents\\codebase\\anki\\chat-ui", "run", "dev"],
+            "runtimeArgs": [
+                "--prefix",
+                "C:\\Users\\shape\\Documents\\codebase\\anki\\chat-ui",
+                "run",
+                "dev"
+            ],
             "port": 5173
         },
         {
             "name": "test-checker",
             "runtimeExecutable": "C:\\Users\\shape\\Documents\\codebase\\Lansi\\checker\\.venv\\Scripts\\python.exe",
-            "runtimeArgs": ["C:\\Users\\shape\\AppData\\Local\\Temp\\claude\\C--Users-shape-Documents-codebase-Lansi\\59c5d183-60ff-4c37-81a3-b6cdc0ee2ca1\\scratchpad\\run_checker3.py"],
+            "runtimeArgs": [
+                "C:\\Users\\shape\\AppData\\Local\\Temp\\claude\\C--Users-shape-Documents-codebase-Lansi\\59c5d183-60ff-4c37-81a3-b6cdc0ee2ca1\\scratchpad\\run_checker3.py"
+            ],
             "port": 8192
         },
         {
             "name": "test-ui",
             "runtimeExecutable": "pwsh",
-            "runtimeArgs": ["-NoLogo", "-Command", "$env:CHECKER_URL='http://127.0.0.1:8192'; Set-Location 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\chat-ui'; npx vite --port 5184 --strictPort"],
+            "runtimeArgs": [
+                "-NoLogo",
+                "-Command",
+                "$env:CHECKER_URL='http://127.0.0.1:8192'; Set-Location 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\chat-ui'; npx vite --port 5184 --strictPort"
+            ],
             "port": 5184
+        },
+        {
+            "name": "practice-checker",
+            "runtimeExecutable": "C:\\Users\\shape\\Documents\\codebase\\Lansi\\checker\\.venv\\Scripts\\python.exe",
+            "runtimeArgs": [
+                "C:\\Users\\shape\\AppData\\Local\\Temp\\claude\\C--Users-shape-Documents-codebase-Lansi\\fc03381d-b97a-4b73-89c0-833eacb96c56\\scratchpad\\run_practice_checker.py"
+            ],
+            "port": 8193
+        },
+        {
+            "name": "practice-ui",
+            "runtimeExecutable": "pwsh",
+            "runtimeArgs": [
+                "-NoLogo",
+                "-Command",
+                "$env:CHECKER_URL='http://127.0.0.1:8193'; Set-Location 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\chat-ui'; npx vite --port 5185 --strictPort"
+            ],
+            "port": 5185
+        },
+        {
+            "name": "plugin-checker",
+            "runtimeExecutable": "pwsh",
+            "runtimeArgs": [
+                "-NoLogo",
+                "-Command",
+                "$env:CHECKER_PORT='8194'; $env:CHECKER_DATA='C:\\Users\\shape\\AppData\\Local\\Temp\\claude\\C--Users-shape-Documents-codebase-Lansi\\4db8a73b-4629-41fc-8da7-f3025e616a5d\\scratchpad\\data'; & 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\checker\\.venv\\Scripts\\python.exe' 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\checker\\server.py'"
+            ],
+            "port": 8194
+        },
+        {
+            "name": "plugin-ui",
+            "runtimeExecutable": "pwsh",
+            "runtimeArgs": [
+                "-NoLogo",
+                "-Command",
+                "$env:CHECKER_URL='http://127.0.0.1:8194'; Set-Location 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\chat-ui'; npx vite --port 5186 --strictPort"
+            ],
+            "port": 5186
+        },
+        {
+            "name": "module-checker",
+            "runtimeExecutable": "pwsh",
+            "runtimeArgs": [
+                "-NoLogo",
+                "-Command",
+                "$env:CHECKER_PORT='8195'; $env:CHECKER_DATA='C:\\Users\\shape\\AppData\\Local\\Temp\\claude\\C--Users-shape-Documents-codebase-Lansi\\33fcc43f-96ad-4234-952b-84e7274583aa\\scratchpad\\data'; & 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\checker\\.venv\\Scripts\\python.exe' 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\checker\\server.py'"
+            ],
+            "port": 8195
+        },
+        {
+            "name": "module-ui",
+            "runtimeExecutable": "pwsh",
+            "runtimeArgs": [
+                "-NoLogo",
+                "-Command",
+                "$env:CHECKER_URL='http://127.0.0.1:8195'; Set-Location 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\chat-ui'; npx vite --port 5187 --strictPort"
+            ],
+            "port": 5187
         }
     ]
 }

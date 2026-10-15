@@ -7,6 +7,7 @@ import { BookList } from "./components/BookList";
 import { BookReader } from "./components/BookReader";
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
+import { Practice } from "./components/Practice";
 import { SelectionTools } from "./components/SelectionTools";
 import { SetEditor } from "./components/SetEditor";
 import { SettingsPanel, type SettingsTab } from "./components/SettingsPanel";
@@ -47,17 +48,26 @@ import {
     storeOf,
     updateChat,
 } from "./lib/chats";
+import type { ProfileUsage } from "./lib/checker";
 import { loadLayout, type Panel, saveLayout } from "./lib/layout";
 import type { ChatMessage } from "./lib/openrouter";
 import { fetchGenerationUsage } from "./lib/openrouter";
+import { type Learner, practiceUsage, USAGE_ID as PRACTICE_USAGE_ID } from "./lib/practice";
 import { logOut } from "./lib/session";
-import { deleteSet, fetchSets, newSet, saveSet, wordLists, type WordSet } from "./lib/sets";
+import { deleteSet, fetchSets, membersOf, newSet, saveSet, wordLists, type WordSet } from "./lib/sets";
 import { applyAppearance, saveSettings, type Settings } from "./lib/settings";
 import { bookSource, messageSource, type SpeechSource, type Voice } from "./lib/speaking";
 import { type BackgroundTask, fetchTasks, TASKS_INTERVAL_MS, withTask } from "./lib/tasks";
 import { fetchTexts, type SavedText } from "./lib/texts";
-import { type Asking, type Translated, usageEntry } from "./lib/translate";
-import { addUsage, loadUsage, saveUsage, type UsageEntry } from "./lib/usage";
+import type { Asking, Translated } from "./lib/translate";
+import {
+    forgetLegacyUsage,
+    legacyUsage,
+    profileUsage,
+    recordUsage,
+    type UsageCategory,
+    type UsageEntry,
+} from "./lib/usage";
 import { fetchVocabulary, type Vocabulary } from "./lib/vocabulary";
 import type { Word } from "./lib/words";
 
@@ -84,6 +94,14 @@ interface Props {
     initialChats: StoredChat[];
 }
 
+/** What the usage of each kind of background task is counted under. */
+const TASK_CATEGORIES: Record<string, UsageCategory> = {
+    words: "vocabulary",
+    embeddings: "vocabulary",
+    speech: "speech",
+    icon: "practice",
+};
+
 export function App({ user, initialSettings, initialChats }: Props) {
     const [settings, setSettings] = useState<Settings>(initialSettings);
     // the panel on the left, with the words, the chats and the texts
@@ -98,7 +116,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
     );
     // the selection the chat at the side is about, with a number that tells it from the one before
     const [asked, setAsked] = useState<{ translated: Translated; nonce: number } | null>(null);
-    const [settingsTab, setSettingsTab] = useState<SettingsTab>("models");
+    const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
     // where the chat puts the sentence checks, which are made of what it knows
     const [panelSlot, setPanelSlot] = useState<HTMLElement | null>(null);
     const [wordsState, setWordsState] = useState<WordsState>({ status: "loading" });
@@ -106,7 +124,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
     const ankiWords = seesAnkiWords(user);
     // text a clicked word adds to the message being written
     const [picked, setPicked] = useState<{ word: string; nonce: number } | null>(null);
-    const [usage, setUsage] = useState<UsageEntry[]>(loadUsage);
+    // tells the usage the server has from what it had before something was recorded
+    const [usageRevision, setUsageRevision] = useState(0);
     const [chatStore, setChatStore] = useState<ChatStore>(() =>
         storeOf(initialChats, initialSettings.defaultContextId, initialSettings.language)
     );
@@ -115,7 +134,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
     );
     // how many words the vocabulary has, once it has been listed
     const [vocabularyCount, setVocabularyCount] = useState<number | null>(null);
-    const [activity, setActivity] = useState<"chat" | "texts" | "books">("chat");
+    const [activity, setActivity] = useState<"chat" | "texts" | "books" | "practice">("chat");
     const [textsState, setTextsState] = useState<TextsState>({ status: "loading" });
     const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
     const [booksState, setBooksState] = useState<BooksState>({ status: "loading" });
@@ -139,7 +158,19 @@ export function App({ user, initialSettings, initialChats }: Props) {
     const texts = textsState.status === "ready" ? textsState.texts : [];
     const selectedText = texts.find((text) => text.id === selectedTextId) ?? null;
 
-    useEffect(() => saveUsage(usage), [usage]);
+    // Usage was kept in the browser before the server kept it for each user.
+    // What is left of it goes to the first user to log in here.
+    useEffect(() => {
+        const left = legacyUsage();
+        if (left.length > 0) {
+            recordUsage(left).then(() => {
+                forgetLegacyUsage();
+                setUsageRevision((revision) => revision + 1);
+            }, () => {
+                // it is sent again the next time the page is opened
+            });
+        }
+    }, []);
     useEffect(() => applyAppearance(settings), [settings.theme, settings.accent, settings.textSize]);
 
     // The server is told of the chats that change, and of those that are
@@ -287,7 +318,10 @@ export function App({ user, initialSettings, initialChats }: Props) {
     );
 
     const addUsageEntry = useCallback(
-        (entry: UsageEntry) => setUsage((current) => addUsage(current, entry)),
+        (entry: UsageEntry) =>
+            void recordUsage([entry]).then(() => setUsageRevision((revision) => revision + 1), () => {
+                // the server is not running, so there is nowhere to count it
+            }),
         [],
     );
 
@@ -337,6 +371,17 @@ export function App({ user, initialSettings, initialChats }: Props) {
         return wordLists(current, active, fetched.words);
     }, []);
 
+    // the words of a set as the vocabulary is now, for the exercises
+    const wordsOfSet = useCallback(async (id: string) => {
+        const { sets: current, language } = latestSets.current;
+        const set = current.find((each) => each.id === id);
+        if (!set) {
+            return null;
+        }
+        const fetched = await fetchVocabulary(language);
+        return [...new Set(membersOf(set, fetched.words).map((word) => word.lemma))];
+    }, []);
+
     function pickSet(id: string) {
         updateSettings({ ...settings, activeSets: { ...settings.activeSets, [settings.language]: id } });
     }
@@ -368,16 +413,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
         language: settings.language,
         ankiLanguage: settings.ankiLanguage,
         onUsage: useCallback(
-            (used) =>
-                addUsageEntry({
-                    id: used.id,
-                    at: Date.now(),
-                    chatId: "vocabulary",
-                    model: used.model,
-                    promptTokens: used.input_tokens,
-                    completionTokens: used.output_tokens,
-                    cost: used.cost,
-                }),
+            (used) => addUsageEntry(profileUsage(used, Date.now(), "vocabulary")),
             [addUsageEntry],
         ),
         onImported: useCallback(() => setVocabularyRevision((revision) => revision + 1), []),
@@ -388,6 +424,10 @@ export function App({ user, initialSettings, initialChats }: Props) {
     // page is away. What a task used is counted when it is done, and the
     // words are listed again, as it may have added some.
     const [tasks, setTasks] = useState<BackgroundTask[]>([]);
+    const addTask = useCallback((task: BackgroundTask) => setTasks((current) => withTask(current, task)), []);
+    // tells the topics from those before an icon was made
+    const [topicsRevision, setTopicsRevision] = useState(0);
+    const embeddingTask = tasks.find((task) => task.kind === "embeddings" && task.state === "running") ?? null;
     const finished = useRef(new Set<string>());
     // who reads the sentences of a book aloud, and how
     const voice = useMemo<Voice>(
@@ -408,9 +448,13 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 continue;
             }
             finished.current.add(task.id);
-            task.usage.forEach((used) => addUsageEntry(usageEntry(used, Date.now())));
+            const category = TASK_CATEGORIES[task.kind] ?? "vocabulary";
+            task.usage.forEach((used) => addUsageEntry(profileUsage(used, Date.now(), category, `task:${task.kind}`)));
             if (task.kind === "words") {
                 setVocabularyRevision((revision) => revision + 1);
+            }
+            if (task.kind === "icon") {
+                setTopicsRevision((revision) => revision + 1);
             }
             // Audio comes without what it cost, which is looked up
             // afterwards, by what each request for it goes by.
@@ -421,6 +465,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         addUsageEntry({
                             id: generation,
                             at: Date.now(),
+                            category: "speech",
                             chatId: "speech",
                             model: used?.model ?? model,
                             promptTokens: used?.promptTokens ?? 0,
@@ -464,6 +509,29 @@ export function App({ user, initialSettings, initialChats }: Props) {
             into: settings.translateInto,
         }),
         [settings.apiKey, settings.model, settings.language, settings.translateInto],
+    );
+    // who practises, and who makes and checks the exercises for them
+    const learner = useMemo<Learner>(
+        () => ({
+            apiKey: settings.apiKey,
+            model: settings.model,
+            imageModel: settings.imageModel,
+            visionModel: settings.visionModel,
+            into: settings.translateInto,
+            level: settings.level,
+        }),
+        [
+            settings.apiKey,
+            settings.model,
+            settings.imageModel,
+            settings.visionModel,
+            settings.translateInto,
+            settings.level,
+        ],
+    );
+    const addPracticeUsage = useCallback(
+        (used: ProfileUsage[]) => used.forEach((each) => addUsageEntry(practiceUsage(each, Date.now()))),
+        [addUsageEntry],
     );
     const translating = useMemo<Asking>(
         () => ({ ...asking, model: settings.translationModel || asking.model }),
@@ -623,8 +691,14 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         <button role="tab" aria-selected={activity === "books"} onClick={() => setActivity("books")}>
                             Books
                         </button>
+                        <button
+                            role="tab"
+                            aria-selected={activity === "practice"}
+                            onClick={() => setActivity("practice")}
+                        >
+                            Practice
+                        </button>
                     </div>
-                    <span className="model" title="Model">{settings.model}</span>
                     <TaskSign tasks={tasks} />
                     {activity === "chat" && (
                         <button
@@ -652,7 +726,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         words={words}
                         loadWords={freshWordLists}
                         picked={activity === "chat" ? picked : null}
-                        onOpenSettings={() => openSettings("models")}
+                        onOpenSettings={() => openSettings("general")}
                         onUsage={addUsageEntry}
                         onSpeak={speakMessage}
                         chat={chat}
@@ -674,12 +748,25 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         onSelect={setSelectedTextId}
                         onTextsChange={changeTexts}
                         onUsage={addUsageEntry}
-                        onOpenSettings={() => openSettings("models")}
+                        onOpenSettings={() => openSettings("general")}
                         storageError={textsState.status === "error" ? textsState.message : null}
                     />
                 </div>
                 <div className="pane" hidden={activity !== "books"}>
                     <BookReader bookId={bookId} active={activity === "books"} />
+                </div>
+                <div className="pane" hidden={activity !== "practice"}>
+                    <Practice
+                        active={activity === "practice"}
+                        settings={settings}
+                        learner={learner}
+                        wordsOfSet={wordsOfSet}
+                        topicsRevision={topicsRevision}
+                        embedding={embeddingTask}
+                        onUsage={addPracticeUsage}
+                        onTask={addTask}
+                        onOpenSettings={() => openSettings("general")}
+                    />
                 </div>
             </main>
             <aside
@@ -689,9 +776,17 @@ export function App({ user, initialSettings, initialChats }: Props) {
             >
                 {panel === "usage" && (
                     <UsagePanel
-                        entries={usage}
-                        currentLabel={activity === "texts" ? "This text" : "This chat"}
-                        chatId={activity === "texts" ? `text:${selectedTextId}` : chat.id}
+                        revision={usageRevision}
+                        currentLabel={activity === "practice"
+                            ? "Practice"
+                            : activity === "texts"
+                            ? "This text"
+                            : "This chat"}
+                        chatId={activity === "practice"
+                            ? PRACTICE_USAGE_ID
+                            : activity === "texts"
+                            ? `text:${selectedTextId}`
+                            : chat.id}
                         onClose={() => setOpenPanel(null)}
                     />
                 )}
@@ -708,6 +803,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     <SettingsPanel
                         settings={settings}
                         ankiWords={ankiWords}
+                        sets={sets}
                         tab={settingsTab}
                         onTab={setSettingsTab}
                         onChange={updateSettings}

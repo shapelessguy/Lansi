@@ -132,6 +132,7 @@ export function Chat(
             onUsage({
                 id: used.id,
                 at: Date.now(),
+                category: "checking",
                 chatId,
                 model: used.model,
                 promptTokens: used.input_tokens,
@@ -263,6 +264,7 @@ export function Chat(
             if (usage) {
                 onUsage({
                     at: Date.now(),
+                    category: "chat",
                     chatId,
                     model: usage.model ?? settings.model,
                     promptTokens: usage.promptTokens,
@@ -393,7 +395,11 @@ export function Chat(
                 >
                     <div className="composer-input">
                         {/* a copy of the text behind the box, which is what carries the underlines */}
-                        <div className="composer-backdrop" ref={backdropRef} aria-hidden="true">
+                        <div
+                            className={settings.rateWords ? "composer-backdrop rating-words" : "composer-backdrop"}
+                            ref={backdropRef}
+                            aria-hidden="true"
+                        >
                             {sentenceParts(draft, check, issues).map(({ sentence, parts }, index) =>
                                 sentence
                                     ? (

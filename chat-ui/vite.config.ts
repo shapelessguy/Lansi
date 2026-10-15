@@ -14,6 +14,9 @@ export default defineConfig({
     plugins: [react()],
     server: {
         port: 5173,
+        // listen on every interface, so the GUI can be opened from other
+        // machines of the LAN; the two servers it forwards to stay on 127.0.0.1
+        host: true,
         // file change events are sometimes missed on Windows when a file is saved
         // several times in a row, which leaves the page running an old version
         watch: { usePolling: true, interval: 300 },

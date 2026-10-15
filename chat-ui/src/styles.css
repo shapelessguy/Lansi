@@ -16,7 +16,16 @@
     --danger: #b3261e;
     --danger-bg: #fdecea;
     --done-bg: rgb(46 160 67 / 14%);
+    --checking-bg: rgb(212 167 44 / 20%);
     --doubt: 215 58 73;
+    --icon-bg: #f4f3ef;
+    /* a colour for each level, from green at the start to pink at the top */
+    --level-a1: #1f8a4c;
+    --level-a2: #0f8585;
+    --level-b1: #2f6fde;
+    --level-b2: #5b4fd6;
+    --level-c1: #9b3fc9;
+    --level-c2: #c0367f;
     --radius: 10px;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     font-size: 15px;
@@ -37,7 +46,15 @@
         --danger: #f2b8b5;
         --danger-bg: #4a2523;
         --done-bg: rgb(63 185 80 / 16%);
+    --checking-bg: rgb(227 179 65 / 18%);
         --doubt: 248 81 73;
+        --icon-bg: #e4e3dd;
+        --level-a1: #5fd18a;
+        --level-a2: #4fcfcf;
+        --level-b1: #6ea0f5;
+        --level-b2: #a39bf7;
+        --level-c1: #cf8cf0;
+        --level-c2: #f08cc0;
     }
 }
 
@@ -55,7 +72,15 @@
     --danger: #f2b8b5;
     --danger-bg: #4a2523;
     --done-bg: rgb(63 185 80 / 16%);
+    --checking-bg: rgb(227 179 65 / 18%);
     --doubt: 248 81 73;
+    --icon-bg: #e4e3dd;
+    --level-a1: #5fd18a;
+    --level-a2: #4fcfcf;
+    --level-b1: #6ea0f5;
+    --level-b2: #a39bf7;
+    --level-c1: #cf8cf0;
+    --level-c2: #f08cc0;
 }
 
 * {
@@ -833,6 +858,11 @@ a {
     border-bottom: 1px solid var(--border);
 }
 
+/* what follows the activities is on the right */
+.topbar > .switch {
+    margin-right: auto;
+}
+
 .switch {
     display: flex;
     padding: 2px;
@@ -1098,22 +1128,13 @@ div.book-cover {
     flex: 1;
 }
 
-.context-picker span,
-.model {
+.context-picker span {
     color: var(--muted);
     font-size: 0.87rem;
 }
 
 .context-picker select {
     min-width: 0;
-}
-
-.model {
-    flex: 1;
-    overflow: hidden;
-    text-align: right;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .messages {
@@ -1252,6 +1273,12 @@ div.book-cover {
 
 .sentence:not([data-state="typing"]) {
     background-color: var(--done-bg);
+}
+
+/* With the words rated, a sentence would be green first and only then get its
+   red words, so it stays yellow until both are known. */
+.rating-words .sentence[data-state="checking"] {
+    background-color: var(--checking-bg);
 }
 
 /* a word that was rated as not quite right; how red it is, is set on it */
@@ -1666,6 +1693,48 @@ div.book-cover {
     font-size: 0.87rem;
 }
 
+/* all of the usage, a group of rows for each category and a row for each model */
+.usage-by-model {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.87rem;
+    table-layout: fixed;
+}
+
+.usage-by-model th,
+.usage-by-model td {
+    padding: 3px 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.usage-by-model th:first-child,
+.usage-by-model td:first-child {
+    text-align: left;
+}
+
+.usage-by-model thead th {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.usage-by-model thead th:first-child {
+    width: 55%;
+}
+
+.usage-by-model tbody th {
+    padding-top: 10px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+}
+
+/* a long model name is cut short, and shown whole when hovered */
+.usage-by-model td:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* settings */
 
 .checks section {
@@ -1974,10 +2043,6 @@ div.book-cover {
         box-shadow: 0 0 24px rgb(0 0 0 / 25%);
     }
 
-    .model {
-        display: none;
-    }
-
     .chat-header {
         flex-wrap: wrap;
     }
@@ -2089,4 +2154,640 @@ div.book-cover {
 
 .speech-player .count.error {
     color: var(--danger);
+}
+
+/* practice */
+
+.practice {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.practice-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px max(16px, calc((100% - 960px) / 2)) 28px;
+    overflow-y: auto;
+}
+
+/* theory, with the list of its pages and the chat beside the page */
+.practice-body.wide {
+    padding-inline: max(16px, calc((100% - 1240px) / 2));
+}
+
+.practice-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+}
+
+.practice-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.practice-actions .primary {
+    padding: 8px 18px;
+}
+
+.practice-columns {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px;
+}
+
+@media (max-width: 760px) {
+    .practice-columns {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* a column no taller than about the window, its list scrolling within it,
+   so that the sessions below are in sight */
+.practice-column {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    max-height: min(62vh, 640px);
+    padding: 12px;
+    background: var(--panel);
+    border-radius: var(--radius);
+}
+
+.practice-column > * {
+    flex: none;
+}
+
+.practice-column > .practice-list {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* room for the scroll bar, beside the choices and not over them */
+    padding-right: 4px;
+}
+
+.practice-column h2 {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 0 2px;
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.practice-hint {
+    font-size: 0.8rem;
+    font-weight: 400;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.practice-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px max(16px, calc((100% - 960px) / 2));
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+}
+
+.practice-summary {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.practice-footer .primary {
+    flex: none;
+    padding: 8px 22px;
+}
+
+.practice-list {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.practice-choice {
+    position: relative;
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    padding: 9px 36px 9px 12px;
+    text-align: left;
+    white-space: normal;
+    background: var(--bg);
+}
+
+.practice-choice[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+}
+
+/* a mark of whether it is chosen: a box for what more than one can be
+   chosen of, a round one for the lesson */
+.practice-choice::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    width: 16px;
+    height: 16px;
+    margin-top: -8px;
+    border: 1.5px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 13px;
+    text-align: center;
+    color: var(--accent-text);
+}
+
+.practice-radio::after {
+    border-radius: 50%;
+}
+
+.practice-choice[aria-pressed="true"]::after {
+    content: "✓";
+    border-color: var(--accent);
+    background: var(--accent);
+}
+
+.practice-radio[aria-pressed="true"]::after {
+    content: "";
+    background: var(--accent);
+    box-shadow: inset 0 0 0 3px var(--bg);
+}
+
+.practice-title {
+    font-weight: 600;
+}
+
+/* a lesson: its number in the book, its title in up to two lines, and its
+   level, every one as tall as two lines so that the list is even */
+.practice-lesson {
+    grid-template-columns: 1.6em minmax(0, 1fr) auto auto;
+    align-items: center;
+    column-gap: 10px;
+    min-height: calc(3em + 20px);
+}
+
+.practice-number {
+    color: var(--muted);
+    font-size: 0.87rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.practice-lesson .practice-title {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+}
+
+/* whether the theory of a lesson has been read, which makes it done */
+.practice-read {
+    color: var(--level-a1);
+    font-weight: 700;
+}
+
+/* a level, in a small circle of its colour, the same everywhere */
+.level {
+    --level: var(--muted);
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1.5px solid color-mix(in srgb, var(--level) 70%, transparent);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--level) 12%, transparent);
+    color: var(--level);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1;
+}
+
+.level-a1 { --level: var(--level-a1); }
+.level-a2 { --level: var(--level-a2); }
+.level-b1 { --level: var(--level-b1); }
+.level-b2 { --level: var(--level-b2); }
+.level-c1 { --level: var(--level-c1); }
+.level-c2 { --level: var(--level-c2); }
+
+/* the levels to choose from, the one chosen filled with its colour */
+.level-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.level-picker .level {
+    width: 36px;
+    height: 36px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.level-picker .level[aria-checked="true"] {
+    border-color: var(--level);
+    background: var(--level);
+    color: var(--bg);
+}
+
+.practice-detail {
+    color: var(--muted);
+    font-size: 0.87rem;
+}
+
+.practice-instances {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 6px 0 2px 12px;
+    color: var(--muted);
+    font-size: 0.87rem;
+}
+
+.practice-instances input {
+    width: 4.5em;
+}
+
+.practice-note {
+    margin: 0;
+    color: var(--muted);
+}
+
+.practice-note.error {
+    color: var(--danger);
+}
+
+/* the interface of an exercise, whose own styles would show it all the same */
+.exercise-ui[hidden] {
+    display: none;
+}
+
+.topic-item {
+    position: relative;
+}
+
+.topic-choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 70px 7px 8px;
+}
+
+/* the chosen topics are marked on their icons, which leaves the right of
+   the card to the buttons that change them */
+.topic-choice::after {
+    display: none;
+}
+
+.topic-icon-wrap {
+    position: relative;
+    flex: none;
+    display: flex;
+}
+
+.topic-choice[aria-pressed="true"] .topic-icon-wrap::after {
+    content: "✓";
+    position: absolute;
+    right: -5px;
+    bottom: -5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--bg);
+    color: var(--accent-text);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+}
+
+.topic-text {
+    display: grid;
+    min-width: 0;
+}
+
+.topic-text > * {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* the symbol alone, drawn on nothing: it was drawn for white, so it is
+   shown on a light tile whatever the theme, as a dark symbol would be lost
+   on a dark page */
+.topic-icon {
+    flex: none;
+    box-sizing: border-box;
+    width: 48px;
+    height: 48px;
+    padding: 5px;
+    border-radius: 10px;
+    background: var(--icon-bg);
+    object-fit: contain;
+}
+
+.topic-icon.empty {
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    background: var(--panel);
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.topic-actions {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    display: flex;
+    gap: 2px;
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+
+.topic-item:hover .topic-actions,
+.topic-actions:focus-within {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .topic-actions {
+        opacity: 1;
+    }
+}
+
+.topic-actions .icon-button {
+    width: 28px;
+    padding: 2px 0;
+    border-color: transparent;
+    background: none;
+    color: var(--muted);
+}
+
+.topic-actions .icon-button:hover {
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.topic-new {
+    width: 100%;
+    border-style: dashed;
+    background: none;
+    color: var(--muted);
+}
+
+.topic-form {
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+}
+
+.topic-form-actions {
+    display: flex;
+    gap: 6px;
+}
+
+/* a session that was left open, to be taken up again */
+.practice-resume {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+
+.history h2 {
+    margin: 8px 0;
+    font-size: 1rem;
+}
+
+/* the sessions, in a box of their own that scrolls */
+.history-list {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    max-height: min(60vh, 600px);
+    margin: 0;
+    padding: 8px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.history-item:has(details[open]) {
+    align-items: flex-start;
+}
+
+.history-item details {
+    flex: 1;
+    min-width: 0;
+}
+
+.history-item summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.history-when {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.87rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.history-what {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-score {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    align-self: center;
+}
+
+/* the results of a session, out of the instances there were to be */
+.history-bar {
+    display: flex;
+    width: 96px;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--border);
+}
+
+.history-bar > .right {
+    background: rgb(46 160 67);
+}
+
+.history-bar > .partial {
+    background: rgb(224 160 32);
+}
+
+.history-bar > .wrong {
+    background: var(--danger);
+}
+
+.history-bar > .read {
+    background: var(--accent);
+}
+
+.history-percent {
+    width: 3.2em;
+    font-size: 0.87rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    text-align: right;
+}
+
+.history-status {
+    flex: none;
+    width: 6.5em;
+    text-align: right;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.history-item.running .history-status {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.history-resume {
+    flex: none;
+    padding: 4px 12px;
+}
+
+/* the answers of one session, scrolling on their own when there are many */
+.history-logs {
+    display: grid;
+    gap: 4px;
+    max-height: 320px;
+    margin: 10px 0 2px;
+    padding: 0 4px 0 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+}
+
+.history-logs li {
+    display: flex;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.history-logs li > span:last-child {
+    display: grid;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.history-logs li.right {
+    background: var(--done-bg);
+}
+
+.history-logs li.partial {
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+}
+
+.history-logs li.wrong {
+    background: var(--danger-bg);
+}
+
+.history-result {
+    flex: none;
+    width: 1.2em;
+    font-weight: 700;
+    text-align: center;
+}
+
+.history-correction {
+    color: var(--muted);
+}
+
+/* in place of an exercise while it is made, or when it could not be */
+.exercise-waiting {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 24px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    text-align: center;
+}
+
+.exercise-waiting.error {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.exercise-spinner {
+    width: 22px;
+    height: 22px;
+    margin-bottom: 4px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
 }

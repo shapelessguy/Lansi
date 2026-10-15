@@ -33,7 +33,24 @@ from anki_import import DECK_STATUS_URL, AnkiImporter, fetch_anki_notes
 from book_sync import BookSync
 from books import BookError, read_epub
 from categories import CATEGORIES
-from intake import DEFAULT_LANGUAGE, MAX_WORDS, Intake, Outcome, Word, read_words
+from exercising import (
+    Choosing,
+    ExerciseError,
+    Practice,
+    model_asker,
+    model_drawer,
+    ui_file,
+)
+from grammar import GrammarError
+from intake import (
+    DEFAULT_LANGUAGE,
+    MAX_WORDS,
+    Intake,
+    Outcome,
+    Word,
+    read_words,
+    send_chat,
+)
 from live import LiveChecker
 from processing import Processor, words_in
 from profiling import (
@@ -59,6 +76,11 @@ from speaking import (
 from spelling import StudySpeller
 from storage import UserStore
 from tasks import Tasks
+from topics import (
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_IMAGE_MODEL,
+    EMBED_BATCH,
+)
 from translating import (
     DEFAULT_INTO,
     MAX_SELECTION_LENGTH,
@@ -95,6 +117,10 @@ MAX_TITLE_LENGTH = 80
 SPEECH_WAIT_SECS = 50.0
 # a language is named in a word or two
 MAX_LANGUAGE_LENGTH = 40
+# a topic is told by a title and a sentence or two
+MAX_TOPIC_LENGTH = 500
+# more words than any set of them has
+MAX_SET_WORDS = 20_000
 # The directory everything is kept in, unless CHECKER_DATA names another:
 # who may log in, and for each user a directory with the vocabularies, one
 # file for each language.
@@ -236,6 +262,8 @@ class Account:
     speaker: Speaker | None = None
     # what is done for the user in the background
     tasks: Tasks = field(default_factory=Tasks)
+    # the sessions of practice, with the exercises done in them
+    practice: Practice | None = None
 
     def study(self, language: str) -> None:
         """Have every part go by `language`, given by its English name."""
@@ -319,7 +347,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:
         if not self._find_account() or self._kept("DELETE") or self._sets("DELETE"):
             return
-        if self._books("DELETE") or self._speech("DELETE"):
+        if self._books("DELETE") or self._speech("DELETE") or self._topics("DELETE"):
             return
         self._reply(HTTPStatus.NOT_FOUND, {"error": "no such path"})
 
@@ -593,11 +621,18 @@ class CheckerHandler(BaseHTTPRequestHandler):
             PUT, DELETE /texts/ID     keep a text as it is sent, or remove it
             GET, PUT /texts/ID/audio  the audio of a text, as a file
             GET, PUT /settings        the settings
+            POST /usage               keep what requests to models used,
+                                      sent as {"entries": [...]}
+            GET /usage?chat=ID&since=MS
+                                      the totals of the usage of a chat or
+                                      text, of that from a time on, and of
+                                      all of it, by category and model too
         """
         store = self.account.store
         path = urlsplit(self.path).path
         one = re.fullmatch(r"/(chats|texts)/([^/]+)(/audio)?", path)
-        if store is None or not (one or path in ("/chats", "/texts", "/settings")):
+        listed = ("/chats", "/texts", "/settings", "/usage")
+        if store is None or not (one or path in listed):
             return False
         try:
             if method == "GET" and path == "/chats":
@@ -609,6 +644,18 @@ class CheckerHandler(BaseHTTPRequestHandler):
             elif method == "PUT" and path == "/settings":
                 store.save_settings(self._read_body())
                 self._reply(HTTPStatus.OK, {})
+            elif method == "POST" and path == "/usage":
+                entries = self._read_body().get("entries")
+                if not isinstance(entries, list):
+                    raise ValueError('expected {"entries": [...]}')
+                self._reply(HTTPStatus.OK, {"kept": store.add_usage(entries)})
+            elif method == "GET" and path == "/usage":
+                query = parse_qs(urlsplit(self.path).query)
+                since = query.get("since", ["0"])[0]
+                if not since.isdigit():
+                    raise ValueError("since is a time in milliseconds")
+                chat_id = query.get("chat", [""])[0]
+                self._reply(HTTPStatus.OK, store.usage(chat_id, int(since)))
             elif one and one.group(3):
                 self._audio(method, store, one.group(2))
             elif one and method == "PUT" and one.group(1) == "chats":
@@ -655,8 +702,299 @@ class CheckerHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(audio[0])
 
+    def _exercise_ui(self) -> bool:
+        """Sends a file the interface of an exercise is made of, and returns
+        whether the request was for one. These are the same for everyone,
+        and are loaded by the browser as modules and stylesheets, which
+        cannot send the token, so whoever asks is not looked into.
+
+            GET /exercises/kit.js, /exercises/kit.css
+            GET /exercises/ID/ui/PATH
+        """
+        path = urlsplit(self.path).path
+        if not path.startswith("/exercises/"):
+            return False
+        found = ui_file(unquote(path.removeprefix("/exercises/")))
+        if found is None:
+            self._reply(HTTPStatus.NOT_FOUND, {"error": "no such file"})
+            return True
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", found[1])
+        self.send_header("Content-Length", str(len(found[0])))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(found[0])
+        return True
+
+    def _practice(self, method: str, api_key: str | None = None) -> bool:
+        """Answers a request about practice, and returns whether the request
+        was one.
+
+            GET /lessons?language=L      the lessons of a language
+            GET /exercises               the exercises there are
+            GET /sessions                the sessions, the latest first
+            GET /sessions/S              a session, with its logs
+            POST /sessions               start a session of `{"language": ...,
+                                         "lesson": ..., "topics": [...],
+                                         "exercises": {ID: instances}}`; with
+                                         an empty lesson, it reviews the
+                                         lessons practised last
+            POST /sessions/S/end         end it, `{"status": "finished" |
+                                         "abandoned"}`, after finishing the
+                                         exercises that were started
+            POST /sessions/S/exercises/ID/OP
+                                         make a step of an exercise: `start`,
+                                         `act` on `{"message": ...}`, or
+                                         `finish`; the reply is what it is to
+                                         `show`
+
+        A POST to a session brings the `model` an exercise asks, the
+        `image_model` that draws its pictures, the `vision_model` that looks
+        at them (the `model` if there is none), and the `into` and `level`
+        of the learner. The reply has what the models that
+        were asked used.
+        """
+        practice = self.account.practice
+        url = urlsplit(self.path)
+        one = re.fullmatch(r"/sessions/([^/]+)", url.path)
+        end = re.fullmatch(r"/sessions/([^/]+)/end", url.path)
+        step = re.fullmatch(r"/sessions/([^/]+)/exercises/([^/]+)/([a-z]+)", url.path)
+        listed = url.path in ("/lessons", "/exercises", "/sessions")
+        store = self.account.store
+        if practice is None or store is None or not (listed or one or end or step):
+            return False
+        try:
+            if method == "GET" and url.path == "/lessons":
+                language = parse_qs(url.query).get("language", [""])[0].strip()
+                lessons = practice.lessons(language or self.account.language)
+                self._reply(HTTPStatus.OK, {"lessons": lessons})
+            elif method == "GET" and url.path == "/exercises":
+                self._reply(HTTPStatus.OK, {"exercises": practice.exercises()})
+            elif method == "GET" and url.path == "/sessions":
+                self._reply(HTTPStatus.OK, {"sessions": store.sessions()})
+            elif method == "GET" and one:
+                session = store.session(one.group(1))
+                if session is None:
+                    self._reply(HTTPStatus.NOT_FOUND, {"error": "no such session"})
+                else:
+                    logs = store.logs(session["id"])
+                    self._reply(HTTPStatus.OK, {**session, "logs": logs})
+            elif method == "POST" and url.path == "/sessions":
+                self._start_session(practice, api_key)
+            elif method == "POST" and (end or step):
+                body = self._read_body()
+                learner = {
+                    name: value[:MAX_LANGUAGE_LENGTH]
+                    for name in ("into", "level")
+                    if isinstance(value := body.get(name), str)
+                }
+                model = body.get("model")
+                ask = model_asker(
+                    send_chat, api_key or "", model if isinstance(model, str) else ""
+                )
+                vision_model = body.get("vision_model")
+                look = (
+                    model_asker(send_chat, api_key or "", vision_model)
+                    if isinstance(vision_model, str) and vision_model
+                    else ask
+                )
+                image_model = body.get("image_model")
+                draw = model_drawer(
+                    api_key or "",
+                    image_model
+                    if isinstance(image_model, str) and image_model
+                    else DEFAULT_IMAGE_MODEL,
+                )
+                reply: dict[str, Any]
+                if end:
+                    status = str(body.get("status") or "finished")
+                    session, used = practice.end_session(
+                        end.group(1), status, learner, ask, draw, look
+                    )
+                    reply = {"session": session}
+                else:
+                    assert step
+                    session_id, exercise, op = step.groups()
+                    show, used = practice.step(
+                        session_id,
+                        exercise,
+                        op,
+                        body.get("message"),
+                        learner,
+                        ask,
+                        draw,
+                        look,
+                    )
+                    reply = {"show": show}
+                usage = [describe_usage(profile) for profile in used]
+                self._reply(HTTPStatus.OK, {**reply, "usage": usage})
+            else:
+                return False
+        except ValueError as error:
+            self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+        except ExerciseError as error:
+            self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
+        except GrammarError as error:
+            self._reply(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+        return True
+
+    def _topics(self, method: str, api_key: str | None = None) -> bool:
+        """Answers a request about the topics of practice, or about the
+        embedding of the vocabulary that finds the words of a topic, and
+        returns whether the request was one.
+
+            GET /topics             the topics, the newest first
+            POST /topics            make a topic of `{"title": ...,
+                                    "description": ..., "image_model": ...}`;
+                                    its icon is made in the background, as
+                                    the `task` of the reply
+            DELETE /topics/ID       remove a topic
+            GET /topics/ID/icon     the icon of a topic, as a file
+            POST /topics/ID/icon    make its icon again, `{"image_model": ...}`
+            POST /embeddings        embed the words of the vocabulary of
+                                    `{"language": ..., "model": ...}` that are
+                                    not yet, in the background; the reply says
+                                    how many are `missing`, and the `task`
+        """
+        practice, store = self.account.practice, self.account.store
+        path = urlsplit(self.path).path
+        one = re.fullmatch(r"/topics/([^/]+)", path)
+        icon = re.fullmatch(r"/topics/([^/]+)/icon", path)
+        if practice is None or store is None:
+            return False
+        if not (one or icon or path in ("/topics", "/embeddings")):
+            return False
+        try:
+            if method == "GET" and path == "/topics":
+                self._reply(HTTPStatus.OK, {"topics": store.topics()})
+            elif method == "POST" and path == "/topics":
+                body = self._read_body()
+                title, description = body.get("title"), body.get("description", "")
+                if not isinstance(title, str) or not isinstance(description, str):
+                    raise ValueError('expected {"title": "...", "description": "..."}')
+                topic = store.add_topic(
+                    uuid.uuid4().hex,
+                    title[:MAX_TOPIC_LENGTH],
+                    description[:MAX_TOPIC_LENGTH],
+                )
+                task = self._make_icon(topic, body, api_key)
+                self._reply(HTTPStatus.OK, {"topic": topic, "task": task})
+            elif method == "DELETE" and one:
+                store.delete_topic(one.group(1))
+                self._reply(HTTPStatus.OK, {})
+            elif method == "GET" and icon:
+                found = store.icon(icon.group(1))
+                if found is None:
+                    self._reply(HTTPStatus.NOT_FOUND, {"error": "no icon"})
+                    return True
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", found[1])
+                self.send_header("Content-Length", str(len(found[0])))
+                self.end_headers()
+                self.wfile.write(found[0])
+            elif method == "POST" and icon:
+                again = store.topic(icon.group(1))
+                if again is None:
+                    self._reply(HTTPStatus.NOT_FOUND, {"error": "no such topic"})
+                    return True
+                task = self._make_icon(again, self._read_body(), api_key)
+                self._reply(HTTPStatus.OK, {"task": task})
+            elif method == "POST" and path == "/embeddings":
+                self._embed_vocabulary(practice, api_key)
+            else:
+                return False
+        except ValueError as error:
+            self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+        return True
+
+    def _make_icon(
+        self, topic: dict[str, Any], body: dict[str, Any], api_key: str | None
+    ) -> dict[str, Any] | None:
+        """Has the icon of `topic` made in the background by the
+        `image_model` of the request, and returns the task, or None
+        without a key to make it with."""
+        store, practice = self.account.store, self.account.practice
+        assert store and practice
+        model = body.get("image_model")
+        if not api_key:
+            return None
+        image_model = model if isinstance(model, str) and model else DEFAULT_IMAGE_MODEL
+
+        def make(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+            picture, kind, used = practice.make_icon(topic, api_key or "", image_model)
+            store.save_icon(topic["id"], picture, kind)
+            step()
+            return [{"topic": topic["id"]}], [describe_usage(used)]
+
+        return self.account.tasks.start("icon", topic["title"], 1, make)
+
+    def _embed_vocabulary(self, practice: Practice, api_key: str | None) -> None:
+        """Has the words of a vocabulary that are not embedded yet embedded
+        in the background, as a POST to /embeddings asks."""
+        body = self._read_body()
+        language, model = body.get("language"), body.get("model")
+        if not isinstance(language, str) or (
+            model is not None and not isinstance(model, str)
+        ):
+            raise ValueError('expected {"language": "...", "model": "..."}')
+        model = model or DEFAULT_EMBEDDING_MODEL
+        missing = practice.vocabulary_to_embed(language.strip(), model)
+        if not missing or model in practice.embedding:
+            self._reply(HTTPStatus.OK, {"missing": len(missing), "task": None})
+            return
+        if not api_key:
+            raise ValueError("an OpenRouter key is needed")
+        practice.embedding.add(model)
+
+        def embed(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+            try:
+                used = practice.embeddings.embed(missing, api_key or "", model, step)
+            finally:
+                practice.embedding.discard(model)
+            log(
+                f"{datetime.now():%H:%M:%S} embedded {len(missing)} words of"
+                f" {language} with {model}"
+            )
+            return [], [describe_usage(profile) for profile in used]
+
+        batches = -(-len(missing) // EMBED_BATCH)
+        task = self.account.tasks.start(
+            "embeddings", f"{len(missing)} words of {language}", batches, embed
+        )
+        self._reply(HTTPStatus.OK, {"missing": len(missing), "task": task})
+
+    def _start_session(self, practice: Practice, api_key: str | None) -> None:
+        """Starts the session of practice a POST describes, and replies with
+        it and with what embedding its words used. Besides the lesson, the
+        topics and the exercises, the POST says how the words are chosen:
+        `{"mix_topics": ..., "vocabulary": "none" | "all" | "set", "words":
+        [...], "topic_words": ...,
+        "embedding_model": ...}`."""
+        body = self._read_body()
+        language, lesson = body.get("language"), body.get("lesson")
+        topics, chosen = body.get("topics", []), body.get("exercises")
+        if not (
+            isinstance(language, str)
+            and isinstance(lesson, str)
+            and isinstance(topics, list)
+            and all(isinstance(topic, str) for topic in topics)
+            and isinstance(chosen, dict)
+        ):
+            raise ValueError(
+                'expected {"language": ..., "lesson": ..., "exercises": {...}}'
+            )
+        session, used = practice.start_session(
+            language, lesson, topics, chosen, read_choosing(body), api_key or ""
+        )
+        usage = [describe_usage(profile) for profile in used]
+        self._reply(HTTPStatus.OK, {**session, "usage": usage})
+
     def do_GET(self) -> None:
+        if self._exercise_ui():
+            return
         if not self._find_account() or self._kept("GET") or self._sets("GET"):
+            return
+        if self._practice("GET") or self._topics("GET"):
             return
         if self._books("GET") or self._speech("GET"):
             return
@@ -706,9 +1044,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
         try:
             if self.path == "/login":
                 self._log_in()
-            elif not self._find_account():
+            elif not self._find_account() or self._kept("POST"):
                 pass
             elif self._books("POST") or self._speech("POST", api_key):
+                pass
+            elif self._practice("POST", api_key) or self._topics("POST", api_key):
                 pass
             elif self.path == "/sentences":
                 self._check_sentences(api_key)
@@ -1027,6 +1367,45 @@ class CheckerHandler(BaseHTTPRequestHandler):
         pass
 
 
+def read_choosing(body: dict[str, Any]) -> Choosing:
+    """How the topics and words of a session are to be chosen, as a request
+    to start one says. Raises ValueError."""
+    choosing = Choosing()
+    mix, topic_words = body.get("mix_topics", False), body.get("topic_words", True)
+    vocabulary, words = body.get("vocabulary", "none"), body.get("words", [])
+    model = body.get("embedding_model") or choosing.embedding_model
+    if not (
+        isinstance(mix, bool)
+        and isinstance(topic_words, bool)
+        and vocabulary in ("none", "all", "set")
+        and isinstance(words, list)
+        and all(isinstance(word, str) for word in words)
+        and isinstance(model, str)
+    ):
+        raise ValueError("the way the words are chosen is not one there is")
+    if len(words) > MAX_SET_WORDS:
+        raise ValueError(f"a set gives at most {MAX_SET_WORDS} words")
+    return Choosing(
+        mix_topics=mix,
+        vocabulary=vocabulary,
+        words=[word.strip() for word in words if word.strip()],
+        topic_words=topic_words,
+        embedding_model=model,
+    )
+
+
+def lemmas_of(intake: Intake, language: str) -> list[str]:
+    """The words of the vocabulary of `language`, each once, those used or
+    stored last first. None for a language there is no vocabulary of."""
+    if not intake.has_vocabulary(language):
+        return []
+    listed = intake.vocabulary_of(language).listing()
+    latest = sorted(
+        listed, key=lambda word: (word.last_used or 0, word.created_at), reverse=True
+    )
+    return list(dict.fromkeys(word.lemma for word in latest))
+
+
 def make_server(
     port: int,
     checker: LiveChecker | None = None,
@@ -1109,6 +1488,11 @@ if __name__ == "__main__":
             # the language model asked when a request names none
             translator=Translator(model=os.environ.get("CHECKER_CHAT_MODEL", "")),
             speaker=Speaker(kept),
+            practice=Practice(
+                kept,
+                lemmas_of=partial(lemmas_of, intake),
+                on_words=log,
+            ),
         )
         assert account.book_sync
         account.book_sync.watch()

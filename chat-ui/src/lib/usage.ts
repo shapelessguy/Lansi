@@ -1,10 +1,28 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import type { ProfileUsage } from "./checker";
+import { checkerFetch } from "./session";
+
+/** The kinds of work requests to the models are made for, which the usage is added up by. */
+export const USAGE_CATEGORIES = {
+    chat: "Chat replies",
+    checking: "Sentence checks",
+    text: "Texts",
+    speech: "Reading aloud",
+    translation: "Translations",
+    vocabulary: "Vocabulary",
+    practice: "Practice",
+} as const;
+
+export type UsageCategory = keyof typeof USAGE_CATEGORIES;
+
 /** What one reply used, as reported by OpenRouter. */
 export interface UsageEntry {
     /** When the reply finished, in milliseconds since the epoch. */
     at: number;
+    category: UsageCategory;
+    /** What the request was made for: a chat, a text, or something such as "practice". */
     chatId: string;
     model: string;
     promptTokens: number;
@@ -24,56 +42,105 @@ export interface UsageTotals {
     costIncomplete: boolean;
 }
 
-const STORAGE_KEY = "chat-ui.usage";
-/** Older entries are dropped, so the log can't outgrow the browser's storage. */
-const MAX_ENTRIES = 2000;
+/** The usage of the user who is logged in, as the checker server adds it up. */
+export interface UsageSummary {
+    /** That of the chat or text asked about. */
+    chat: UsageTotals;
+    /** That from the time asked about on. */
+    since: UsageTotals;
+    everything: UsageTotals;
+    /** All of it, for each category and model. */
+    byModel: (UsageTotals & { category: string; model: string })[];
+}
 
-export function loadUsage(): UsageEntry[] {
+/** An entry for what the checker server said a request to a model used. */
+export function profileUsage(
+    used: ProfileUsage,
+    at: number,
+    category: UsageCategory,
+    chatId: string = category,
+): UsageEntry {
+    return {
+        id: used.id,
+        at,
+        category,
+        chatId,
+        model: used.model,
+        promptTokens: used.input_tokens,
+        completionTokens: used.output_tokens,
+        cost: used.cost,
+    };
+}
+
+/** Has the checker server keep `entries` for the user; those with an id it has already are counted once. */
+export async function recordUsage(entries: UsageEntry[]): Promise<void> {
+    const response = await checkerFetch("/usage", { method: "POST", body: JSON.stringify({ entries }) });
+    if (!response.ok) {
+        throw new Error(`checker server: ${response.status}`);
+    }
+}
+
+/** The usage of the user, with that of `chatId` and that from `since` on, in milliseconds since the epoch. */
+export async function fetchUsage(chatId: string, since: number): Promise<UsageSummary> {
+    const query = new URLSearchParams({ chat: chatId, since: String(Math.max(0, Math.floor(since))) });
+    const response = await checkerFetch(`/usage?${query}`);
+    if (!response.ok) {
+        throw new Error(`checker server: ${response.status}`);
+    }
+    return response.json();
+}
+
+/** The local midnight that began the day `now` is in. */
+export function startOfDay(now: number): number {
+    const day = new Date(now);
+    day.setHours(0, 0, 0, 0);
+    return day.getTime();
+}
+
+/** Where the usage was kept in the browser before the server kept it. */
+const LEGACY_KEY = "chat-ui.usage";
+
+/** What a chat id of the usage kept in the browser was used for. */
+function legacyCategory(chatId: string): UsageCategory {
+    if (chatId.startsWith("text:")) {
+        return "text";
+    }
+    const named: Record<string, UsageCategory> = {
+        speech: "speech",
+        vocabulary: "vocabulary",
+        practice: "practice",
+        translate: "translation",
+    };
+    return named[chatId] ?? "chat";
+}
+
+/**
+ * The usage that was kept in this browser before the server kept it, each
+ * entry given the category it most likely was. Empty if there is none.
+ */
+export function legacyUsage(): UsageEntry[] {
     try {
-        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-        return Array.isArray(stored) ? stored : [];
+        const stored: unknown = JSON.parse(localStorage.getItem(LEGACY_KEY) ?? "[]");
+        if (!Array.isArray(stored)) {
+            return [];
+        }
+        return stored
+            .filter((entry): entry is Omit<UsageEntry, "category"> =>
+                typeof entry === "object" && entry !== null && typeof entry.chatId === "string"
+            )
+            .map((entry) => ({ ...entry, category: legacyCategory(entry.chatId) }));
     } catch {
         return [];
     }
 }
 
-export function saveUsage(entries: UsageEntry[]): void {
+/** Removes the usage kept in this browser, once the server has it. */
+export function forgetLegacyUsage(): void {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+        localStorage.removeItem(LEGACY_KEY);
     } catch {
-        // usage is then only tracked until the page is closed
+        // it is then sent again the next time, and counted once all the same where it has an id
     }
-}
-
-/** The entries with `entry` added. They are returned as they are if it has an id that was already counted. */
-export function addUsage(entries: UsageEntry[], entry: UsageEntry): UsageEntry[] {
-    if (entry.id !== undefined && entries.some((counted) => counted.id === entry.id)) {
-        return entries;
-    }
-    return [...entries, entry].slice(-MAX_ENTRIES);
-}
-
-/** The entries from the same calendar day as `now`, in local time. */
-export function usageOnDay(entries: UsageEntry[], now: number): UsageEntry[] {
-    const day = new Date(now).toDateString();
-    return entries.filter((entry) => new Date(entry.at).toDateString() === day);
-}
-
-export function totalUsage(entries: UsageEntry[]): UsageTotals {
-    const totals: UsageTotals = {
-        requests: entries.length,
-        promptTokens: 0,
-        completionTokens: 0,
-        cost: 0,
-        costIncomplete: false,
-    };
-    for (const entry of entries) {
-        totals.promptTokens += entry.promptTokens;
-        totals.completionTokens += entry.completionTokens;
-        totals.cost += entry.cost ?? 0;
-        totals.costIncomplete ||= entry.cost === null;
-    }
-    return totals;
 }
 
 /** Small amounts keep enough digits to show what a single reply cost. */

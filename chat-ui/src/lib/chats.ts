@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { newId } from "./ids";
 import type { ChatMessage } from "./openrouter";
 import { checkerFetch } from "./session";
 
@@ -26,7 +27,7 @@ const OLD_STORAGE_KEYS = ["chat-ui.chats", "chat-ui.chat"];
 const TITLE_LENGTH = 48;
 
 export function emptyChat(contextId: string, language = ""): StoredChat {
-    return { id: crypto.randomUUID(), contextId, language, messages: [], updatedAt: Date.now() };
+    return { id: newId(), contextId, language, messages: [], updatedAt: Date.now() };
 }
 
 function storeWith(chat: StoredChat): ChatStore {

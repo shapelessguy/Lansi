@@ -1,0 +1,136 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+   License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+.top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 1.6em;
+}
+
+.stage {
+    position: relative;
+    margin: 8px 0 12px;
+    user-select: none;
+}
+
+.stage img {
+    display: block;
+    width: 100%;
+    border-radius: var(--radius);
+}
+
+.dot {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+    transform: translate(-50%, -50%);
+    transition: transform 0.12s;
+}
+
+.dot:hover:not(:disabled),
+.dot.open {
+    transform: translate(-50%, -50%) scale(1.25);
+}
+
+/* labelled, and not yet checked */
+.dot.labelled {
+    background: #fff;
+    border-color: var(--accent);
+}
+
+.dot.right {
+    background: rgb(46 160 67);
+}
+
+.dot.partial {
+    background: rgb(224 160 32);
+}
+
+.dot.wrong {
+    background: var(--danger);
+}
+
+.dot:disabled {
+    opacity: 1;
+    cursor: default;
+}
+
+/* what was written for a point, under it, kept within the picture */
+.label {
+    position: absolute;
+    max-width: 40%;
+    overflow: hidden;
+    padding: 1px 7px;
+    border-radius: 6px;
+    background: rgb(0 0 0 / 72%);
+    color: #fff;
+    font-size: 0.8em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transform: translate(-50%, 14px);
+    pointer-events: none;
+}
+
+.label.from-left {
+    transform: translate(-12px, 14px);
+}
+
+.label.from-right {
+    transform: translate(calc(-100% + 12px), 14px);
+}
+
+.label s {
+    opacity: 0.7;
+}
+
+.ask {
+    position: absolute;
+    z-index: 1;
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+}
+
+.ask input {
+    width: 14ch;
+}
+
+.judged {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.judged li {
+    padding: 3px 0;
+}
+
+.judged .number {
+    display: inline-block;
+    width: 1.8em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.judged .right {
+    color: rgb(46 160 67);
+}
+
+.judged .partial {
+    color: rgb(224 160 32);
+}
+
+.judged .wrong {
+    color: var(--danger);
+}

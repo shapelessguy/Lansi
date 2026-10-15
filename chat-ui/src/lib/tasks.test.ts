@@ -62,3 +62,13 @@ test("a task that makes audio is described by the sentences that were read, left
     expect(mentioned({ ...speech, result: taken("made", "failed") }).map((one) => one.status)).toEqual(["failed"]);
     expect([taskName(speech), taskName(task())]).toEqual(["Read aloud", "Add to vocabulary"]);
 });
+
+test("the tasks of topics are named and described for what they do", () => {
+    expect(taskName(task({ kind: "icon" }))).toBe("Topic icon");
+    expect(taskName(task({ kind: "embeddings" }))).toBe("Embed vocabulary");
+    expect(describeTask(task({ kind: "embeddings", state: "running", done: 1, total: 4 }))).toBe(
+        "Embedding the words: 1 of 4",
+    );
+    expect(describeTask(task({ kind: "icon", state: "done" }))).toBe("The icon is made.");
+    expect(mentioned(task({ kind: "icon", state: "done" }))).toEqual([]);
+});

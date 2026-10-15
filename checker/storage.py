@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 10
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -115,6 +115,117 @@ CREATE TABLE book_speech (
 );
 """
 
+# What came with version 6: the sessions of practice, the exercises done in
+# each, and the logs of what the learner answered in them.
+_PRACTICE = """
+CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    -- the language being learned, which the lesson is of
+    language TEXT NOT NULL,
+    lesson TEXT NOT NULL,
+    -- the ids of the topics, in JSON
+    topics TEXT NOT NULL,
+    -- in seconds since the epoch
+    started_at REAL NOT NULL,
+    finished_at REAL,
+    -- "running", "finished" or "abandoned"
+    status TEXT NOT NULL
+);
+CREATE TABLE session_exercises (
+    session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+    exercise TEXT NOT NULL,
+    -- where it is among the exercises of the session, from 0
+    position INTEGER NOT NULL,
+    -- how many instances of it there are to be
+    instances INTEGER NOT NULL,
+    -- What the exercise keeps from one step to the next, and what it last
+    -- showed, in JSON, once it has started.
+    state TEXT,
+    shown TEXT,
+    -- what it reported when it finished, in JSON
+    results TEXT,
+    finished_at REAL,
+    PRIMARY KEY (session_id, exercise)
+);
+CREATE TABLE logs (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+    exercise TEXT NOT NULL,
+    -- "right", "wrong" or "partial"
+    result TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    correction TEXT NOT NULL,
+    note TEXT NOT NULL
+);
+"""
+
+# What came with version 7: the topics a session can be about, each with a
+# picture of its own in a file; the words of every session, and whether its
+# topics are mixed; and the embeddings of the texts that were embedded, such
+# as the words of the vocabulary and the topics, by the model that made them.
+_TOPICS = """
+CREATE TABLE topics (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    -- the kind of file its icon is, once it has one
+    icon_type TEXT
+);
+CREATE TABLE embeddings (
+    model TEXT NOT NULL,
+    text TEXT NOT NULL,
+    -- the vector, as float16 numbers one after another
+    vector BLOB NOT NULL,
+    PRIMARY KEY (model, text)
+);
+-- the words the exercises are to use, {"mode": ..., "lemmas": [...]} in JSON
+ALTER TABLE sessions ADD COLUMN words TEXT;
+ALTER TABLE sessions ADD COLUMN mix_topics INTEGER NOT NULL DEFAULT 0;
+"""
+
+# What came with version 8: what each exercise of a session was told to
+# heed besides its lesson, topics and words, such as what was used before.
+_GUIDANCE = """
+ALTER TABLE session_exercises ADD COLUMN guidance TEXT NOT NULL DEFAULT '';
+"""
+
+# What came with version 9: what each request to a model used. `id` is set
+# for a request that may be reported more than once, so that it is counted
+# only the first time; `chat_id` is what it was made for, such as a chat or a
+# text, and `category` the kind of work it was.
+_USAGE = """
+CREATE TABLE usage (
+    number INTEGER PRIMARY KEY,
+    id TEXT UNIQUE,
+    at INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    prompt_tokens INTEGER NOT NULL,
+    completion_tokens INTEGER NOT NULL,
+    cost REAL
+);
+CREATE INDEX usage_by_time ON usage (at);
+CREATE INDEX usage_by_chat ON usage (chat_id);
+"""
+
+# What came with version 10: the lessons a review goes over, in JSON, for a
+# session that is not of one lesson, whose `lesson` is then empty.
+_REVIEWS = """
+ALTER TABLE sessions ADD COLUMN lessons TEXT NOT NULL DEFAULT '[]';
+"""
+
+# What is added up of some of the usage.
+_TOTALS = (
+    "COUNT(*), COALESCE(SUM(prompt_tokens), 0),"
+    " COALESCE(SUM(completion_tokens), 0), COALESCE(SUM(cost), 0),"
+    " COALESCE(MAX(cost IS NULL), 0)"
+)
+
+# What a log says of an answer.
+RESULTS = ("right", "wrong", "partial")
+
 # the id of a sentence of a book: the place of its paragraph, and its own in it
 _SENTENCE_ID = re.compile(r"\d{1,9}\.\d{1,9}")
 
@@ -184,6 +295,7 @@ class UserStore:
         self._audio = self._directory / "audio"
         self._covers = self._directory / "covers"
         self._speech = self._directory / "speech"
+        self._icons = self._directory / "topics"
         self._now = now
         self._db = sqlite3.connect(
             str(self._directory / "app.db"), check_same_thread=False
@@ -202,6 +314,16 @@ class UserStore:
                 self._db.executescript(_BOOK_COVERS)
             if version < 5:
                 self._db.executescript(_BOOK_SPEECH)
+            if version < 6:
+                self._db.executescript(_PRACTICE)
+            if version < 7:
+                self._db.executescript(_TOPICS)
+            if version < 8:
+                self._db.executescript(_GUIDANCE)
+            if version < 9:
+                self._db.executescript(_USAGE)
+            if version < 10:
+                self._db.executescript(_REVIEWS)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -576,6 +698,414 @@ class UserStore:
                 )
             return cursor.rowcount > 0
 
+    # practice
+
+    def start_session(
+        self,
+        session_id: str,
+        language: str,
+        lesson: str,
+        topics: list[str],
+        exercises: dict[str, int],
+        words: dict[str, Any] | None = None,
+        mix_topics: bool = False,
+        guidance: dict[str, str] | None = None,
+        lessons: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Start a session of practice with the exercises given, each with
+        how many instances of it there are to be, the `words` they are to
+        use, if any, and the `guidance` each is given, by exercise. A
+        review has no `lesson`, and goes over `lessons`. A session that is
+        still running is abandoned: there is one at a time. Raises
+        ValueError."""
+        guidance = guidance or {}
+        if not is_id(session_id):
+            raise ValueError("a session needs an id")
+        if not exercises:
+            raise ValueError("a session needs an exercise")
+        now = self._now()
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE sessions SET status = 'abandoned', finished_at = ?"
+                " WHERE status = 'running'",
+                (now,),
+            )
+            self._db.execute(
+                "INSERT INTO sessions (id, language, lesson, topics, started_at,"
+                " status, words, mix_topics, lessons)"
+                " VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)",
+                (
+                    session_id,
+                    language,
+                    lesson,
+                    json.dumps(topics),
+                    now,
+                    None if words is None else json.dumps(words, ensure_ascii=False),
+                    int(mix_topics),
+                    json.dumps(lessons or []),
+                ),
+            )
+            self._db.executemany(
+                "INSERT INTO session_exercises"
+                " (session_id, exercise, position, instances, guidance)"
+                " VALUES (?, ?, ?, ?, ?)",
+                [
+                    (
+                        session_id,
+                        exercise,
+                        position,
+                        instances,
+                        guidance.get(exercise, ""),
+                    )
+                    for position, (exercise, instances) in enumerate(exercises.items())
+                ],
+            )
+        session = self.session(session_id)
+        assert session
+        return session
+
+    def _sessions(self, where: str, values: tuple[Any, ...]) -> list[dict[str, Any]]:
+        sessions = {
+            session_id: {
+                "id": session_id,
+                "language": language,
+                "lesson": lesson,
+                # those a review goes over, which has no lesson
+                "lessons": json.loads(lessons),
+                "topics": json.loads(topics),
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "status": status,
+                "words": None if words is None else json.loads(words),
+                "mix_topics": bool(mix_topics),
+                "exercises": {},
+                # what each exercise was told to heed, by exercise
+                "guidance": {},
+                # what can be told of each exercise from what was kept of it
+                "progress": {},
+            }
+            for (
+                session_id,
+                language,
+                lesson,
+                topics,
+                started_at,
+                finished_at,
+                status,
+                words,
+                mix_topics,
+                lessons,
+            ) in (
+                self._db.execute(
+                    "SELECT id, language, lesson, topics, started_at, finished_at,"
+                    " status, words, mix_topics, lessons FROM sessions"
+                    f" {where} ORDER BY started_at DESC",
+                    values,
+                )
+            )
+        }
+        # how many logs of each result each exercise kept
+        logged: dict[tuple[str, str], dict[str, int]] = {}
+        for session_id, exercise, result, count in self._db.execute(
+            "SELECT session_id, exercise, result, COUNT(*) FROM logs GROUP BY 1, 2, 3"
+        ):
+            if session_id in sessions:
+                logged.setdefault((session_id, exercise), {})[result] = count
+        for (
+            session_id,
+            exercise,
+            instances,
+            started,
+            finished,
+            guidance,
+        ) in self._db.execute(
+            "SELECT session_id, exercise, instances, state IS NOT NULL,"
+            " finished_at IS NOT NULL, guidance FROM session_exercises"
+            " ORDER BY position"
+        ):
+            if session_id not in sessions:
+                continue
+            sessions[session_id]["exercises"][exercise] = instances
+            sessions[session_id]["guidance"][exercise] = guidance
+            sessions[session_id]["progress"][exercise] = {
+                "status": "finished"
+                if finished
+                else "started"
+                if started
+                else "pending",
+                "logs": sum(logged.get((session_id, exercise), {}).values()),
+                "results": {
+                    result: logged.get((session_id, exercise), {}).get(result, 0)
+                    for result in ("right", "partial", "wrong")
+                },
+            }
+        return list(sessions.values())
+
+    def session(self, session_id: str) -> dict[str, Any] | None:
+        """A session with its exercises, and with how far each has got."""
+        with self._lock:
+            found = self._sessions("WHERE id = ?", (session_id,))
+        return found[0] if found else None
+
+    def sessions(self) -> list[dict[str, Any]]:
+        """Every session, the latest first."""
+        with self._lock:
+            return self._sessions("", ())
+
+    def end_session(self, session_id: str, status: str) -> None:
+        """Bring a running session to an end, as "finished" or "abandoned"."""
+        if status not in ("finished", "abandoned"):
+            raise ValueError("a session ends finished or abandoned")
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE sessions SET status = ?, finished_at = ?"
+                " WHERE id = ? AND status = 'running'",
+                (status, self._now(), session_id),
+            )
+
+    def exercise_state(
+        self, session_id: str, exercise: str
+    ) -> tuple[bool, Any, Any] | None:
+        """Whether an exercise of a session has started, what it keeps from
+        one step to the next and what it last showed, if the session has it."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT state, shown FROM session_exercises"
+                " WHERE session_id = ? AND exercise = ?",
+                (session_id, exercise),
+            ).fetchone()
+        if row is None:
+            return None
+        state, shown = row
+        if state is None:
+            return False, None, None
+        return True, json.loads(state), json.loads(shown)
+
+    def save_exercise_state(
+        self, session_id: str, exercise: str, state: Any, shown: Any
+    ) -> None:
+        """Keep what an exercise keeps from one step to the next, and what
+        it shows, which also has it started."""
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE session_exercises SET state = ?, shown = ?"
+                " WHERE session_id = ? AND exercise = ?",
+                (
+                    json.dumps(state, ensure_ascii=False),
+                    json.dumps(shown, ensure_ascii=False),
+                    session_id,
+                    exercise,
+                ),
+            )
+
+    def finish_exercise(self, session_id: str, exercise: str, results: Any) -> None:
+        """Keep what an exercise reported when it finished."""
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE session_exercises SET results = ?, finished_at = ?"
+                " WHERE session_id = ? AND exercise = ?",
+                (
+                    json.dumps(results, ensure_ascii=False),
+                    self._now(),
+                    session_id,
+                    exercise,
+                ),
+            )
+
+    def results(self, session_id: str, exercise: str) -> Any:
+        """What an exercise reported when it finished, if it did."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT results FROM session_exercises"
+                " WHERE session_id = ? AND exercise = ?",
+                (session_id, exercise),
+            ).fetchone()
+        return json.loads(row[0]) if row and row[0] is not None else None
+
+    def add_logs(
+        self, session_id: str, exercise: str, logs: list[dict[str, str]]
+    ) -> None:
+        """Keep the logs an exercise reported, each a `{"result": ...,
+        "answer": ..., "correction": ..., "note": ...}`. Raises ValueError,
+        and keeps none, if one is not a log."""
+        rows = []
+        for log in logs:
+            if log.get("result") not in RESULTS:
+                raise ValueError(f"the result of a log is one of {', '.join(RESULTS)}")
+            parts = [log.get(name, "") for name in ("answer", "correction", "note")]
+            if not all(isinstance(part, str) for part in parts):
+                raise ValueError("the answer, correction and note of a log are text")
+            rows.append((session_id, exercise, log["result"], *parts))
+        with self._lock, self._db:
+            self._db.executemany(
+                "INSERT INTO logs"
+                " (session_id, exercise, result, answer, correction, note)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+
+    def logs(self, session_id: str) -> list[dict[str, str]]:
+        """The logs of a session, in the order they were kept."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT session_id, exercise, result, answer, correction, note"
+                " FROM logs WHERE session_id = ? ORDER BY id",
+                (session_id,),
+            ).fetchall()
+        names = ("session", "exercise", "result", "answer", "correction", "note")
+        return [dict(zip(names, row)) for row in rows]
+
+    def used_before(self, exercise: str, sessions: int) -> list[str]:
+        """What `exercise` was answered with in the last `sessions` sessions
+        it was in, the latest first, each once: the correction of an answer
+        that had one, and else the answer."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT CASE WHEN logs.correction != '' THEN logs.correction"
+                " ELSE logs.answer END FROM logs"
+                " JOIN sessions ON sessions.id = logs.session_id"
+                " WHERE logs.exercise = ? AND logs.session_id IN ("
+                "  SELECT session_id FROM session_exercises"
+                "  JOIN sessions ON sessions.id = session_exercises.session_id"
+                "  WHERE exercise = ? ORDER BY sessions.started_at DESC LIMIT ?)"
+                " ORDER BY sessions.started_at DESC, logs.id",
+                (exercise, exercise, sessions),
+            ).fetchall()
+        return list(dict.fromkeys(text for (text,) in rows if text.strip()))
+
+    # topics
+
+    def topics(self) -> list[dict[str, Any]]:
+        """Every topic, the newest first, with whether it has an icon."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, title, description, created_at, icon_type FROM topics"
+                " ORDER BY created_at DESC"
+            ).fetchall()
+        return [
+            {
+                "id": topic_id,
+                "title": title,
+                "description": description,
+                "created_at": created_at,
+                "icon": icon_type is not None,
+            }
+            for topic_id, title, description, created_at, icon_type in rows
+        ]
+
+    def topic(self, topic_id: str) -> dict[str, Any] | None:
+        return next((each for each in self.topics() if each["id"] == topic_id), None)
+
+    def add_topic(self, topic_id: str, title: str, description: str) -> dict[str, Any]:
+        """Keep a topic, without an icon yet. Raises ValueError."""
+        if not is_id(topic_id):
+            raise ValueError("a topic needs an id")
+        if not title.strip():
+            raise ValueError("a topic needs a title")
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT INTO topics (id, title, description, created_at)"
+                " VALUES (?, ?, ?, ?)",
+                (topic_id, title.strip(), description.strip(), self._now()),
+            )
+        topic = self.topic(topic_id)
+        assert topic
+        return topic
+
+    def delete_topic(self, topic_id: str) -> None:
+        """Remove a topic and its icon. The sessions about it keep its id."""
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM topics WHERE id = ?", (topic_id,))
+        if is_id(topic_id):
+            (self._icons / topic_id).unlink(missing_ok=True)
+
+    def save_icon(self, topic_id: str, icon: bytes, content_type: str) -> bool:
+        """Keep the icon of a topic, in place of any it had. False if there
+        is no such topic."""
+        if not is_id(topic_id):
+            return False
+        with self._lock, self._db:
+            cursor = self._db.execute(
+                "UPDATE topics SET icon_type = ? WHERE id = ?", (content_type, topic_id)
+            )
+            if cursor.rowcount == 0:
+                return False
+            self._icons.mkdir(exist_ok=True)
+            (self._icons / topic_id).write_bytes(icon)
+        return True
+
+    def icon(self, topic_id: str) -> tuple[bytes, str] | None:
+        """The icon of a topic with the kind of file it is, if it has one."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT icon_type FROM topics WHERE id = ?", (topic_id,)
+            ).fetchone()
+        file = self._icons / topic_id
+        if not row or row[0] is None or not is_id(topic_id) or not file.exists():
+            return None
+        return file.read_bytes(), row[0]
+
+    # embeddings
+
+    def embedded(self, model: str) -> dict[str, bytes]:
+        """Every text `model` has embedded, with its vector as it is kept."""
+        with self._lock:
+            return dict(
+                self._db.execute(
+                    "SELECT text, vector FROM embeddings WHERE model = ?", (model,)
+                )
+            )
+
+    def save_embeddings(self, model: str, vectors: dict[str, bytes]) -> None:
+        with self._lock, self._db:
+            self._db.executemany(
+                "INSERT OR REPLACE INTO embeddings (model, text, vector)"
+                " VALUES (?, ?, ?)",
+                [(model, text, vector) for text, vector in vectors.items()],
+            )
+
+    # usage
+
+    def add_usage(self, entries: list[Any]) -> int:
+        """Keeps what each of `entries`, as the app sends them, used, but for
+        those whose id was counted already. Returns how many were kept.
+        Nothing is kept if any of them is not a usage entry."""
+        rows = [_usage_row(entry) for entry in entries]
+        with self._lock, self._db:
+            before = self._db.total_changes
+            self._db.executemany(
+                "INSERT OR IGNORE INTO usage (id, at, category, chat_id, model,"
+                " prompt_tokens, completion_tokens, cost)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                rows,
+            )
+            return self._db.total_changes - before
+
+    def usage(self, chat_id: str, since: int) -> dict[str, Any]:
+        """The totals of the usage of the chat or text `chat_id`, of the
+        usage from `since` on, in milliseconds since the epoch, and of all
+        of it, with all of it added up for each category and model."""
+
+        def totals(where: str = "1", values: tuple[Any, ...] = ()) -> dict[str, Any]:
+            query = f"SELECT {_TOTALS} FROM usage WHERE {where}"
+            return _totals(self._db.execute(query, values).fetchone())
+
+        with self._lock:
+            grouped = self._db.execute(
+                f"SELECT category, model, {_TOTALS} FROM usage"
+                " GROUP BY category, model"
+                " ORDER BY category, SUM(cost) DESC, model"
+            ).fetchall()
+            return {
+                "chat": totals("chat_id = ?", (chat_id,)),
+                "since": totals("at >= ?", (since,)),
+                "everything": totals(),
+                "byModel": [
+                    {"category": category, "model": model, **_totals(rest)}
+                    for category, model, *rest in grouped
+                ],
+            }
+
     # settings
 
     def settings(self) -> dict[str, Any] | None:
@@ -592,3 +1122,56 @@ class UserStore:
                 "INSERT OR REPLACE INTO kept (name, body) VALUES ('settings', ?)",
                 (json.dumps(settings, ensure_ascii=False),),
             )
+
+
+def _usage_row(entry: Any) -> tuple[Any, ...]:
+    """A usage entry, as the app sends it, as a row of the usage table."""
+    if not isinstance(entry, dict):
+        raise ValueError("a usage entry is an object")
+    texts = [entry.get(name) for name in ("category", "chatId", "model")]
+    counts = [entry.get(name) for name in ("at", "promptTokens", "completionTokens")]
+    cost, entry_id = entry.get("cost"), entry.get("id")
+    if (
+        not all(isinstance(text, str) and text for text in texts)
+        or not all(_is_count(count) for count in counts)
+        or not (cost is None or _is_count(cost))
+        or not (entry_id is None or isinstance(entry_id, str))
+    ):
+        raise ValueError(
+            "a usage entry has a category, chatId, model, at, promptTokens,"
+            " completionTokens and cost"
+        )
+    category, chat_id, model = texts
+    # each was checked to be a number above
+    at, prompt_tokens, completion_tokens = (int(count or 0) for count in counts)
+    return (
+        entry_id,
+        at,
+        category,
+        chat_id,
+        model,
+        prompt_tokens,
+        completion_tokens,
+        cost,
+    )
+
+
+def _is_count(value: Any) -> bool:
+    """Whether `value` is a number that is not below 0, which a JSON true is
+    not."""
+    return (
+        isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+    )
+
+
+def _totals(row: Any) -> dict[str, Any]:
+    """Totals of the usage, from a row of `_TOTALS`, in the names the app
+    gives them."""
+    requests, prompt_tokens, completion_tokens, cost, incomplete = row
+    return {
+        "requests": requests,
+        "promptTokens": prompt_tokens,
+        "completionTokens": completion_tokens,
+        "cost": cost,
+        "costIncomplete": bool(incomplete),
+    }

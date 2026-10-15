@@ -1,0 +1,740 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+"""Runs the exercises of a session of practice.
+
+An exercise is a directory in `exercises/`, written as `exercises/kit.py`
+describes. Its backend is run for each step in a Python process of its own,
+which is given the step on its input and replies on its output. It is given
+no key, and the environment of the server is not passed on to it: when it
+wants a language model asked, a picture looked at or a picture drawn, it
+asks the server, which asks the model for it. This keeps an exercise from mixing with the server and from spending
+what it was not given, but is no sandbox against an exercise written to do
+harm: the exercises are trusted to be the user's own.
+
+What a step returns is kept at once: the state for the next step, what the
+interface is to show, and the logs of what the learner answered.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import random
+import re
+import subprocess
+import sys
+import threading
+import uuid
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from grammar import Grammar
+from intake import read_usage
+from profiling import Profile, ProfileError
+from storage import UserStore
+from topics import (
+    DEFAULT_EMBEDDING_MODEL,
+    MAX_WORDS,
+    Embeddings,
+    Send,
+    as_picture,
+    choose_words,
+    draw,
+    make_icon,
+    rank,
+    send_to_openrouter,
+    topic_text,
+)
+from translating import TranslationError, read_text
+
+EXERCISES_DIRECTORY = Path(__file__).parent / "exercises"
+# how long one step may take, with the models it asks
+STEP_TIMEOUT_SECS = 300.0
+# how often a step may ask a model, and have a picture drawn, which costs most
+MAX_ASKS = 10
+MAX_DRAWS = 1
+# far more than an exercise needs to say
+MAX_REPLY_BYTES = 2_000_000
+# no exercise is done more often than this in a session
+MAX_INSTANCES = 50
+# How many words that were never embedded are embedded when a session
+# starts. With more, the session waits for the vocabulary to be embedded in
+# the background.
+MAX_EMBEDDED_AT_START = 1000
+# How many of the sessions an exercise was in before are looked at for what
+# it was answered with, and how long what it is told of them may be.
+GUIDANCE_SESSIONS = 20
+MAX_GUIDANCE = 3000
+# how many of the words nearest the topics are printed when a session starts
+SHOWN_WORDS = 15
+# how many of the lessons practised last a session without a lesson reviews
+REVIEWED_LESSONS = 10
+# The interface of an exercise is a module the app loads into its own page,
+# where it runs as the app does: it is trusted, as the backend is, to be the
+# user's own. The files it may be made of, by their endings, with what each
+# is.
+UI_TYPES = {
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+}
+_ID = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+# Runs the backend that is named, with the kit to be imported, and nothing
+# else of the server's. It is run with -I, which leaves out the directory it
+# is started in and whatever the environment says about Python.
+_LAUNCH = (
+    "import runpy, sys; sys.path[:0] = [sys.argv[1]];"
+    " runpy.run_path(sys.argv[2], run_name='__main__')"
+)
+
+# Asks a language model the messages given, and replies with what it said and
+# what asking used. Raises TranslationError.
+Asker = Callable[[list[dict[str, Any]]], tuple[str, Profile]]
+# Has an image model draw a prompt in an aspect ratio, and replies with the
+# picture, as a data URL, and what drawing it used. Raises TranslationError.
+Drawer = Callable[[str, str], tuple[str, Profile]]
+# the aspect ratios a picture may be drawn in
+ASPECT_RATIOS = ("1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3")
+
+
+class ExerciseError(Exception):
+    """A step of an exercise could not be made. The message says why."""
+
+
+@dataclass
+class Choosing:
+    """How the topics and the words of a session are chosen."""
+
+    # Whether the exercises bring all the topics chosen together. Otherwise
+    # one of them is drawn for the whole session.
+    mix_topics: bool = False
+    # The words the exercises are given: "none", the whole vocabulary
+    # ("all"), or the `words` that are sent, such as those of a set ("set").
+    vocabulary: str = "none"
+    words: list[str] = field(default_factory=list)
+    # Whether the words are those nearest the topics, rather than those
+    # used last.
+    topic_words: bool = True
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL
+
+
+@dataclass
+class Manifest:
+    id: str
+    title: str
+    description: str
+    # Whether it teaches rather than asks: it comes first, is done once,
+    # and keeps no logs.
+    theory: bool = False
+
+
+def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
+    """The exercises there are, those of theory first and then by their
+    titles: each directory with a manifest, a backend and an interface."""
+    found = []
+    for path in sorted(directory.iterdir()) if directory.is_dir() else []:
+        manifest = path / "manifest.json"
+        if not _ID.fullmatch(path.name) or not manifest.exists():
+            continue
+        if (
+            not (path / "backend.py").exists()
+            or not (path / "ui" / "index.js").exists()
+        ):
+            continue
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if isinstance(data, dict) and isinstance(data.get("title"), str):
+            found.append(
+                Manifest(
+                    path.name,
+                    data["title"],
+                    str(data.get("description") or ""),
+                    data.get("theory") is True,
+                )
+            )
+    return sorted(found, key=lambda manifest: (not manifest.theory, manifest.title))
+
+
+def ui_file(
+    path: str, directory: Path = EXERCISES_DIRECTORY
+) -> tuple[bytes, str] | None:
+    """A file the interface of an exercise is made of, with what it is, as
+    it is asked for by its path from `directory`: `kit.js` and `kit.css`,
+    which every interface may use, or a file in the `ui` directory of an
+    exercise. None for anything else."""
+    parts = path.split("/")
+    if parts in (["kit.js"], ["kit.css"]):
+        file = directory / parts[0]
+    elif len(parts) >= 3 and _ID.fullmatch(parts[0]) and parts[1] == "ui":
+        ui = (directory / parts[0] / "ui").resolve()
+        file = ui.joinpath(*parts[2:]).resolve()
+        if ui not in file.parents:
+            return None
+    else:
+        return None
+    kind = UI_TYPES.get(file.suffix)
+    if kind is None or not file.is_file():
+        return None
+    return file.read_bytes(), kind
+
+
+def model_asker(
+    chat: Callable[[dict[str, Any], str], dict[str, Any]], api_key: str, model: str
+) -> Asker:
+    """What asks `model` with `api_key`, as the exercises want it asked."""
+
+    def ask(messages: list[dict[str, Any]]) -> tuple[str, Profile]:
+        if not api_key:
+            raise TranslationError("an OpenRouter key is needed")
+        if not model:
+            raise TranslationError("no model was named")
+        try:
+            response = chat(
+                {"model": model, "messages": messages, "usage": {"include": True}},
+                api_key,
+            )
+        except ProfileError as error:
+            raise TranslationError(str(error)) from None
+        return read_text(response), read_usage(response, model)
+
+    return ask
+
+
+def model_drawer(api_key: str, model: str, send: Send = send_to_openrouter) -> Drawer:
+    """What has the image `model` draw with `api_key`, as the exercises want
+    pictures drawn."""
+
+    def draw_picture(prompt: str, aspect_ratio: str) -> tuple[str, Profile]:
+        if not model:
+            raise TranslationError("no image model was named")
+        try:
+            picture, _, used = draw(prompt, api_key, model, aspect_ratio, send)
+            return as_picture(picture), used
+        except ProfileError as error:
+            raise TranslationError(str(error)) from None
+
+    return draw_picture
+
+
+def cannot_draw(prompt: str, aspect_ratio: str) -> tuple[str, Profile]:
+    raise TranslationError("no image model was named")
+
+
+class Runner:
+    """Runs one step of the backend of an exercise in a process of its own."""
+
+    def __init__(
+        self,
+        directory: Path = EXERCISES_DIRECTORY,
+        python: str = sys.executable,
+        timeout: float = STEP_TIMEOUT_SECS,
+    ) -> None:
+        self._directory = directory
+        self._python = python
+        self._timeout = timeout
+
+    def run(
+        self,
+        exercise: str,
+        request: dict[str, Any],
+        ask: Asker,
+        draw: Drawer = cannot_draw,
+        look: Asker | None = None,
+    ) -> tuple[dict[str, Any], list[Profile]]:
+        """What the backend of `exercise` replied to `request`, with what
+        the models it had asked used. Raises ExerciseError."""
+        backend = self._directory / exercise / "backend.py"
+        if not _ID.fullmatch(exercise) or not backend.exists():
+            raise ExerciseError(f"there is no exercise {exercise}")
+        process = subprocess.Popen(
+            [
+                self._python,
+                "-I",
+                "-X",
+                "utf8",
+                "-c",
+                _LAUNCH,
+                str(self._directory),
+                str(backend),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=self._directory / exercise,
+            env=_bare_environment(),
+            encoding="utf-8",
+        )
+        assert process.stdin and process.stdout and process.stderr
+        # what it writes to its error output, which is read as it comes so
+        # that it never waits for room there
+        errors: list[str] = []
+        reader = threading.Thread(
+            target=lambda: errors.extend(process.stderr or []), daemon=True
+        )
+        reader.start()
+        timed_out = threading.Event()
+
+        def stop() -> None:
+            timed_out.set()
+            process.kill()
+
+        timer = threading.Timer(self._timeout, stop)
+        timer.start()
+        used: list[Profile] = []
+        try:
+            process.stdin.write(json.dumps(request) + "\n")
+            process.stdin.flush()
+            reply = self._converse(process, ask, draw, look or ask, used)
+        except (OSError, ValueError) as error:
+            raise ExerciseError(f"the exercise failed: {error}") from None
+        finally:
+            timer.cancel()
+            process.kill()
+            process.wait()
+            reader.join(timeout=1)
+        if timed_out.is_set():
+            raise ExerciseError(f"the exercise took more than {self._timeout:.0f} s")
+        if reply is None:
+            said = "".join(errors).strip().splitlines()
+            raise ExerciseError(
+                f"the exercise stopped without a reply{': ' + said[-1] if said else ''}"
+            )
+        if "error" in reply:
+            raise ExerciseError(str(reply["error"]))
+        return _read_reply(reply.get("reply")), used
+
+    def _converse(
+        self,
+        process: subprocess.Popen[str],
+        ask: Asker,
+        draw: Drawer,
+        look: Asker,
+        used: list[Profile],
+    ) -> dict[str, Any] | None:
+        """Answers what the backend asks of the models until it replies.
+        None if it stops first."""
+        assert process.stdin and process.stdout
+        asked = drawn = 0
+        while line := process.stdout.readline():
+            if len(line) > MAX_REPLY_BYTES:
+                raise ExerciseError("the exercise said too much")
+            said = json.loads(line)
+            if not isinstance(said, dict):
+                raise ExerciseError("the exercise said what is not an object")
+            if not {"ask", "look", "draw"} & said.keys():
+                return said
+            answer: dict[str, str]
+            try:
+                if "ask" in said or "look" in said:
+                    asked += 1
+                    if asked > MAX_ASKS:
+                        raise TranslationError(
+                            f"an exercise asks at most {MAX_ASKS} times"
+                        )
+                    # a look is asked of the model that sees pictures best
+                    kind = "ask" if "ask" in said else "look"
+                    request = said[kind] if isinstance(said[kind], dict) else {}
+                    asker = ask if kind == "ask" else look
+                    text, profile = asker(_read_messages(request.get("messages")))
+                else:
+                    drawn += 1
+                    if drawn > MAX_DRAWS:
+                        raise TranslationError(
+                            f"an exercise has at most {MAX_DRAWS} pictures drawn"
+                        )
+                    request = said["draw"] if isinstance(said["draw"], dict) else {}
+                    text, profile = draw(*_read_drawing(request))
+                used.append(profile)
+                answer = {"answer": text}
+            except (TranslationError, ValueError) as error:
+                answer = {"error": str(error)}
+            process.stdin.write(json.dumps(answer) + "\n")
+            process.stdin.flush()
+        return None
+
+
+def _bare_environment() -> dict[str, str]:
+    """What a backend is given of the environment: only what Python needs
+    to start, and nothing that holds a key."""
+    kept = ("SYSTEMROOT", "WINDIR", "TEMP", "TMP", "PATH")
+    return {name: os.environ[name] for name in kept if name in os.environ}
+
+
+def _read_messages(value: object) -> list[dict[str, Any]]:
+    """The messages an exercise asks with: each with a role and a content,
+    which is text, or a list of parts that are text or pictures given as
+    data URLs."""
+    if not isinstance(value, list) or not value:
+        raise ValueError("an exercise asks with messages")
+    messages = []
+    for message in value:
+        if not isinstance(message, dict) or message.get("role") not in (
+            "system",
+            "user",
+            "assistant",
+        ):
+            raise ValueError("every message needs a role and a content")
+        messages.append(
+            {"role": message["role"], "content": _read_content(message.get("content"))}
+        )
+    return messages
+
+
+def _read_content(content: object) -> str | list[dict[str, Any]]:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list) or not content:
+        raise ValueError("every message needs a role and a content")
+    parts: list[dict[str, Any]] = []
+    for part in content:
+        kind = part.get("type") if isinstance(part, dict) else None
+        if kind == "text" and isinstance(part.get("text"), str):
+            parts.append({"type": "text", "text": part["text"]})
+            continue
+        image = part.get("image_url") if kind == "image_url" else None
+        url = image.get("url") if isinstance(image, dict) else None
+        # a picture the exercise has, and no address for the model to fetch
+        if not isinstance(url, str) or not url.startswith("data:image/"):
+            raise ValueError("a part of a message is text, or a picture as a data URL")
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+    return parts
+
+
+def _read_drawing(request: dict[str, Any]) -> tuple[str, str]:
+    prompt, aspect_ratio = request.get("prompt"), request.get("aspect_ratio", "1:1")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("a picture is drawn from a prompt")
+    if aspect_ratio not in ASPECT_RATIOS:
+        raise ValueError(f"a picture is drawn in one of {', '.join(ASPECT_RATIOS)}")
+    return prompt, aspect_ratio
+
+
+def _read_reply(reply: object) -> dict[str, Any]:
+    if not isinstance(reply, dict):
+        raise ExerciseError("the exercise replied with nothing")
+    logs = reply.get("logs") or []
+    if not isinstance(logs, list) or not all(isinstance(each, dict) for each in logs):
+        raise ExerciseError("the logs of an exercise must be a list of objects")
+    return {**reply, "logs": logs}
+
+
+class Practice:
+    """The sessions of practice of one user, and the exercises done in them."""
+
+    def __init__(
+        self,
+        store: UserStore,
+        grammar: Grammar | None = None,
+        runner: Runner | None = None,
+        directory: Path = EXERCISES_DIRECTORY,
+        embeddings: Embeddings | None = None,
+        lemmas_of: Callable[[str], list[str]] = lambda language: [],
+        draw: Callable[[list[str]], str] = random.choice,
+        on_words: Callable[[str], None] = lambda line: None,
+        send: Send = send_to_openrouter,
+    ) -> None:
+        self._store = store
+        self._grammar = grammar or Grammar()
+        self._runner = runner or Runner(directory)
+        self._directory = directory
+        # what sends the requests for icons and embeddings to OpenRouter
+        self._send = send
+        self.embeddings = embeddings or Embeddings(store, send)
+        # the words of the vocabulary of a language, those used last first
+        self.lemmas_of = lemmas_of
+        self._draw = draw
+        # what is told of the words a session was given
+        self._on_words = on_words
+        # the embedding models that are embedding a vocabulary in the background
+        self.embedding: set[str] = set()
+        # one step at a time, so that two never start from the same state
+        self._lock = threading.Lock()
+
+    def exercises(self) -> list[dict[str, str]]:
+        return [asdict(manifest) for manifest in exercises(self._directory)]
+
+    def lessons(self, language: str) -> list[dict[str, Any]]:
+        """The lessons of `language`. Raises GrammarError."""
+        return [asdict(lesson) for lesson in self._grammar.lessons(language)]
+
+    def start_session(
+        self,
+        language: str,
+        lesson: str,
+        topics: list[str],
+        chosen: dict[str, int],
+        choosing: Choosing | None = None,
+        api_key: str = "",
+    ) -> tuple[dict[str, Any], list[Profile]]:
+        """Start a session of `lesson`, with the exercises `chosen`, each
+        with how many instances of it there are to be, about `topics`, with
+        the words `choosing` says. An exercise of theory comes first, with
+        no instances, as it is not answered. Without a lesson, the session
+        reviews the lessons practised last, and has no theory. Returns the
+        session with what embedding the words used. Raises ValueError, and
+        ProfileError if the words could not be embedded."""
+        choosing = choosing or Choosing()
+        known = {manifest.id: manifest for manifest in exercises(self._directory)}
+        reviewed: list[str] = []
+        if not lesson:
+            if any(exercise in known and known[exercise].theory for exercise in chosen):
+                raise ValueError("theory is that of a lesson: choose one")
+            reviewed = self.practised(language)
+            if not reviewed:
+                raise ValueError(
+                    "a review goes over the lessons practised last: practise one first"
+                )
+        elif self._grammar.lesson(language, lesson) is None:
+            raise ValueError(f"there is no lesson {lesson} in {language}")
+        if not chosen:
+            raise ValueError("choose an exercise")
+        for exercise, instances in chosen.items():
+            if exercise not in known:
+                raise ValueError(f"there is no exercise {exercise}")
+            if known[exercise].theory:
+                continue
+            if not isinstance(instances, int) or not 0 < instances <= MAX_INSTANCES:
+                raise ValueError(f"an exercise has 1 to {MAX_INSTANCES} instances")
+        chosen = {
+            exercise: 0 if known[exercise].theory else instances
+            for exercise, instances in sorted(
+                chosen.items(), key=lambda each: not known[each[0]].theory
+            )
+        }
+        if all(known[exercise].theory for exercise in chosen):
+            # theory is about the lesson alone, whatever was chosen besides
+            topics, choosing = [], Choosing()
+        about = [self._store.topic(topic) for topic in dict.fromkeys(topics)]
+        if None in about:
+            raise ValueError("there is no such topic")
+        if len(topics) > 1 and not choosing.mix_topics:
+            topics = [self._draw(topics)]
+            about = [self._store.topic(topics[0])]
+        words, used = self._words(
+            language, [topic_text(each) for each in about if each], choosing, api_key
+        )
+        session = self._store.start_session(
+            uuid.uuid4().hex,
+            language,
+            lesson,
+            list(dict.fromkeys(topics)),
+            chosen,
+            words,
+            choosing.mix_topics and len(topics) > 1,
+            {exercise: self.guidance(exercise) for exercise in chosen},
+            reviewed,
+        )
+        return session, used
+
+    def practised(self, language: str) -> list[str]:
+        """The ids of the lessons of `language` practised last, at most
+        `REVIEWED_LESSONS` of them, in the order they are taught in. A
+        lesson is practised in a session of it, and not in a review."""
+        latest_first = dict.fromkeys(
+            session["lesson"]
+            for session in self._store.sessions()
+            if session["language"] == language and session["lesson"]
+        )
+        last = set(list(latest_first)[:REVIEWED_LESSONS])
+        return [
+            lesson.id for lesson in self._grammar.lessons(language) if lesson.id in last
+        ]
+
+    def guidance(self, exercise: str) -> str:
+        """What an exercise is told to heed when a session starts, besides
+        its lesson, topics and words: what it was answered with in the last
+        sessions it was in, so that it chooses other things. Nothing if it
+        was in none."""
+        used = []
+        length = 0
+        for text in self._store.used_before(exercise, GUIDANCE_SESSIONS):
+            length += len(text) + 2
+            if length > MAX_GUIDANCE:
+                break
+            used.append(text)
+        if not used:
+            return ""
+        return (
+            "The learner had these in the last sessions of this exercise, the"
+            " latest first. Do not use them again: choose other words, things and"
+            f" sentences.\n{'; '.join(used)}"
+        )
+
+    def _words(
+        self, language: str, topics: list[str], choosing: Choosing, api_key: str
+    ) -> tuple[dict[str, Any] | None, list[Profile]]:
+        """The words the exercises of a session about `topics` are to
+        use, as `choosing` says, with what embedding them used."""
+        if choosing.vocabulary == "all":
+            candidates = self.lemmas_of(language)
+        elif choosing.vocabulary == "set":
+            candidates = list(dict.fromkeys(choosing.words))
+        else:
+            return None, []
+        if not candidates:
+            return None, []
+        if not (choosing.topic_words and topics):
+            return {"mode": "prefer", "lemmas": candidates[:MAX_WORDS]}, []
+        model = choosing.embedding_model
+        missing = self.embeddings.missing(candidates + topics, model)
+        if len(missing) > MAX_EMBEDDED_AT_START:
+            raise ValueError(
+                f"{len(missing)} words of the vocabulary are not embedded yet:"
+                " wait for them to be, and start again"
+            )
+        used = self.embeddings.embed(missing, api_key, model)
+        ranked = rank(self.embeddings, topics, candidates, model)
+        words = choose_words(ranked, MAX_WORDS)
+        nearest = ", ".join(
+            f"{word} {score:.2f}" for word, score in ranked[:SHOWN_WORDS]
+        )
+        self._on_words(
+            f"{datetime.now():%H:%M:%S} words for {'; '.join(topics)}:"
+            f" {words['mode']} {len(words['lemmas'])} of {len(candidates)}"
+            f"\n       nearest: {nearest}"
+        )
+        return words, used
+
+    def make_icon(
+        self, topic: dict[str, Any], api_key: str, model: str
+    ) -> tuple[bytes, str, Profile]:
+        """An icon for `topic`, made by the image `model`. Raises ProfileError."""
+        return make_icon(topic, api_key, model, self._send)
+
+    def vocabulary_to_embed(self, language: str, model: str) -> list[str]:
+        """The words of the vocabulary of `language` that `model` has not
+        embedded yet."""
+        return self.embeddings.missing(self.lemmas_of(language), model)
+
+    def step(
+        self,
+        session_id: str,
+        exercise: str,
+        op: str,
+        message: Any,
+        context: dict[str, str],
+        ask: Asker,
+        draw: Drawer = cannot_draw,
+        look: Asker | None = None,
+    ) -> tuple[Any, list[Profile]]:
+        """Make a step of an exercise of a session: `start` it, have it
+        `act` on the `message` of its interface, or `finish` it. Returns
+        what it is to show, with what the models it asked used. `context`
+        is the language the learner reads in, as `into`, and their `level`.
+        Raises ValueError for a step that cannot be made, and ExerciseError
+        for one that failed."""
+        with self._lock:
+            session = self._store.session(session_id)
+            kept = self._store.exercise_state(session_id, exercise)
+            if session is None or kept is None:
+                raise ValueError("there is no such exercise in the session")
+            if session["status"] != "running":
+                raise ValueError("the session has ended")
+            if session["progress"][exercise]["status"] == "finished":
+                raise ValueError("the exercise is finished")
+            started, state, shown = kept
+            if op == "start" and started:
+                # the interface was opened again, and is shown what it showed
+                return shown, []
+            if op == "finish" and not started:
+                return None, []
+            if op == "act" and not started:
+                raise ValueError("the exercise has not started")
+            if op not in ("start", "act", "finish"):
+                raise ValueError(f"there is no step {op}")
+            request = {
+                "op": op,
+                "context": self._context(session, exercise, context),
+                "state": state,
+                "message": message,
+            }
+            reply, used = self._runner.run(exercise, request, ask, draw, look)
+            # the logs are kept first, as they are what matters most
+            try:
+                self._store.add_logs(session_id, exercise, reply["logs"])
+            except ValueError as error:
+                raise ExerciseError(str(error)) from None
+            if op == "finish":
+                self._store.finish_exercise(session_id, exercise, reply.get("results"))
+                return None, used
+            self._store.save_exercise_state(
+                session_id, exercise, reply.get("state"), reply.get("show")
+            )
+            return reply.get("show"), used
+
+    def end_session(
+        self,
+        session_id: str,
+        status: str,
+        context: dict[str, str],
+        ask: Asker,
+        draw: Drawer = cannot_draw,
+        look: Asker | None = None,
+    ) -> tuple[dict[str, Any], list[Profile]]:
+        """End a session, after finishing every exercise of it that was
+        started, so that what was done of them is kept. Raises ValueError."""
+        session = self._store.session(session_id)
+        if session is None:
+            raise ValueError("there is no such session")
+        used: list[Profile] = []
+        if session["status"] == "running":
+            for exercise, progress in session["progress"].items():
+                if progress["status"] != "started":
+                    continue
+                try:
+                    _, finishing = self.step(
+                        session_id,
+                        exercise,
+                        "finish",
+                        None,
+                        context,
+                        ask,
+                        draw,
+                        look,
+                    )
+                    used += finishing
+                except ExerciseError:
+                    # the logs it reported are kept all the same
+                    pass
+            self._store.end_session(session_id, status)
+        ended = self._store.session(session_id)
+        assert ended
+        return ended, used
+
+    def _context(
+        self, session: dict[str, Any], exercise: str, context: dict[str, str]
+    ) -> dict[str, Any]:
+        """What an exercise is told about the session it is in. A review is
+        told of a lesson made of the lessons it goes over."""
+        if session["lesson"]:
+            lesson = self._grammar.lesson(session["language"], session["lesson"])
+        else:
+            lesson = self._grammar.review(session["language"], session["lessons"])
+        if lesson is None:
+            raise ValueError(
+                f"the lesson {session['lesson'] or 'of the review'} is gone"
+            )
+        topics = [self._store.topic(topic) for topic in session["topics"]]
+        return {
+            "language": session["language"],
+            "into": context.get("into") or "English",
+            "level": context.get("level") or "",
+            "lesson": lesson,
+            # those that have been deleted since are left out
+            "topics": [
+                {"title": topic["title"], "description": topic["description"]}
+                for topic in topics
+                if topic
+            ],
+            "mix_topics": session["mix_topics"],
+            "words": session["words"],
+            "instances": session["exercises"][exercise],
+            "guidance": session["guidance"].get(exercise, ""),
+        }

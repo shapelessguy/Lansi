@@ -1,0 +1,812 @@
+[
+    {
+        "id": "praesens-regelmaessig",
+        "level": "A1",
+        "title": "Present tense of regular verbs",
+        "statement": "Regular verbs add -e, -st, -t, -en, -t, -en to the stem for ich, du, er/sie/es, wir, ihr, sie/Sie. A stem ending in -t or -d puts an -e- before -st and -t (du arbeitest, er findet).",
+        "when": "present tense, any subject, verb without a vowel change",
+        "confused_with": ["praesens-vokalwechsel"],
+        "requires": []
+    },
+    {
+        "id": "praesens-vokalwechsel",
+        "level": "A1",
+        "title": "Vowel change in the present tense",
+        "statement": "Some strong verbs change their stem vowel in the du and er/sie/es forms only: e becomes i or ie, a becomes ä. The endings stay regular.",
+        "when": "present tense, subject du or er/sie/es, verb that changes its vowel (essen, geben, nehmen, lesen, sehen, fahren, schlafen ...)",
+        "confused_with": ["praesens-regelmaessig"],
+        "requires": ["praesens-regelmaessig"]
+    },
+    {
+        "id": "verb-position-2",
+        "level": "A1",
+        "title": "The verb in second position",
+        "statement": "In a statement and in a question with a question word, the conjugated verb is the second element. Whatever comes first, the subject follows the verb if it is not first itself.",
+        "when": "main clause that is a statement or a W-question",
+        "confused_with": ["nebensatz-verb-ende"],
+        "requires": []
+    },
+    {
+        "id": "modalverben-satzklammer",
+        "level": "A1",
+        "title": "Modal verbs and the infinitive at the end",
+        "statement": "A modal verb (können, müssen, wollen, dürfen, sollen, möchten) is conjugated in second position and the other verb goes to the end of the clause as an infinitive.",
+        "when": "main clause with a modal verb and another verb",
+        "confused_with": [],
+        "requires": ["verb-position-2"]
+    },
+    {
+        "id": "nebensatz-verb-ende",
+        "level": "A2",
+        "title": "The verb at the end of a subordinate clause",
+        "statement": "In a clause started by a conjunction such as weil, dass, wenn or ob, the conjugated verb goes to the very end of the clause.",
+        "when": "subordinate clause after weil, dass, wenn, ob, als ...",
+        "confused_with": ["verb-position-2"],
+        "requires": ["verb-position-2"]
+    },
+    {
+        "id": "trennbar-hauptsatz",
+        "level": "A1",
+        "title": "Separable verbs in a main clause",
+        "statement": "In a main clause the conjugated part of a separable verb stands in second position and the prefix goes to the end of the clause.",
+        "when": "main clause, separable verb (aufstehen, einkaufen, anrufen ...), no modal verb",
+        "confused_with": ["trennbar-nebensatz"],
+        "requires": ["verb-position-2"]
+    },
+    {
+        "id": "trennbar-modalverb",
+        "level": "A1",
+        "title": "Separable verbs with a modal verb",
+        "statement": "With a modal verb, a separable verb is not split: it goes to the end of the clause as one word in the infinitive.",
+        "when": "main clause with a modal verb and a separable verb",
+        "confused_with": ["trennbar-hauptsatz"],
+        "requires": ["trennbar-hauptsatz", "modalverben-satzklammer"]
+    },
+    {
+        "id": "trennbar-nebensatz",
+        "level": "A2",
+        "title": "Separable verbs in a subordinate clause",
+        "statement": "In a subordinate clause a separable verb is not split: it goes to the end of the clause as one conjugated word.",
+        "when": "subordinate clause (weil, dass, wenn ...) with a separable verb",
+        "confused_with": ["trennbar-hauptsatz"],
+        "requires": ["trennbar-hauptsatz", "nebensatz-verb-ende"]
+    },
+    {
+        "id": "personalpronomen-nominativ",
+        "level": "A1",
+        "title": "Subject pronouns",
+        "statement": "The subject pronouns are ich, du, er, sie, es, wir, ihr, sie and Sie. A noun is replaced by the pronoun of its gender, whether it is a person or a thing: der Tisch → er, die Lampe → sie, das Regal → es. Every plural is sie.",
+        "when": "a pronoun as the subject, standing for a person, a thing or a group",
+        "confused_with": ["anrede-du-sie"],
+        "requires": []
+    },
+    {
+        "id": "anrede-du-sie",
+        "level": "A1",
+        "title": "du, ihr or Sie",
+        "statement": "du (one person) and ihr (several) are for family, friends, children and, often, among young people and colleagues; Sie, always with a capital S, is the polite form for one or more adults, and takes the verb of the plural (Sie kommen). Small s sie is she or they.",
+        "when": "speaking to someone: choosing du, ihr or Sie, and writing Sie with a capital",
+        "confused_with": ["personalpronomen-nominativ"],
+        "requires": []
+    },
+    {
+        "id": "praesens-stamm-auf-s",
+        "level": "A1",
+        "title": "Present tense of verbs whose stem ends in -s, -ß, -z",
+        "statement": "A verb whose stem ends in -s, -ss, -ß, -x or -z adds only -t for du, so that the du and the er/sie/es forms are the same: du heißt, du tanzt, du reist.",
+        "when": "present tense, subject du, verb such as heißen, tanzen, reisen, sitzen, putzen, mixen",
+        "confused_with": ["praesens-regelmaessig"],
+        "requires": ["praesens-regelmaessig"]
+    },
+    {
+        "id": "praesens-eln-ern",
+        "level": "A1",
+        "title": "Present tense of verbs in -eln and -ern",
+        "statement": "Verbs ending in -eln or -ern add only -n for wir and sie/Sie (wir wandern, sie sammeln), and a verb in -eln drops the e of its stem for ich (ich sammle, ich lächle).",
+        "when": "present tense of sammeln, lächeln, wandern, ändern, erinnern ...",
+        "confused_with": ["praesens-regelmaessig"],
+        "requires": ["praesens-regelmaessig"]
+    },
+    {
+        "id": "sein-haben-praesens",
+        "level": "A1",
+        "title": "sein and haben in the present tense",
+        "statement": "sein is irregular: bin, bist, ist, sind, seid, sind. haben drops its b for du and er/sie/es: habe, hast, hat, haben, habt, haben.",
+        "when": "present tense of sein or haben, any subject",
+        "confused_with": ["sein-oder-haben"],
+        "requires": []
+    },
+    {
+        "id": "sein-oder-haben",
+        "level": "A1",
+        "title": "sein or haben",
+        "statement": "sein goes with names, jobs, nationalities, age (Ich bin 30) and adjectives (Ich bin müde); haben goes with an object in the accusative: things, family, time, and Hunger, Durst, Angst, Fieber, Glück (Ich habe Hunger).",
+        "when": "saying who or how someone is, or what someone has; age; hunger, thirst, fear",
+        "confused_with": ["sein-haben-praesens"],
+        "requires": ["sein-haben-praesens"]
+    },
+    {
+        "id": "moechten-moegen-wissen",
+        "level": "A1",
+        "title": "möchten, mögen, wissen and tun",
+        "statement": "möchten, mögen and wissen have no ending for ich and er/sie/es (ich möchte, er mag, sie weiß); mögen and wissen change their vowel in the singular (mag, weiß) but not in the plural (mögen, wissen). tun is regular: ich tue, du tust, er tut, wir tun.",
+        "when": "present tense of möchten, mögen, wissen or tun",
+        "confused_with": [],
+        "requires": ["praesens-regelmaessig"]
+    },
+    {
+        "id": "modalverben-formen",
+        "level": "A1",
+        "title": "The forms of the modal verbs",
+        "statement": "Modal verbs have no ending for ich and er/sie/es (ich kann, er muss), and können, müssen, dürfen and wollen change their vowel in the singular (kann, muss, darf, will) but not in the plural (wir können). sollen keeps its vowel: ich soll, er soll.",
+        "when": "present tense of können, müssen, dürfen, wollen, sollen, möchten",
+        "confused_with": [],
+        "requires": ["praesens-regelmaessig"]
+    },
+    {
+        "id": "modalverben-bedeutung",
+        "level": "A1",
+        "title": "What each modal verb means",
+        "statement": "können is ability or possibility, müssen necessity, dürfen permission, wollen a firm wish or plan, möchten a polite wish, sollen what someone else asks or advises. In a question, Soll ich ...? offers to do something.",
+        "when": "choosing a modal verb for ability, necessity, permission, a wish, or someone else's request",
+        "confused_with": ["nicht-muessen-nicht-duerfen"],
+        "requires": ["modalverben-formen"]
+    },
+    {
+        "id": "nicht-muessen-nicht-duerfen",
+        "level": "A1",
+        "title": "nicht müssen or nicht dürfen",
+        "statement": "nicht müssen means it is not necessary (Du musst nicht kommen = you don't have to come); nicht dürfen means it is forbidden (Du darfst nicht kommen = you must not come). English must not is nicht dürfen.",
+        "when": "negated necessity or prohibition",
+        "confused_with": ["modalverben-bedeutung"],
+        "requires": ["modalverben-formen"]
+    },
+    {
+        "id": "imperativ-sie-ihr",
+        "level": "A1",
+        "title": "The imperative with Sie and ihr",
+        "statement": "The Sie imperative is the Sie form with the verb first and Sie after it (Kommen Sie!); the ihr imperative is the ihr form without the pronoun (Kommt!). seien Sie and seid are the forms of sein.",
+        "when": "asking or telling one adult politely, or several people informally, to do something",
+        "confused_with": ["imperativ-du"],
+        "requires": ["praesens-regelmaessig"]
+    },
+    {
+        "id": "imperativ-du",
+        "level": "A1",
+        "title": "The imperative with du",
+        "statement": "The du imperative is the stem without -st and without du (Komm! Mach!); a stem in -t, -d, -chn or -tm adds -e (Warte! Rechne!). A change of e to i or ie stays (Nimm! Lies!), but a change of a to ä does not (Fahr! Schlaf!). sein gives Sei!",
+        "when": "asking or telling one person you say du to, to do something",
+        "confused_with": ["imperativ-sie-ihr"],
+        "requires": ["praesens-regelmaessig", "praesens-vokalwechsel"]
+    },
+    {
+        "id": "zeit-vor-ort",
+        "level": "A1",
+        "title": "Time before place",
+        "statement": "In the middle of a sentence an expression of time comes before an expression of place (Ich fahre morgen nach Berlin), and the usual order is time, reason, manner, place (te-ka-mo-lo): Ich fahre heute wegen der Arbeit mit dem Zug nach Köln.",
+        "when": "a sentence with both a time and a place, or with several adverbials",
+        "confused_with": [],
+        "requires": ["verb-position-2"]
+    },
+    {
+        "id": "w-frage-wortstellung",
+        "level": "A1",
+        "title": "Word order in a question with a question word",
+        "statement": "The question word comes first, the conjugated verb second, and the subject after the verb: Wo wohnst du? Wann fängt der Kurs an? Only when the question word is the subject itself (wer, was) does the verb follow it directly: Wer kommt?",
+        "when": "a question that starts with a question word",
+        "confused_with": ["ja-nein-frage-wortstellung"],
+        "requires": ["verb-position-2"]
+    },
+    {
+        "id": "fragewoerter",
+        "level": "A1",
+        "title": "Choosing the question word",
+        "statement": "wer asks for a person, was for a thing, wo for a place, woher for where from, wohin for where to, wann for a time, wie for a manner, warum for a reason, wie viel with an uncountable noun, wie viele with a plural, wie lange for a span of time and wie oft for how often. wo, woher and wohin are not interchangeable.",
+        "when": "asking a W-question",
+        "confused_with": [],
+        "requires": []
+    },
+    {
+        "id": "ja-nein-frage-wortstellung",
+        "level": "A1",
+        "title": "Word order in a yes/no question",
+        "statement": "A yes/no question starts with the conjugated verb, followed by the subject: Kommst du mit? Hast du Zeit? A second verb or a prefix still goes to the end: Kannst du mir helfen? Rufst du mich an?",
+        "when": "a question that is answered with ja, nein or doch",
+        "confused_with": ["w-frage-wortstellung"],
+        "requires": ["verb-position-2"]
+    },
+    {
+        "id": "ja-nein-doch",
+        "level": "A1",
+        "title": "ja, nein or doch",
+        "statement": "A positive question is answered ja or nein. A negative question (with nicht or kein) is answered doch to contradict it (Kommst du nicht? – Doch, ich komme!) and nein to agree with it (Nein, ich komme nicht).",
+        "when": "answering a yes/no question, above all one with nicht or kein",
+        "confused_with": [],
+        "requires": []
+    },
+    {
+        "id": "hoefliche-bitten",
+        "level": "A1",
+        "title": "Polite requests",
+        "statement": "A polite request is a question with Könnten Sie / Kannst du, Würden Sie / Würdest du, with bitte: Könnten Sie mir bitte helfen? Würden Sie bitte das Fenster schließen? The second verb is an infinitive at the end.",
+        "when": "asking someone politely to do something",
+        "confused_with": [],
+        "requires": ["ja-nein-frage-wortstellung"]
+    },
+    {
+        "id": "satzklammer",
+        "level": "A1",
+        "title": "The sentence bracket",
+        "statement": "When the verb has two parts, the conjugated part stands in second position and the other part goes to the very end of the clause, with everything else between them: a modal verb and its infinitive, a separable verb and its prefix, haben or sein and the participle, and fixed pairs such as spazieren gehen, Rad fahren or kennenlernen.",
+        "when": "main clause whose verb has two parts",
+        "confused_with": ["nebensatz-verb-ende"],
+        "requires": ["verb-position-2"]
+    },
+    {
+        "id": "nomen-plural",
+        "level": "A1",
+        "title": "The plural of nouns",
+        "statement": "The plural article is always die. The ending depends on the noun: -(e)n for most feminine nouns and all in -ung, -heit, -keit, -ion; -er (with an umlaut where it can) for many short neuter nouns; -e, often with an umlaut, for many short masculine nouns; no ending for masculine and neuter nouns in -er, -el, -en, -chen, -lein; -s for nouns in -a, -i, -o, -y, abbreviations and many foreign words.",
+        "when": "a noun in the plural",
+        "confused_with": [],
+        "requires": []
+    },
+    {
+        "id": "nomen-ohne-plural",
+        "level": "A1",
+        "title": "Nouns with no plural or no singular",
+        "statement": "Some nouns have no plural: materials (Wasser, Milch), most abstract nouns (Glück, Hunger), collective nouns (Obst, Polizei) and verbs used as nouns (das Essen). Some have no singular: Eltern, Leute, Ferien, Möbel, Geschwister, and names such as die USA.",
+        "when": "a noun for a material, an idea, a group, or one of Eltern, Leute, Ferien ...",
+        "confused_with": ["nomen-plural"],
+        "requires": []
+    },
+    {
+        "id": "artikel-definit-indefinit",
+        "level": "A1",
+        "title": "Definite or indefinite article",
+        "statement": "ein / eine introduces something new or unknown, or one of many (Da ist ein Café); der / die / das names something known, already mentioned or unique (Das Café ist schön. Die Sonne scheint). The article follows the gender of the noun: der/ein (masculine), das/ein (neuter), die/eine (feminine), die/– (plural).",
+        "when": "a noun mentioned for the first time, or again, or something unique",
+        "confused_with": ["kein-artikel"],
+        "requires": []
+    },
+    {
+        "id": "kein-artikel",
+        "level": "A1",
+        "title": "No article",
+        "statement": "There is no article with an indefinite plural (Ich kaufe Äpfel), with uncountable things in an indefinite amount (Ich trinke Wasser), with jobs and nationalities after sein or werden (Sie ist Ärztin), with names of people, and with most names of cities and countries (in Berlin, aus Spanien). Countries such as die Schweiz, die Türkei, der Iran, die USA keep it.",
+        "when": "a plural, a material, a job, a name, a city or a country",
+        "confused_with": ["artikel-definit-indefinit"],
+        "requires": []
+    },
+    {
+        "id": "kein-oder-nicht",
+        "level": "A1",
+        "title": "kein or nicht",
+        "statement": "kein negates a noun that would have ein or no article (Ich habe kein Auto, keine Zeit, keine Kinder) and takes the endings of ein; nicht negates everything else: verbs, adjectives, adverbs, names, and nouns with der/die/das or a possessive (Ich kenne den Film nicht).",
+        "when": "a negative sentence",
+        "confused_with": ["nicht-position"],
+        "requires": ["artikel-definit-indefinit"]
+    },
+    {
+        "id": "nicht-position",
+        "level": "A1",
+        "title": "Where nicht goes",
+        "statement": "To negate the whole sentence, nicht goes to the end of the middle field: after objects and time, but before the second part of the verb, before an adjective after sein, and before a place or direction (Ich rufe dich heute nicht an. Er ist nicht müde. Ich fahre nicht nach Berlin). To negate one part only, nicht goes right before it.",
+        "when": "a sentence negated with nicht",
+        "confused_with": ["kein-oder-nicht"],
+        "requires": ["satzklammer"]
+    },
+    {
+        "id": "negationswoerter",
+        "level": "A1",
+        "title": "nie, nichts, niemand, noch nicht, nicht mehr",
+        "statement": "The opposites are: immer → nie, etwas/alles → nichts, jemand/alle → niemand, schon → noch nicht, schon mal → noch nie, noch → nicht mehr / kein ... mehr. There is no double negation in German: Ich sehe nichts, not Ich sehe nicht nichts.",
+        "when": "negating immer, schon, noch, etwas, jemand, alle",
+        "confused_with": [],
+        "requires": ["kein-oder-nicht"]
+    },
+    {
+        "id": "akkusativ-artikel",
+        "level": "A1",
+        "title": "Articles in the accusative",
+        "statement": "In the accusative only the masculine changes: der → den, ein → einen, kein → keinen, mein → meinen. Neuter (das, ein), feminine (die, eine) and plural (die, –, keine) stay as in the nominative.",
+        "when": "a noun as the direct object, or after es gibt",
+        "confused_with": ["dativ-artikel"],
+        "requires": ["artikel-definit-indefinit"]
+    },
+    {
+        "id": "akkusativ-objekt",
+        "level": "A1",
+        "title": "The direct object in the accusative",
+        "statement": "The direct object of most verbs is in the accusative (wen? was?): haben, brauchen, kaufen, sehen, kennen, suchen, finden, nehmen, besuchen, lieben, mögen, essen, trinken, and es gibt. The subject stays in the nominative, even when the object comes first: Den Film kenne ich.",
+        "when": "a sentence with a direct object",
+        "confused_with": [],
+        "requires": ["akkusativ-artikel"]
+    },
+    {
+        "id": "dativ-artikel",
+        "level": "A1",
+        "title": "Articles in the dative",
+        "statement": "In the dative the articles are dem/einem/keinem/meinem (masculine and neuter), der/einer/keiner/meiner (feminine) and den/–/keinen/meinen (plural). Some prepositions fuse with dem and der: zum, zur, beim, vom, im, am.",
+        "when": "a noun after mit, von, zu, bei, aus, nach, seit, or as the indirect object",
+        "confused_with": ["akkusativ-artikel"],
+        "requires": ["akkusativ-artikel"]
+    },
+    {
+        "id": "dativ-plural-n",
+        "level": "A1",
+        "title": "The dative plural ends in -n",
+        "statement": "A noun in the dative plural takes -n unless its plural already ends in -n or in -s: mit den Kinder-n, mit meinen Freunde-n, but mit den Frauen, mit den Autos.",
+        "when": "a plural noun in the dative",
+        "confused_with": [],
+        "requires": ["dativ-artikel", "nomen-plural"]
+    },
+    {
+        "id": "possessivartikel-wahl",
+        "level": "A1",
+        "title": "Choosing the possessive article",
+        "statement": "The possessive article follows the owner: ich → mein, du → dein, er/es → sein, sie → ihr, wir → unser, ihr → euer, sie → ihr, Sie → Ihr. For a man or a masculine/neuter thing it is sein, for a woman or a feminine thing or several owners it is ihr.",
+        "when": "saying whose something is",
+        "confused_with": ["possessivartikel-endung"],
+        "requires": ["personalpronomen-nominativ"]
+    },
+    {
+        "id": "possessivartikel-endung",
+        "level": "A1",
+        "title": "The endings of the possessive article",
+        "statement": "The ending of the possessive article follows the noun that is owned, not the owner, and is the ending of ein/kein: mein Vater, meine Mutter, meinen Vater (accusative), meinem Vater (dative), meine Eltern. euer drops its e when it takes an ending: eure, euren.",
+        "when": "a possessive article before a noun, in any case",
+        "confused_with": ["possessivartikel-wahl"],
+        "requires": ["akkusativ-artikel", "dativ-artikel"]
+    },
+    {
+        "id": "welcher-dieser",
+        "level": "A1",
+        "title": "welcher and dieser",
+        "statement": "welcher (which) and dieser (this) take the endings of the definite article: welcher/dieser (der), welches/dieses (das), welche/diese (die), welchen/diesen (den), welchem/diesem (dem), welcher/dieser (der, dative feminine), welchen/diesen + -n (dative plural). They can stand without a noun: Welcher gefällt dir? – Dieser.",
+        "when": "asking which one of a known group, or pointing to one",
+        "confused_with": ["welcher-was-fuer-ein"],
+        "requires": ["akkusativ-artikel", "dativ-artikel"]
+    },
+    {
+        "id": "welcher-was-fuer-ein",
+        "level": "A1",
+        "title": "welcher or was für ein",
+        "statement": "welcher asks for one of a known, limited choice (Welchen Pullover nimmst du, den roten oder den blauen?); was für ein asks for the kind (Was für ein Auto hast du? – Ein kleines). In was für ein, für does not decide the case: ein takes the case of its role in the sentence.",
+        "when": "asking which one, or what kind of",
+        "confused_with": ["welcher-dieser"],
+        "requires": ["welcher-dieser"]
+    },
+    {
+        "id": "personalpronomen-akkusativ",
+        "level": "A1",
+        "title": "Personal pronouns in the accusative",
+        "statement": "The accusative pronouns are mich, dich, ihn, es, sie, uns, euch, sie, Sie. A masculine thing is ihn too: Der Tisch? Ich kaufe ihn. They are used for a direct object and after für, ohne, gegen, um, durch.",
+        "when": "a pronoun as the direct object, or after an accusative preposition",
+        "confused_with": ["personalpronomen-dativ"],
+        "requires": ["personalpronomen-nominativ", "akkusativ-objekt"]
+    },
+    {
+        "id": "personalpronomen-dativ",
+        "level": "A1",
+        "title": "Personal pronouns in the dative",
+        "statement": "The dative pronouns are mir, dir, ihm, ihm, ihr, uns, euch, ihnen, Ihnen. They are used after mit, bei, von, zu, aus, nach, seit, with verbs such as helfen, danken, gefallen, gehören, schmecken, and in phrases such as Wie geht es dir?, Mir ist kalt, Es tut mir leid.",
+        "when": "a pronoun after a dative preposition or verb, or in a fixed phrase",
+        "confused_with": ["personalpronomen-akkusativ"],
+        "requires": ["personalpronomen-nominativ", "dativ-artikel"]
+    },
+    {
+        "id": "dativ-person-akkusativ-sache",
+        "level": "A2",
+        "title": "Verbs with a dative and an accusative",
+        "statement": "Verbs of giving and telling, such as geben, schenken, bringen, schicken, zeigen, erklären, empfehlen, leihen, kaufen, erzählen, sagen, have two objects: the person (wem?) in the dative and the thing (was?) in the accusative: Ich schenke meiner Mutter einen Schal.",
+        "when": "geben, schenken, zeigen, bringen ... with a person and a thing",
+        "confused_with": ["stellung-dativ-akkusativ"],
+        "requires": ["akkusativ-objekt", "dativ-artikel"]
+    },
+    {
+        "id": "stellung-dativ-akkusativ",
+        "level": "A2",
+        "title": "The order of the dative and the accusative",
+        "statement": "Two nouns: the dative before the accusative (Ich gebe dem Kind den Ball). A pronoun comes before a noun, whatever its case (Ich gebe ihm den Ball. Ich gebe ihn dem Kind). Two pronouns: the accusative before the dative (Ich gebe ihn ihm).",
+        "when": "a sentence with both a dative and an accusative object",
+        "confused_with": ["dativ-person-akkusativ-sache"],
+        "requires": ["dativ-person-akkusativ-sache", "personalpronomen-akkusativ", "personalpronomen-dativ"]
+    },
+    {
+        "id": "verben-mit-dativ",
+        "level": "A2",
+        "title": "Verbs with only a dative object",
+        "statement": "Some verbs take their only object in the dative, not the accusative: helfen, danken, antworten, gratulieren, zuhören, glauben, folgen, vertrauen, gefallen, gehören, passen, schmecken, stehen (of clothes), fehlen, wehtun, leidtun: Ich helfe dem Mann. Ich danke dir.",
+        "when": "helfen, danken, antworten, gratulieren, zuhören, glauben, gefallen, gehören ... with an object",
+        "confused_with": ["akkusativ-objekt"],
+        "requires": ["dativ-artikel", "personalpronomen-dativ"]
+    },
+    {
+        "id": "gefallen-subjekt",
+        "level": "A2",
+        "title": "gefallen, schmecken, passen: the thing is the subject",
+        "statement": "With gefallen, schmecken, passen, stehen, gehören, fehlen and wehtun the thing is the subject and the person is in the dative; the verb agrees with the thing: Das Kleid gefällt mir. Die Schuhe gefallen mir. Mir tun die Füße weh.",
+        "when": "saying that someone likes, owns, misses something, or that something hurts or fits",
+        "confused_with": ["verben-mit-dativ"],
+        "requires": ["verben-mit-dativ"]
+    },
+    {
+        "id": "praeteritum-sein-haben",
+        "level": "A1",
+        "title": "The simple past of sein and haben",
+        "statement": "sein: war, warst, war, waren, wart, waren; haben: hatte, hattest, hatte, hatten, hattet, hatten. ich and er/sie/es have no ending. For sein and haben the simple past is used in speech too, rather than the perfect.",
+        "when": "talking about the past with sein or haben",
+        "confused_with": ["perfekt-haben"],
+        "requires": ["sein-haben-praesens"]
+    },
+    {
+        "id": "perfekt-haben",
+        "level": "A1",
+        "title": "The perfect tense with haben",
+        "statement": "The perfect is formed with haben (or sein) in second position and the past participle at the very end of the clause: Ich habe gestern Pizza gegessen. Most verbs take haben, among them all verbs with an accusative object. Regular verbs form the participle as ge- + stem + -t (gemacht, gekauft, gearbeitet).",
+        "when": "talking about the past in speech, with most verbs",
+        "confused_with": ["perfekt-sein", "praeteritum-sein-haben"],
+        "requires": ["satzklammer", "sein-haben-praesens"]
+    },
+    {
+        "id": "perfekt-sein",
+        "level": "A2",
+        "title": "The perfect tense with sein",
+        "statement": "Verbs of movement from one place to another (gehen, fahren, fliegen, kommen, laufen, reisen, umziehen), verbs of a change of state (aufstehen, einschlafen, aufwachen, sterben, wachsen), and sein, bleiben, werden, passieren, geschehen form the perfect with sein: Ich bin nach Rom geflogen. Er ist eingeschlafen. Wir sind zu Hause geblieben.",
+        "when": "the perfect of a verb of movement, of change, or of sein, bleiben, werden, passieren",
+        "confused_with": ["perfekt-haben"],
+        "requires": ["perfekt-haben"]
+    },
+    {
+        "id": "partizip-unregelmaessig",
+        "level": "A2",
+        "title": "The participle of irregular verbs",
+        "statement": "Irregular (strong) verbs form the participle with ge- + stem + -en, often with another vowel, which must be learnt: gegessen, gesehen, getrunken, geschrieben, gesprochen, genommen, gegangen. Mixed verbs take -t but change the stem: gebracht, gedacht, gewusst, gekannt.",
+        "when": "the participle of a strong or mixed verb",
+        "confused_with": ["partizip-trennbar-untrennbar"],
+        "requires": ["perfekt-haben"]
+    },
+    {
+        "id": "partizip-trennbar-untrennbar",
+        "level": "A2",
+        "title": "The participle of separable, inseparable and -ieren verbs",
+        "statement": "A separable verb puts ge between prefix and stem: eingekauft, angerufen, aufgestanden. A verb with an inseparable prefix (be-, emp-, ent-, er-, ge-, miss-, ver-, zer-) and a verb in -ieren take no ge: bezahlt, verstanden, erzählt, telefoniert, studiert.",
+        "when": "the participle of a verb with a prefix or ending in -ieren",
+        "confused_with": ["partizip-unregelmaessig"],
+        "requires": ["perfekt-haben", "trennbar-hauptsatz"]
+    },
+    {
+        "id": "praeteritum-modalverben",
+        "level": "A2",
+        "title": "The simple past of the modal verbs",
+        "statement": "The simple past of a modal verb is its stem without the umlaut + -te: konnte, musste, durfte, wollte, sollte, mochte; möchten has no past of its own and uses wollte. ich and er/sie/es have no further ending (ich konnte, er musste). In speech the modal verbs are used in the simple past, not the perfect.",
+        "when": "talking about the past with können, müssen, dürfen, wollen, sollen, möchten",
+        "confused_with": [],
+        "requires": ["modalverben-formen", "praeteritum-sein-haben"]
+    },
+    {
+        "id": "zeitengebrauch-vergangenheit",
+        "level": "A2",
+        "title": "Perfect or simple past",
+        "statement": "In speech and informal writing the past is told in the perfect (Ich habe Saft getrunken), except sein, haben, the modal verbs and es gibt, which are used in the simple past (Ich hatte Durst. Ich musste los. Es gab Kuchen). Stories, reports and books use the simple past for all verbs.",
+        "when": "talking or writing about the past",
+        "confused_with": [],
+        "requires": ["perfekt-haben", "praeteritum-sein-haben", "praeteritum-modalverben"]
+    },
+    {
+        "id": "praesens-mit-seit",
+        "level": "A2",
+        "title": "The present tense with seit",
+        "statement": "Something that began in the past and still goes on is said in the present tense with seit or schon: Ich wohne seit drei Jahren in Berlin (not the perfect, as in English I have lived). The present with a time expression also tells the future: Morgen fahre ich nach Köln.",
+        "when": "an action that started in the past and still goes on; a plan for the future",
+        "confused_with": ["zeitengebrauch-vergangenheit"],
+        "requires": ["praesens-regelmaessig"]
+    },
+    {
+        "id": "reflexivpronomen-akkusativ",
+        "level": "A2",
+        "title": "Reflexive pronouns in the accusative",
+        "statement": "A reflexive verb has a pronoun that refers back to the subject: mich, dich, sich, uns, euch, sich (and sich for Sie). Only the third person differs from the other pronouns: er wäscht sich, not ihn. Some verbs are always reflexive: sich freuen, sich beeilen, sich erholen, sich verlieben, sich interessieren, sich ausruhen.",
+        "when": "a reflexive verb such as sich waschen, sich freuen, sich beeilen, sich anziehen",
+        "confused_with": ["reflexiv-oder-nicht"],
+        "requires": ["personalpronomen-akkusativ"]
+    },
+    {
+        "id": "reflexiv-oder-nicht",
+        "level": "A2",
+        "title": "Reflexive or not",
+        "statement": "Many verbs are reflexive only when the subject does the action to itself: Ich wasche mich, but Ich wasche das Auto; Sie zieht sich an, but Sie zieht das Kind an. In the plural, sich can also mean each other: Wir treffen uns. Sie lieben sich.",
+        "when": "waschen, anziehen, ärgern, setzen, treffen ... with or without a reflexive pronoun",
+        "confused_with": ["reflexivpronomen-akkusativ"],
+        "requires": ["reflexivpronomen-akkusativ"]
+    },
+    {
+        "id": "temporal-um-am-im",
+        "level": "A1",
+        "title": "um, am, im for times",
+        "statement": "um goes with clock times (um 8 Uhr), am with days, parts of the day and dates (am Montag, am Abend, am 3. Mai, am Wochenende), im with months, seasons and centuries (im Mai, im Sommer); but in der Nacht. A year stands alone or with im Jahr: 2020 / im Jahr 2020, never in 2020.",
+        "when": "saying when something happens",
+        "confused_with": ["temporal-vor-nach-seit"],
+        "requires": []
+    },
+    {
+        "id": "temporal-vor-nach-seit",
+        "level": "A1",
+        "title": "vor, nach, seit, ab, bis, von ... bis",
+        "statement": "vor (before, ago), nach (after) and seit (since, for) take the dative: vor dem Essen, vor zwei Tagen, nach der Arbeit, seit einem Jahr. ab is from a point on (ab Montag), bis up to a point (bis Freitag, bis um 6), von ... bis from ... to (von 9 bis 17 Uhr, vom 1. bis zum 5. Mai).",
+        "when": "saying before, after, since, from or until when",
+        "confused_with": ["temporal-um-am-im"],
+        "requires": ["dativ-artikel"]
+    },
+    {
+        "id": "praepositionen-dativ",
+        "level": "A1",
+        "title": "Prepositions with the dative",
+        "statement": "aus, bei, mit, nach, seit, von, zu and gegenüber always take the dative: mit dem Bus, bei meiner Schwester, zu den Kindern, aus der Schweiz. zu dem, zu der, bei dem and von dem become zum, zur, beim and vom.",
+        "when": "a noun or pronoun after aus, bei, mit, nach, seit, von, zu, gegenüber",
+        "confused_with": ["praepositionen-akkusativ"],
+        "requires": ["dativ-artikel"]
+    },
+    {
+        "id": "nach-zu-aus-von",
+        "level": "A1",
+        "title": "nach or zu, aus or von",
+        "statement": "nach goes with towns and countries without an article (nach Berlin, nach Italien) and nach Hause; zu goes with people, buildings and places (zu meiner Mutter, zum Bahnhof, zur Arbeit). aus says where from out of a country, town or room (aus Spanien, aus dem Haus); von says from a person or a starting point (von meinem Freund, vom Arzt).",
+        "when": "saying where to or where from",
+        "confused_with": ["praepositionen-dativ"],
+        "requires": ["praepositionen-dativ"]
+    },
+    {
+        "id": "praepositionen-akkusativ",
+        "level": "A1",
+        "title": "Prepositions with the accusative",
+        "statement": "für, um, durch, ohne, gegen and bis always take the accusative: für meinen Vater, ohne dich, durch den Park, gegen die Wand, um den See. durch das and für das are often shortened to durchs and fürs.",
+        "when": "a noun or pronoun after für, um, durch, ohne, gegen, bis",
+        "confused_with": ["praepositionen-dativ"],
+        "requires": ["akkusativ-artikel"]
+    },
+    {
+        "id": "wechselpraepositionen-wo",
+        "level": "A1",
+        "title": "Two-way prepositions for a place: the dative",
+        "statement": "in, an, auf, über, unter, vor, hinter, neben and zwischen take the dative when they say where something is (wo?): Das Buch liegt auf dem Tisch. Die Lampe hängt über dem Sofa. in dem and an dem become im and am.",
+        "when": "saying where something is with in, an, auf, über, unter, vor, hinter, neben, zwischen",
+        "confused_with": ["wechselpraepositionen-wohin"],
+        "requires": ["dativ-artikel"]
+    },
+    {
+        "id": "in-an-auf",
+        "level": "A1",
+        "title": "in, an or auf",
+        "statement": "in is inside a closed space (im Zimmer, im Park, in der Stadt); an is at the side of something, touching it from the side or at its edge, and at water (an der Wand, an der Tür, am Fenster, am Meer); auf is on top of a surface (auf dem Tisch, auf dem Boden, auf dem Balkon).",
+        "when": "choosing in, an or auf for a place",
+        "confused_with": [],
+        "requires": ["wechselpraepositionen-wo"]
+    },
+    {
+        "id": "wechselpraepositionen-wohin",
+        "level": "A2",
+        "title": "Two-way prepositions for a direction: the accusative",
+        "statement": "in, an, auf, über, unter, vor, hinter, neben and zwischen take the accusative when they say where something goes (wohin?), a movement to a new place: Ich gehe in den Park. Ich lege das Buch auf den Tisch. in das and an das become ins and ans. A movement within one place stays dative: Ich laufe im Park.",
+        "when": "a movement to a place with in, an, auf, über, unter, vor, hinter, neben, zwischen",
+        "confused_with": ["wechselpraepositionen-wo"],
+        "requires": ["wechselpraepositionen-wo", "akkusativ-artikel"]
+    },
+    {
+        "id": "lokale-praepositionen",
+        "level": "A2",
+        "title": "Where, where to, where from",
+        "statement": "Rooms, buildings and countries with an article: in + dative / in + accusative / aus (im Kino, ins Kino, aus dem Kino). Towns and countries without an article: in / nach / aus (in Rom, nach Rom, aus Rom). People, shops and doctors: bei / zu / von (beim Arzt, zum Arzt, vom Arzt). Water, edges and stations: an + dative / an + accusative / von (am Meer, ans Meer, vom Meer). Open places and events: auf / auf / von (auf dem Markt, auf den Markt, vom Markt). Home: zu Hause / nach Hause / von zu Hause.",
+        "when": "saying where someone is, goes or comes from",
+        "confused_with": [],
+        "requires": ["wechselpraepositionen-wohin", "nach-zu-aus-von"]
+    },
+    {
+        "id": "adjektiv-praedikativ",
+        "level": "A2",
+        "title": "No ending after sein",
+        "statement": "An adjective after sein, werden, bleiben or used as an adverb takes no ending: Der Mann ist nett. Sie singt schön. An ending is needed only before a noun: der nette Mann.",
+        "when": "an adjective after sein, werden, bleiben, or describing how something is done",
+        "confused_with": ["adjektiv-nach-definit"],
+        "requires": []
+    },
+    {
+        "id": "adjektiv-nach-definit",
+        "level": "A2",
+        "title": "Adjective endings after der, das, die",
+        "statement": "After der/das/die (and dieser, jeder, welcher) the adjective ends in -e in the nominative singular and in the accusative singular of das and die (der nette Mann, das kleine Kind, die neue Lampe); everywhere else it ends in -en (den netten Mann, die netten Leute).",
+        "when": "an adjective before a noun with der, das, die, dieser, jeder, welcher",
+        "confused_with": ["adjektiv-nach-indefinit"],
+        "requires": ["akkusativ-artikel", "adjektiv-praedikativ"]
+    },
+    {
+        "id": "adjektiv-nach-indefinit",
+        "level": "A2",
+        "title": "Adjective endings after ein, kein, mein",
+        "statement": "After ein, kein or a possessive the adjective shows the gender where the article does not: ein netter Mann, ein kleines Kind, eine neue Lampe; in the accusative einen netten Mann, ein kleines Kind, eine neue Lampe. In the plural after keine, meine it is -en (keine netten Leute).",
+        "when": "an adjective before a noun with ein, kein, mein, dein ...",
+        "confused_with": ["adjektiv-nach-definit"],
+        "requires": ["akkusativ-artikel", "adjektiv-praedikativ"]
+    },
+    {
+        "id": "adjektiv-dativ",
+        "level": "A2",
+        "title": "Adjective endings in the dative",
+        "statement": "After an article in the dative (dem, der, den, einem, einer, meinen ...) the adjective always ends in -en: mit dem neuen Auto, mit einer guten Freundin, mit meinen alten Freunden.",
+        "when": "an adjective before a noun in the dative, after an article",
+        "confused_with": ["adjektiv-nach-definit"],
+        "requires": ["dativ-artikel", "adjektiv-nach-definit"]
+    },
+    {
+        "id": "ordinalzahlen",
+        "level": "A2",
+        "title": "Ordinal numbers and the date",
+        "statement": "Ordinal numbers are the number + -t- up to 19 and + -st- from 20, with adjective endings (der zweite, am zweiten); erste, dritte, siebte and achte are irregular. A date is am + dative: am ersten Mai, am 3. (dritten) Oktober; in writing, a full stop marks the ordinal.",
+        "when": "saying a date or a position in a row",
+        "confused_with": [],
+        "requires": ["adjektiv-dativ"]
+    },
+    {
+        "id": "komparativ-formen",
+        "level": "A2",
+        "title": "The comparative",
+        "statement": "The comparative is the adjective + -er (schnell → schneller); many short adjectives with a, o, u take an umlaut (alt → älter, groß → größer, jung → jünger). Irregular: gut → besser, viel → mehr, gern → lieber, hoch → höher. Before a noun it also takes the adjective ending: ein schnelleres Auto.",
+        "when": "comparing two things",
+        "confused_with": ["vergleich-als-wie"],
+        "requires": ["adjektiv-praedikativ"]
+    },
+    {
+        "id": "vergleich-als-wie",
+        "level": "A2",
+        "title": "als or wie in a comparison",
+        "statement": "After a comparative comes als (Tom ist größer als Paul); for things that are equal comes so ... wie, or genauso ... wie (Tom ist so groß wie Paul), and with nicht so ... wie for less. Never wie after a comparative.",
+        "when": "a comparison of two people or things",
+        "confused_with": ["komparativ-formen"],
+        "requires": ["komparativ-formen"]
+    },
+    {
+        "id": "superlativ",
+        "level": "A2",
+        "title": "The superlative",
+        "statement": "The superlative is am + adjective + -sten after a verb (Er läuft am schnellsten. Das ist am besten), and der/die/das + adjective + -st- + ending before a noun (der schnellste Läufer). After -d, -t, -s, -ß, -sch, -z it is -esten (am ältesten, am kürzesten). Irregular: gut → am besten, viel → am meisten, gern → am liebsten, hoch → am höchsten, nah → am nächsten.",
+        "when": "saying that someone or something is the most of all",
+        "confused_with": ["komparativ-formen"],
+        "requires": ["komparativ-formen", "adjektiv-nach-definit"]
+    },
+    {
+        "id": "konnektoren-position-0",
+        "level": "A2",
+        "title": "und, aber, oder, denn, sondern",
+        "statement": "und, aber, oder, denn and sondern join two main clauses without taking a position of their own (position 0): the clause after them keeps its normal order, subject and then verb in second place: Ich bleibe zu Hause, denn ich bin krank. A comma comes before aber, denn and sondern.",
+        "when": "joining two main clauses with und, aber, oder, denn, sondern",
+        "confused_with": ["konnektoren-position-1", "nebensatz-verb-ende"],
+        "requires": ["verb-position-2"]
+    },
+    {
+        "id": "aber-sondern",
+        "level": "A2",
+        "title": "aber or sondern",
+        "statement": "sondern corrects a negated part: nicht/kein ..., sondern ... (Das ist kein Tee, sondern Kaffee). aber adds a contrast or a limit and does not replace what came before (Das ist kein Tee, aber es schmeckt gut).",
+        "when": "a contrast after nicht or kein",
+        "confused_with": [],
+        "requires": ["konnektoren-position-0", "kein-oder-nicht"]
+    },
+    {
+        "id": "konnektoren-position-1",
+        "level": "A2",
+        "title": "deshalb, trotzdem, sonst, dann ...",
+        "statement": "Connecting adverbs such as deshalb, darum, deswegen, trotzdem, sonst, dann, danach, also and außerdem take position 1 of their clause, so the verb follows them directly and the subject comes after the verb: Es regnet, deshalb bleiben wir zu Hause. They can also stand in the middle of the clause: Wir bleiben deshalb zu Hause.",
+        "when": "joining two main clauses with deshalb, trotzdem, sonst, dann, danach ...",
+        "confused_with": ["konnektoren-position-0"],
+        "requires": ["verb-position-2", "konnektoren-position-0"]
+    },
+    {
+        "id": "deshalb-trotzdem-sonst",
+        "level": "A2",
+        "title": "What deshalb, trotzdem and sonst mean",
+        "statement": "deshalb (darum, deswegen) gives the consequence of the first clause; trotzdem says something happens although the first clause speaks against it; sonst says what happens if the first clause is not done; dann and danach give the next step.",
+        "when": "a consequence, a contrast, a warning or a next step",
+        "confused_with": [],
+        "requires": ["konnektoren-position-1"]
+    },
+    {
+        "id": "weil-dass-wenn",
+        "level": "A2",
+        "title": "weil, dass or wenn",
+        "statement": "weil gives a reason (Ich komme nicht, weil ich krank bin); dass introduces what is said, thought, known or felt (Ich glaube, dass er kommt); wenn gives a condition or a time that repeats (Wenn es regnet, bleibe ich zu Hause). A comma always separates the subordinate clause.",
+        "when": "a subordinate clause for a reason, a content or a condition",
+        "confused_with": [],
+        "requires": ["nebensatz-verb-ende"]
+    },
+    {
+        "id": "nebensatz-vorn",
+        "level": "A2",
+        "title": "A subordinate clause first",
+        "statement": "When the subordinate clause comes first, it takes position 1 of the whole sentence, so the main clause continues with its conjugated verb: Wenn ich Zeit habe, komme ich. Weil es regnet, bleiben wir zu Hause. Verb, comma, verb.",
+        "when": "a sentence that starts with a subordinate clause",
+        "confused_with": [],
+        "requires": ["nebensatz-verb-ende", "verb-position-2"]
+    },
+    {
+        "id": "positions-direktionsadverbien",
+        "level": "A2",
+        "title": "Adverbs of place and of direction",
+        "statement": "For where (wo?) the adverbs are hier, da, dort, oben, unten, drinnen, draußen, vorne, hinten, links, rechts; for where to (wohin?) they become hierher, dahin, dorthin, nach oben, nach unten, rein/hinein, raus/hinaus, nach vorne, nach hinten, nach links, nach rechts. hin means away from the speaker, her towards the speaker: Komm her! Geh hin!",
+        "when": "saying where something is or where it goes, without a noun",
+        "confused_with": [],
+        "requires": ["wechselpraepositionen-wohin"]
+    },
+    {
+        "id": "partikeln",
+        "level": "A2",
+        "title": "Modal particles",
+        "statement": "Unstressed particles in the middle of the clause colour a sentence without changing its content: denn makes a question friendlier or more interested (Wie heißt du denn?), doch and mal soften an imperative (Komm doch mal vorbei!), ja marks surprise or something both know (Du bist ja schon da!), eigentlich asks in passing (Wie alt bist du eigentlich?). They never stand in position 1.",
+        "when": "a question, request or remark in speech",
+        "confused_with": [],
+        "requires": ["verb-position-2"]
+    },
+    {
+        "id": "komposita",
+        "level": "A2",
+        "title": "Compound nouns",
+        "statement": "In a compound noun the last word is the main word: it gives the article, the plural and the basic meaning, and the words before it describe it (der Kinderarzt is a doctor, die Arztkinder are children). The first word carries the stress. Between the words there is sometimes a joining -s- (Arbeitszeit, after -ung, -heit, -keit, -ion, -tät), -n- or -en- (Straßenbahn), or -er- (Kinderzimmer).",
+        "when": "a noun made of two or more words",
+        "confused_with": [],
+        "requires": ["artikel-definit-indefinit"]
+    },
+    {
+        "id": "wortbildung-endungen",
+        "level": "A2",
+        "title": "Making nouns with -chen, -lein, -er, -in, -ung",
+        "statement": "-chen and -lein make a small thing and are always das, usually with an umlaut (das Häuschen); -er makes a person or a device from a verb and is der (der Lehrer, der Fernseher); -in makes the female form and is die, plural -innen (die Lehrerin); -ung makes a noun from a verb and is die (die Wohnung). An infinitive used as a noun is das (das Essen).",
+        "when": "a noun formed with a suffix, or a verb used as a noun",
+        "confused_with": ["genusregeln"],
+        "requires": ["artikel-definit-indefinit"]
+    },
+    {
+        "id": "sein-mit-adverb",
+        "level": "A2",
+        "title": "sein with an, aus, auf, zu, los, weg, da",
+        "statement": "sein with a short word describes a state: an/aus sein (on/off), auf/zu sein (open/closed), los sein (happening, wrong), weg sein (gone), da sein (here), dabei sein (taking part), dafür/dagegen sein (for/against). The short word goes to the end of the clause like a prefix, but is written apart from sein: Das Licht ist noch an. ..., weil das Geschäft zu ist. anhaben and dabeihaben are separable verbs: Ich habe keine Jacke an.",
+        "when": "a state such as open, closed, on, off, gone, here",
+        "confused_with": [],
+        "requires": ["satzklammer", "trennbar-hauptsatz"]
+    },
+    {
+        "id": "genusregeln",
+        "level": "A2",
+        "title": "Rules for the gender of nouns",
+        "statement": "Some endings and groups show the gender. der: male people and animals, days, months, seasons, weather words, and nouns in -er (from verbs), -ling, -ismus, -ent. die: female people, most nouns in -e, and all in -ung, -heit, -keit, -schaft, -ion, -tät, -ik, -ei, -ur. das: -chen, -lein, -um, -ment, infinitives used as nouns, and most metals and colours as nouns.",
+        "when": "choosing der, die or das for a noun",
+        "confused_with": ["wortbildung-endungen"],
+        "requires": ["artikel-definit-indefinit"]
+    },
+    {
+        "id": "praeteritum-regelmaessig",
+        "level": "B1",
+        "title": "The simple past of regular verbs",
+        "statement": "Regular verbs form the simple past with stem + -te + ending: sagte, sagtest, sagte, sagten, sagtet, sagten; a stem in -t, -d, -chn, -ffn adds -e- (arbeitete, öffnete). ich and er/sie/es are the same. Separable verbs split as in the present: Er kaufte ein.",
+        "when": "writing or telling a story in the past with a regular verb",
+        "confused_with": ["praeteritum-unregelmaessig"],
+        "requires": ["praeteritum-sein-haben"]
+    },
+    {
+        "id": "praeteritum-unregelmaessig",
+        "level": "B1",
+        "title": "The simple past of irregular verbs",
+        "statement": "Irregular verbs change the stem vowel and take no -te: kommen → kam, gehen → ging, sehen → sah, fahren → fuhr, finden → fand; ich and er/sie/es have no ending (ich kam, er kam), the others take -st, -en, -t, -en (du kamst, wir kamen). Mixed verbs change the stem and take -te: bringen → brachte, denken → dachte, wissen → wusste, kennen → kannte.",
+        "when": "writing or telling a story in the past with an irregular verb",
+        "confused_with": ["praeteritum-regelmaessig"],
+        "requires": ["praeteritum-regelmaessig"]
+    },
+    {
+        "id": "plusquamperfekt",
+        "level": "B1",
+        "title": "The past perfect",
+        "statement": "The past perfect is hatte or war (as in the perfect: haben-verbs take hatte, sein-verbs take war) in second position and the participle at the end: Ich hatte zu lange geschlafen. Der Zug war schon abgefahren. It tells what happened before another past event, often with nachdem or schon.",
+        "when": "an event that happened before another event in the past",
+        "confused_with": ["zeitengebrauch-vergangenheit"],
+        "requires": ["perfekt-haben", "perfekt-sein", "praeteritum-sein-haben"]
+    }
+]

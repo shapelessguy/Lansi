@@ -20,7 +20,14 @@ A language-learning chat built on an Anki collection. Three parts:
   the chats, texts, books and settings (`storage.py`) and a vocabulary for
   each language (`intake.py`, `vocabulary.py`); a book is an EPUB file read
   into its text and font sizes (`books.py`); what the models are told about
-  each category of word is in `categories.py`. Who may log in is in
+  each category of word is in `categories.py`. Practice is made of
+  lessons, which are grammar points kept by hand in `checker/grammar/`
+  (`grammar.py`), and exercises, each a directory in `checker/exercises/`
+  with a backend run in a process of its own and an interface, a module
+  the app mounts in a shadow root, as `exercises/kit.py` and
+  `exercises/kit.js` describe;
+  sessions of practice and the logs of what was answered are kept by
+  `exercising.py` and `storage.py`. Who may log in is in
   `users.json` at the top of the repository, which holds passwords: do not
   read it.
 

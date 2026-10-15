@@ -208,6 +208,93 @@ def test_the_settings_come_back_as_they_were_kept(store: UserStore) -> None:
     assert store.settings() == {"language": "Italian", "level": "A2"}
 
 
+def used(**more: Any) -> dict[str, Any]:
+    """What a request to a model used, as the app reports it."""
+    return {
+        "at": 1_000,
+        "category": "chat",
+        "chatId": "chat-1",
+        "model": "openai/gpt-5",
+        "promptTokens": 100,
+        "completionTokens": 20,
+        "cost": 0.5,
+        **more,
+    }
+
+
+def test_the_usage_is_added_up_for_a_chat_from_a_time_on_and_in_all(
+    store: UserStore,
+) -> None:
+    store.add_usage(
+        [
+            used(at=1_000),
+            used(at=5_000, chatId="text:die-reise", category="text", cost=0.25),
+            used(at=6_000, promptTokens=10, completionTokens=1),
+        ]
+    )
+
+    usage = store.usage("chat-1", 5_000)
+
+    assert usage["chat"] == {
+        "requests": 2,
+        "promptTokens": 110,
+        "completionTokens": 21,
+        "cost": 1.0,
+        "costIncomplete": False,
+    }
+    assert usage["since"]["requests"] == 2
+    assert usage["since"]["cost"] == 0.75
+    assert usage["everything"]["requests"] == 3
+
+
+def test_the_usage_is_added_up_for_each_category_and_model(store: UserStore) -> None:
+    store.add_usage(
+        [
+            used(),
+            used(cost=0.25),
+            used(model="google/gemini-3-flash", cost=None),
+            used(category="checking", cost=0.125),
+        ]
+    )
+
+    by_model = store.usage("chat-1", 0)["byModel"]
+
+    assert [(one["category"], one["model"]) for one in by_model] == [
+        ("chat", "openai/gpt-5"),
+        ("chat", "google/gemini-3-flash"),
+        ("checking", "openai/gpt-5"),
+    ]
+    assert by_model[0]["requests"] == 2
+    assert by_model[0]["cost"] == 0.75
+    assert by_model[1]["costIncomplete"] is True
+
+
+def test_a_request_reported_again_under_the_same_id_is_counted_once(
+    store: UserStore,
+) -> None:
+    first = store.add_usage([used(id="gen-1"), used()])
+    again = store.add_usage([used(id="gen-1"), used()])
+
+    assert (first, again) == (2, 1)
+    assert store.usage("chat-1", 0)["everything"]["requests"] == 3
+
+
+def test_usage_that_is_not_an_entry_is_refused_and_none_of_it_kept(
+    store: UserStore,
+) -> None:
+    for wrong in (
+        used(category=""),
+        used(promptTokens=-1),
+        used(cost=True),
+        used(id=7),
+        "chat",
+    ):
+        with pytest.raises(ValueError):
+            store.add_usage([used(), wrong])
+
+    assert store.usage("chat-1", 0)["everything"]["requests"] == 0
+
+
 def test_what_a_user_has_is_still_there_when_it_is_opened_again(
     tmp_path: Path,
 ) -> None:
@@ -260,6 +347,9 @@ def test_books_can_be_kept_where_things_were_kept_before_there_were_books(
     before.save_settings({"level": "B1"})
     before._db.execute("DROP TABLE books")  # noqa: SLF001
     before._db.execute("DROP TABLE book_speech")  # noqa: SLF001
+    later = ("logs", "session_exercises", "sessions", "topics", "embeddings", "usage")
+    for table in later:
+        before._db.execute(f"DROP TABLE {table}")  # noqa: SLF001
     before._db.execute("PRAGMA user_version = 1")  # noqa: SLF001
     before.close()
 
@@ -318,3 +408,176 @@ def test_a_book_that_is_read_again_without_a_cover_has_none_any_more(
     again = store.add_book("book-1", "Der Hund", "", "", [])
 
     assert (again["cover"], store.cover("book-1")) == (False, None)
+
+
+def test_sessions_can_be_kept_where_things_were_kept_before_there_were_sessions(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.save_settings({"level": "B1"})
+    later = ("logs", "session_exercises", "sessions", "topics", "embeddings", "usage")
+    for table in later:
+        before._db.execute(f"DROP TABLE {table}")  # noqa: SLF001
+    before._db.execute("PRAGMA user_version = 5")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+    store.start_session("s1", "German", "trennbare-verben", [], {"cloze": 3})
+    store.add_logs("s1", "cloze", [{"result": "right", "answer": "Ja."}])
+
+    assert [log["answer"] for log in store.logs("s1")] == ["Ja."]
+    assert store.settings() == {"level": "B1"}
+
+
+def test_usage_can_be_kept_where_things_were_kept_before_there_was_usage(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.save_settings({"level": "B1"})
+    before._db.execute("DROP TABLE usage")  # noqa: SLF001
+    before._db.execute("ALTER TABLE sessions DROP COLUMN lessons")  # noqa: SLF001
+    before._db.execute("PRAGMA user_version = 8")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+    store.add_usage([used()])
+
+    assert store.usage("chat-1", 0)["everything"]["requests"] == 1
+    assert store.settings() == {"level": "B1"}
+
+
+def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> None:
+    times = iter([10.0, 20.0, 30.0])
+    store = UserStore(tmp_path / "ada", now=lambda: next(times))
+    store.start_session(
+        "s1", "German", "lesson", ["t1"], {"cloze": 3, "translation": 2}
+    )
+    store.save_exercise_state("s1", "cloze", {"at": 1}, {"shown": True})
+    store.add_logs("s1", "cloze", [{"result": "partial", "answer": "a", "note": "n"}])
+
+    store.end_session("s1", "abandoned")
+
+    session = store.session("s1")
+    assert session == {
+        "id": "s1",
+        "language": "German",
+        "lesson": "lesson",
+        "lessons": [],
+        "topics": ["t1"],
+        "started_at": 10.0,
+        "finished_at": 20.0,
+        "status": "abandoned",
+        "words": None,
+        "mix_topics": False,
+        "exercises": {"cloze": 3, "translation": 2},
+        "guidance": {"cloze": "", "translation": ""},
+        "progress": {
+            "cloze": {
+                "status": "started",
+                "logs": 1,
+                "results": {"right": 0, "partial": 1, "wrong": 0},
+            },
+            "translation": {
+                "status": "pending",
+                "logs": 0,
+                "results": {"right": 0, "partial": 0, "wrong": 0},
+            },
+        },
+    }
+    assert store.exercise_state("s1", "cloze") == (True, {"at": 1}, {"shown": True})
+    assert store.exercise_state("s1", "translation") == (False, None, None)
+
+
+def test_a_session_keeps_the_words_its_exercises_are_to_use(tmp_path: Path) -> None:
+    store = UserStore(tmp_path / "ada")
+    words = {"mode": "only", "lemmas": ["der Arzt", "krank"]}
+
+    store.start_session(
+        "s1", "German", "lesson", ["t1", "t2"], {"cloze": 3}, words, True
+    )
+
+    session = store.session("s1")
+    assert session and (session["words"], session["mix_topics"]) == (words, True)
+
+
+def test_a_topic_is_kept_with_its_icon_and_removed_with_it(tmp_path: Path) -> None:
+    store = UserStore(tmp_path / "ada", now=lambda: 5.0)
+
+    added = store.add_topic("t1", " Beim Arzt ", "symptoms, appointments ")
+    without = store.icon("t1")
+    kept = store.save_icon("t1", b"png", "image/png")
+    listed = store.topics()
+    icon = store.icon("t1")
+    store.delete_topic("t1")
+
+    assert added == {
+        "id": "t1",
+        "title": "Beim Arzt",
+        "description": "symptoms, appointments",
+        "created_at": 5.0,
+        "icon": False,
+    }
+    assert (without, kept, icon) == (None, True, (b"png", "image/png"))
+    assert listed[0]["icon"] is True
+    assert (store.topics(), store.icon("t1")) == ([], None)
+    assert not (tmp_path / "ada" / "topics" / "t1").exists()
+
+
+def test_an_icon_is_not_kept_for_a_topic_there_is_not(tmp_path: Path) -> None:
+    store = UserStore(tmp_path / "ada")
+
+    assert store.save_icon("gone", b"png", "image/png") is False
+    assert store.save_icon("../escape", b"png", "image/png") is False
+
+
+def test_a_topic_needs_a_title(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="title"):
+        UserStore(tmp_path / "ada").add_topic("t1", "  ", "")
+
+
+def test_embeddings_are_kept_by_the_model_that_made_them(tmp_path: Path) -> None:
+    store = UserStore(tmp_path / "ada")
+
+    store.save_embeddings("one/model", {"Hund": b"", "Katze": b""})
+    store.save_embeddings("other/model", {"Hund": b""})
+    store.save_embeddings("one/model", {"Hund": b""})
+
+    assert store.embedded("one/model") == {"Hund": b"", "Katze": b""}
+    assert store.embedded("other/model") == {"Hund": b""}
+
+
+def test_a_session_keeps_what_each_of_its_exercises_was_told_to_heed(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path / "ada")
+
+    store.start_session(
+        "s1", "German", "l", [], {"cloze": 2, "picture": 1}, guidance={"cloze": "x"}
+    )
+
+    session = store.session("s1")
+    assert session and session["guidance"] == {"cloze": "x", "picture": ""}
+
+
+def test_what_an_exercise_was_answered_with_comes_from_its_last_sessions(
+    tmp_path: Path,
+) -> None:
+    times = iter(range(100))
+    store = UserStore(tmp_path / "ada", now=lambda: float(next(times)))
+    for number, logs in enumerate(
+        [
+            [{"result": "right", "answer": "der Tisch"}],
+            [
+                {"result": "wrong", "answer": "der Preis", "correction": "der Pokal"},
+                {"result": "right", "answer": "der Tisch"},
+            ],
+            [{"result": "right", "answer": "die Lampe"}],
+        ]
+    ):
+        store.start_session(f"s{number}", "German", "l", [], {"picture": 1, "cloze": 1})
+        store.add_logs(f"s{number}", "picture", logs)
+    store.add_logs("s2", "cloze", [{"result": "right", "answer": "Ich stehe auf."}])
+
+    assert store.used_before("picture", 2) == ["die Lampe", "der Pokal", "der Tisch"]
+    assert store.used_before("picture", 1) == ["die Lampe"]
+    assert store.used_before("translation", 20) == []
