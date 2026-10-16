@@ -115,7 +115,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
         () => saveLayout({ libraryOpen, panel: openPanel === "subchat" ? null : openPanel }),
         [libraryOpen, openPanel],
     );
-    // the selection the chat at the side is about, with a number that tells it from the one before
+    // the selection the floating chat is about, with a number that tells it from the one before
     const [asked, setAsked] = useState<{ translated: Translated; nonce: number } | null>(null);
     const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
     // where the chat puts the sentence checks, which are made of what it knows
@@ -481,7 +481,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
         };
     }, [tasksRunning, followTasks]);
 
-    // the sentence checks belong to the chat, and the chat at the side to a selection
+    // the sentence checks belong to the chat, and the floating chat to a selection
     const panel = (openPanel === "checks" && activity !== "chat") || (openPanel === "subchat" && !asked)
         ? null
         : openPanel;
@@ -731,7 +731,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 </main>
                 <aside
                     className="side-panel"
-                    hidden={panel === null}
+                    hidden={panel === null || panel === "subchat"}
                     ref={setPanelSlot}
                 >
                     {panel === "usage" && (
@@ -739,15 +739,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             revision={usageRevision}
                             currentLabel={activity === "practice" ? "Practice" : "This chat"}
                             chatId={activity === "practice" ? PRACTICE_USAGE_ID : chat.id}
-                            onClose={() => setOpenPanel(null)}
-                        />
-                    )}
-                    {panel === "subchat" && asked && (
-                        <SubChat
-                            key={asked.nonce}
-                            translated={asked.translated}
-                            asking={asking}
-                            onUsage={addUsageEntry}
                             onClose={() => setOpenPanel(null)}
                         />
                     )}
@@ -763,6 +754,18 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         />
                     )}
                 </aside>
+                {/* floats over the page, which keeps its width */}
+                {panel === "subchat" && asked && (
+                    <section className="floating-window" aria-label="Ask about it">
+                        <SubChat
+                            key={asked.nonce}
+                            translated={asked.translated}
+                            asking={asking}
+                            onUsage={addUsageEntry}
+                            onClose={() => setOpenPanel(null)}
+                        />
+                    </section>
+                )}
                 <SelectionTools
                     translating={translating}
                     describing={asking}

@@ -243,113 +243,118 @@ export function BookReader({ bookId, active }: Props) {
     const paper = PAPERS[look.paper];
     return (
         <section className="reader">
-            <header className="reader-bar">
-                <span className="reader-title">
-                    {book ? [book.title, book.author].filter(Boolean).join(" · ") : ""}
-                </span>
-                {/* where the player of what is read aloud goes */}
-                <span className="speech-dock" data-speech-dock="book" />
-                {trail.length > 0 && (
-                    <button onClick={goBack} title="Back to where the link was">
-                        ↩ Back
+            {/* how the book looks opens over the page, under the bar */}
+            <div className="reader-top">
+                <header className="reader-bar">
+                    <span className="reader-title">
+                        {book ? [book.title, book.author].filter(Boolean).join(" · ") : ""}
+                    </span>
+                    {/* where the player of what is read aloud goes */}
+                    <span className="speech-dock" data-speech-dock="book" />
+                    {trail.length > 0 && (
+                        <button onClick={goBack} title="Back to where the link was">
+                            ↩ Back
+                        </button>
+                    )}
+                    <button
+                        className="icon-button"
+                        onClick={() => turnTo(page - 1)}
+                        disabled={!book || page === 0}
+                        title="Previous page"
+                        aria-label="Previous page"
+                    >
+                        ‹
                     </button>
-                )}
-                <button
-                    className="icon-button"
-                    onClick={() => turnTo(page - 1)}
-                    disabled={!book || page === 0}
-                    title="Previous page"
-                    aria-label="Previous page"
-                >
-                    ‹
-                </button>
-                <span className="count" title="Page">{book ? `${page + 1} / ${pages}` : ""}</span>
-                <button
-                    className="icon-button"
-                    onClick={() => turnTo(page + 1)}
-                    disabled={!book || page >= pages - 1}
-                    title="Next page"
-                    aria-label="Next page"
-                >
-                    ›
-                </button>
-                <button
-                    className="icon-button"
-                    aria-pressed={optionsOpen}
-                    onClick={() => setOptionsOpen(!optionsOpen)}
-                    title="How the book looks"
-                    aria-label="How the book looks"
-                >
-                    Aa
-                </button>
-            </header>
-            {optionsOpen && (
-                <div className="reader-options">
-                    <label>
-                        Size
-                        <button
-                            className="icon-button"
-                            onClick={() => changeLook({ fontSize: resized(look.fontSize, -1) })}
-                            disabled={look.fontSize <= MIN_FONT_SIZE}
-                            title="Smaller text"
-                            aria-label="Smaller text"
-                        >
-                            A−
-                        </button>
-                        <span className="count" title="Size of the text, in pixels">{look.fontSize}</span>
-                        <button
-                            className="icon-button"
-                            onClick={() => changeLook({ fontSize: resized(look.fontSize, 1) })}
-                            disabled={look.fontSize >= MAX_FONT_SIZE}
-                            title="Larger text"
-                            aria-label="Larger text"
-                        >
-                            A+
-                        </button>
-                    </label>
-                    <label>
-                        Font
-                        <select
-                            value={look.font}
-                            onChange={(event) => changeLook({ font: event.target.value as Reading["font"] })}
-                        >
-                            {Object.entries(FONTS).map(([id, font]) => (
-                                <option key={id} value={id} style={{ fontFamily: font.family }}>{font.label}</option>
-                            ))}
-                        </select>
-                    </label>
-                    <label>
-                        Lines
-                        <select
-                            value={look.spacing}
-                            onChange={(event) => changeLook({ spacing: event.target.value as Reading["spacing"] })}
-                        >
-                            {Object.entries(SPACINGS).map(([id, spacing]) => (
-                                <option key={id} value={id}>{spacing.label}</option>
-                            ))}
-                        </select>
-                    </label>
-                    <div className="swatches" role="radiogroup" aria-label="Background">
-                        {Object.entries(PAPERS).map(([id, each]) => (
+                    <span className="count" title="Page">{book ? `${page + 1} / ${pages}` : ""}</span>
+                    <button
+                        className="icon-button"
+                        onClick={() => turnTo(page + 1)}
+                        disabled={!book || page >= pages - 1}
+                        title="Next page"
+                        aria-label="Next page"
+                    >
+                        ›
+                    </button>
+                    <button
+                        className="icon-button"
+                        aria-pressed={optionsOpen}
+                        onClick={() => setOptionsOpen(!optionsOpen)}
+                        title="How the book looks"
+                        aria-label="How the book looks"
+                    >
+                        Aa
+                    </button>
+                </header>
+                {optionsOpen && (
+                    <div className="reader-options">
+                        <label>
+                            Size
                             <button
-                                key={id}
-                                role="radio"
-                                aria-checked={look.paper === id}
-                                className="swatch"
-                                title={each.label}
-                                aria-label={`Background: ${each.label}`}
-                                style={{
-                                    background: each.background || "var(--bg)",
-                                    color: each.color || "var(--text)",
-                                }}
-                                onClick={() => changeLook({ paper: id as Reading["paper"] })}
+                                className="icon-button"
+                                onClick={() => changeLook({ fontSize: resized(look.fontSize, -1) })}
+                                disabled={look.fontSize <= MIN_FONT_SIZE}
+                                title="Smaller text"
+                                aria-label="Smaller text"
                             >
-                                A
+                                A−
                             </button>
-                        ))}
+                            <span className="count" title="Size of the text, in pixels">{look.fontSize}</span>
+                            <button
+                                className="icon-button"
+                                onClick={() => changeLook({ fontSize: resized(look.fontSize, 1) })}
+                                disabled={look.fontSize >= MAX_FONT_SIZE}
+                                title="Larger text"
+                                aria-label="Larger text"
+                            >
+                                A+
+                            </button>
+                        </label>
+                        <label>
+                            Font
+                            <select
+                                value={look.font}
+                                onChange={(event) => changeLook({ font: event.target.value as Reading["font"] })}
+                            >
+                                {Object.entries(FONTS).map(([id, font]) => (
+                                    <option key={id} value={id} style={{ fontFamily: font.family }}>
+                                        {font.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        <label>
+                            Lines
+                            <select
+                                value={look.spacing}
+                                onChange={(event) => changeLook({ spacing: event.target.value as Reading["spacing"] })}
+                            >
+                                {Object.entries(SPACINGS).map(([id, spacing]) => (
+                                    <option key={id} value={id}>{spacing.label}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <div className="swatches" role="radiogroup" aria-label="Background">
+                            {Object.entries(PAPERS).map(([id, each]) => (
+                                <button
+                                    key={id}
+                                    role="radio"
+                                    aria-checked={look.paper === id}
+                                    className="swatch"
+                                    title={each.label}
+                                    aria-label={`Background: ${each.label}`}
+                                    style={{
+                                        background: each.background || "var(--bg)",
+                                        color: each.color || "var(--text)",
+                                    }}
+                                    onClick={() => changeLook({ paper: id as Reading["paper"] })}
+                                >
+                                    A
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
             {state.status === "loading" && <p className="reader-note">Loading the book…</p>}
             {state.status === "error" && (
                 <div className="reader-note error">

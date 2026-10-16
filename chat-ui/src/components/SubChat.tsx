@@ -18,7 +18,7 @@ interface Props {
 }
 
 /**
- * A chat at the side about a selection that was translated. It starts with
+ * A chat about a selection that was translated, in a window over the page. It starts with
  * the passage and the translation, and lasts until it is closed or another
  * is started: nothing of it is kept.
  */
