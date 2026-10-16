@@ -2818,3 +2818,112 @@ div.book-cover {
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
+
+/* logs */
+
+/* the kinds of logs that are shown, each a button that is pressed while they are */
+.log-kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.log-kinds button {
+    padding: 3px 10px;
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
+.log-kinds button[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.log-list {
+    flex: 1;
+    min-height: 0;
+    padding: 6px 14px 14px;
+    overflow-y: auto;
+}
+
+.log-day h3 {
+    position: sticky;
+    top: -6px;
+    margin: 0;
+    padding: 8px 0 6px;
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.log-day ul {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 8px;
+    padding: 0;
+    list-style: none;
+}
+
+.log-entry {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: var(--radius);
+}
+
+.log-entry.translation {
+    border-left-color: var(--accent);
+}
+
+.log-entry.question {
+    border-left-color: color-mix(in srgb, var(--accent) 50%, var(--muted));
+}
+
+.log-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.log-kind,
+.log-time,
+.log-where {
+    color: var(--muted);
+    font-size: 0.8em;
+}
+
+.log-kind {
+    flex: none;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.log-subject {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.log-time {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+}
+
+.log-content {
+    margin: 4px 0 0;
+    font-size: 0.9em;
+    white-space: pre-wrap;
+}
+
+.log-where {
+    margin: 4px 0 0;
+}
+
+.log-more {
+    width: 100%;
+}

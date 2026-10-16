@@ -7,6 +7,7 @@ import { BookList } from "./components/BookList";
 import { BookReader } from "./components/BookReader";
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
+import { LogsPanel } from "./components/LogsPanel";
 import { Practice } from "./components/Practice";
 import { SelectionTools } from "./components/SelectionTools";
 import { SetEditor } from "./components/SetEditor";
@@ -101,12 +102,17 @@ const TASK_CATEGORIES: Record<string, UsageCategory> = {
     speech: "speech",
     icon: "practice",
     log: "practice",
+    questions: "translation",
 };
 
 export function App({ user, initialSettings, initialChats }: Props) {
     const [settings, setSettings] = useState<Settings>(initialSettings);
     // the panel on the left, with the words, the chats and the books
     const [libraryOpen, setLibraryOpen] = useState(() => loadLayout().libraryOpen);
+    // the logs, which take the place of the library on the left while they are open
+    const [logsOpen, setLogsOpen] = useState(false);
+    // tells the logs from those before something more was logged
+    const [logsRevision, setLogsRevision] = useState(0);
     // the panels on the right share one place, so one is shown at a time
     const [openPanel, setOpenPanel] = useState<Panel | "subchat" | null>(() => loadLayout().panel);
     // The panels are found as they were left the next time the page is
@@ -441,6 +447,9 @@ export function App({ user, initialSettings, initialChats }: Props) {
             if (task.kind === "icon") {
                 setTopicsRevision((revision) => revision + 1);
             }
+            if (task.kind === "log" || task.kind === "questions") {
+                setLogsRevision((revision) => revision + 1);
+            }
             // Audio comes without what it cost, which is looked up
             // afterwards, by what each request for it goes by.
             const { apiKey, model } = latestVoice.current;
@@ -540,7 +549,12 @@ export function App({ user, initialSettings, initialChats }: Props) {
     return (
         <WritingChecks language={settings.language}>
             <div className="app">
-                <aside className="side-panel left" hidden={!libraryOpen}>
+                <aside className="side-panel left" hidden={!logsOpen}>
+                    <SidePanel title="Logs" onClose={() => setLogsOpen(false)} flush>
+                        <LogsPanel active={logsOpen} revision={logsRevision} onOpenBook={openBook} />
+                    </SidePanel>
+                </aside>
+                <aside className="side-panel left" hidden={!libraryOpen || logsOpen}>
                     <SidePanel
                         title="Library"
                         onClose={() => setLibraryOpen(false)}
@@ -647,7 +661,16 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 </aside>
                 <main className="main">
                     <header className="topbar">
-                        <button aria-pressed={libraryOpen} onClick={() => setLibraryOpen(!libraryOpen)}>Library</button>
+                        <button
+                            aria-pressed={libraryOpen && !logsOpen}
+                            onClick={() => {
+                                setLibraryOpen(logsOpen || !libraryOpen);
+                                setLogsOpen(false);
+                            }}
+                        >
+                            Library
+                        </button>
+                        <button aria-pressed={logsOpen} onClick={() => setLogsOpen(!logsOpen)}>Logs</button>
                         <div className="switch" role="tablist" aria-label="Activity">
                             <button role="tab" aria-selected={activity === "chat"} onClick={() => setActivity("chat")}>
                                 Chat
@@ -762,6 +785,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             translated={asked.translated}
                             asking={asking}
                             onUsage={addUsageEntry}
+                            onTask={addTask}
                             onClose={() => setOpenPanel(null)}
                         />
                     </section>
@@ -772,6 +796,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     decisionModel={settings.profileModel}
                     onUsage={addUsageEntry}
                     onTask={(task) => setTasks((current) => withTask(current, task))}
+                    onLogged={() => setLogsRevision((revision) => revision + 1)}
                     onPlay={(selection) =>
                         bookId && setListening({ source: bookSource(bookId, selection), nonce: Date.now() })}
                     onChat={(translated) => {

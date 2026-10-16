@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -266,6 +266,48 @@ _TASKS = """
 ALTER TABLE grades ADD COLUMN task TEXT NOT NULL DEFAULT '';
 """
 
+# What came with version 15: the logs are of whatever the learner did, not
+# only of the exercises of the sessions, such as what they had translated
+# and what they asked about it. Those of an exercise still name its session
+# and the exercise, and the others where what they are of was done.
+_ACTIVITY_LOGS = """
+ALTER TABLE logs RENAME TO exercise_logs;
+CREATE TABLE logs (
+    id INTEGER PRIMARY KEY,
+    -- "exercise", "translation" or "question"
+    kind TEXT NOT NULL,
+    -- the language being learned
+    language TEXT NOT NULL,
+    -- what it is about, in a few words, such as the words translated
+    subject TEXT NOT NULL,
+    -- what happened, for the models rather than the learner
+    content TEXT NOT NULL,
+    -- in seconds since the epoch
+    written_at REAL NOT NULL,
+    -- the session and the exercise of the log of an exercise
+    session_id TEXT REFERENCES sessions (id) ON DELETE CASCADE,
+    exercise TEXT,
+    -- where else it was done, such as a page of a book, in JSON
+    source TEXT NOT NULL DEFAULT '{}',
+    UNIQUE (session_id, exercise)
+);
+INSERT INTO logs
+    (kind, language, subject, content, written_at, session_id, exercise)
+SELECT 'exercise', sessions.language, exercise_logs.exercise,
+    exercise_logs.content, exercise_logs.written_at, exercise_logs.session_id,
+    exercise_logs.exercise
+FROM exercise_logs JOIN sessions ON sessions.id = exercise_logs.session_id
+ORDER BY exercise_logs.written_at;
+DROP TABLE exercise_logs;
+"""
+
+# what the logs are of
+LOG_KINDS = ("exercise", "translation", "question")
+# What is said of a log when they are listed.
+_LOG_COLUMNS = (
+    "id, kind, language, subject, content, written_at, session_id, exercise, source"
+)
+
 # what the learner and the models are, as what they wrote is kept
 ROLES = ("user", "assistant")
 
@@ -338,6 +380,32 @@ def _listed(
     }
 
 
+def _log(
+    log_id: int,
+    kind: str,
+    language: str,
+    subject: str,
+    content: str,
+    written_at: float,
+    session_id: str | None,
+    exercise: str | None,
+    source: str,
+) -> dict[str, Any]:
+    """A log as it is listed."""
+    return {
+        "id": log_id,
+        "kind": kind,
+        "language": language,
+        "subject": subject,
+        "content": content,
+        "writtenAt": written_at,
+        # those of an exercise of a session
+        "session": session_id,
+        "exercise": exercise,
+        "source": json.loads(source),
+    }
+
+
 class UserStore:
     """The chats, the practice and the settings of one user, in a directory
     of the user's own. It can be used from several threads."""
@@ -386,6 +454,8 @@ class UserStore:
                 self._db.executescript(_FINDINGS)
             if version < 14:
                 self._db.executescript(_TASKS)
+            if version < 15:
+                self._db.executescript(_ACTIVITY_LOGS)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -1016,13 +1086,18 @@ class UserStore:
         )
         return [dict(zip(names, row)) for row in rows]
 
-    def set_log(self, session_id: str, exercise: str, content: str) -> None:
-        """Keep the log of an exercise of a session, in place of any it had."""
+    def set_log(
+        self, session_id: str, exercise: str, content: str, subject: str = ""
+    ) -> None:
+        """Keep the log of an exercise of a session, in place of any it had.
+        `subject` is what it was about, the exercise if it is not given."""
         with self._lock, self._db:
             self._db.execute(
-                "INSERT OR REPLACE INTO logs (session_id, exercise, content, written_at)"
-                " VALUES (?, ?, ?, ?)",
-                (session_id, exercise, content, self._now()),
+                "INSERT OR REPLACE INTO logs (kind, language, subject, content,"
+                " written_at, session_id, exercise)"
+                " SELECT 'exercise', language, ?, ?, ?, id, ? FROM sessions"
+                " WHERE id = ?",
+                (subject or exercise, content, self._now(), exercise, session_id),
             )
 
     def logs(self, session_id: str) -> dict[str, str]:
@@ -1033,6 +1108,50 @@ class UserStore:
                 (session_id,),
             ).fetchall()
         return dict(rows)
+
+    def add_log(
+        self,
+        kind: str,
+        language: str,
+        subject: str,
+        content: str,
+        source: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Keep the log of something that was not an exercise of a session,
+        with `source` saying where it was done, and return it as it is
+        listed. Raises ValueError."""
+        if kind not in LOG_KINDS or kind == "exercise":
+            raise ValueError(f"there are no logs of the kind {kind!r}")
+        with self._lock, self._db:
+            cursor = self._db.execute(
+                "INSERT INTO logs (kind, language, subject, content, written_at,"
+                " source) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    kind,
+                    language,
+                    subject,
+                    content,
+                    self._now(),
+                    json.dumps(source or {}),
+                ),
+            )
+            row = self._db.execute(
+                f"SELECT {_LOG_COLUMNS} FROM logs WHERE id = ?", (cursor.lastrowid,)
+            ).fetchone()
+        return _log(*row)
+
+    def all_logs(
+        self, before: int | None = None, most: int = 100
+    ) -> list[dict[str, Any]]:
+        """The logs of everything, the latest first: at most `most` of them,
+        and only those kept before the log `before` if it is given."""
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT {_LOG_COLUMNS} FROM logs WHERE id < COALESCE(?, id + 1)"
+                " ORDER BY id DESC LIMIT ?",
+                (before, most),
+            ).fetchall()
+        return [_log(*row) for row in rows]
 
     def used_before(self, exercise: str, sessions: int) -> list[str]:
         """What `exercise` was answered with in the last `sessions` sessions

@@ -587,6 +587,10 @@ def test_the_import_stays_off_for_a_user_the_anki_words_are_not_of() -> None:
     assert (after["state"], after["taken"]) == ("off", 0)
 
 
+# the language model of each server with users, by its address
+MODELS: dict[str, FakeModel] = {}
+
+
 @pytest.fixture
 def with_users(tmp_path: Path) -> Iterator[str]:
     """A server that two users can log in to, each with a vocabulary of
@@ -595,6 +599,8 @@ def with_users(tmp_path: Path) -> Iterator[str]:
         json.dumps({"ada": "a password", "ben": "another one"}), encoding="utf-8"
     )
     users = Users(tmp_path / "users.json", tmp_path)
+    # what is asked of the language model, by every user
+    model = FakeModel()
 
     def make_account(user: str) -> Account:
         vocabularies = Vocabularies(user_directory(tmp_path, user))
@@ -608,7 +614,7 @@ def with_users(tmp_path: Path) -> Iterator[str]:
             store=store,
             # the folder is looked through before the request is answered
             book_sync=BookSync(store, background=lambda job: job()),
-            translator=Translator(FakeModel()),
+            translator=Translator(model),
             speaker=Speaker(store, FakeVoice()),
             tasks=tasks,
             practice=Practice(
@@ -625,7 +631,9 @@ def with_users(tmp_path: Path) -> Iterator[str]:
         target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
     )
     thread.start()
-    yield f"http://127.0.0.1:{server.server_port}"
+    url = f"http://127.0.0.1:{server.server_port}"
+    MODELS[url] = model
+    yield url
     server.shutdown()
     server.server_close()
     thread.join(timeout=5)
@@ -987,6 +995,107 @@ def test_what_is_asked_about_a_translated_selection_is_answered(
     assert reply["reply"] == "the dog"
     assert reply["usage"][0]["id"] == "gen-1"
     assert without_messages == 400
+
+
+def test_a_translation_is_logged_with_where_the_selection_was_made(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    ben = log_in(with_users, "ben", "another one")
+    where = {"kind": "book", "id": "b1", "title": "Der Hund", "page": 2}
+    body = {
+        "selection": "Hund",
+        "before": "Der ",
+        "after": " schläft.",
+        "language": "German",
+        "model": "some/model",
+        "where": where,
+    }
+
+    _, reply = post(
+        f"{with_users}/translate", json.dumps(body).encode(), key="sk-test", token=ada
+    )
+    refused, _ = post(
+        f"{with_users}/translate",
+        json.dumps({**body, "where": "a book"}).encode(),
+        key="sk-test",
+        token=ada,
+    )
+    _, of_ada, _ = send(f"{with_users}/logs", "GET", ada)
+    _, of_ben, _ = send(f"{with_users}/logs", "GET", ben)
+
+    assert isinstance(reply, dict) and reply["log"]["kind"] == "translation"
+    [log] = json.loads(of_ada)["logs"]
+    assert (log["subject"], log["language"], log["source"]) == ("Hund", "German", where)
+    assert log["content"] == (
+        'Asked for "Hund" to be translated, in: "Der [[Hund]] schläft.".\n'
+        'Translated as: "the dog".'
+    )
+    assert json.loads(of_ben) == {"logs": []}
+    assert refused == 400
+
+
+def test_each_matter_asked_about_a_translation_is_logged_when_the_chat_is_over(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {
+        "passage": {"before": "Ich bin ", "selection": "gerade", "after": " da."},
+        "translation": "just",
+        "messages": [
+            {"role": "user", "content": "Does it mean straight?"},
+            {"role": "assistant", "content": "Here it means just now."},
+        ],
+        "language": "German",
+        "model": "some/model",
+        "where": {"kind": "chat", "id": "chat-1"},
+    }
+    translated = {"selection": "gerade", "before": "Ich bin ", "after": " da."}
+    _, reply = post(
+        f"{with_users}/translate",
+        json.dumps({**translated, "model": "some/model"}).encode(),
+        key="sk-test",
+        token=ada,
+    )
+    assert isinstance(reply, dict)
+    body["log"] = reply["log"]["id"]
+    MODELS[with_users].says = json.dumps(
+        {
+            "logs": [
+                {"subject": "gerade", "points": ["Asked if it means straight."]},
+                {"subject": "da", "points": ["Asked what it is."]},
+            ]
+        }
+    )
+
+    status, reply = post(
+        f"{with_users}/translate/chat/end",
+        json.dumps(body).encode(),
+        key="sk-test",
+        token=ada,
+    )
+    _, nothing_asked = post(
+        f"{with_users}/translate/chat/end",
+        json.dumps({**body, "messages": []}).encode(),
+        key="sk-test",
+        token=ada,
+    )
+    _, listed, _ = send(f"{with_users}/logs", "GET", ada)
+
+    assert status == 200 and isinstance(reply, dict)
+    assert reply["task"]["kind"] == "questions"
+    assert nothing_asked == {"task": None}
+    logs = json.loads(listed)["logs"]
+    assert [(log["kind"], log["subject"], log["content"]) for log in logs] == [
+        ("question", "da", "Asked what it is."),
+        ("question", "gerade", "Asked if it means straight."),
+        ("translation", "gerade", logs[2]["content"]),
+    ]
+    assert logs[0]["source"] == {
+        "kind": "chat",
+        "id": "chat-1",
+        "translation": body["log"],
+    }
 
 
 def test_the_words_of_a_selection_are_taken_into_the_vocabulary(url: str) -> None:

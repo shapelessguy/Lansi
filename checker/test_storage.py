@@ -661,3 +661,84 @@ def test_a_log_can_be_kept_where_findings_were_left_naming_the_logs_before(
     store.set_log("s1", "cloze", "1 of 3 done.")
 
     assert store.logs("s1") == {"cloze": "1 of 3 done."}
+
+
+def test_the_logs_of_exercises_are_among_those_of_everything_once_logs_are_of_more(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.start_session("s1", "German", "trennbare-verben", [], {"cloze": 3})
+    before._db.executescript(  # noqa: SLF001
+        "DROP TABLE logs;"
+        " CREATE TABLE logs (session_id TEXT NOT NULL REFERENCES sessions (id)"
+        " ON DELETE CASCADE, exercise TEXT NOT NULL, content TEXT NOT NULL,"
+        " written_at REAL NOT NULL, PRIMARY KEY (session_id, exercise));"
+        " INSERT INTO logs VALUES ('s1', 'cloze', '1 of 3 done.', 5.0);"
+        " PRAGMA user_version = 14;"
+    )
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+
+    assert store.logs("s1") == {"cloze": "1 of 3 done."}
+    assert store.all_logs() == [
+        {
+            "id": 1,
+            "kind": "exercise",
+            "language": "German",
+            "subject": "cloze",
+            "content": "1 of 3 done.",
+            "writtenAt": 5.0,
+            "session": "s1",
+            "exercise": "cloze",
+            "source": {},
+        }
+    ]
+
+
+def test_a_log_of_an_exercise_is_kept_in_place_of_the_one_it_had(
+    store: UserStore,
+) -> None:
+    store.start_session("s1", "German", "trennbare-verben", [], {"cloze": 3})
+
+    store.set_log("s1", "cloze", "1 of 3 done.")
+    store.set_log("s1", "cloze", "3 of 3 done.", "Cloze: Trennbare Verben")
+
+    assert [(log["subject"], log["content"]) for log in store.all_logs()] == [
+        ("Cloze: Trennbare Verben", "3 of 3 done.")
+    ]
+
+
+def test_a_log_of_a_translation_is_listed_with_where_it_was_made_the_latest_first(
+    store: UserStore,
+) -> None:
+    store.start_session("s1", "German", "trennbare-verben", [], {"cloze": 3})
+    store.set_log("s1", "cloze", "1 of 3 done.")
+    where = {"kind": "book", "id": "b1", "title": "Der Hund", "page": 3}
+
+    kept = store.add_log("translation", "German", "gerade", "Asked.", where)
+
+    assert kept["source"] == where and kept["session"] is None
+    assert [log["kind"] for log in store.all_logs()] == ["translation", "exercise"]
+
+
+def test_the_logs_are_listed_a_few_at_a_time_from_one_on(store: UserStore) -> None:
+    for number in range(5):
+        store.add_log("question", "German", f"word {number}", "Asked.")
+
+    first = store.all_logs(most=2)
+    then = store.all_logs(first[-1]["id"], most=2)
+
+    assert [log["subject"] for log in first + then] == [
+        "word 4",
+        "word 3",
+        "word 2",
+        "word 1",
+    ]
+
+
+def test_a_log_of_no_kind_there_is_is_refused(store: UserStore) -> None:
+    with pytest.raises(ValueError):
+        store.add_log("exercise", "German", "cloze", "Done.")
+    with pytest.raises(ValueError):
+        store.add_log("dream", "German", "cloze", "Done.")

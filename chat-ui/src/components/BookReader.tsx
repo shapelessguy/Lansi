@@ -21,6 +21,7 @@ import {
     shownSize,
     SPACINGS,
 } from "../lib/books";
+import type { Where } from "../lib/logs";
 import { SPOKEN_EVENT } from "./SpeechPlayer";
 
 interface Props {
@@ -378,6 +379,9 @@ export function BookReader({ bookId, active }: Props) {
                         <div
                             className="reader-columns"
                             data-selectable="book"
+                            data-where={JSON.stringify(
+                                { kind: "book", id: book.id, title: book.title, page } satisfies Where,
+                            )}
                             ref={columns}
                             style={{
                                 columnGap: `${PAGE_GAP}px`,

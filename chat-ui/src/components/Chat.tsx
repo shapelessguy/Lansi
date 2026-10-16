@@ -7,6 +7,7 @@ import Markdown from "react-markdown";
 
 import { isAtEnd, type StoredChat } from "../lib/chats";
 import { type ProfileUsage, sentenceAtCaret } from "../lib/checker";
+import type { Where } from "../lib/logs";
 import { type ChatMessage, streamChat } from "../lib/openrouter";
 import { requestQuestions } from "../lib/questions";
 import type { WordLists } from "../lib/sets";
@@ -251,6 +252,7 @@ export function Chat(
                 <div
                     className="messages"
                     data-selectable
+                    data-where={JSON.stringify({ kind: "chat", id: chat.id } satisfies Where)}
                     ref={listRef}
                     onScroll={(event) => {
                         const list = event.currentTarget;

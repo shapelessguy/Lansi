@@ -816,7 +816,9 @@ class Practice:
                 raise ExerciseError(
                     f"the log of {title} could not be written: {error}"
                 ) from None
-            self._store.set_log(session["id"], exercise, content)
+            lesson = context["lesson"].get("title", "")
+            subject = f"{title}: {lesson}" if lesson else title
+            self._store.set_log(session["id"], exercise, content, subject)
             return [used]
 
         self._later(title, write)

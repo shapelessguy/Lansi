@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { ProfileUsage } from "../lib/checker";
+import type { Where } from "../lib/logs";
 import { exerciseKit, type Learner, loadInterface, stepExercise } from "../lib/practice";
 
 interface Props {
@@ -113,7 +114,14 @@ export function ExerciseView(
                     <button onClick={() => setAttempt((count) => count + 1)}>Try again</button>
                 </div>
             )}
-            <div ref={host} className="exercise-ui" data-selectable data-writing hidden={!rendered || error !== null} />
+            <div
+                ref={host}
+                className="exercise-ui"
+                data-selectable
+                data-writing
+                data-where={JSON.stringify({ kind: "exercise", session: sessionId, exercise } satisfies Where)}
+                hidden={!rendered || error !== null}
+            />
         </div>
     );
 }

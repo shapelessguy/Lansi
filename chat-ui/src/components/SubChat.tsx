@@ -5,7 +5,8 @@ import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 
 import type { ChatMessage } from "../lib/openrouter";
-import { askAbout, type Asking, type Translated, usageEntry } from "../lib/translate";
+import type { BackgroundTask } from "../lib/tasks";
+import { askAbout, type Asking, endChatAbout, type Translated, usageEntry } from "../lib/translate";
 import type { UsageEntry } from "../lib/usage";
 import { SidePanel } from "./SidePanel";
 
@@ -14,15 +15,18 @@ interface Props {
     translated: Translated;
     asking: Asking;
     onUsage: (entry: UsageEntry) => void;
+    /** Told the task the server started to log what was asked, once the chat is over. */
+    onTask: (task: BackgroundTask) => void;
     onClose: () => void;
 }
 
 /**
  * A chat about a selection that was translated, in a window over the page. It starts with
  * the passage and the translation, and lasts until it is closed or another
- * is started: nothing of it is kept.
+ * is started, or the page is left. Nothing of it is kept but the logs the
+ * server has written of what was asked, once it is over.
  */
-export function SubChat({ translated, asking, onUsage, onClose }: Props) {
+export function SubChat({ translated, asking, onUsage, onTask, onClose }: Props) {
     const { passage, translation } = translated;
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [draft, setDraft] = useState("");
@@ -37,6 +41,29 @@ export function SubChat({ translated, asking, onUsage, onClose }: Props) {
         input.current?.focus();
     }, []);
     useEffect(() => () => request.current?.abort(), []);
+    // what the chat is over with, as it is then
+    const latest = useRef({ translated, messages, asking, onTask });
+    latest.current = { translated, messages, asking, onTask };
+    useEffect(() => {
+        let ended = false;
+        function end(leaving: boolean) {
+            const { translated, messages, asking, onTask } = latest.current;
+            if (ended || !messages.some((message) => message.role === "user")) {
+                return;
+            }
+            ended = true;
+            endChatAbout(translated, messages, asking, leaving).then(
+                (task) => task && onTask(task),
+                (error) => console.error("what was asked could not be logged:", error),
+            );
+        }
+        const leave = () => end(true);
+        window.addEventListener("pagehide", leave);
+        return () => {
+            window.removeEventListener("pagehide", leave);
+            end(false);
+        };
+    }, []);
     useEffect(() => {
         end.current?.scrollIntoView({ block: "end" });
     }, [messages, busy, error]);

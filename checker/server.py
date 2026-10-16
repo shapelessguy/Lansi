@@ -52,6 +52,8 @@ from intake import (
     send_chat,
 )
 from live import LiveChecker
+from logs import LogError
+from lookups import asked_anything, translation_log, write_question_logs
 from processing import Processor, words_in
 from profiling import (
     DEFAULT_MODEL,
@@ -120,6 +122,10 @@ MAX_LANGUAGE_LENGTH = 40
 MAX_TOPIC_LENGTH = 500
 # more words than any set of them has
 MAX_SET_WORDS = 20_000
+# where something was done is told in a few names and ids, in JSON
+MAX_WHERE_LENGTH = 2000
+# how many logs are sent at a time
+LOGS_AT_A_TIME = 100
 # The directory everything is kept in, unless CHECKER_DATA names another:
 # who may log in, and for each user a directory with the vocabularies, one
 # file for each language.
@@ -645,11 +651,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                       the totals of the usage of a chat, of
                                       that from a time on, and of
                                       all of it, by category and model too
+            GET /logs?before=ID       the logs of everything the user did,
+                                      the latest first, a hundred at a time
         """
         store = self.account.store
         path = urlsplit(self.path).path
         one = re.fullmatch(r"/chats/([^/]+)", path)
-        listed = ("/chats", "/settings", "/usage")
+        listed = ("/chats", "/settings", "/usage", "/logs")
         if store is None or not (one or path in listed):
             return False
         try:
@@ -672,6 +680,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     raise ValueError("since is a time in milliseconds")
                 chat_id = query.get("chat", [""])[0]
                 self._reply(HTTPStatus.OK, store.usage(chat_id, int(since)))
+            elif method == "GET" and path == "/logs":
+                before = parse_qs(urlsplit(self.path).query).get("before", [""])[0]
+                if before and not before.isdigit():
+                    raise ValueError("before is the id of a log")
+                logs = store.all_logs(int(before) if before else None, LOGS_AT_A_TIME)
+                self._reply(HTTPStatus.OK, {"logs": logs})
             elif one and method == "PUT":
                 chat = self._read_body()
                 if chat.get("id") != one.group(1):
@@ -1065,6 +1079,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._translate(self.account.translator, api_key)
             elif self.path == "/translate/chat" and self.account.translator:
                 self._answer(self.account.translator, api_key)
+            elif self.path == "/translate/chat/end" and self.account.translator:
+                self._log_questions(self.account.translator, api_key)
             elif self.path == "/vocabulary/words" and self.account.intake:
                 self._take_words(self.account.intake, api_key)
             elif self.path == "/vocabulary/selection" and self.account.intake:
@@ -1082,7 +1098,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
         where `before` and `after` are the text around it, as much of it as
         the sender likes. Replies with the translation, with the `passage`
         the model was given, which is the sentences the selection is in and
-        a few before them, and with what the request to the model used."""
+        a few before them, and with what the request to the model used.
+        The translation is logged, with `where`, if the request has it,
+        saying where the selection was made, such as a page of a book; the
+        reply has the `log` too."""
         body = self._read_body()
         selection = body.get("selection")
         before, after = body.get("before", ""), body.get("after", "")
@@ -1096,6 +1115,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             raise ValueError("the selection is too long")
         passage = passage_of(before, selection, after)
         language, into, model = self._read_translating(body)
+        where = self._read_where(body)
         started = time.monotonic()
         try:
             translation, used = translator.translate(
@@ -1110,14 +1130,83 @@ class CheckerHandler(BaseHTTPRequestHandler):
             f"       ({used.model}, {time.monotonic() - started:.1f} s,"
             f" {used.input_tokens} tokens in, {used.output_tokens} out)"
         )
+        kept = None
+        if self.account.store:
+            subject, content = translation_log(passage, translation)
+            kept = self.account.store.add_log(
+                "translation", language, subject, content, where
+            )
         self._reply(
             HTTPStatus.OK,
             {
                 "translation": translation,
                 "passage": asdict(passage),
+                "log": kept,
                 "usage": [describe_usage(used)],
             },
         )
+
+    def _log_questions(self, translator: Translator, api_key: str | None) -> None:
+        """Has a model write the logs of what was asked about a selection
+        that was translated, once the chat about it is over: one for each
+        matter that was discussed. The request is as for an answer, with
+        `where` the translation was made and the `log` of the translation,
+        if it has them, which the logs of the questions are kept beside.
+        This is done in the background: the reply is the `task` that was
+        started, or null if nothing was asked."""
+        body = self._read_body()
+        given = body.get("passage")
+        parts = [
+            part
+            for name in ("before", "selection", "after")
+            if isinstance(given, dict) and isinstance(part := given.get(name), str)
+        ]
+        translation = body.get("translation")
+        if len(parts) != 3 or not isinstance(translation, str):
+            raise ValueError('expected {"passage": {...}, "translation": "..."}')
+        messages = read_messages(body.get("messages"), to_answer=False)
+        language, into, model = self._read_translating(body)
+        where = self._read_where(body)
+        translated = body.get("log")
+        if translated is not None and not isinstance(translated, int):
+            raise ValueError("log must be the id of the log of the translation")
+        store = self.account.store
+        if store is None or not asked_anything(messages):
+            self._reply(HTTPStatus.OK, {"task": None})
+            return
+        passage = Passage(*parts)
+        source = {**where, "translation": translated} if translated else where
+        ask = translator.asker(api_key or "", model)
+
+        def write(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+            try:
+                logs, used = write_question_logs(
+                    ask, passage, translation, messages, language, into
+                )
+            except (LogError, TranslationError) as error:
+                raise ValueError(
+                    f"the questions could not be logged: {error}"
+                ) from None
+            for subject, content in logs:
+                store.add_log("question", language, subject, content, source)
+            step()
+            return [{"subject": subject} for subject, _ in logs], [describe_usage(used)]
+
+        title = " ".join(passage.selection.split())[:MAX_TITLE_LENGTH]
+        task = self.account.tasks.start(
+            "questions", f"Questions about {title}", 1, write
+        )
+        self._reply(HTTPStatus.OK, {"task": task})
+
+    def _read_where(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Where a request says something was done, such as a page of a
+        book, as a few names and ids, or nothing."""
+        where = body.get("where")
+        if where is None:
+            return {}
+        if not isinstance(where, dict) or len(json.dumps(where)) > MAX_WHERE_LENGTH:
+            raise ValueError("where must be a small object")
+        return where
 
     def _answer(self, translator: Translator, api_key: str | None) -> None:
         """Answers the last of the `messages` of a `{"passage": ...,

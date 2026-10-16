@@ -191,16 +191,21 @@ def write_log(
     return format_log(read_log(said)), used
 
 
-def read_log(said: str) -> dict[str, Any]:
-    """The log as the model wrote it, in JSON, which it may have put in a
-    fenced block. Raises LogError."""
+def read_json(said: str) -> Any:
+    """The object a model wrote in JSON, which it may have put in a fenced
+    block, or None if it wrote none."""
     fenced = re.search(r"```(?:json)?\s*(.*?)```", said, re.DOTALL)
     reply = (fenced.group(1) if fenced else said).strip()
     start, end = reply.find("{"), reply.rfind("}")
     try:
-        found = json.loads(reply[start : end + 1]) if start != -1 else None
+        return json.loads(reply[start : end + 1]) if start != -1 else None
     except ValueError:
-        found = None
+        return None
+
+
+def read_log(said: str) -> dict[str, Any]:
+    """The log as the model wrote it, in JSON. Raises LogError."""
+    found = read_json(said)
     if not isinstance(found, dict) or not isinstance(found.get("summary"), list):
         raise LogError("the model did not write the log as it was asked")
     return found

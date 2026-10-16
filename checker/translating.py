@@ -12,6 +12,7 @@ goes to it with the same passage and the translation it gave.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -119,11 +120,14 @@ def read_text(response: dict[str, Any]) -> str:
     return content.strip()
 
 
-def read_messages(value: object) -> list[dict[str, str]]:
+def read_messages(value: object, to_answer: bool = True) -> list[dict[str, str]]:
     """Check the messages of a chat that came in from outside: what the user
-    wrote and what was answered, in turn. Raises ValueError."""
-    if not isinstance(value, list) or not 0 < len(value) <= MAX_MESSAGES:
-        raise ValueError(f"messages must be a list of 1 to {MAX_MESSAGES}")
+    wrote and what was answered, in turn. A chat `to_answer` ends with what
+    the user wrote; one that is over may end with anything, or be empty.
+    Raises ValueError."""
+    least = 1 if to_answer else 0
+    if not isinstance(value, list) or not least <= len(value) <= MAX_MESSAGES:
+        raise ValueError(f"messages must be a list of {least} to {MAX_MESSAGES}")
     messages = []
     for message in value:
         role = message.get("role") if isinstance(message, dict) else None
@@ -133,7 +137,7 @@ def read_messages(value: object) -> list[dict[str, str]]:
         if len(content) > MAX_MESSAGE_LENGTH:
             raise ValueError("a message is too long")
         messages.append({"role": role, "content": content})
-    if messages[-1]["role"] != "user":
+    if to_answer and messages[-1]["role"] != "user":
         raise ValueError("the last message must be the user's")
     return messages
 
@@ -185,10 +189,27 @@ class Translator:
         )
         return self._ask(instructions, messages, api_key, model)
 
+    def asker(
+        self, api_key: str, model: str | None = None
+    ) -> Callable[[list[dict[str, Any]]], tuple[str, Profile]]:
+        """What asks the model the messages it is given, as they are, such
+        as for the logs of what was asked. It raises TranslationError."""
+        return lambda messages: self._send(messages, api_key, model)
+
     def _ask(
         self,
         instructions: str,
         messages: list[dict[str, str]],
+        api_key: str,
+        model: str | None,
+        more: dict[str, Any] | None = None,
+    ) -> tuple[str, Profile]:
+        system = {"role": "system", "content": instructions}
+        return self._send([system, *messages], api_key, model, more)
+
+    def _send(
+        self,
+        messages: list[dict[str, Any]],
         api_key: str,
         model: str | None,
         more: dict[str, Any] | None = None,
@@ -200,7 +221,7 @@ class Translator:
             raise TranslationError("no model was named")
         body = {
             "model": model,
-            "messages": [{"role": "system", "content": instructions}, *messages],
+            "messages": messages,
             "usage": {"include": True},
             **(more or {}),
         }

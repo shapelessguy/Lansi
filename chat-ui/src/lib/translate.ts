@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import type { ProfileUsage } from "./checker";
+import type { Log, Where } from "./logs";
 import type { ChatMessage } from "./openrouter";
 import { checkerFetch } from "./session";
 import type { BackgroundTask } from "./tasks";
@@ -21,6 +22,10 @@ export type Passage = Picked;
 export interface Translated {
     passage: Passage;
     translation: string;
+    /** The log the server kept of the translation, if it kept one. */
+    log?: Log | null;
+    /** Where the selection was made, if that is known. */
+    where?: Where | null;
 }
 
 /** Who is asked, and for whom. */
@@ -166,13 +171,15 @@ export function describeError(reason: unknown, status: number): string {
     return typeof reason === "string" && reason ? reason : `The server answered ${status}.`;
 }
 
-/** Has the selection translated as it is meant where it stands. */
+/** Has the selection translated as it is meant where it stands, which is logged with `where` it was made. */
 export async function translate(
     picked: Picked,
     asking: Asking,
     signal?: AbortSignal,
+    where: Where | null = null,
 ): Promise<Translated & { usage: ProfileUsage[] }> {
-    return ask("/translate", picked, asking, signal);
+    const reply = await ask<Translated & { usage: ProfileUsage[] }>("/translate", { ...picked, where }, asking, signal);
+    return { ...reply, where };
 }
 
 /** Has the last of `messages` answered, which are what was asked and answered so far about a translated selection. */
@@ -182,7 +189,43 @@ export async function askAbout(
     asking: Asking,
     signal?: AbortSignal,
 ): Promise<{ reply: string; usage: ProfileUsage[] }> {
-    return ask("/translate/chat", { ...translated, messages }, asking, signal);
+    return ask("/translate/chat", chatAbout(translated, messages), asking, signal);
+}
+
+function chatAbout(translated: Translated, messages: ChatMessage[]): object {
+    const { passage, translation, log, where } = translated;
+    return { passage, translation, messages, where: where ?? null, log: log?.id ?? null };
+}
+
+/**
+ * Tells the server that a chat about a translated selection is over, so
+ * that what was asked in it is logged. That is done in the background, and
+ * what comes back is the task it started, or null if nothing was asked.
+ * When the page is `leaving`, the request is to outlast it, which it can
+ * only if it is small.
+ */
+export async function endChatAbout(
+    translated: Translated,
+    messages: ChatMessage[],
+    asking: Asking,
+    leaving = false,
+): Promise<BackgroundTask | null> {
+    const response = await checkerFetch("/translate/chat/end", {
+        method: "POST",
+        headers: asking.apiKey ? { "X-OpenRouter-Key": asking.apiKey } : {},
+        body: JSON.stringify({
+            ...chatAbout(translated, messages),
+            model: asking.model,
+            language: asking.language,
+            into: asking.into,
+        }),
+        keepalive: leaving,
+    });
+    const reply = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(describeError(reply.error, response.status));
+    }
+    return reply.task ?? null;
 }
 
 /**

@@ -3,7 +3,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { regionOf, selectableShadowRoots, selectedRange } from "../lib/selection";
+import { readWhere, type Where, WHERE_ATTRIBUTE } from "../lib/logs";
+import { markedAncestor, regionOf, selectableShadowRoots, selectedRange } from "../lib/selection";
 import { type BookSelection, bookSelection } from "../lib/speaking";
 import type { BackgroundTask } from "../lib/tasks";
 import {
@@ -30,6 +31,8 @@ interface Props {
     onChat: (translated: Translated) => void;
     /** Told the task the server started to take words into the vocabulary. */
     onTask: (task: BackgroundTask) => void;
+    /** Told when something was logged, such as a translation. */
+    onLogged: () => void;
     /** Told what was selected of the book in the reader when it is to be read aloud. */
     onPlay: (selection: BookSelection) => void;
 }
@@ -48,6 +51,8 @@ interface Found {
     rect: DOMRect;
     /** What it is of the book in the reader, if it was selected there. */
     book: BookSelection | null;
+    /** Where it was selected, as what is done with it is logged. */
+    where: Where | null;
 }
 
 type Box =
@@ -76,6 +81,7 @@ function findSelection(): Found | null {
         picked: textAround(range, root, text),
         rect: range.getBoundingClientRect(),
         book: book && region instanceof Element ? bookSelection(range, region) : null,
+        where: readWhere(markedAncestor(range.commonAncestorContainer, WHERE_ATTRIBUTE)?.value),
     };
 }
 
@@ -91,9 +97,12 @@ function placed(anchor: Anchor) {
  * The buttons that come up over text that is selected, and the box with
  * the translation that the first of them opens. The second has the words
  * taken into the vocabulary, which is done in the background and shows
- * here only if it cannot be started.
+ * here only if it cannot be started. What is translated is taken into the
+ * vocabulary as well.
  */
-export function SelectionTools({ translating, describing, decisionModel, onUsage, onChat, onTask, onPlay }: Props) {
+export function SelectionTools(
+    { translating, describing, decisionModel, onUsage, onChat, onTask, onLogged, onPlay }: Props,
+) {
     // what the buttons are shown for, until something is done with it
     const [found, setFound] = useState<Found | null>(null);
     const [box, setBox] = useState<Box | null>(null);
@@ -170,10 +179,18 @@ export function SelectionTools({ translating, describing, decisionModel, onUsage
         setFound(null);
         if (task === "translate") {
             show({ status: "loading" });
-            translate(of.picked, translating, controller.signal).then(({ usage, ...translated }) => {
+            translate(of.picked, translating, controller.signal, of.where).then(({ usage, ...translated }) => {
                 count(usage);
                 show({ status: "translated", translated });
+                if (translated.log) {
+                    onLogged();
+                }
             }, failed);
+            // the words go into the vocabulary whatever becomes of the box, unless they cannot
+            takeWords(of.picked, describing, decisionModel).then(
+                onTask,
+                (error) => console.warn("the words translated were not taken into the vocabulary:", error),
+            );
         } else {
             takeWords(of.picked, describing, decisionModel, controller.signal).then(onTask, failed);
         }

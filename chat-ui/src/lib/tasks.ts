@@ -12,6 +12,8 @@ export interface TakenWord {
     reason: string;
     /** For a sentence that was read aloud: what OpenRouter knows the request by, to look its cost up with. */
     generation?: string;
+    /** For what was asked about a translation: what one of its logs is about. */
+    subject?: string;
 }
 
 /** Something the server does in the background, as it is at present. */
@@ -77,6 +79,7 @@ export function describeTask(task: BackgroundTask): string {
             icon: "Making the icon",
             embeddings: "Embedding the words",
             log: "Writing the log",
+            questions: "Logging what was asked",
         }[task.kind] ?? "Looking into the words";
         return `${doing}: ${task.done} of ${task.total}`;
     }
@@ -91,6 +94,9 @@ export function describeTask(task: BackgroundTask): string {
     }
     if (task.kind === "log") {
         return "The log is written.";
+    }
+    if (task.kind === "questions") {
+        return `Logged: ${task.result.map((each) => each.subject).join(", ") || "nothing"}.`;
     }
     return speech ? describeRead(task.result) : describeTaken(task.result);
 }
@@ -113,13 +119,14 @@ export function taskName(task: BackgroundTask): string {
         icon: "Topic icon",
         embeddings: "Embed vocabulary",
         log: "Exercise log",
+        questions: "Questions log",
     }[task.kind]
         ?? "Add to vocabulary";
 }
 
 /** The words of a task that are worth a mention: those that are new, and those that could not be taken. */
 export function mentioned(task: BackgroundTask): TakenWord[] {
-    if (task.kind === "icon" || task.kind === "embeddings") {
+    if (task.kind === "icon" || task.kind === "embeddings" || task.kind === "questions") {
         return [];
     }
     const worth = task.kind === "speech" ? ["failed"] : ["added", "form", "failed"];
