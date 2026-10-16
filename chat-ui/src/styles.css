@@ -848,17 +848,53 @@ a {
     display: none;
 }
 
+/* the panels on the left, the activities in the middle and the rest on the right */
 .topbar {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: 10px;
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
 }
 
-/* what follows the activities is on the right */
-.topbar > .switch {
-    margin-right: auto;
+.topbar-side {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.topbar-side.end {
+    justify-content: flex-end;
+}
+
+.icon {
+    width: 18px;
+    height: 18px;
+    flex: none;
+}
+
+/* a button that is an icon alone, which its title names */
+.topbar button.icon-only,
+.topbar .switch button.icon-only {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 9px;
+}
+
+/* leaving the app is set apart from what is in it */
+.topbar .log-out {
+    margin-left: 6px;
+    padding-inline: 8px;
+    border-color: transparent;
+    background: none;
+    color: var(--muted);
+}
+
+.topbar .log-out:hover {
+    color: var(--text);
 }
 
 .switch {
@@ -877,7 +913,8 @@ a {
     font-weight: 600;
 }
 
-.switch button[aria-selected="true"] {
+.switch button[aria-selected="true"],
+.topbar .switch button[aria-pressed="true"] {
     background: var(--bg);
     color: var(--text);
     box-shadow: 0 0 0 1px var(--border);
@@ -1292,6 +1329,11 @@ div.book-cover {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.task-sign .caret {
+    color: var(--muted);
+    font-size: 0.75em;
 }
 
 .spinner {

@@ -7,6 +7,7 @@ import { BookList } from "./components/BookList";
 import { BookReader } from "./components/BookReader";
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
+import { Icon } from "./components/Icon";
 import { LogsPanel } from "./components/LogsPanel";
 import { Practice } from "./components/Practice";
 import { SelectionTools } from "./components/SelectionTools";
@@ -660,18 +661,37 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     </SidePanel>
                 </aside>
                 <main className="main">
+                    {
+                        /* Buttons that take each other's place are kept together: the panels on the left,
+                        the activities, and the panels on the right. */
+                    }
                     <header className="topbar">
-                        <button
-                            aria-pressed={libraryOpen && !logsOpen}
-                            onClick={() => {
-                                setLibraryOpen(logsOpen || !libraryOpen);
-                                setLogsOpen(false);
-                            }}
-                        >
-                            Library
-                        </button>
-                        <button aria-pressed={logsOpen} onClick={() => setLogsOpen(!logsOpen)}>Logs</button>
-                        <div className="switch" role="tablist" aria-label="Activity">
+                        <div className="topbar-side">
+                            <div className="switch" role="group" aria-label="Panel on the left">
+                                <button
+                                    className="icon-only"
+                                    aria-pressed={libraryOpen && !logsOpen}
+                                    onClick={() => {
+                                        setLibraryOpen(logsOpen || !libraryOpen);
+                                        setLogsOpen(false);
+                                    }}
+                                    title="Library"
+                                    aria-label="Library"
+                                >
+                                    <Icon name="library" />
+                                </button>
+                                <button
+                                    className="icon-only"
+                                    aria-pressed={logsOpen}
+                                    onClick={() => setLogsOpen(!logsOpen)}
+                                    title="Logs"
+                                    aria-label="Logs"
+                                >
+                                    <Icon name="logs" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="switch activities" role="tablist" aria-label="Activity">
                             <button role="tab" aria-selected={activity === "chat"} onClick={() => setActivity("chat")}>
                                 Chat
                             </button>
@@ -690,20 +710,48 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 Practice
                             </button>
                         </div>
-                        <TaskSign tasks={tasks} />
-                        {activity === "chat" && (
+                        <div className="topbar-side end">
+                            <TaskSign tasks={tasks} />
+                            <div className="switch" role="group" aria-label="Panel on the right">
+                                {activity === "chat" && (
+                                    <button
+                                        className="icon-only"
+                                        aria-pressed={panel === "checks"}
+                                        onClick={() => togglePanel("checks")}
+                                        title="Checks"
+                                        aria-label="Checks"
+                                    >
+                                        <Icon name="checks" />
+                                    </button>
+                                )}
+                                <button
+                                    className="icon-only"
+                                    aria-pressed={panel === "usage"}
+                                    onClick={() => togglePanel("usage")}
+                                    title="Usage"
+                                    aria-label="Usage"
+                                >
+                                    <Icon name="usage" />
+                                </button>
+                                <button
+                                    className="icon-only"
+                                    aria-pressed={panel === "settings"}
+                                    onClick={() => togglePanel("settings")}
+                                    title="Settings"
+                                    aria-label="Settings"
+                                >
+                                    <Icon name="settings" />
+                                </button>
+                            </div>
                             <button
-                                aria-pressed={panel === "checks"}
-                                onClick={() => togglePanel("checks")}
+                                className="log-out icon-only"
+                                onClick={logOut}
+                                title={`Log out (logged in as ${user})`}
+                                aria-label="Log out"
                             >
-                                Checks
+                                <Icon name="log-out" />
                             </button>
-                        )}
-                        <button aria-pressed={panel === "usage"} onClick={() => togglePanel("usage")}>Usage</button>
-                        <button aria-pressed={panel === "settings"} onClick={() => togglePanel("settings")}>
-                            Settings
-                        </button>
-                        <button onClick={logOut} title={`Logged in as ${user}`}>Log out</button>
+                        </div>
                     </header>
                     {/* stays in place while hidden, so a reply still arriving is not cut off */}
                     <div className="pane" hidden={activity !== "chat"}>
