@@ -36,6 +36,8 @@ from kit import (
     grade_of,
     level_of,
     option,
+    prompts_beside,
+    score_of,
     serve,
     written,
 )
@@ -45,39 +47,8 @@ SENTENCES = 5
 # more than anyone writes for one sentence
 MAX_ANSWER_LENGTH = 1000
 
-MAKING = """\
-You write translation exercises for someone learning {language}. Write \
-{count} different sentences in {into} which, translated into {language}, \
-need the rules below, and keep to the topics below. {level}
-
-{lesson}
-{topics}
-{words}{guidance}{made}
-
-Give each sentence with a good translation into {language}.
-
-Reply with JSON alone: {{"items": [{{"source": "...", "reference": "..."}}]}}"""
-
-JUDGING = """\
-You check translations by someone learning {language} at level {level}. \
-The lesson they practise:
-
-{lesson}
-
-The sentences, each in {into}, with a good translation and the learner's:
-
-{sentences}
-
-Judge each translation of the learner, not how close it is to the good one: \
-another wording that is right is right. "right" if it is correct {language} \
-and means the sentence, "partial" if it has small mistakes, "wrong" if it \
-has mistakes in the rules of the lesson or does not mean the sentence. The \
-correction is the learner's translation with as few changes as make it \
-right, or "" if it is right. The note says in a sentence of {into} what was \
-wrong, or "" if nothing was.
-
-Reply with JSON alone, with a verdict for each sentence in turn: \
-{{"verdicts": [{{"result": "...", "correction": "...", "note": "..."}}]}}"""
+# what the exercise tells the models, by name
+PROMPTS = prompts_beside(__file__)
 
 
 def read_items(reply: Any, count: int = SENTENCES) -> list[dict[str, str]]:
@@ -129,7 +100,8 @@ def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> No
     sets = state["sets"]
     if len(sets) > len(state["checked"]) or len(sets) >= context["instances"]:
         return
-    prompt = MAKING.format(
+    prompt = PROMPTS(
+        "making",
         language=context["language"],
         count=sentences_of(context),
         into=context["into"],
@@ -155,14 +127,20 @@ def judge(
     are judged by the model, together. Raises ModelError."""
     written = [number for number, answer in enumerate(answers) if answer]
     sentences = "\n\n".join(
-        f"{order}. In {context['into']}: {items[number]['source']}\n"
-        f"   Good: {items[number]['reference']}\n"
-        f"   The learner's: {answers[number]}"
+        PROMPTS(
+            "sentence",
+            number=order,
+            into=context["into"],
+            source=items[number]["source"],
+            reference=items[number]["reference"],
+            given=answers[number],
+        )
         for order, number in enumerate(written, start=1)
     )
     verdicts: dict[int, tuple[str, str, str]] = {}
     if written:
-        prompt = JUDGING.format(
+        prompt = PROMPTS(
+            "judging",
             language=context["language"],
             level=level_of(context),
             lesson=describe_lesson(context),
@@ -267,7 +245,15 @@ def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
         {"items": made, **checked}
         for made, checked in zip(state["sets"], state["checked"])
     ]
-    return Step(state=state, results={"sets": done, "total": context["instances"]})
+    # each sentence counts, of every set that was checked
+    score = score_of(
+        [each["result"] for checked in state["checked"] for each in checked["feedback"]]
+    )
+    return Step(
+        state=state,
+        results={"sets": done, "total": context["instances"]},
+        scores=None if score is None else {"strukturen": score},
+    )
 
 
 if __name__ == "__main__":

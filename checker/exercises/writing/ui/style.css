@@ -1,0 +1,39 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+   License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+.task p {
+    margin: 0 0 6px;
+}
+
+.task ul {
+    margin: 6px 0 0;
+    padding-left: 20px;
+}
+
+textarea {
+    width: 100%;
+    margin: 8px 0 4px;
+    resize: vertical;
+}
+
+.form {
+    display: grid;
+    gap: 8px;
+}
+
+.field {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) 2fr;
+    gap: 12px;
+    align-items: center;
+}
+
+h3 {
+    margin: 16px 0 4px;
+    font-size: 1em;
+}
+
+.written {
+    margin: 0;
+    white-space: pre-wrap;
+}

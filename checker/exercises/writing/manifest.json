@@ -1,0 +1,21 @@
+{
+    "title": "Write",
+    "description": "Write a short message, an email or a post on a situation, to every point it asks for, or fill in a form from a text; what you write is rated as an exam rates it. Each instance is a task.",
+    "options": {
+        "kind": {
+            "label": "What to write",
+            "choices": {
+                "message": "A message to a friend",
+                "email": "An email with Sie",
+                "opinion": "An opinion, as in a forum",
+                "form": "A form, filled in from a text"
+            }
+        },
+        "words": {
+            "label": "About how many words",
+            "min": 20,
+            "max": 250,
+            "default": 40
+        }
+    }
+}

@@ -3,12 +3,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
 from kit import (
     ModelError,
+    PromptError,
+    Prompts,
     ask_json,
+    criteria_scores,
+    describe_exam,
     describe_guidance,
     describe_lesson,
     describe_level,
@@ -19,6 +24,11 @@ from kit import (
     focuses,
     grade,
     grade_of,
+    prompts_beside,
+    read_ratings,
+    result_of_ratings,
+    score_of,
+    variables_of,
 )
 
 DOCTOR = {"title": "Beim Arzt", "description": "symptoms"}
@@ -222,3 +232,68 @@ def test_a_lesson_without_points_to_practise_leaves_the_model_free() -> None:
     lesson = {"title": "L", "level": "A1", "points": [point("c", "preview")]}
 
     assert describe_plan({"lesson": lesson}, 5) == ""
+
+
+def test_a_score_is_the_share_of_answers_right_one_partly_right_counting_half() -> None:
+    assert score_of(["right", "partial", "wrong", "right"]) == 62.5
+    assert score_of([]) is None
+
+
+def test_ratings_are_kept_within_0_and_4_and_one_missing_is_a_failure() -> None:
+    ratings = read_ratings({"aufgabe": 5, "wortschatz": 2.6}, ["aufgabe", "wortschatz"])
+
+    assert ratings == {"aufgabe": 4, "wortschatz": 3}
+    with pytest.raises(ModelError, match="did not rate wortschatz"):
+        read_ratings({"aufgabe": 3}, ["aufgabe", "wortschatz"])
+
+
+def test_answers_rated_3_or_more_on_average_are_right_and_from_1_5_partly() -> None:
+    assert result_of_ratings({"aufgabe": 4, "strukturen": 2}) == "right"
+    assert result_of_ratings({"aufgabe": 2, "strukturen": 1}) == "partial"
+    assert result_of_ratings({"aufgabe": 1, "strukturen": 1}) == "wrong"
+
+
+def test_the_score_of_a_criterion_is_the_share_of_the_most_of_its_ratings() -> None:
+    scores = criteria_scores([{"aufgabe": 4, "strukturen": 2}, {"aufgabe": 2}])
+
+    assert scores == {"aufgabe": 75.0, "strukturen": 50.0, "all": 66.7}
+
+
+def test_the_exam_is_told_only_when_the_exercise_is_part_of_one() -> None:
+    assert describe_exam({"exam": ""}) == ""
+    assert "Teil 1" in describe_exam({"exam": "Lesen, Teil 1"})
+
+
+EXERCISES = Path(__file__).resolve().parent
+
+
+def test_the_prompts_beside_a_backend_are_those_of_its_directory() -> None:
+    prompts = prompts_beside(str(EXERCISES / "cloze" / "backend.py"))
+    assert prompts.path == EXERCISES / "cloze" / "prompts.toml"
+    assert "$language" in prompts.text("making")
+
+
+def test_a_prompt_of_an_exercise_is_an_error_when_it_uses_a_value_not_given(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "prompts.toml"
+    path.write_text('asking = "Ask in $language about $topic."\n', encoding="utf-8")
+    prompts = Prompts(path)
+    assert prompts("asking", language="German", topic="food", count=3) == (
+        "Ask in German about food."
+    )
+    with pytest.raises(PromptError, match=r"\$topic"):
+        prompts("asking", language="German")
+
+
+@pytest.mark.parametrize(
+    "directory",
+    sorted(path.parent for path in EXERCISES.glob("*/backend.py")),
+    ids=lambda path: path.name,
+)
+def test_every_exercise_keeps_its_prompts_beside_its_backend(directory: Path) -> None:
+    prompts = Prompts(directory / "prompts.toml")
+    texts = [value for value in prompts.table().values() if isinstance(value, str)]
+    assert texts
+    for text in texts:
+        variables_of(text)

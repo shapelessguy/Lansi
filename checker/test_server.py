@@ -11,10 +11,12 @@ import urllib.request
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+from unittest.mock import ANY
 
 import pytest
 from anki_import import AnkiImporter
 from book_sync import BookSync
+from evaluating import Evaluations
 from exercising import Practice, Runner
 from intake import Intake
 from live import LiveChecker
@@ -608,6 +610,13 @@ def with_users(tmp_path: Path) -> Iterator[str]:
         store = UserStore(user_directory(tmp_path, user))
         # what is started is done before the request is answered
         tasks = Tasks(background=lambda job: job())
+        practice = Practice(
+            store,
+            runner=FakeRunner(),
+            lemmas_of=lambda language: ["der Arzt", "krank", "gehen"],
+            send=FakeOpenRouter(),
+            later=in_background(tasks, "log"),
+        )
         return Account(
             LiveChecker(Speller(language=None)),
             intake,
@@ -617,13 +626,8 @@ def with_users(tmp_path: Path) -> Iterator[str]:
             translator=Translator(model),
             speaker=Speaker(store, FakeVoice()),
             tasks=tasks,
-            practice=Practice(
-                store,
-                runner=FakeRunner(),
-                lemmas_of=lambda language: ["der Arzt", "krank", "gehen"],
-                send=FakeOpenRouter(),
-                later=in_background(tasks, "log"),
-            ),
+            practice=practice,
+            evaluations=Evaluations(store, practice, later=in_background(tasks, "log")),
         )
 
     server = make_server(0, users=users, accounts=Accounts(make_account))
@@ -1269,6 +1273,8 @@ def test_a_session_of_practice_keeps_the_logs_of_its_exercises(with_users: str) 
     assert found["progress"]["cloze"] == {
         "status": "finished",
         "answered": 1,
+        "started_at": ANY,
+        "scores": None,
         "results": {"right": 0, "partial": 0, "wrong": 1},
     }
     assert [(log["answer"], log["correction"]) for log in found["grades"]] == [
@@ -1427,3 +1433,59 @@ def test_a_session_with_words_chosen_in_a_way_there_is_not_is_refused(
 
     assert status == 400
     assert "words are chosen" in json.loads(reply)["error"]
+
+
+def test_the_exams_there_are_of_a_language_are_listed_by_level(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+
+    _, listed, _ = send(f"{with_users}/evaluations/levels?language=German", "GET", ada)
+
+    levels = json.loads(listed)["levels"]
+    assert [level["level"] for level in levels][:2] == ["A1", "A2"]
+    assert [module["id"] for module in levels[0]["modules"]] == [
+        "hoeren",
+        "lesen",
+        "schreiben",
+        "sprechen",
+    ]
+
+
+def test_an_evaluation_is_started_and_its_first_part_in_a_session_of_its_own(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {"language": "German", "level": "A1", "length": 2, "timed": True}
+
+    _, made, _ = send(
+        f"{with_users}/evaluations", "POST", ada, json.dumps(body).encode()
+    )
+    evaluation = json.loads(made)
+    _, started, _ = send(
+        f"{with_users}/evaluations/{evaluation['id']}/parts/0/start", "POST", ada, b"{}"
+    )
+    _, listed, _ = send(f"{with_users}/evaluations", "GET", ada)
+    _, sessions, _ = send(f"{with_users}/sessions", "GET", ada)
+
+    part = json.loads(started)["evaluation"]["parts"][0]
+    assert (part["module"], part["exercise"], part["status"]) == (
+        "hoeren",
+        "comprehension",
+        "running",
+    )
+    assert json.loads(started)["session"]["kind"] == "evaluation"
+    assert [each["id"] for each in json.loads(listed)["evaluations"]] == [
+        evaluation["id"]
+    ]
+    assert json.loads(sessions)["sessions"] == []
+
+
+def test_an_evaluation_of_a_level_with_no_exam_is_refused(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {"language": "German", "level": "C2", "length": 2, "timed": True}
+
+    status, said, _ = send(
+        f"{with_users}/evaluations", "POST", ada, json.dumps(body).encode()
+    )
+
+    assert status == 400
+    assert "no exam of German at C2" in json.loads(said)["error"]

@@ -41,6 +41,8 @@ from kit import (
     grade_of,
     loose,
     option,
+    prompts_beside,
+    score_of,
     serve,
     written,
 )
@@ -51,29 +53,8 @@ SENTENCES = 5
 # what the answers for the gaps of a sentence are joined with in its grade
 GAPS_JOINED = "; "
 
-MAKING = """\
-You write fill-in-the-gap exercises for someone learning {language}. Write \
-{count} different sentences in {language} that practise the rules below, \
-about the topics below. {level}
-
-{lesson}
-{plan}{topics}
-{words}{guidance}{made}
-
-In each sentence, put the words the learner is to fill in between [ and ]: \
-one or two gaps, each a word whose form, or whose choice, the rule the \
-sentence practises decides. A word the learner could only guess, whatever \
-they know of the rule, is no gap. If more than one answer is right, list \
-them in the gap separated by |.
-
-Give a hint for each gap: what the learner starts from to find the word, \
-such as the form a dictionary lists it under. Leave the hint empty where \
-it would be the word itself, or give it away. Give each sentence a \
-translation into {into}.
-
-Reply with JSON alone, an item for each sentence in the order asked, and a \
-hint for each gap of it, in order: {{"items": [{{"text": "...", "hints": \
-["..."], "translation": "..."}}]}}"""
+# what the exercise tells the model, by name
+PROMPTS = prompts_beside(__file__)
 
 
 def parts_of(text: str) -> list[str | None]:
@@ -183,7 +164,8 @@ def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> No
     sets = state["sets"]
     if len(sets) > len(state["checked"]) or len(sets) >= context["instances"]:
         return
-    prompt = MAKING.format(
+    prompt = PROMPTS(
+        "making",
         language=context["language"],
         count=sentences_of(context),
         level=describe_level(context),
@@ -309,7 +291,15 @@ def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
         {"items": made, **checked}
         for made, checked in zip(state["sets"], state["checked"])
     ]
-    return Step(state=state, results={"sets": done, "total": context["instances"]})
+    # each sentence counts, of every set that was checked
+    score = score_of(
+        [each["result"] for checked in state["checked"] for each in checked["feedback"]]
+    )
+    return Step(
+        state=state,
+        results={"sets": done, "total": context["instances"]},
+        scores=None if score is None else {"strukturen": score},
+    )
 
 
 if __name__ == "__main__":

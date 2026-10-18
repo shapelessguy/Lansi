@@ -71,6 +71,12 @@ export interface Settings {
     exerciseOptions: Record<string, Record<string, string | number>>;
     /** How many times each exercise was last to be done, by exercise. */
     exerciseInstances: Record<string, number>;
+    /** How many minutes each exercise was last to take, 0 for no limit, by exercise. */
+    exerciseMinutes: Record<string, number>;
+    /** How long an evaluation is to take, in half hours, from 1 to 8. */
+    evaluationLength: number;
+    /** Whether each part of an evaluation is to be done in its time. */
+    evaluationTimed: boolean;
 }
 
 export const THEMES = { system: "As the system", light: "Light", dark: "Dark" } as const;
@@ -207,6 +213,9 @@ export function defaultSettings(): Settings {
         exerciseTopicWords: true,
         exerciseOptions: {},
         exerciseInstances: {},
+        exerciseMinutes: {},
+        evaluationLength: 2,
+        evaluationTimed: true,
     };
 }
 
@@ -301,14 +310,28 @@ export function normalizeSettings(stored: unknown): Settings {
             ? candidate.exerciseTopicWords
             : defaults.exerciseTopicWords,
         exerciseOptions: exerciseOptionsOf(candidate.exerciseOptions),
-        exerciseInstances: typeof candidate.exerciseInstances === "object" && candidate.exerciseInstances !== null
-            ? Object.fromEntries(
-                Object.entries(candidate.exerciseInstances).filter(([, value]) =>
-                    typeof value === "number" && Number.isFinite(value)
-                ),
-            )
-            : defaults.exerciseInstances,
+        exerciseInstances: numbersOf(candidate.exerciseInstances),
+        exerciseMinutes: numbersOf(candidate.exerciseMinutes),
+        evaluationLength: typeof candidate.evaluationLength === "number"
+                && Number.isInteger(candidate.evaluationLength)
+                && candidate.evaluationLength >= 1
+                && candidate.evaluationLength <= 8
+            ? candidate.evaluationLength
+            : defaults.evaluationLength,
+        evaluationTimed: typeof candidate.evaluationTimed === "boolean"
+            ? candidate.evaluationTimed
+            : defaults.evaluationTimed,
     };
+}
+
+/** The numbers of stored settings kept by exercise, those that are not numbers left out. */
+function numbersOf(stored: unknown): Record<string, number> {
+    if (typeof stored !== "object" || stored === null) {
+        return {};
+    }
+    return Object.fromEntries(
+        Object.entries(stored).filter(([, value]) => typeof value === "number" && Number.isFinite(value)),
+    );
 }
 
 /** The options of the exercises in stored settings, those that are not text or numbers left out. */

@@ -1,0 +1,31 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+# What the cloze exercise tells the model, as checker/prompts.py describes.
+# $level, $lesson, $plan, $topics, $words, $guidance and $made are the
+# pieces of `kit` in checker/prompts.toml.
+
+# what makes a set of sentences with gaps
+making = """
+You write fill-in-the-gap exercises for someone learning $language. Write \
+$count different sentences in $language that practise the rules below, \
+about the topics below. $level
+
+$lesson
+$plan$topics
+$words$guidance$made
+
+In each sentence, put the words the learner is to fill in between [ and ]: \
+one or two gaps, each a word whose form, or whose choice, the rule the \
+sentence practises decides. A word the learner could only guess, whatever \
+they know of the rule, is no gap. If more than one answer is right, list \
+them in the gap separated by |.
+
+Give a hint for each gap: what the learner starts from to find the word, \
+such as the form a dictionary lists it under. Leave the hint empty where \
+it would be the word itself, or give it away. Give each sentence a \
+translation into $into.
+
+Reply with JSON alone, an item for each sentence in the order asked, and a \
+hint for each gap of it, in order: {"items": [{"text": "...", "hints": \
+["..."], "translation": "..."}]}"""

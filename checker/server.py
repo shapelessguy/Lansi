@@ -33,8 +33,11 @@ from anki_import import DECK_STATUS_URL, AnkiImporter, fetch_anki_notes
 from book_sync import BookSync
 from books import BookError, read_epub
 from categories import CATEGORIES
+from evaluating import EvaluationError, Evaluations
 from exercising import (
+    Asker,
     Choosing,
+    Drawer,
     ExerciseError,
     Practice,
     model_asker,
@@ -286,6 +289,8 @@ class Account:
     tasks: Tasks = field(default_factory=Tasks)
     # the sessions of practice, with the exercises done in them
     practice: Practice | None = None
+    # the evaluations, mock exams made of the exercises of practice
+    evaluations: Evaluations | None = None
 
     def study(self, language: str) -> None:
         """Have every part go by `language`, given by its English name."""
@@ -791,28 +796,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._start_session(practice, api_key)
             elif method == "POST" and (end or step):
                 body = self._read_body()
-                learner = {
-                    name: value[:MAX_LANGUAGE_LENGTH]
-                    for name in ("into", "level")
-                    if isinstance(value := body.get(name), str)
-                }
-                model = body.get("model")
-                ask = model_asker(
-                    send_chat, api_key or "", model if isinstance(model, str) else ""
-                )
-                vision_model = body.get("vision_model")
-                look = (
-                    model_asker(send_chat, api_key or "", vision_model)
-                    if isinstance(vision_model, str) and vision_model
-                    else ask
-                )
-                image_model = body.get("image_model")
-                draw = model_drawer(
-                    api_key or "",
-                    image_model
-                    if isinstance(image_model, str) and image_model
-                    else DEFAULT_IMAGE_MODEL,
-                )
+                learner, ask, draw, look = self._models(body, api_key)
                 reply: dict[str, Any]
                 before = {task["id"] for task in self.account.tasks.listing()}
                 if end:
@@ -850,6 +834,140 @@ class CheckerHandler(BaseHTTPRequestHandler):
         except ExerciseError as error:
             self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
         except GrammarError as error:
+            self._reply(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
+        return True
+
+    def _models(
+        self, body: dict[str, Any], api_key: str | None
+    ) -> tuple[dict[str, str], Asker, Drawer, Asker]:
+        """What a request about an exercise says of the learner, their
+        `into` and `level`, and what asks the models it names: the `model`,
+        the `image_model` that draws and the `vision_model` that looks at
+        pictures, which is the `model` if none is named."""
+        learner = {
+            name: value[:MAX_LANGUAGE_LENGTH]
+            for name in ("into", "level")
+            if isinstance(value := body.get(name), str)
+        }
+        model = body.get("model")
+        ask = model_asker(
+            send_chat, api_key or "", model if isinstance(model, str) else ""
+        )
+        vision_model = body.get("vision_model")
+        look = (
+            model_asker(send_chat, api_key or "", vision_model)
+            if isinstance(vision_model, str) and vision_model
+            else ask
+        )
+        image_model = body.get("image_model")
+        draw = model_drawer(
+            api_key or "",
+            image_model
+            if isinstance(image_model, str) and image_model
+            else DEFAULT_IMAGE_MODEL,
+        )
+        return learner, ask, draw, look
+
+    def _evaluating(self, method: str, api_key: str | None = None) -> bool:
+        """Answers a request about the evaluations, and returns whether the
+        request was one.
+
+            GET /evaluations/levels?language=L
+                                         the exams there are of a language,
+                                         by level
+            GET /evaluations             the evaluations, the latest first
+            GET /evaluations/E           an evaluation, with its parts
+            POST /evaluations            start one, `{"language": ...,
+                                         "level": ..., "length": half hours,
+                                         "timed": ...}`
+            POST /evaluations/E/parts/N/start
+                                         start its part N in a session of its
+                                         own, or take it up; the reply has the
+                                         `evaluation` and the `session`
+            POST /evaluations/E/parts/N/finish
+                                         finish the part N, and the evaluation
+                                         after the last
+            POST /evaluations/E/end      end it, after finishing the part that
+                                         is running
+
+        A POST that finishes brings the models and the learner, as one to a
+        session does; the level is that of the exam. The reply has the
+        `evaluation`, what the models used and the `tasks` it started, such
+        as writing the logs.
+        """
+        evaluations, store = self.account.evaluations, self.account.store
+        url = urlsplit(self.path)
+        one = re.fullmatch(r"/evaluations/([^/]+)", url.path)
+        part = re.fullmatch(
+            r"/evaluations/([^/]+)/parts/(\d+)/(start|finish)", url.path
+        )
+        end = re.fullmatch(r"/evaluations/([^/]+)/end", url.path)
+        listed = url.path in ("/evaluations", "/evaluations/levels")
+        if evaluations is None or store is None or not (listed or one or part or end):
+            return False
+        try:
+            if method == "GET" and url.path == "/evaluations/levels":
+                language = parse_qs(url.query).get("language", [""])[0].strip()
+                levels = evaluations.levels(language or self.account.language)
+                self._reply(HTTPStatus.OK, {"levels": levels})
+            elif method == "GET" and url.path == "/evaluations":
+                self._reply(HTTPStatus.OK, {"evaluations": evaluations.evaluations()})
+            elif method == "GET" and one:
+                found = evaluations.evaluation(one.group(1))
+                if found is None:
+                    self._reply(HTTPStatus.NOT_FOUND, {"error": "no such evaluation"})
+                else:
+                    self._reply(HTTPStatus.OK, found)
+            elif method == "POST" and url.path == "/evaluations":
+                body = self._read_body()
+                named, level = body.get("language"), body.get("level")
+                if not isinstance(named, str) or not isinstance(level, str):
+                    raise ValueError("an evaluation names its language and its level")
+                evaluation = evaluations.start(
+                    named.strip() or self.account.language,
+                    level,
+                    body.get("length"),  # type: ignore[arg-type]
+                    body.get("timed") is True,
+                )
+                self._reply(HTTPStatus.OK, evaluation)
+            elif method == "POST" and part and part.group(3) == "start":
+                evaluation, session = evaluations.start_part(
+                    part.group(1), int(part.group(2))
+                )
+                self._reply(
+                    HTTPStatus.OK, {"evaluation": evaluation, "session": session}
+                )
+            elif method == "POST" and (part or end):
+                body = self._read_body()
+                learner, ask, draw, _ = self._models(body, api_key)
+                before = {task["id"] for task in self.account.tasks.listing()}
+                if part:
+                    evaluation, used = evaluations.finish_part(
+                        part.group(1), int(part.group(2)), learner, ask, draw
+                    )
+                else:
+                    assert end
+                    evaluation, used = evaluations.end(end.group(1), learner, ask, draw)
+                logging = [
+                    task
+                    for task in self.account.tasks.listing()
+                    if task["id"] not in before and task["kind"] == "log"
+                ]
+                self._reply(
+                    HTTPStatus.OK,
+                    {
+                        "evaluation": evaluation,
+                        "usage": [describe_usage(profile) for profile in used],
+                        "tasks": logging,
+                    },
+                )
+            else:
+                return False
+        except ValueError as error:
+            self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+        except ExerciseError as error:
+            self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
+        except (EvaluationError, GrammarError) as error:
             self._reply(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
         return True
 
@@ -984,11 +1102,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
         topics and the exercises, the POST says how the words are chosen:
         `{"mix_topics": ..., "vocabulary": "none" | "all" | "set", "words":
         [...], "topic_words": ...,
-        "embedding_model": ...}`."""
+        "embedding_model": ...}`, and how many `minutes` each exercise may
+        take, by exercise, none for no limit."""
         body = self._read_body()
         language, lesson = body.get("language"), body.get("lesson")
         topics, chosen = body.get("topics", []), body.get("exercises")
         options = body.get("options") or {}
+        minutes = body.get("minutes") or {}
         if not (
             isinstance(language, str)
             and isinstance(lesson, str)
@@ -996,6 +1116,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             and all(isinstance(topic, str) for topic in topics)
             and isinstance(chosen, dict)
             and isinstance(options, dict)
+            and isinstance(minutes, dict)
         ):
             raise ValueError(
                 'expected {"language": ..., "lesson": ..., "exercises": {...}}'
@@ -1008,6 +1129,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             read_choosing(body),
             api_key or "",
             options,
+            minutes,
         )
         usage = [describe_usage(profile) for profile in used]
         self._reply(HTTPStatus.OK, {**session, "usage": usage})
@@ -1017,7 +1139,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         if not self._find_account() or self._kept("GET") or self._sets("GET"):
             return
-        if self._practice("GET") or self._topics("GET"):
+        if self._practice("GET") or self._topics("GET") or self._evaluating("GET"):
             return
         if self._books("GET") or self._speech("GET"):
             return
@@ -1072,6 +1194,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             elif self._books("POST") or self._speech("POST", api_key):
                 pass
             elif self._practice("POST", api_key) or self._topics("POST", api_key):
+                pass
+            elif self._evaluating("POST", api_key):
                 pass
             elif self.path == "/sentences":
                 self._check_sentences(api_key)
@@ -1613,7 +1737,10 @@ if __name__ == "__main__":
                 later=in_background(tasks, "log"),
             ),
         )
-        assert account.book_sync
+        assert account.book_sync and account.practice
+        account.evaluations = Evaluations(
+            kept, account.practice, later=in_background(tasks, "log")
+        )
         account.book_sync.watch()
         processor.watch()
         account.study(language)

@@ -1,0 +1,87 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+# What the oral exercise tells the models, as checker/prompts.py describes.
+# $level, $topics, $words, $guidance, $exam and $criteria are the pieces of
+# `kit` in checker/prompts.toml.
+
+# What makes a speaking task: $task is one of `tasks`, and $made is `made`
+# when tasks were made before.
+making = """
+You make speaking tasks for someone learning $language, which they answer \
+as they would speak, to an examiner or a partner. $task Write it all in \
+$language, about the topics below. $level
+
+$topics
+$words$guidance$exam$made
+Make $count turns. Each "prompt" is what the learner is to say something \
+to, as on a card or said by the partner, in a sentence or two.
+
+Reply with JSON alone: {"card": "...", "prompts": ["..."]}"""
+
+# The tasks made before, one to a line as $listed.
+made = """
+Tasks made already in this exercise. Make another, on other themes \
+and things:
+$listed"""
+
+# What rates what the learner said to a task: $turns are each a `turn`,
+# with a blank line between them, and $shape the ratings asked for, each
+# as "name": 0.
+rating = """
+You are an examiner of speaking, rating what someone learning $language \
+said in a task of an exam at level $level. Rate it as strictly as the \
+examiners of the exam do, by what the level asks for. What they said was \
+typed, as they have no microphone yet: rate it as the speech it stands \
+for, without counting punctuation and capitals against it, and leave out \
+pronunciation.
+
+The card: $card
+
+Each turn, with what the learner said:
+
+$turns
+
+Rate all of it together by each of these, from 0 to 4:
+$criteria
+
+For each turn, the correction is what the learner said with as few \
+changes as make it right and fitting at the level, or "" if it is. The \
+note says in a sentence or two of $into what was missing or wrong, and \
+what was done well.
+
+Reply with JSON alone: {"ratings": {$shape}, "corrections": \
+["..."], "note": "..."}"""
+
+# A turn of a task, with what the learner said to it.
+turn = """
+$number. $prompt
+Learner: $answer"""
+
+# What each kind of task is, by the option `kind`.
+[tasks]
+introduce = """
+The learner introduces themselves. The "card" lists the \
+points to say something about, such as name, age, country, where they \
+live, languages, work and hobbies, separated by ·; the one prompt asks \
+them to say something to every point."""
+cards = """
+A theme in the "card", such as "Einkaufen", and turns: half \
+give a word card of the theme and ask the learner to ask their partner \
+a question with its word ("Karte: Brot. Stellen Sie eine Frage."), the \
+other half give a question of the partner for the learner to answer."""
+requests = """
+Cards with a thing or an action, described in words in place \
+of a picture. Half of the turns give a card and ask the learner to ask \
+their partner for something with it; the other half give a request of \
+the partner for the learner to react to."""
+talk = """
+A question about the learner's own life in the "card", with four \
+points around it, separated by ·; the one prompt asks them to talk to \
+all of them."""
+plan = """
+The learner plans something with a partner, such as a visit or a \
+present. The "card" says what, and gives the learner's own diary of \
+the day, hour by hour, with two or three hours free. Each turn is what \
+the partner says, in order, for the learner to answer: proposing a \
+time, turning one down with a reason, agreeing on what to do."""

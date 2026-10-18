@@ -1,0 +1,59 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+   License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+.text {
+    font-size: 1.05em;
+    line-height: 1.6;
+}
+
+.text h2 {
+    margin: 0 0 8px;
+    font-size: 1.15em;
+}
+
+.text p {
+    margin: 0 0 6px;
+}
+
+.beside {
+    white-space: pre-line;
+}
+
+.heard {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.heard p {
+    margin: 0;
+}
+
+.options {
+    display: grid;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.options.inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+}
+
+.option {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    cursor: pointer;
+}
+
+details {
+    margin-top: 16px;
+}
+
+summary {
+    color: var(--muted);
+    cursor: pointer;
+}

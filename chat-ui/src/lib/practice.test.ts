@@ -7,6 +7,7 @@ import {
     answeredOf,
     choosingOf,
     clampInstances,
+    clock,
     DEFAULT_INSTANCES,
     defaultOptions,
     exerciseKit,
@@ -19,6 +20,7 @@ import {
     practiceUsage,
     resumeAt,
     scoreOf,
+    secondsLeft,
 } from "./practice";
 import { defaultSettings } from "./settings";
 
@@ -89,12 +91,20 @@ describe("resuming a session", () => {
             status: "running",
             words: null,
             mix_topics: false,
+            kind: "practice",
             exercises: Object.fromEntries(Object.keys(statuses).map((id) => [id, 5])),
             options: {},
+            minutes: {},
             progress: Object.fromEntries(
                 Object.entries(statuses).map(([id, status]) => {
                     const done = status === "pending" ? 0 : 1;
-                    return [id, { status, answered: 2 * done, results: { right: done, partial: done, wrong: 0 } }];
+                    return [id, {
+                        status,
+                        answered: 2 * done,
+                        results: { right: done, partial: done, wrong: 0 },
+                        started_at: null,
+                        scores: null,
+                    }];
                 }),
             ),
         };
@@ -234,8 +244,10 @@ describe("lessonsToReview", () => {
             status: "finished",
             words: null,
             mix_topics: false,
+            kind: "practice",
             exercises: {},
             options: {},
+            minutes: {},
             progress: {},
         };
     }
@@ -255,5 +267,52 @@ describe("lessonsToReview", () => {
         expect(lessonsToReview(sessions, taught, "German")).toEqual(
             ["l0", "l1", "l2", "l3", "l4", "l5", "l6", "l7", "l8", "l11"],
         );
+    });
+});
+
+describe("secondsLeft", () => {
+    function timed(minutes: number, started: number | null): PracticeSession {
+        return {
+            id: "s",
+            language: "German",
+            lesson: "",
+            lessons: [],
+            topics: [],
+            started_at: 0,
+            finished_at: null,
+            status: "running",
+            words: null,
+            mix_topics: false,
+            kind: "practice",
+            exercises: { cloze: 5 },
+            options: {},
+            minutes: { cloze: minutes },
+            progress: {
+                cloze: {
+                    status: "started",
+                    answered: 0,
+                    results: { right: 0, partial: 0, wrong: 0 },
+                    started_at: started,
+                    scores: null,
+                },
+            },
+        };
+    }
+
+    it("counts down from when the exercise was first shown", () => {
+        expect(secondsLeft(timed(2, 100), "cloze", 130_000)).toBe(90);
+        expect(secondsLeft(timed(2, 100), "cloze", 500_000)).toBe(0);
+    });
+
+    it("is none without a limit, or before the exercise was shown", () => {
+        expect(secondsLeft(timed(0, 100), "cloze", 130_000)).toBeNull();
+        expect(secondsLeft(timed(2, null), "cloze", 130_000)).toBeNull();
+    });
+});
+
+describe("clock", () => {
+    it("says minutes and seconds, and hours when there are any", () => {
+        expect(clock(65)).toBe("1:05");
+        expect(clock(3750)).toBe("1:02:30");
     });
 });

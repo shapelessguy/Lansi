@@ -36,6 +36,7 @@ from categories import (
     writes_nouns_with_capitals,
 )
 from profiling import Profile, ProfileError, Profiler, Questions, post
+from prompts import PROMPTS
 from vocabulary import Entry, Form, Vocabularies, Vocabulary
 
 CHAT_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
@@ -63,9 +64,8 @@ def category_questions(language: str) -> Questions:
     return {
         name: {
             "type": "noul",
-            "instructions": (
-                f"Is the {language} `word`, as it is used in the `sentence` if"
-                f" one is given, this: {criterion}"
+            "instructions": PROMPTS(
+                "intake.question", language=language, criterion=criterion
             ),
         }
         for name, criterion in (
@@ -95,78 +95,6 @@ RESCUE_SCHEMA = shape(
     lemma={"type": "string"},
     reason={"type": "string"},
 )
-
-RESCUING = """\
-You keep a vocabulary of {language}, in which every word is stored once, under \
-its dictionary form, together with all of its forms. The words are kept \
-apart by category.
-
-The software that takes words in could not place a word. You are given the \
-`word`, the `sentence` it was used in, if there was one, the `category` it \
-was being taken in as, and the `problem`: what the software reported. The \
-problem is often no fault of the word: it may be a form of a word that is \
-not stored yet, or an earlier answer about it may have been wrong.
-
-Decide whether the word can be saved after all:
-
-- If it is a {language} word that belongs in the vocabulary, set `savable` to \
-true, and give the `category` it belongs in and its dictionary form as \
-`lemma`, by the rules below. The word is then stored under that dictionary \
-form, which is added with all its forms if it is not there yet.
-- If it is not, because it is misspelt, a name, or a word of another \
-language, set `savable` to false and say why in `reason`.
-
-The categories are: {categories}. Their rules:
-
-{rules}
-
-{capitals}
-
-Leave `category` and `lemma` empty when the word is not savable, and \
-`reason` empty when it is."""
-
-# What is said about how a dictionary form is written, wherever one is
-# asked for.
-CAPITALS = (
-    "Write a dictionary form in small letters, however the word was written"
-    " where it was met, unless the word always has a capital letter in"
-    " {language}: `hi`, not `Hi`, for a word that began a sentence."
-)
-
-JUDGING = """\
-You keep a vocabulary of {language}, in which every word is stored once, under \
-its dictionary form, together with all of its forms. The words are kept \
-apart by category. This is about the category "{name}".
-
-You are given a `word` that is not among the stored forms of this category, \
-the `sentence` it was used in, if there was one, and `candidates`: the \
-stored words of the category that are spelt most like it. Decide what the \
-word is:
-
-- "form": it is a form of one of the candidates. Give that candidate's \
-`lemma`, exactly as it was given to you.
-- "new": it is a {language} {name} that is none of the candidates. Give its \
-dictionary form as `lemma`.
-- "elsewhere": it is a {language} word, but not a {name}, as it is used in the \
-sentence or, without one, as it is most often used. Name what it is as \
-`category`: one of {categories}.
-- "reject": it is not a {language} word of any category: it is misspelt, a name, \
-or a word of another language. Say which in `reason`.
-
-The rules of this category: {rules}
-
-{capitals}
-
-Give a `lemma` only for "form" and "new", a `category` only for \
-"elsewhere", and a `reason` only for "reject". Leave the others empty."""
-
-DESCRIBING = """\
-You fill in the entry of a {language} {name} for a vocabulary. You are given \
-its dictionary form as `lemma`. Spell every form as it is written in \
-{language}, with the letters and marks of its own, and with a capital letter \
-only where {language} has one.
-
-{rules}"""
 
 
 class IntakeError(Exception):
@@ -479,8 +407,9 @@ class Intake:
             for category in self.categories.values()
         )
         reply = self._ask(
-            RESCUING.format(
-                capitals=CAPITALS.format(language=self.language),
+            PROMPTS(
+                "intake.rescuing",
+                capitals=PROMPTS("intake.capitals", language=self.language),
                 language=self.language,
                 categories=", ".join(CATEGORIES),
                 rules=rules,
@@ -556,8 +485,9 @@ class Intake:
             for entry in candidates
         ]
         reply = self._ask(
-            JUDGING.format(
-                capitals=CAPITALS.format(language=self.language),
+            PROMPTS(
+                "intake.judging",
+                capitals=PROMPTS("intake.capitals", language=self.language),
                 language=self.language,
                 name=category.name,
                 rules=category.judging,
@@ -591,7 +521,8 @@ class Intake:
         used: list[Profile],
     ) -> tuple[dict[str, Any], list[Form]]:
         reply = self._ask(
-            DESCRIBING.format(
+            PROMPTS(
+                "intake.describing",
                 language=self.language,
                 name=category.name,
                 rules=category.describing,

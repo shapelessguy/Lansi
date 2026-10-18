@@ -13,6 +13,7 @@ import {
     type ExerciseInfo,
     fetchExercises,
     fetchLessons,
+    fetchSession,
     fetchSessions,
     type Learner,
     type Lesson,
@@ -41,6 +42,7 @@ import { type ChosenExercise, ExerciseSettings } from "./ExerciseSettings";
 import { ExerciseView } from "./ExerciseView";
 import { LevelBadge } from "./Level";
 import { SessionHistory } from "./SessionHistory";
+import { TimeLeft } from "./TimeLeft";
 import { TopicList } from "./TopicList";
 
 interface Props {
@@ -278,6 +280,26 @@ export function Practice(
         });
     }
 
+    /** How many minutes an exercise may take, as it was last set, 0 for no limit. */
+    function minutesOf(id: string): number {
+        return settings.exerciseMinutes[id] ?? 0;
+    }
+
+    function setMinutes(exercise: ExerciseInfo, minutes: number) {
+        onChangeSettings({
+            ...settings,
+            exerciseMinutes: { ...settings.exerciseMinutes, [exercise.id]: minutes },
+        });
+    }
+
+    /** Takes what the server has of the session, such as when its exercise started, which its time goes by. */
+    function refresh(current: PracticeSession) {
+        fetchSession(current.id).then(
+            (found) => setSession((shown) => (shown?.id === found.id ? found : shown)),
+            () => undefined,
+        );
+    }
+
     function toggle(id: string) {
         setChosen(({ [id]: had, ...rest }) => {
             if (had !== undefined) {
@@ -306,6 +328,7 @@ export function Practice(
                         .filter((exercise) => chosen[exercise.id] !== undefined)
                         .map((exercise) => [exercise.id, optionsFor(exercise)]),
                 ),
+                Object.fromEntries(Object.keys(chosen).map((id) => [id, isTheory(id) ? 0 : minutesOf(id)])),
             )
         ).then(
             ({ usage, ...started }) => {
@@ -383,6 +406,12 @@ export function Practice(
                                 } ${session.words.lemmas.length} of your words`}
                         </span>
                     </span>
+                    <TimeLeft
+                        key={`${session.id}:${exercise}`}
+                        session={session}
+                        exercise={exercise}
+                        onUp={() => next(session)}
+                    />
                     {/* where the player of a story read aloud goes */}
                     <span className="speech-dock" data-speech-dock="practice" />
                     <span className="practice-actions">
@@ -415,6 +444,7 @@ export function Practice(
                         onUsage={onUsage}
                         onFinish={() => next(session)}
                         onReadAloud={(text, number) => onReadAloud(session.id, exercise, number, text)}
+                        onStarted={() => refresh(session)}
                     />
                 </div>
             </div>
@@ -425,7 +455,12 @@ export function Practice(
     // the exercises chosen that have something to set, as they are listed
     const configured: ChosenExercise[] = (exercises.status === "ready" ? exercises.items : [])
         .filter((exercise) => chosen[exercise.id] !== undefined && !exercise.theory)
-        .map((exercise) => ({ exercise, instances: chosen[exercise.id], values: optionsFor(exercise) }));
+        .map((exercise) => ({
+            exercise,
+            instances: chosen[exercise.id],
+            minutes: minutesOf(exercise.id),
+            values: optionsFor(exercise),
+        }));
     // what a session without a lesson goes over
     const reviewed = lessons.status === "ready" ? lessonsToReview(history, lessons.items, language) : [];
     return (
@@ -574,7 +609,14 @@ export function Practice(
                 </div>
                 {error && <p className="practice-note error">{error}</p>}
                 {configured.length > 0
-                    ? <ExerciseSettings chosen={configured} onInstances={setInstances} onChange={setOption} />
+                    ? (
+                        <ExerciseSettings
+                            chosen={configured}
+                            onInstances={setInstances}
+                            onMinutes={setMinutes}
+                            onChange={setOption}
+                        />
+                    )
                     : (
                         <SessionHistory
                             sessions={history}

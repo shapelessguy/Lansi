@@ -18,6 +18,10 @@ learner and the models wrote, whose words are taken into the vocabulary
 once the exercise is over. Then a model writes the log of the exercise from
 them, as logs.py describes, in the background, so that the learner can go on
 meanwhile.
+
+An exercise may have a time limit, in minutes, from when it is first shown.
+The app keeps the time and finishes the exercise once it is up; what the
+learner sends after that, and a little more for the way there, is refused.
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -78,6 +83,23 @@ MAX_GUIDANCE = 3000
 SHOWN_WORDS = 15
 # how many of the lessons practised last a session without a lesson reviews
 REVIEWED_LESSONS = 10
+# what an exercise may score, as `SCORES` of exercises/kit.py names them
+SCORES = (
+    "lesen",
+    "hoeren",
+    "schreiben",
+    "sprechen",
+    "aufgabe",
+    "kohaerenz",
+    "wortschatz",
+    "strukturen",
+    "aussprache",
+)
+# the longest time limit an exercise may have, in minutes
+MAX_MINUTES = 240
+# how long after its time is up what an exercise is sent is still taken, for
+# the way it takes there, in seconds
+GRACE_SECS = 30
 # The interface of an exercise is a module the app loads into its own page,
 # where it runs as the app does: it is trusted, as the backend is, to be the
 # user's own. The files it may be made of, by their endings, with what each
@@ -511,7 +533,37 @@ def _read_reply(reply: object) -> dict[str, Any]:
     written = reply.get("written") or {}
     if not isinstance(written, dict):
         raise ExerciseError("what an exercise wrote must be an object of lists")
-    return {**reply, "graded": graded, "written": written}
+    return {
+        **reply,
+        "graded": graded,
+        "written": written,
+        "scores": _read_scores(reply.get("scores")),
+    }
+
+
+def _read_scores(value: object) -> dict[str, float] | None:
+    """The scores an exercise reported, each from 0 to 100 by a name of
+    `SCORES`, or None if it reported none."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ExerciseError("the scores of an exercise must be an object")
+    scores = {}
+    for name, score in value.items():
+        if name not in SCORES:
+            raise ExerciseError(f"an exercise cannot score {name}")
+        if isinstance(score, bool) or not isinstance(score, (int, float)):
+            raise ExerciseError(f"the score {name} must be a number")
+        scores[name] = round(min(100.0, max(0.0, float(score))), 1)
+    return scores
+
+
+def describe_scores(scores: dict[str, float] | None) -> str:
+    """The scores of an exercise as they are written into its log; nothing
+    if it has none."""
+    if not scores:
+        return ""
+    return "Scores: " + ", ".join(f"{name} {score:g}" for name, score in scores.items())
 
 
 class Practice:
@@ -529,7 +581,9 @@ class Practice:
         on_words: Callable[[str], None] = lambda line: None,
         send: Send = send_to_openrouter,
         later: Later = do_now,
+        now: Callable[[], float] = time.time,
     ) -> None:
+        self._now = now
         self._store = store
         self._grammar = grammar or Grammar()
         self._runner = runner or Runner(directory)
@@ -565,23 +619,32 @@ class Practice:
         choosing: Choosing | None = None,
         api_key: str = "",
         options: dict[str, Any] | None = None,
+        minutes: dict[str, int] | None = None,
+        exam: str = "",
+        reviewing: list[str] | None = None,
     ) -> tuple[dict[str, Any], list[Profile]]:
         """Start a session of `lesson`, with the exercises `chosen`, each
-        with how many instances of it there are to be and the `options` it
-        is chosen with, by exercise, about `topics`, with the words
-        `choosing` says. An exercise of theory comes first, with
-        no instances, as it is not answered. Without a lesson, the session
-        reviews the lessons practised last, and has no theory. Returns the
-        session with what embedding the words used. Raises ValueError, and
+        with how many instances of it there are to be, the `options` it
+        is chosen with and how many `minutes` it may take, by exercise,
+        about `topics`, with the words `choosing` says. An exercise of
+        theory comes first, with no instances and no time limit, as it is
+        not answered. Without a lesson, the session reviews the lessons
+        practised last, or those `reviewing` names, and has no theory.
+
+        A session with an `exam` is a part of an evaluation: what the exam
+        says the part is like is told to every exercise of it, and what is
+        written in it is not taken into the vocabulary. Returns the session
+        with what embedding the words used. Raises ValueError, and
         ProfileError if the words could not be embedded."""
         choosing = choosing or Choosing()
+        minutes = minutes or {}
         known = {manifest.id: manifest for manifest in exercises(self._directory)}
         reviewed: list[str] = []
         if not lesson:
             if any(exercise in known and known[exercise].theory for exercise in chosen):
                 raise ValueError("theory is that of a lesson: choose one")
-            reviewed = self.practised(language)
-            if not reviewed:
+            reviewed = self.practised(language) if reviewing is None else reviewing
+            if not reviewed and not exam:
                 raise ValueError(
                     "a review goes over the lessons practised last: practise one first"
                 )
@@ -599,6 +662,9 @@ class Practice:
                 continue
             if not isinstance(instances, int) or not 0 < instances <= MAX_INSTANCES:
                 raise ValueError(f"an exercise has 1 to {MAX_INSTANCES} instances")
+            limit = minutes.get(exercise, 0)
+            if not _whole(limit) or not 0 <= limit <= MAX_MINUTES:
+                raise ValueError(f"an exercise takes 0 to {MAX_MINUTES} minutes")
         chosen = {
             exercise: 0 if known[exercise].theory else instances
             for exercise, instances in sorted(
@@ -632,6 +698,11 @@ class Practice:
             {exercise: self.guidance(exercise) for exercise in chosen},
             reviewed,
             values,
+            {
+                exercise: 0 if known[exercise].theory else minutes.get(exercise, 0)
+                for exercise in chosen
+            },
+            {exercise: exam for exercise in chosen} if exam else {},
         )
         return session, used
 
@@ -749,6 +820,8 @@ class Practice:
                 return None, []
             if op == "act" and not started:
                 raise ValueError("the exercise has not started")
+            if op == "act" and self._time_is_up(session, exercise):
+                raise ValueError("the time for this exercise is up")
             if op not in ("start", "act", "finish"):
                 raise ValueError(f"there is no step {op}")
             request = {
@@ -771,9 +844,20 @@ class Practice:
                     session_id, exercise, reply.get("state"), reply.get("show")
                 )
                 return reply.get("show"), used
-            self._store.finish_exercise(session_id, exercise, reply.get("results"))
+            self._store.finish_exercise(
+                session_id, exercise, reply.get("results"), reply.get("scores")
+            )
         self._log_later(session, exercise, request["context"], ask)
         return None, used
+
+    def _time_is_up(self, session: dict[str, Any], exercise: str) -> bool:
+        """Whether the time an exercise had is up, with a little more for
+        what is still on its way."""
+        limit: int = session["minutes"].get(exercise, 0)
+        started: float | None = session["progress"][exercise]["started_at"]
+        if not limit or started is None:
+            return False
+        return self._now() > started + 60 * limit + GRACE_SECS
 
     def _log_later(
         self,
@@ -809,6 +893,9 @@ class Practice:
             ],
         )
 
+        ended = self._store.session(session["id"])
+        scores = ended["progress"][exercise]["scores"] if ended else None
+
         def write() -> list[Profile]:
             try:
                 content, used = write_log(ask, task, grades, written)
@@ -816,6 +903,8 @@ class Practice:
                 raise ExerciseError(
                     f"the log of {title} could not be written: {error}"
                 ) from None
+            if scores:
+                content += "\n" + describe_scores(scores)
             lesson = context["lesson"].get("title", "")
             subject = f"{title}: {lesson}" if lesson else title
             self._store.set_log(session["id"], exercise, content, subject)
@@ -867,10 +956,21 @@ class Practice:
     ) -> dict[str, Any]:
         """What an exercise is told about the session it is in. A review is
         told of a lesson made of the lessons it goes over."""
+        exam = session["exams"].get(exercise, "")
         if session["lesson"]:
             lesson = self._grammar.lesson(session["language"], session["lesson"])
         else:
             lesson = self._grammar.review(session["language"], session["lessons"])
+        if lesson is None and exam:
+            # a level that has no lessons yet is examined all the same
+            level = context.get("level") or ""
+            lesson = {
+                "id": "",
+                "level": level,
+                "title": f"Level {level}",
+                "points": [],
+                "more_info": "",
+            }
         if lesson is None:
             raise ValueError(
                 f"the lesson {session['lesson'] or 'of the review'} is gone"
@@ -892,4 +992,6 @@ class Practice:
             "instances": session["exercises"][exercise],
             "options": session["options"].get(exercise, {}),
             "guidance": session["guidance"].get(exercise, ""),
+            "minutes": session["minutes"].get(exercise, 0),
+            "exam": exam,
         }

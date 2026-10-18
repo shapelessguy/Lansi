@@ -1,0 +1,94 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+# What the picture exercise tells the models, as checker/prompts.py
+# describes. $topics and $guidance are the pieces of `kit` in
+# checker/prompts.toml.
+
+# What plans a picture: $words is `words` when the learner has words to
+# choose things by, and $avoid each of `avoid` that there is, after a space.
+planning = """
+You plan a picture for someone learning $language at level $level: a \
+drawing of one scene with things in it that the learner will label in \
+$language.
+
+$topics
+$words$guidance
+Choose a scene that fits the topics and has room for many things: a \
+particular place and moment, rather than the first that comes to mind for \
+the topic. Then choose \
+$count different things in it that are concrete objects, clearly visible, \
+of a fair size and apart from one another, and whose names a learner at \
+level $level knows or should learn.$avoid
+
+For each thing, say in English what it is, for the illustrator, such as "a \
+wooden kitchen table". For the scene, say in English what the picture shows, \
+in one sentence that leaves the things out.
+
+Reply with JSON alone: {"scene": "A sunny kitchen seen from the door.", \
+"things": ["a wooden kitchen table", "a red kettle"]}"""
+
+# what the image model is told to draw
+drawing = """
+$scene In it, each clearly visible, once, and apart from the others: \
+$things. A clear, colourful illustration. No text, letters, labels or \
+numbers."""
+
+# The boxes are asked for as Gemini models are taught to give them, which
+# they do far better than points.
+locating = """
+These are things that should be in the picture, numbered:
+$things
+
+Detect each of them that is in the picture, and give its bounding box, tight \
+around the thing itself, as "box_2d": [ymin, xmin, ymax, xmax], each from 0 \
+to 1000 of the height or the width of the picture. Leave out a thing that is \
+not in the picture, or that cannot be told apart from the others.
+
+Reply with JSON alone: {"boxes": [{"n": 1, "box_2d": [520, 380, 700, 610]}]}"""
+
+# What judges the labels the learner gave, each a `label` on a line of
+# its own as $labels.
+judging = """
+Someone learning $language at level $level labelled the things in this \
+picture. Each thing is marked with a numbered circle, and this is what they \
+wrote for each, with what the illustrator meant to draw there:
+$labels
+
+For each number, look at the thing under its circle, and judge what was \
+written as its name in $language:
+- "right": a correct name of that thing, with the right article if \
+$language has articles. A capital first letter does not matter.
+- "partial": the right word with a small mistake, such as in its article, a \
+missing article, its spelling, umlauts or capitals; or a word so near in \
+meaning that it is not quite the name of the thing.
+- "wrong": not a name of that thing, or nothing written.
+
+For each, give also "correct": the everyday name of the thing in $language, \
+in the singular, with its article if $language has articles, or what was \
+written if that is right; "translation": its name in $into; and "note": in \
+$into, in a few words, what was not right, or "" if it was.
+
+Reply with JSON alone: {"labels": [{"n": 1, "result": "partial", \
+"correct": "der Pokal", "translation": "trophy", "note": "Preis is a prize, \
+the cup is der Pokal."}]}"""
+
+
+# a label the learner gave, with the thing that was meant to be there
+label = "$number. $given (the illustrator meant: $thing)"
+
+# Some of the words of the learner's vocabulary, as $lemmas joined by commas.
+words = """
+Some words the learner knows. Choose things that are named by these \
+words where they fit the scene:
+$lemmas"""
+
+# What the picture is not to have: the $scenes of the pictures before, and
+# the things $drawn in them, each joined by ;.
+[avoid]
+scenes = """
+The learner has had pictures of these scenes already; choose one \
+clearly different from all of them: $scenes."""
+drawn = """
+None of these may be in the picture, under any name, as the learner \
+has labelled them already: $drawn."""

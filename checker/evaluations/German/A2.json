@@ -1,0 +1,540 @@
+{
+    "level": "A2",
+    "exam": "Goethe-Zertifikat A2",
+    "pass": {
+        "total": 60
+    },
+    "themes": [
+        "Wohnen und Umzug",
+        "Arbeit und Ausbildung",
+        "Gesundheit und Arztbesuch",
+        "Einkaufen und Dienstleistungen",
+        "Reisen und Urlaub",
+        "Feste und Feiern",
+        "Freizeit, Sport und Vereine",
+        "Essen und Restaurant",
+        "Medien und Kommunikation",
+        "Schule und Lernen",
+        "Verkehr und Stadt",
+        "Natur und Wetter"
+    ],
+    "modules": [
+        {
+            "id": "lesen",
+            "title": "Lesen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 5
+                    },
+                    "instances": 1,
+                    "scale": "questions",
+                    "minutes": 8,
+                    "points": 5,
+                    "instructions": "Sie lesen in einer Zeitung diesen Text. Wählen Sie für die Aufgaben die richtige Lösung a, b oder c.",
+                    "task": "A short newspaper article of 150 to 200 words about a person, a local event or a new place in a town, with a title. The questions follow the order of the text; each asks for a fact, a reason or a plan, and the wrong options are named in the text in another role.",
+                    "example": {
+                        "title": "Ein Café für alle",
+                        "shown": "",
+                        "text": "Seit März gibt es in der Lindenstraße ein besonderes Café. Hier arbeiten junge Leute und Rentner zusammen. Die Idee hatte Karin Lehmann, 62 Jahre alt. „Früher war ich Lehrerin. Jetzt bin ich in Rente, aber ich wollte nicht immer zu Hause sitzen“, erzählt sie. Zusammen mit ihrem Neffen Max hat sie das Café eröffnet. Max studiert Wirtschaft und kümmert sich um das Geld. Die Kuchen backen die älteren Mitarbeiterinnen nach alten Familienrezepten. Am Wochenende ist das Café besonders voll, deshalb sucht Frau Lehmann noch zwei Helfer für Samstag und Sonntag. Jeden Mittwochnachmittag gibt es außerdem einen Spielenachmittag für Kinder und Großeltern. Das Café ist von Dienstag bis Sonntag geöffnet, montags ist Ruhetag.",
+                        "questions": [
+                            {
+                                "prompt": "Karin Lehmann hat das Café eröffnet, weil sie …",
+                                "options": [
+                                    "als Lehrerin keine Arbeit mehr gefunden hat.",
+                                    "in der Rente etwas tun wollte.",
+                                    "Wirtschaft studiert hat."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Max …",
+                                "options": [
+                                    "backt die Kuchen.",
+                                    "ist Frau Lehmanns Sohn.",
+                                    "macht die Finanzen."
+                                ],
+                                "answer": 2
+                            },
+                            {
+                                "prompt": "Die Kuchen im Café …",
+                                "options": [
+                                    "kommen aus einer Bäckerei.",
+                                    "werden nach alten Rezepten gebacken.",
+                                    "gibt es nur am Wochenende."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Frau Lehmann sucht Leute, die …",
+                                "options": [
+                                    "am Wochenende helfen.",
+                                    "mittwochs mit Kindern spielen.",
+                                    "montags arbeiten."
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Das Café ist …",
+                                "options": [
+                                    "jeden Tag geöffnet.",
+                                    "am Montag geschlossen.",
+                                    "nur nachmittags geöffnet."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 5
+                    },
+                    "instances": 1,
+                    "scale": "questions",
+                    "minutes": 6,
+                    "points": 5,
+                    "instructions": "Sie sind in einem Kaufhaus. Lesen Sie die Aufgaben und die Information. In welchen Stock gehen Sie? Wählen Sie die richtige Lösung a, b oder c.",
+                    "task": "A board of information, such as the floors of a department store, the rooms of a town hall or the departments of a hospital, of eight to twelve lines, each a place with what is found there. Each question is a situation of one sentence; its options are three of the places, only one of which fits, and the wrong ones share a word with the situation.",
+                    "example": {
+                        "title": "Kaufhaus Merkur",
+                        "shown": "",
+                        "text": "3. Stock: Möbel · Lampen · Teppiche · Restaurant mit Dachterrasse\n2. Stock: Damenmode · Herrenmode · Kindermode · Schuhe\n1. Stock: Elektrogeräte · Computer · Handys · Fotoservice\nErdgeschoss: Kosmetik · Schmuck · Taschen · Zeitschriften · Information\nUntergeschoss: Lebensmittel · Getränke · Haushaltswaren · Bäckerei",
+                        "questions": [
+                            {
+                                "prompt": "Sie möchten Ihrer Freundin eine Halskette schenken.",
+                                "options": [
+                                    "Erdgeschoss",
+                                    "2. Stock",
+                                    "3. Stock"
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 5
+                    },
+                    "instances": 1,
+                    "scale": "questions",
+                    "minutes": 8,
+                    "points": 5,
+                    "instructions": "Sie lesen eine E-Mail. Wählen Sie für die Aufgaben die richtige Lösung a, b oder c.",
+                    "task": "A personal email of 120 to 160 words, from one friend or relative to another, telling news and asking or planning something. The questions follow the order of the text.",
+                    "example": {
+                        "title": "E-Mail",
+                        "shown": "",
+                        "text": "Hallo Sara,\nendlich habe ich Zeit für eine Mail! Seit zwei Wochen wohne ich in Hamburg. Die neue Wohnung ist kleiner als meine alte, aber sie ist sehr hell und hat einen Balkon. Leider ist sie weit weg von meiner Arbeit, ich fahre jeden Tag 40 Minuten mit der U-Bahn. In der Firma sind alle sehr nett, besonders meine Kollegin Ines. Mit ihr gehe ich mittags oft in den Park. Am 12. Juni mache ich eine kleine Party, weil ich meine Nachbarn kennenlernen möchte. Hast du Lust zu kommen? Du kannst gern bei mir schlafen. Schreib mir bald!\nLiebe Grüße\nLena",
+                        "questions": [
+                            {
+                                "prompt": "Lenas neue Wohnung …",
+                                "options": [
+                                    "ist größer als die alte.",
+                                    "hat einen Balkon.",
+                                    "ist nah an ihrer Arbeit."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "match",
+                        "questions": 5
+                    },
+                    "instances": 1,
+                    "scale": "questions",
+                    "minutes": 8,
+                    "points": 5,
+                    "instructions": "Sechs Personen suchen im Internet nach Informationen. Lesen Sie die Aufgaben und die Anzeigen a bis f. Welche Anzeige passt zu welcher Person? Für eine Aufgabe gibt es keine passende Anzeige. Wählen Sie dann x.",
+                    "task": "Six short adverts, a to f, of two to three lines each, on one field such as courses, flats or offers of free time, given in the text. Each question is a person looking for something, in one sentence; each advert fits at most one person, and exactly one person fits none (answer x, the last option). The adverts that do not fit share words with the people.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "a) Schwimmkurs für Erwachsene: Anfänger lernen in 10 Stunden schwimmen. Dienstags 19 Uhr, Hallenbad Nord.\nb) Yoga am Morgen: jeden Samstag 8 Uhr im Stadtpark, kostenlos, für alle.\nc) Tennisclub sucht neue Mitglieder! Probetraining jeden Freitag ab 17 Uhr.\nd) Laufgruppe für Mütter mit Kinderwagen, Mittwochvormittag am See.\ne) Kletterhalle Gipfel: Kurse für Kinder ab 8 Jahren, auch in den Ferien.\nf) Fitnessstudio Aktiv: jetzt im ersten Monat nur 10 Euro, geöffnet 6–23 Uhr.",
+                        "questions": [
+                            {
+                                "prompt": "Herr Weber, 45, kann nicht schwimmen und möchte es am Abend lernen.",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "x"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Frau Ahmadi möchte Sport machen und ihr Baby mitnehmen.",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "x"
+                                ],
+                                "answer": 3
+                            },
+                            {
+                                "prompt": "Tim, 16, sucht einen Fußballverein in der Nähe.",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "x"
+                                ],
+                                "answer": 6
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "hoeren",
+            "title": "Hören",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "choice",
+                        "questions": 1,
+                        "plays": "2"
+                    },
+                    "instances": 5,
+                    "minutes": 8,
+                    "points": 5,
+                    "instructions": "Sie hören fünf kurze Texte. Sie hören jeden Text zweimal. Wählen Sie für die Aufgaben die richtige Lösung a, b oder c.",
+                    "task": "Short texts of the radio or the telephone, of three to five sentences: a weather report, a traffic report, an advert, a message on an answering machine. The question asks for one fact; all three options are said or likely.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Und nun das Wetter für morgen, Donnerstag: Am Vormittag regnet es noch im ganzen Land. Am Nachmittag scheint im Süden die Sonne, im Norden bleibt es bewölkt. Die Temperaturen liegen zwischen 14 und 18 Grad.",
+                        "questions": [
+                            {
+                                "prompt": "Wie ist das Wetter morgen Nachmittag im Süden?",
+                                "options": [
+                                    "Es regnet.",
+                                    "Es ist sonnig.",
+                                    "Es ist bewölkt."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "match",
+                        "questions": 5,
+                        "plays": "1"
+                    },
+                    "instances": 1,
+                    "scale": "questions",
+                    "minutes": 7,
+                    "points": 5,
+                    "instructions": "Sie hören ein Gespräch. Sie hören den Text einmal. Was machen die Personen wann? Wählen Sie für jede Aufgabe die passende Lösung a bis i.",
+                    "task": "A dialogue of ten to fourteen turns, with the speakers' names, in which two people go through five days or five people and say what each is doing. The prompt of each question is the day or the person; the nine activities they are chosen from, a to i, are in \"shown\", which the learner reads while listening, as 'a) … b) …'. Four activities are not done by anyone, and some of them are named in the dialogue as plans that fell through.",
+                    "example": {
+                        "title": "",
+                        "shown": "a) Arzt · b) Kino · c) Kochen · d) Schwimmen · e) Umzug · f) Einkaufen · g) Besuch · h) Konzert · i) Arbeit",
+                        "text": "Mann: Du, Jana, wann können wir uns nächste Woche treffen?\nFrau: Hm, am Montag gehe ich nach der Arbeit zum Zahnarzt.\nMann: Und Dienstag?\nFrau: Dienstag habe ich Schwimmtraining. Am Mittwoch wollte ich eigentlich ins Kino, aber das mache ich lieber am Wochenende. Am Mittwoch helfe ich meiner Schwester beim Umzug.\nMann: Donnerstag?\nFrau: Da kommt meine Mutter zum Abendessen. Aber Freitag habe ich Zeit! Dann können wir zusammen kochen.",
+                        "questions": [
+                            {
+                                "prompt": "Montag",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "i"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Dienstag",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "i"
+                                ],
+                                "answer": 3
+                            },
+                            {
+                                "prompt": "Mittwoch",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "i"
+                                ],
+                                "answer": 4
+                            },
+                            {
+                                "prompt": "Donnerstag",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "i"
+                                ],
+                                "answer": 6
+                            },
+                            {
+                                "prompt": "Freitag",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "i"
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "choice",
+                        "questions": 1,
+                        "plays": "2"
+                    },
+                    "instances": 5,
+                    "minutes": 8,
+                    "points": 5,
+                    "instructions": "Sie hören fünf kurze Gespräche. Sie hören jeden Text zweimal. Wählen Sie für die Aufgaben die richtige Lösung a, b oder c.",
+                    "task": "Short dialogues of four to six turns, with the speakers' names, in a shop, at work, at the doctor's or among friends. The question asks what someone buys, chooses, does or where they go; all three options are named, and the speakers change their minds once.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Verkäuferin: Kann ich Ihnen helfen?\nMann: Ja, ich suche eine Jacke für den Herbst.\nVerkäuferin: Wie gefällt Ihnen die blaue hier?\nMann: Die ist schön, aber zu teuer. Haben Sie die auch in Grau?\nVerkäuferin: Die graue ist im Angebot, 49 Euro.\nMann: Gut, die nehme ich.",
+                        "questions": [
+                            {
+                                "prompt": "Was kauft der Mann?",
+                                "options": [
+                                    "Eine blaue Jacke.",
+                                    "Eine graue Jacke.",
+                                    "Einen grauen Mantel."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "yesno",
+                        "questions": 5,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "scale": "questions",
+                    "minutes": 7,
+                    "points": 5,
+                    "instructions": "Sie hören ein Interview. Sie hören den Text zweimal. Wählen Sie für die Aufgaben Ja oder Nein.",
+                    "task": "A radio interview of ten to fourteen turns, with the speakers' names, in which a presenter asks someone about their work, a hobby or a change in their life. The statements follow the order of the interview; each takes up one thing the guest says, rightly or wrongly.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Moderatorin: Herr Brandt, Sie sind Busfahrer in Köln. Wie lange machen Sie das schon?\nHerr Brandt: Seit zwölf Jahren. Vorher war ich Koch in einem Hotel.\nModeratorin: Warum haben Sie den Beruf gewechselt?\nHerr Brandt: In der Küche musste ich immer abends und am Wochenende arbeiten. Das war schwer mit meinen Kindern.\nModeratorin: Und jetzt?\nHerr Brandt: Jetzt fange ich früh an, um fünf Uhr, aber am Nachmittag bin ich zu Hause.",
+                        "questions": [
+                            {
+                                "prompt": "Herr Brandt war früher Koch.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Er arbeitet jetzt oft am Abend.",
+                                "options": [],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "schreiben",
+            "title": "Schreiben",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "message",
+                        "words": 25
+                    },
+                    "instances": 1,
+                    "minutes": 12,
+                    "points": 10,
+                    "instructions": "Schreiben Sie eine SMS (circa 20–30 Wörter). Schreiben Sie zu allen drei Punkten.",
+                    "task": "A situation of one or two sentences in which the learner writes a short message to a friend: they are late, cannot come, need something. The prompt lists three points: say what happened, give a reason or a new plan, ask or propose something.",
+                    "example": {
+                        "situation": "Sie wollen heute Abend mit Ihrem Freund Paul ins Kino gehen. Ihr Zug hat Verspätung.",
+                        "points": [
+                            "Entschuldigen Sie sich.",
+                            "Schreiben Sie, warum Sie zu spät kommen.",
+                            "Machen Sie einen Vorschlag, wo Sie sich treffen."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "email",
+                        "words": 40
+                    },
+                    "instances": 1,
+                    "minutes": 18,
+                    "points": 10,
+                    "instructions": "Schreiben Sie eine E-Mail (circa 30–40 Wörter). Schreiben Sie zu allen drei Punkten. Vergessen Sie Anrede und Gruß nicht.",
+                    "task": "A situation in which the learner writes a semi-formal email with Sie, to a teacher, a landlord, a boss or a club: an invitation, a request, a change of plan. The prompt lists three points.",
+                    "example": {
+                        "situation": "Ihre Kursleiterin, Frau Wagner, hat Sie zu einem Grillfest des Deutschkurses eingeladen. Sie können kommen.",
+                        "points": [
+                            "Bedanken Sie sich für die Einladung.",
+                            "Schreiben Sie, was Sie mitbringen.",
+                            "Fragen Sie, wie Sie zum Grillplatz kommen."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "sprechen",
+            "title": "Sprechen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "cards",
+                        "prompts": 4
+                    },
+                    "instances": 1,
+                    "scale": "prompts",
+                    "minutes": 4,
+                    "points": 4,
+                    "instructions": "Fragen zur Person stellen und beantworten. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "Cards each with a word about everyday life, such as Geburtstag, Wohnung, Sport, Lieblingsessen. Half of the prompts give a card and ask the learner to ask their partner a question with its word; the other half give a question of the partner for the learner to answer with a detail.",
+                    "example": {
+                        "card": "Fragen zur Person",
+                        "prompts": [
+                            "Karte: Geburtstag. Stellen Sie Ihrem Partner eine Frage.",
+                            "Ihr Partner fragt: „Wo wohnst du und wie gefällt dir die Wohnung?“ Antworten Sie.",
+                            "Karte: Sport. Stellen Sie Ihrem Partner eine Frage.",
+                            "Ihr Partner fragt: „Was machst du am Wochenende gern?“ Antworten Sie."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "talk",
+                        "prompts": 1
+                    },
+                    "instances": 1,
+                    "minutes": 5,
+                    "points": 8,
+                    "instructions": "Über das eigene Leben sprechen. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "A card with a question about the learner's own life and four points around it, such as who, where, when, what. The one prompt asks them to talk about all four points.",
+                    "example": {
+                        "card": "Was machen Sie in Ihrer Freizeit?\n· Sport? · Freunde? · Wochenende? · Lieblingsort?",
+                        "prompts": [
+                            "Erzählen Sie zu allen vier Punkten."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "plan",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "scale": "prompts",
+                    "minutes": 6,
+                    "points": 8,
+                    "instructions": "Gemeinsam etwas planen. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "Two people plan something together, such as a visit or a present for a friend. The text gives the learner's own diary of one day, hour by hour, with two or three free hours. Each prompt is what the partner says, in turn, which the learner answers: proposing a time, turning one down with a reason, agreeing on what to do.",
+                    "example": {
+                        "card": "Sie möchten am Samstag zusammen mit Ihrem Partner einen Freund im Krankenhaus besuchen. Ihr Kalender:\n8:00 Frühstück · 9:00–11:00 Sport · 11:00–12:00 frei · 12:00 Mittagessen mit Eltern · 14:00–16:00 frei · 16:00 Einkaufen · 19:00 Kino",
+                        "prompts": [
+                            "Ihr Partner sagt: „Wann hast du am Samstag Zeit? Am Vormittag vielleicht, um zehn?“",
+                            "Ihr Partner sagt: „Um elf kann ich leider nicht. Geht es auch am Nachmittag?“",
+                            "Ihr Partner sagt: „Super. Was bringen wir ihm mit?“"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

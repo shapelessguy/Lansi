@@ -18,8 +18,11 @@ A language-learning chat built on an Anki collection. Three parts:
   It also keeps everything a user has, in `checker/data/users/<name>/`:
   the chats, books, sessions of practice and settings (`storage.py`) and a vocabulary for
   each language (`intake.py`, `vocabulary.py`); a book is an EPUB file read
-  into its text and font sizes (`books.py`); what the models are told about
-  each category of word is in `categories.py`. Practice is made of
+  into its text and font sizes (`books.py`); the categories of words are
+  in `categories.py`. Everything the server tells the models is in
+  `checker/prompts.toml`, by dotted name and with `$variables`, as
+  `prompts.py` describes; what an exercise tells them is in the
+  `prompts.toml` of its directory. Practice is made of
   lessons, which are grammar points kept by hand in `checker/grammar/`
   (`grammar.py`), and exercises, each a directory in `checker/exercises/`
   with a backend run in a process of its own and an interface, a module
@@ -30,7 +33,12 @@ A language-learning chat built on an Anki collection. Three parts:
   chats do (`processing.py`), are kept by `exercising.py` and `storage.py`;
   once an exercise is over, a model writes its log from them (`logs.py`), a
   short account of what worked and what did not, for the models that
-  profile the learner rather than for the learner. Who may log in is in
+  profile the learner rather than for the learner. Evaluations are mock
+  exams of a level, as the Goethe-Institut sets them, kept by hand in
+  `checker/evaluations/<language>/<level>.json`: each part is an exercise of
+  practice with its options, done in a session of its own, and an
+  evaluation counts up the scores the exercises report (`evaluating.py`).
+  Who may log in is in
   `users.json` at the top of the repository, which holds passwords: do not
   read it.
 

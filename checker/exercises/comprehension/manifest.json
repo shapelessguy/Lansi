@@ -1,0 +1,50 @@
+{
+    "title": "Understand a text",
+    "description": "Read a text, or listen to it, and answer questions on it by choosing: a, b or c, right or wrong, or what goes with what. Each instance is a text with its questions.",
+    "options": {
+        "by": {
+            "label": "By",
+            "choices": {
+                "reading": "Reading it",
+                "listening": "Listening to it"
+            }
+        },
+        "text": {
+            "label": "Kind of text",
+            "choices": {
+                "any": "Any that fits",
+                "message": "An email or a letter",
+                "article": "A newspaper article",
+                "adverts": "Adverts or notices",
+                "signs": "Signs and boards",
+                "dialogue": "A conversation",
+                "announcement": "An announcement",
+                "phone": "A message on the phone",
+                "interview": "An interview"
+            }
+        },
+        "answers": {
+            "label": "Answers",
+            "choices": {
+                "choice": "a, b or c",
+                "truefalse": "Richtig or Falsch",
+                "yesno": "Ja or Nein",
+                "match": "Match to a list"
+            }
+        },
+        "questions": {
+            "label": "Questions on a text",
+            "min": 1,
+            "max": 10,
+            "default": 3
+        },
+        "plays": {
+            "label": "Heard",
+            "choices": {
+                "2": "Twice",
+                "1": "Once",
+                "0": "As often as I like"
+            }
+        }
+    }
+}

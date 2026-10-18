@@ -1,0 +1,85 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+# What the comprehension exercise tells the models, as checker/prompts.py
+# describes. $level, $lesson, $topics, $words, $guidance and $exam are the
+# pieces of `kit` in checker/prompts.toml.
+
+# What writes a text with its questions: $kind is one of `texts` or of
+# `any_text`, $by one
+# of `by`, $answers one of `answering`, $heard is `heard` when the text is
+# listened to, and $made is `made` when texts were written before.
+making = """
+You write texts for someone learning $language to show they understand \
+them, $by. Write $kind, of about $length words, about the topics below, \
+then $count questions on it. $level
+
+$lesson
+$topics
+$words$guidance$exam$made
+$answers
+Every question must be answered by the text alone, with one answer right \
+and the others plainly wrong to whoever understood it, though they may be \
+named in the text in another role. Ask in the order of the text, about what \
+matters in it rather than about single words. Spread the right answers \
+over the places. $heard
+
+Reply with JSON alone: {"title": "...", "shown": "...", "text": "...", \
+"questions": [{"prompt": "...", "options": ["..."], "answer": 0}]}
+"title" may be empty, and "shown" is empty unless the questions need \
+something to be read beside the text, such as a list to choose from. \
+"answer" is the place of the right answer among the options, from 0."""
+
+# said of a text that is listened to
+heard = """
+The text is read aloud, not shown: write it as it is spoken, \
+with no headings, and the numbers and times in words where they are \
+said so."""
+
+# The texts written before, one to a line as $listed.
+made = """
+Texts written already in this exercise. Write another, with other \
+people, places, numbers and happenings:
+$listed"""
+
+# whether the texts are read or listened to
+[by]
+reading = "by reading them"
+listening = "by listening to them"
+
+# What text is written when any kind will do, by whether it is read or
+# listened to.
+[any_text]
+reading = "a text to be read, such as an email, an article or adverts"
+listening = "a text to be heard, such as a conversation or an announcement"
+
+# What each kind of text is, by the option `text`.
+[texts]
+message = "a personal email or letter, with a greeting and an ending"
+article = "a short newspaper article, with a title"
+adverts = "a few short adverts or notices, each with its letter"
+signs = "a sign, a notice or a board, as found on a door, in a shop or at a station"
+dialogue = "a conversation between two people, each line with who says it"
+announcement = "an announcement, as heard at a station, an airport or in a shop"
+phone = "a message left on an answering machine"
+interview = "a radio interview, each line with who says it"
+
+# How the questions are answered, by the option `answers`.
+[answering]
+choice = """
+Each question is a question, or the start of a sentence, with \
+three "options" that answer it."""
+truefalse = """
+Each question is a statement about the text, which is \
+"Richtig" or "Falsch": leave "options" empty, and "answer" is 0 for Richtig \
+and 1 for Falsch."""
+yesno = """
+Each question is a statement about the text, which is "Ja" or \
+"Nein": leave "options" empty, and "answer" is 0 for Ja and 1 for Nein."""
+match = """
+The text, or "shown" if the text is heard, has a list of six to \
+nine things, each with its letter, such as "a) ...". Each question is a \
+person, a day or a situation that one of them goes with, and its "options" \
+are the letters of the list, the same for every question, and "x" last, for \
+none. Every thing goes with one question at most, and one question goes \
+with none, whose answer is x."""

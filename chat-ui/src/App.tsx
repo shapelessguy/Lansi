@@ -7,6 +7,7 @@ import { BookList } from "./components/BookList";
 import { BookReader } from "./components/BookReader";
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
+import { Evaluations } from "./components/Evaluations";
 import { Icon } from "./components/Icon";
 import { LogsPanel } from "./components/LogsPanel";
 import { Practice } from "./components/Practice";
@@ -50,6 +51,7 @@ import {
     updateChat,
 } from "./lib/chats";
 import type { ProfileUsage } from "./lib/checker";
+import { evaluationUsage, USAGE_ID as EVALUATION_USAGE_ID } from "./lib/evaluations";
 import { loadLayout, type Panel, saveLayout } from "./lib/layout";
 import type { ChatMessage } from "./lib/openrouter";
 import { fetchGenerationUsage } from "./lib/openrouter";
@@ -142,7 +144,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
     );
     // how many words the vocabulary has, once it has been listed
     const [vocabularyCount, setVocabularyCount] = useState<number | null>(null);
-    const [activity, setActivity] = useState<"chat" | "books" | "practice">("chat");
+    const [activity, setActivity] = useState<"chat" | "books" | "practice" | "evaluations">("chat");
     const [booksState, setBooksState] = useState<BooksState>({ status: "loading" });
     // the book in the reader, which is the one that was read last
     const [bookId, setBookId] = useState<string | null>(() => loadReading().bookId);
@@ -528,6 +530,10 @@ export function App({ user, initialSettings, initialChats }: Props) {
         (used: ProfileUsage[]) => used.forEach((each) => addUsageEntry(practiceUsage(each, Date.now()))),
         [addUsageEntry],
     );
+    const addEvaluationUsage = useCallback(
+        (used: ProfileUsage[]) => used.forEach((each) => addUsageEntry(evaluationUsage(each, Date.now()))),
+        [addUsageEntry],
+    );
     const translating = useMemo<Asking>(
         () => ({ ...asking, model: settings.translationModel || asking.model }),
         [asking, settings.translationModel],
@@ -709,6 +715,13 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             >
                                 Practice
                             </button>
+                            <button
+                                role="tab"
+                                aria-selected={activity === "evaluations"}
+                                onClick={() => setActivity("evaluations")}
+                            >
+                                Evaluations
+                            </button>
                         </div>
                         <div className="topbar-side end">
                             <TaskSign tasks={tasks} />
@@ -799,6 +812,22 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 })}
                         />
                     </div>
+                    <div className="pane" hidden={activity !== "evaluations"}>
+                        <Evaluations
+                            settings={settings}
+                            learner={learner}
+                            onUsage={addEvaluationUsage}
+                            onTask={addTask}
+                            onChangeSettings={updateSettings}
+                            onOpenSettings={() => openSettings("general")}
+                            onReadAloud={(sessionId, exercise, number, text) =>
+                                setListening({
+                                    source: exerciseSource(sessionId, exercise, number, text, "evaluation"),
+                                    nonce: Date.now(),
+                                })}
+                            onEnded={() => setLogsRevision((revision) => revision + 1)}
+                        />
+                    </div>
                 </main>
                 <aside
                     className="side-panel"
@@ -808,8 +837,16 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     {panel === "usage" && (
                         <UsagePanel
                             revision={usageRevision}
-                            currentLabel={activity === "practice" ? "Practice" : "This chat"}
-                            chatId={activity === "practice" ? PRACTICE_USAGE_ID : chat.id}
+                            currentLabel={activity === "practice"
+                                ? "Practice"
+                                : activity === "evaluations"
+                                ? "Evaluations"
+                                : "This chat"}
+                            chatId={activity === "practice"
+                                ? PRACTICE_USAGE_ID
+                                : activity === "evaluations"
+                                ? EVALUATION_USAGE_ID
+                                : chat.id}
                             onClose={() => setOpenPanel(null)}
                         />
                     )}

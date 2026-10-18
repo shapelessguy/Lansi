@@ -4,14 +4,14 @@
 """The categories the words of the vocabulary are divided into, and what is
 stored of a word in each.
 
-Everything a model is told about a category is here, to be tuned in one
-place: how the decision model is to recognise it, what makes two words the
-same entry, and the shape of the description a language model has to fill in
-for a new word. The shapes are given to the model as JSON schemas, so it has
+What a model is told about a category is `categories` of prompts.toml, to
+be tuned in one place: how the decision model is to recognise it, what makes
+two words the same entry, and what a language model is told when it
+describes a new word. The shape of that description is here. The shapes are given to the model as JSON schemas, so it has
 no say in how its answer is laid out, and the forms of a word are worked out
 from the filled-in shape here rather than left to it to list.
 
-The rules written out here are those of German. A word of any other
+The rules written out there are those of German. A word of any other
 language is stored by rules that fit every language: under the form a
 dictionary lists it by, with whatever forms the model lists for it.
 """
@@ -22,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from prompts import PROMPTS
 from vocabulary import Form
 
 Schema = dict[str, Any]
@@ -68,17 +69,36 @@ class Category:
 
 
 MEANINGS = several(TEXT)
-_MEANINGS_RULE = (
-    "`meanings` are short English translations, one for each distinct meaning"
-    " of the word, the most common first."
-)
-# A form that is written in two ways is to be found by either, so both are
-# asked for, in the one place the form has.
-_EMPTY_RULE = (
-    "Leave a text empty where the word has no such form. Where a form has two"
-    " accepted spellings, give both, separated by a slash: `Produkts /"
-    " Produktes`, `geh / gehe`, `gern / gerne`."
-)
+
+
+def _told(name: str) -> str:
+    """A text of `categories` of the prompts, with the rules it uses."""
+    return PROMPTS(
+        f"categories.{name}",
+        meanings_rule=PROMPTS("categories.meanings_rule"),
+        empty_rule=PROMPTS("categories.empty_rule"),
+        listing=PROMPTS("categories.listing"),
+    )
+
+
+def _german(
+    name: str,
+    schema: Schema,
+    read: Callable[[dict[str, Any]], Description],
+    rules: str = "",
+) -> Category:
+    """A category of German, as `categories.german` of the prompts tells it,
+    judged and described by the rules of `rules` if it has none of its own."""
+    told = rules or name
+    return Category(
+        name,
+        _told(f"german.{name}.criterion"),
+        _told(f"german.{told}.judging"),
+        _told(f"german.{told}.describing"),
+        schema,
+        read,
+    )
+
 
 # nouns
 
@@ -115,24 +135,7 @@ def read_noun(reply: dict[str, Any]) -> Description:
     return {"genders": genders}, _present(forms)
 
 
-NOUN = Category(
-    "noun",
-    "A noun, in any case or number: Hund, Hundes, Häuser, Kindern, Freiheit."
-    " German nouns are written with a capital letter.",
-    "The dictionary form is the nominative singular, without an article, or"
-    " the nominative plural for a noun that has no singular. The same word:"
-    " its cases and its plural, and the same spelling with another gender or"
-    " meaning (der, das and die Band are one word). Words of their own:"
-    " compounds (Haustür is not Haus), diminutives (Häuschen), and verbs and"
-    " adjectives used as nouns (das Essen, der Alte).",
-    "List every gender the noun is used with as one of `genders`: der Band,"
-    " das Band and die Band are three. For each give the article, the"
-    " meanings it has with that gender, and the noun, without the article,"
-    f" in the four cases of the singular and of the plural. {_EMPTY_RULE}"
-    f" {_MEANINGS_RULE}",
-    NOUN_SCHEMA,
-    read_noun,
-)
+NOUN = _german("noun", NOUN_SCHEMA, read_noun)
 
 # verbs
 
@@ -182,25 +185,7 @@ def read_verb(reply: dict[str, Any]) -> Description:
     return details, _present(forms)
 
 
-VERB = Category(
-    "verb",
-    "A verb, in any form: infinitive (gehen), conjugated (gehe, gehst, ging,"
-    " kam, war, ist, bin, hat, wird, wäre), participle (gegangen, gewesen).",
-    "The dictionary form is the infinitive, without `sich`. The same word:"
-    " every person, tense and mood of the verb and its participles, and the"
-    " same infinitive with another meaning or used reflexively. Words of"
-    " their own: verbs with a prefix, separable or not (anrufen, berufen and"
-    " rufen are three words).",
-    "Give the forms that are one word: no tenses made with an auxiliary."
-    " In each table give the form for each person without the pronoun and"
-    " without `sich`, as it stands in a main clause, so that a separable"
-    " verb is split: `rufe an`. `er` stands for er, sie and es, and `sie`"
-    " for the plural sie and for Sie. `zu_infinitive` is the infinitive with"
-    " zu, such as `zu gehen` or `anzurufen`. `auxiliary` is the verb the"
-    f" perfect is made with. {_EMPTY_RULE} {_MEANINGS_RULE}",
-    VERB_SCHEMA,
-    read_verb,
-)
+VERB = _german("verb", VERB_SCHEMA, read_verb)
 
 # adjectives
 
@@ -233,24 +218,7 @@ def read_adjective(reply: dict[str, Any]) -> Description:
     return {"meanings": reply["meanings"]}, _present(forms)
 
 
-ADJECTIVE = Category(
-    "adjective",
-    "An adjective, with or without an ending, in any degree: schön, schöne,"
-    " altes, kleinen, größer, besten, müde, schnell.",
-    "The dictionary form is the positive without an ending (schön, not"
-    " schöne). The same word: every ending, and the comparative and the"
-    " superlative. Words of their own: adjectives made with a prefix or a"
-    " suffix (unschön, kindlich), and participles that have become"
-    " adjectives with a meaning of their own (bekannt, spannend).",
-    "`comparative` is the comparative without an ending (schöner, höher)."
-    " `positive_inflected`, `comparative_inflected` and"
-    " `superlative_inflected` are the three degrees with the ending -e, as"
-    " after `die` (schöne, schönere, schönste; hohe, höhere, höchste). For"
-    " an adjective that takes no endings (lila, prima) give it unchanged as"
-    f" `positive_inflected`. {_EMPTY_RULE} {_MEANINGS_RULE}",
-    ADJECTIVE_SCHEMA,
-    read_adjective,
-)
+ADJECTIVE = _german("adjective", ADJECTIVE_SCHEMA, read_adjective)
 
 # adverbs
 
@@ -266,18 +234,7 @@ def read_adverb(reply: dict[str, Any]) -> Description:
     return {"meanings": reply["meanings"]}, _present(forms)
 
 
-ADVERB = Category(
-    "adverb",
-    "An adverb, which never changes: heute, morgen, jetzt, bald, immer, oft,"
-    " selten, hier, dort, sehr, gern, vielleicht.",
-    "The dictionary form is the word itself. The same word: its comparative"
-    " and superlative, for the few adverbs that have them (gern, lieber, am"
-    " liebsten). Every other adverb is a word of its own.",
-    "`comparative` and `superlative` are for the few adverbs that have them"
-    f" (lieber, am liebsten). {_EMPTY_RULE} {_MEANINGS_RULE}",
-    ADVERB_SCHEMA,
-    read_adverb,
-)
+ADVERB = _german("adverb", ADVERB_SCHEMA, read_adverb)
 
 # words that are declined: pronouns and articles
 
@@ -292,38 +249,9 @@ def read_listed(reply: dict[str, Any]) -> Description:
     return {"meanings": reply["meanings"]}, _present(forms)
 
 
-_LISTING = (
-    "List every form the word is declined into as one of `forms`, each with"
-    " `tags` that say which it is, in small letters, as case, then gender or"
-    " `plural`: `dativ maskulin`, `akkusativ plural`. Give a spelling once"
-    " for every case and gender it serves."
-)
+PRONOUN = _german("pronoun", DECLINED_SCHEMA, read_listed)
 
-PRONOUN = Category(
-    "pronoun",
-    "A pronoun, in any case: ich, mich, mir, du, dich, dir, er, ihn, ihm, sie,"
-    " ihr, es, wir, uns, euch, ihnen, man, jemand, etwas, sich, wer, was.",
-    "The dictionary form is the nominative, masculine singular where there"
-    " are genders (ich, dieser, jemand). The same word: its cases, genders"
-    " and plural (mich and mir are ich; diese and diesem are dieser). Words"
-    " of their own: each person (ich, du, er, sie, es, wir, ihr), and each"
-    " possessive (mein, dein).",
-    f"{_LISTING} {_MEANINGS_RULE}",
-    DECLINED_SCHEMA,
-    read_listed,
-)
-
-ARTICLE = Category(
-    "article",
-    "An article or determiner, in any case: der, die, das, den, dem, des,"
-    " ein, eine, einen, einem, kein, mein, dein, dieser, jeder.",
-    "The dictionary form is the nominative masculine singular (der, ein,"
-    " kein, mein). The same word: its cases, genders and plural (die, das,"
-    " dem and den are der).",
-    f"{_LISTING} {_MEANINGS_RULE}",
-    DECLINED_SCHEMA,
-    read_listed,
-)
+ARTICLE = _german("article", DECLINED_SCHEMA, read_listed)
 
 # prepositions
 
@@ -339,18 +267,7 @@ def read_preposition(reply: dict[str, Any]) -> Description:
     return details, _present([Form(c, "contraction") for c in reply["contractions"]])
 
 
-PREPOSITION = Category(
-    "preposition",
-    "A preposition, also fused with an article: in, im, an, am, auf, mit,"
-    " nach, zu, zum, zur, von, vom, bei, für, um, ohne, wegen.",
-    "The dictionary form is the preposition itself. The same word: the"
-    " preposition fused with an article (zum and zur are zu, im is in).",
-    "`cases` are the cases the preposition can be followed by."
-    " `contractions` are the forms it has fused with an article (zum, zur),"
-    f" if any. {_MEANINGS_RULE}",
-    PREPOSITION_SCHEMA,
-    read_preposition,
-)
+PREPOSITION = _german("preposition", PREPOSITION_SCHEMA, read_preposition)
 
 # words that have one form only
 
@@ -361,42 +278,10 @@ def read_plain(reply: dict[str, Any]) -> Description:
     return {"meanings": reply["meanings"]}, []
 
 
-def _plain(name: str, criterion: str) -> Category:
-    return Category(
-        name,
-        criterion,
-        "The dictionary form is the word itself, which has no other forms."
-        " Every other word is a word of its own.",
-        _MEANINGS_RULE,
-        PLAIN_SCHEMA,
-        read_plain,
-    )
-
-
-CONJUNCTION = _plain(
-    "conjunction",
-    "A conjunction: und, oder, aber, denn, weil, dass, ob, wenn, als, obwohl.",
-)
-PARTICLE = _plain(
-    "particle",
-    "A particle: nicht, doch, mal, ja, nein, eben, halt, schon.",
-)
-INTERJECTION = _plain(
-    "interjection",
-    "A greeting or exclamation: hallo, hi, tschüss, danke, bitte, ach, oh.",
-)
-NUMERAL = Category(
-    "numeral",
-    "A number written as a word: eins, zwei, drei, acht, zwanzig, hundert,"
-    " erste, dritte.",
-    "The dictionary form of a cardinal is the word itself (drei), and of an"
-    " ordinal the form with -e (dritte). The same word: the endings of an"
-    " ordinal (dritten, dritter), and of eins (ein, eine, einen). A cardinal"
-    " and its ordinal are two words.",
-    f"{_LISTING} For a numeral that is not declined list no forms. {_MEANINGS_RULE}",
-    DECLINED_SCHEMA,
-    read_listed,
-)
+CONJUNCTION = _german("conjunction", PLAIN_SCHEMA, read_plain, "plain")
+PARTICLE = _german("particle", PLAIN_SCHEMA, read_plain, "plain")
+INTERJECTION = _german("interjection", PLAIN_SCHEMA, read_plain, "plain")
+NUMERAL = _german("numeral", DECLINED_SCHEMA, read_listed)
 
 CATEGORIES: dict[str, Category] = {
     category.name: category
@@ -428,39 +313,17 @@ def read_generic(reply: dict[str, Any]) -> Description:
     return {"meanings": reply["meanings"]}, _present(forms)
 
 
-_GENERIC_CRITERIA = {
-    "noun": "A noun, in any of its forms.",
-    "verb": "A verb, in any of its forms: infinitive, conjugated or participle.",
-    "adjective": "An adjective, in any of its forms.",
-    "adverb": "An adverb.",
-    "pronoun": "A pronoun, in any of its forms.",
-    "article": "An article or determiner, in any of its forms.",
-    "preposition": "A preposition, also when it is fused with an article.",
-    "conjunction": "A conjunction.",
-    "particle": "A particle: a small word that never changes its form.",
-    "numeral": "A number written as a word.",
-    "interjection": "A greeting or exclamation.",
-}
-
 GENERIC: dict[str, Category] = {
     name: Category(
         name,
-        criterion,
-        "The dictionary form is the one a dictionary of the language lists the"
-        " word under. The same word: every inflected form of it, and the same"
-        " spelling with another meaning. Words of their own: words made from"
-        " it with a prefix or a suffix, and compounds.",
-        "List every inflected form of the word as one of `forms`, each with"
-        " `tags` that say which form it is, in English grammatical terms in"
-        " small letters: `present 2nd singular`, `plural`, `feminine"
-        " singular`. Give a spelling once for every form it serves. List no"
-        f" forms for a word that never changes. {_MEANINGS_RULE}",
+        _told(f"generic.criteria.{name}"),
+        _told("generic.judging"),
+        _told("generic.describing"),
         GENERIC_SCHEMA,
         read_generic,
     )
-    for name, criterion in _GENERIC_CRITERIA.items()
+    for name in CATEGORIES
 }
-assert list(GENERIC) == list(CATEGORIES)
 
 # the languages that have rules of their own, by their names in small letters
 _BY_LANGUAGE = {"german": CATEGORIES}
@@ -488,11 +351,7 @@ def dictionary_form(lemma: str, category: str, language: str) -> str:
 
 # What a word can be found to be that is not stored, as the decision model is
 # told to recognise it.
-NOT_STORED = {
-    "name": "A proper name of a person, place or brand: Maria, Berlin, Deutschland.",
-    "other": "Not a word of that language at all: random letters, or a word of"
-    " another language.",
-}
+NOT_STORED = {name: _told(f"not_stored.{name}") for name in ("name", "other")}
 
 
 def _spellings(text: str) -> list[str]:

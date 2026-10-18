@@ -1,0 +1,665 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+# What the server tells the models, as prompts.py describes: each prompt by
+# its dotted name, filled in with the $variables the code gives it. Those of
+# each exercise are in the prompts.toml of its directory in exercises/.
+#
+# A line that ends in a \ goes on in the next one without a break: the
+# prompts are told as long lines, and only the breaks written as blank or
+# unended lines are kept. The server is to be started again after this file
+# is changed.
+
+
+# The pieces of the prompts of the exercises that every exercise uses, put
+# together by exercises/kit.py.
+[kit]
+
+# What the model is told when the exercise is a part of a mock exam: what
+# the exam says the part is like, as $exam.
+exam = """
+This is a part of a mock exam. Follow what the exam says the part \
+is like, its kind of text, its length and its difficulty, closely, \
+with other people, places, numbers and situations than its example:
+$exam"""
+
+# The sentences an exercise made before, one to a line as $listed, for it
+# to make others.
+made = """
+Sentences made already in this exercise. Write other ones, with \
+other words, things and structures:
+$listed"""
+
+# The lesson practised: its title, then each point taught or reviewed on a
+# line of its own.
+[kit.lesson]
+heading = "Lesson: $title (level $level)"
+point = "- $title ($role): $statement Applies when: $when."
+
+# Which point each thing made is to practise, said above the numbered list
+# of them; `repeated` when the points are fewer than the things made.
+[kit.plan]
+once = "Make them in this order, each centred on the rule named for it."
+repeated = """
+Make them in this order, each centred on the rule named for it. \
+Where the same comes more than once, practise another side of it."""
+
+# How hard what a model writes is to be, by the learner's $level, with
+# `sentences` of that level where there are any.
+[kit.level]
+with_sentences = """
+The learner is at level $level: use only words a learner at $level knows, \
+and write $sentences. Where the rules below need more than that, the rules \
+come first."""
+plain = """
+The learner is at level $level: use only words a learner at $level knows. \
+Where the rules below need more than that, the rules come first."""
+
+# What the sentences a learner reads and writes are like at each level.
+[kit.level.sentences]
+A1 = "very short, simple main clauses of about 4 to 8 words"
+A2 = """
+short sentences of about 6 to 12 words: main clauses, joined at most \
+by simple conjunctions such as and, but or because"""
+B1 = "sentences of about 8 to 15 words, with a subordinate clause where one fits"
+B2 = "sentences of about 10 to 20 words, with subordinate and relative clauses"
+C1 = "sentences of natural length, up to about 25 words, with complex structures"
+C2 = "sentences as a native speaker writes them, of any length and structure"
+
+# The topics of the session: none, one, or several as $topics joined by ;,
+# to be mixed if the session says so. A topic with a description is
+# `described`.
+[kit.topics]
+none = "Topic: everyday life."
+one = "Topic: $topic."
+several = "Topics: $topics."
+mixed = """
+Topics: $topics. Mix them: bring them together in the same \
+sentences where it makes sense, so that every topic comes up."""
+described = "$title ($description)"
+
+# The words of the learner's vocabulary, as $lemmas joined by commas, that
+# the sentences are to be made of (`only`) or are to lean on (`prefer`).
+[kit.words]
+only = """
+Words the learner knows, those that fit the topic first. Write the \
+$language sentences with these words alone, in any of their forms, \
+besides articles, pronouns, prepositions, conjunctions, numbers, \
+auxiliary and modal verbs, and the words the rules above need:
+$lemmas"""
+prefer = """
+Words the learner knows, those that fit the topic first. Use these in \
+the $language sentences wherever they fit, in any of their forms; \
+other words are fine where none of these does, as long as a learner \
+at the level knows them:
+$lemmas"""
+
+# How what the learner writes or says is rated, from 0 to 4, as the
+# examiners of the Goethe-Institut rate it, by the level of the exam.
+[kit.criteria]
+aufgabe = """
+Task fulfilment. 4: every point of the task dealt with, with \
+the detail the level asks for, about as long as asked, in the register \
+the reader calls for; 3: every point, one only thinly; 2: one point \
+missing or two thin; 1: most points missing or not to be understood; \
+0: off the task, or almost nothing."""
+kohaerenz = """
+Coherence. 4: one text, its sentences joined with the \
+connectors of the level, with a fitting greeting and ending where the \
+kind of text has them; 3: joined mostly with und and dann, or the \
+greeting or the ending missing; 2: a list of sentences that still reads \
+as one text; 1: hard to follow; 0: not to be followed."""
+wortschatz = """
+Vocabulary. 4: the words of the level used rightly, with \
+some range; 3: a few wrong or missing words that do not get in the way; \
+2: several, so that the reader must guess now and then, or a very \
+narrow range; 1: so many that the meaning is unclear; 0: hardly any \
+words of the language."""
+strukturen = """
+Structures. 4: the grammar of the level right, with at \
+most a few slips; 3: some mistakes that do not get in the way; 2: many \
+mistakes, though most sentences can be understood; 1: mistakes in most \
+sentences, hard to understand; 0: no sentence is formed."""
+aussprache = """
+Pronunciation. 4: easy to understand, with the sounds and \
+the stress of the language; 3: an accent that does not get in the way; \
+2: the listener must make an effort; 1: hard to understand; 0: not to \
+be understood."""
+
+
+# What a model is told about each category of word, as categories.py
+# puts it to use: how the decision model recognises a word of it
+# (`criterion`), what the language model is told when it judges whether a
+# word is new, which is the dictionary form and what is and is not the
+# same word (`judging`), and what it is told when it describes a new word
+# (`describing`). In those, $empty_rule, $meanings_rule and $listing are
+# the texts of the same names here.
+[categories]
+
+meanings_rule = """
+`meanings` are short English translations, one for each distinct meaning of \
+the word, the most common first."""
+
+# A form that is written in two ways is to be found by either, so both are
+# asked for, in the one place the form has.
+empty_rule = """
+Leave a text empty where the word has no such form. Where a form has two \
+accepted spellings, give both, separated by a slash: `Produkts / Produktes`, \
+`geh / gehe`, `gern / gerne`."""
+
+# how the forms of a declined word are listed
+listing = """
+List every form the word is declined into as one of `forms`, each with \
+`tags` that say which it is, in small letters, as case, then gender or \
+`plural`: `dativ maskulin`, `akkusativ plural`. Give a spelling once for \
+every case and gender it serves."""
+
+# What a word can be found to be that is not stored, as the decision model
+# is told to recognise it.
+[categories.not_stored]
+name = """
+A proper name of a person, place or brand: Maria, Berlin, Deutschland."""
+other = """
+Not a word of that language at all: random letters, or a word of another \
+language."""
+
+# The categories of German, with examples, by which the decision model
+# does best, of every form the words come in. Conjunctions, particles and
+# interjections, which have one form only, are judged and described as
+# `plain` says.
+
+[categories.german.plain]
+judging = """
+The dictionary form is the word itself, which has no other forms. Every \
+other word is a word of its own."""
+describing = "$meanings_rule"
+
+[categories.german.noun]
+criterion = """
+A noun, in any case or number: Hund, Hundes, Häuser, Kindern, Freiheit. \
+German nouns are written with a capital letter."""
+judging = """
+The dictionary form is the nominative singular, without an article, or the \
+nominative plural for a noun that has no singular. The same word: its cases \
+and its plural, and the same spelling with another gender or meaning (der, \
+das and die Band are one word). Words of their own: compounds (Haustür is \
+not Haus), diminutives (Häuschen), and verbs and adjectives used as nouns \
+(das Essen, der Alte)."""
+describing = """
+List every gender the noun is used with as one of `genders`: der Band, das \
+Band and die Band are three. For each give the article, the meanings it has \
+with that gender, and the noun, without the article, in the four cases of \
+the singular and of the plural. $empty_rule $meanings_rule"""
+
+[categories.german.verb]
+criterion = """
+A verb, in any form: infinitive (gehen), conjugated (gehe, gehst, ging, kam, \
+war, ist, bin, hat, wird, wäre), participle (gegangen, gewesen)."""
+judging = """
+The dictionary form is the infinitive, without `sich`. The same word: every \
+person, tense and mood of the verb and its participles, and the same \
+infinitive with another meaning or used reflexively. Words of their own: \
+verbs with a prefix, separable or not (anrufen, berufen and rufen are three \
+words)."""
+describing = """
+Give the forms that are one word: no tenses made with an auxiliary. In each \
+table give the form for each person without the pronoun and without `sich`, \
+as it stands in a main clause, so that a separable verb is split: `rufe an`. \
+`er` stands for er, sie and es, and `sie` for the plural sie and for Sie. \
+`zu_infinitive` is the infinitive with zu, such as `zu gehen` or \
+`anzurufen`. `auxiliary` is the verb the perfect is made with. $empty_rule \
+$meanings_rule"""
+
+[categories.german.adjective]
+criterion = """
+An adjective, with or without an ending, in any degree: schön, schöne, \
+altes, kleinen, größer, besten, müde, schnell."""
+judging = """
+The dictionary form is the positive without an ending (schön, not schöne). \
+The same word: every ending, and the comparative and the superlative. Words \
+of their own: adjectives made with a prefix or a suffix (unschön, kindlich), \
+and participles that have become adjectives with a meaning of their own \
+(bekannt, spannend)."""
+describing = """
+`comparative` is the comparative without an ending (schöner, höher). \
+`positive_inflected`, `comparative_inflected` and `superlative_inflected` \
+are the three degrees with the ending -e, as after `die` (schöne, schönere, \
+schönste; hohe, höhere, höchste). For an adjective that takes no endings \
+(lila, prima) give it unchanged as `positive_inflected`. $empty_rule \
+$meanings_rule"""
+
+[categories.german.adverb]
+criterion = """
+An adverb, which never changes: heute, morgen, jetzt, bald, immer, oft, \
+selten, hier, dort, sehr, gern, vielleicht."""
+judging = """
+The dictionary form is the word itself. The same word: its comparative and \
+superlative, for the few adverbs that have them (gern, lieber, am liebsten). \
+Every other adverb is a word of its own."""
+describing = """
+`comparative` and `superlative` are for the few adverbs that have them \
+(lieber, am liebsten). $empty_rule $meanings_rule"""
+
+[categories.german.pronoun]
+criterion = """
+A pronoun, in any case: ich, mich, mir, du, dich, dir, er, ihn, ihm, sie, \
+ihr, es, wir, uns, euch, ihnen, man, jemand, etwas, sich, wer, was."""
+judging = """
+The dictionary form is the nominative, masculine singular where there are \
+genders (ich, dieser, jemand). The same word: its cases, genders and plural \
+(mich and mir are ich; diese and diesem are dieser). Words of their own: \
+each person (ich, du, er, sie, es, wir, ihr), and each possessive (mein, \
+dein)."""
+describing = "$listing $meanings_rule"
+
+[categories.german.article]
+criterion = """
+An article or determiner, in any case: der, die, das, den, dem, des, ein, \
+eine, einen, einem, kein, mein, dein, dieser, jeder."""
+judging = """
+The dictionary form is the nominative masculine singular (der, ein, kein, \
+mein). The same word: its cases, genders and plural (die, das, dem and den \
+are der)."""
+describing = "$listing $meanings_rule"
+
+[categories.german.preposition]
+criterion = """
+A preposition, also fused with an article: in, im, an, am, auf, mit, nach, \
+zu, zum, zur, von, vom, bei, für, um, ohne, wegen."""
+judging = """
+The dictionary form is the preposition itself. The same word: the \
+preposition fused with an article (zum and zur are zu, im is in)."""
+describing = """
+`cases` are the cases the preposition can be followed by. `contractions` are \
+the forms it has fused with an article (zum, zur), if any. $meanings_rule"""
+
+[categories.german.conjunction]
+criterion = """
+A conjunction: und, oder, aber, denn, weil, dass, ob, wenn, als, obwohl."""
+
+[categories.german.particle]
+criterion = "A particle: nicht, doch, mal, ja, nein, eben, halt, schon."
+
+[categories.german.numeral]
+criterion = """
+A number written as a word: eins, zwei, drei, acht, zwanzig, hundert, erste, \
+dritte."""
+judging = """
+The dictionary form of a cardinal is the word itself (drei), and of an \
+ordinal the form with -e (dritte). The same word: the endings of an ordinal \
+(dritten, dritter), and of eins (ein, eine, einen). A cardinal and its \
+ordinal are two words."""
+describing = """
+$listing For a numeral that is not declined list no forms. $meanings_rule"""
+
+[categories.german.interjection]
+criterion = """
+A greeting or exclamation: hallo, hi, tschüss, danke, bitte, ach, oh."""
+
+# The categories of a language that has no rules of its own here: the same
+# ones, told apart without examples, and judged and described alike.
+[categories.generic]
+judging = """
+The dictionary form is the one a dictionary of the language lists the word \
+under. The same word: every inflected form of it, and the same spelling with \
+another meaning. Words of their own: words made from it with a prefix or a \
+suffix, and compounds."""
+describing = """
+List every inflected form of the word as one of `forms`, each with `tags` \
+that say which form it is, in English grammatical terms in small letters: \
+`present 2nd singular`, `plural`, `feminine singular`. Give a spelling once \
+for every form it serves. List no forms for a word that never changes. \
+$meanings_rule"""
+
+[categories.generic.criteria]
+noun = "A noun, in any of its forms."
+verb = "A verb, in any of its forms: infinitive, conjugated or participle."
+adjective = "An adjective, in any of its forms."
+adverb = "An adverb."
+pronoun = "A pronoun, in any of its forms."
+article = "An article or determiner, in any of its forms."
+preposition = "A preposition, also when it is fused with an article."
+conjunction = "A conjunction."
+particle = "A particle: a small word that never changes its form."
+numeral = "A number written as a word."
+interjection = "A greeting or exclamation."
+
+
+
+# What the vocabulary is taken in with, by intake.py. What is told of each
+# category is `categories`, which $rules are: the rules of one category, or
+# those of each, one to a line as "- name: rules". $categories are the
+# names of the categories joined by commas, and $capitals is `capitals`.
+[intake]
+
+# What asks the decision model whether a word is of a category, or one of
+# `categories.not_stored`, as $criterion.
+question = """
+Is the $language `word`, as it is used in the `sentence` if one is given, \
+this: $criterion"""
+
+# What looks again at a word that could not be placed, with the problem
+# that was reported.
+rescuing = """
+You keep a vocabulary of $language, in which every word is stored once, under \
+its dictionary form, together with all of its forms. The words are kept \
+apart by category.
+
+The software that takes words in could not place a word. You are given the \
+`word`, the `sentence` it was used in, if there was one, the `category` it \
+was being taken in as, and the `problem`: what the software reported. The \
+problem is often no fault of the word: it may be a form of a word that is \
+not stored yet, or an earlier answer about it may have been wrong.
+
+Decide whether the word can be saved after all:
+
+- If it is a $language word that belongs in the vocabulary, set `savable` to \
+true, and give the `category` it belongs in and its dictionary form as \
+`lemma`, by the rules below. The word is then stored under that dictionary \
+form, which is added with all its forms if it is not there yet.
+- If it is not, because it is misspelt, a name, or a word of another \
+language, set `savable` to false and say why in `reason`.
+
+The categories are: $categories. Their rules:
+
+$rules
+
+$capitals
+
+Leave `category` and `lemma` empty when the word is not savable, and \
+`reason` empty when it is."""
+
+# What judges whether a word is a form of a stored word of a category, a
+# new word of it, a word of another, or no word, with the `judging` rules
+# of the category named $name.
+judging = """
+You keep a vocabulary of $language, in which every word is stored once, under \
+its dictionary form, together with all of its forms. The words are kept \
+apart by category. This is about the category "$name".
+
+You are given a `word` that is not among the stored forms of this category, \
+the `sentence` it was used in, if there was one, and `candidates`: the \
+stored words of the category that are spelt most like it. Decide what the \
+word is:
+
+- "form": it is a form of one of the candidates. Give that candidate's \
+`lemma`, exactly as it was given to you.
+- "new": it is a $language $name that is none of the candidates. Give its \
+dictionary form as `lemma`.
+- "elsewhere": it is a $language word, but not a $name, as it is used in the \
+sentence or, without one, as it is most often used. Name what it is as \
+`category`: one of $categories.
+- "reject": it is not a $language word of any category: it is misspelt, a name, \
+or a word of another language. Say which in `reason`.
+
+The rules of this category: $rules
+
+$capitals
+
+Give a `lemma` only for "form" and "new", a `category` only for \
+"elsewhere", and a `reason` only for "reject". Leave the others empty."""
+
+# What describes a new word, with the `describing` rules of its category.
+describing = """
+You fill in the entry of a $language $name for a vocabulary. You are given \
+its dictionary form as `lemma`. Spell every form as it is written in \
+$language, with the letters and marks of its own, and with a capital letter \
+only where $language has one.
+
+$rules"""
+
+# What is said about how a dictionary form is written, wherever one is
+# asked for.
+capitals = """
+Write a dictionary form in small letters, however the word was written \
+where it was met, unless the word always has a capital letter in \
+$language: `hi`, not `Hi`, for a word that began a sentence."""
+
+
+# What translates what the learner selects, and answers what they ask about
+# it, by translating.py.
+[translating]
+
+# what translates the selection
+translating = """
+You translate for someone who is learning $language. You are given a passage \
+in which a selection is marked with [[ and ]]. Translate the selection, and \
+only the selection, into $into, as it is meant in the passage. If the \
+selection is in $into already, translate it into $language instead.
+
+Reply with the translation alone: no quotation marks, no brackets, no notes, \
+no alternatives, and nothing of the rest of the passage."""
+
+# what answers what the learner asks about a selection, before the chat
+chatting = """
+You help someone who is learning $language with something they are reading. \
+They selected part of a passage and were given a translation of it into \
+$into. Answer what they ask about it. Be brief, and write in $into unless \
+they write to you in another language.
+
+The passage, with the selection marked with [[ and ]]:
+$passage
+
+The selection:
+$selection
+
+The translation they were given:
+$translation"""
+
+
+# What writes the logs of a chat about a translation, by lookups.py.
+[lookups]
+
+# What writes the logs: $chat is each message as `lookups.names` has it,
+# with a blank line between them.
+writing = """
+You write the logs of a chat in which someone learning $language asked \
+about a passage they had selected and had translated into $into. The logs \
+are not for the learner: they are kept for the models that will later work \
+out what the learner can and cannot do yet, so they must be exact and \
+plain. Do not praise, encourage or soften anything. State what the learner \
+asked about and did not know, and the gist of what they were told; draw no \
+conclusion about the learner beyond that.
+
+Split the chat into the separate matters that were discussed, such as what \
+a word means there, how it is used, why it stands where it does or a \
+construction. Write one log for each, with:
+- "subject": the words of $language it is about, in a few words, as they \
+were written, such as "gerade" or "sich freuen auf";
+- "points": one or two short lines, in English: what the learner asked or \
+did not know, and what they were told. No more than that.
+At most $matters logs. Leave out greetings, thanks and anything that is \
+not about the language.
+
+The passage, with the selection marked with [[ and ]]:
+$passage
+
+The translation they were given:
+$translation
+
+The chat:
+$chat
+
+Reply with JSON only:
+{"logs": [{"subject": "...", "points": ["...", "..."]}]}"""
+
+# What a chat about a translation is shown as, each message as "name: text",
+# with the name of who wrote it.
+[lookups.names]
+user = "Learner"
+assistant = "Helper"
+
+# What the log of a translation says, which is written without a model.
+[lookups.translation]
+asked = 'Asked for "$selection" to be translated, in: "$sentence".'
+translated = 'Translated as: "$translation".'
+
+
+# What writes the log of an exercise once it is over, by logs.py: $task is
+# made of `logs.task`, and $record of `logs.record`.
+[logs]
+
+writing = """
+You write the log of an exercise that someone learning $language has just \
+done. The log is not for the learner: it is kept for the models that will \
+later work out what the learner can and cannot do yet, so it must be exact \
+and plain. Do not praise, encourage or soften anything, and do not excuse \
+mistakes. State facts that what the learner wrote shows; draw no conclusion \
+about the learner beyond them. Where several answers show the same mistake, \
+say how many. If the learner wrote too little to judge something, say so \
+rather than guess.
+
+What the learner did is told in two parts that must never be mixed. \
+"Given by the exercise" was written by a model, not by the learner: a \
+sentence with gaps, a sentence to translate, a question. The learner gets no \
+credit and no blame for any of it, and it is never quoted as theirs; it is \
+there only so that you know what was asked. "Written by the learner" is the \
+only thing the learner did, and the only thing you judge. In a sentence with \
+gaps (___), the learner wrote only what went into the gaps, in the order of \
+the gaps: a rule counts as used by the learner only if what they wrote into \
+a gap shows it.
+
+The grades below were given by another model while the exercise ran. Check \
+each against what the learner wrote: where a grade or a correction is wrong, \
+go by what the learner actually wrote, and say the grade was wrong.
+
+The exercise:
+$task
+
+What the learner did, in the order they did it:
+$record
+
+Write, in English:
+- "summary": at most $lines short lines, in this order: how much of the \
+exercise was done; what the learner got right, as the rules and forms they \
+used correctly; what they got wrong, as the rules and forms they used \
+wrongly, the words they did not know and the kinds of mistakes they made. \
+Name the rules of the lesson where they apply. Leave out what was not \
+tested.
+- "worked": at most $worked examples of what the learner wrote that was \
+right, with the rule or form it shows. None if nothing was right.
+- "failed": at most $failed examples of what the learner wrote that was \
+wrong, with the correction and what was wrong. None if nothing was wrong.
+In each example, "text" is only the learner's own words, quoted exactly as \
+they wrote them, such as what they put into a gap, and never words the \
+exercise gave; "given" is, if it helps, the part of the exercise they \
+answered, such as the sentence with its gaps.
+
+Reply with JSON only:
+{"summary": ["...", "..."], \
+"worked": [{"text": "...", "given": "...", "why": "..."}], \
+"failed": [{"text": "...", "given": "...", "correction": "...", \
+"why": "..."}]}"""
+
+# What is said of the exercise, one to a line; the options as they were
+# chosen, and the points of the lesson as `kit.lesson.point`, come after
+# `instances` and `lesson`.
+[logs.task]
+heading = "$title: $description"
+level = "Level: $level"
+instances = "Instances to do: $count"
+topics = "Topics: $topics"
+lesson = "Lesson: $title"
+
+# What is said of what the learner did: each instance with its grade, and
+# what was given, written, corrected and noted under it; or, where there are
+# no grades, as in a conversation, what the exercise and the learner wrote,
+# one to a line.
+[logs.record]
+instance = "Instance $number, graded $result"
+given = "Given by the exercise (not the learner's)"
+written = "Written by the learner"
+correction = "Correct"
+note = "Note"
+nothing = "(nothing)"
+exercise = "Exercise: $text"
+learner = "Learner: $text"
+
+
+# What writes the log of an evaluation once it is over, by evaluating.py.
+# $timed is one of `evaluating.timed`, $scores is as in `evaluating.scores`,
+# and $passed one of `evaluating.passed`. $record is each part, as
+# `evaluating.part` says, with a blank line between them.
+[evaluating]
+
+log = """
+You write the log of a mock exam, $exam, that someone learning $language \
+has just taken at level $level. The log is not for the learner: it is kept \
+for the models that will later work out what the learner can and cannot do \
+yet, so it must be exact and plain. Do not praise, encourage or soften \
+anything, and do not excuse mistakes. State facts that what the learner did \
+shows; where several answers show the same mistake, say how many. If a \
+part was not done, or too little was answered to judge something, say so \
+rather than guess.
+
+What the learner did is told part by part, each with what the exam gave \
+them, which a model wrote and which is never the learner's, and what they \
+answered, which is the only thing you judge. The grades were given by \
+another model while the exam ran: where one is wrong, go by what the \
+learner actually answered, and say the grade was wrong.
+
+The exam took $minutes minutes$timed.
+
+$record
+
+The scores, from 0 to 100, as the exam marks it: $scores. $passed
+
+Write, in English:
+- "summary": at most $lines short lines: which modules and parts were \
+done and how they went; for each skill, what the learner managed and what \
+they did not, as the kinds of task they did right and wrong, such as \
+following numbers and times in a dialogue, finding a detail in an advert, \
+dealing with every point of a message; the rules, forms and words they \
+used rightly and wrongly in what they wrote and said; and what stands most \
+between them and passing at this level.
+- "worked": at most $worked examples of what the learner answered that \
+was right, with what it shows.
+- "failed": at most $failed examples of what the learner answered that \
+was wrong, with the correction and what was wrong.
+In each example, "text" is only the learner's own words, or the answer \
+they chose, quoted exactly; "given" is, if it helps, what the exam asked.
+
+Reply with JSON only:
+{"summary": ["...", "..."], \
+"worked": [{"text": "...", "given": "...", "why": "..."}], \
+"failed": [{"text": "...", "given": "...", "correction": "...", \
+"why": "..."}]}"""
+
+# The scores of an evaluation, each as "name score", joined by commas, or
+# `no_scores` if there are none.
+scores = "Scores: $scores"
+no_scores = "none"
+
+# whether the parts of the exam were timed
+[evaluating.timed]
+yes = ", each part in its time"
+no = ", untimed"
+
+# whether the exam was passed, or could not be as a module was not done
+[evaluating.passed]
+yes = "It is passed."
+no = "It is not passed."
+incomplete = "Not every module was done, so it is not passed."
+
+# A part of the exam, under its title of "module title: exercise": what was
+# answered in it, as `logs.record` says, or that nothing was.
+[evaluating.part]
+pending = "(not done)"
+nothing = "(nothing answered)"
+
+
+# What draws the icon of a topic, by topics.py.
+[topics]
+
+# Only the thing itself is asked for. It is drawn on white, which is taken
+# away after, as image models cannot draw on nothing: what is shown is the
+# symbol alone, which fills the place of the icon.
+icon = """
+$topic: one simple, bold symbol of it, alone on plain white. Flat \
+colours, strong shapes. No text, letters or numbers."""
+
+
+# What stands in place of what is cut off where a text is too long to be
+# shown to a model whole.
+[cut]
+rest = "(the rest is left out)"

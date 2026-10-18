@@ -1,0 +1,355 @@
+{
+    "level": "A1",
+    "exam": "Goethe-Zertifikat A1: Start Deutsch 1",
+    "pass": {
+        "total": 60
+    },
+    "themes": [
+        "Familie und Freunde",
+        "Wohnen",
+        "Essen und Trinken",
+        "Einkaufen",
+        "Arbeit und Beruf",
+        "Freizeit und Hobbys",
+        "Uhrzeit, Tage und Termine",
+        "Reisen und Verkehr",
+        "Wetter",
+        "Körper und Gesundheit",
+        "Schule und Kurs",
+        "Stadt und Orientierung"
+    ],
+    "modules": [
+        {
+            "id": "hoeren",
+            "title": "Hören",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "choice",
+                        "questions": 1,
+                        "plays": "2"
+                    },
+                    "instances": 6,
+                    "minutes": 8,
+                    "points": 6,
+                    "instructions": "Sie hören kurze Gespräche. Sie hören jeden Text zweimal. Kreuzen Sie an: a, b oder c.",
+                    "task": "Short everyday dialogues between two people, of four to six turns, written with the speakers' names, such as Frau, Mann, Verkäuferin. The question asks for one fact the dialogue gives: a time, a day, a price, a number, a place or a thing. All three options are named or hinted at in the dialogue, and only one is what the speakers agree on, so that the listener must follow a change of mind or a correction.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Frau: Entschuldigung, wann fährt der nächste Bus nach Weststadt?\nMann: Der Bus um zehn nach drei ist leider schon weg.\nFrau: Oh nein! Und der nächste?\nMann: Der kommt um halb vier. Aber heute ist Samstag, warten Sie... nein, um Viertel vor vier.\nFrau: Viertel vor vier. Danke schön!",
+                        "questions": [
+                            {
+                                "prompt": "Wann fährt der nächste Bus?",
+                                "options": [
+                                    "Um 15:10 Uhr.",
+                                    "Um 15:30 Uhr.",
+                                    "Um 15:45 Uhr."
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "truefalse",
+                        "questions": 1,
+                        "plays": "1"
+                    },
+                    "instances": 4,
+                    "minutes": 4,
+                    "points": 4,
+                    "instructions": "Sie hören Durchsagen. Sie hören jeden Text einmal. Kreuzen Sie an: Richtig oder Falsch.",
+                    "task": "Announcements of two to four sentences, as heard at a station, an airport, in a shop or a swimming pool, with a time, a platform, a floor or an offer. The statement repeats one fact of it, rightly or with one detail changed.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Liebe Kundinnen und Kunden, heute haben wir im ersten Stock ein Sonderangebot: Alle Kinderschuhe kosten nur zwanzig Euro. Das Angebot gibt es nur bis 18 Uhr.",
+                        "questions": [
+                            {
+                                "prompt": "Die Kinderschuhe sind heute im Erdgeschoss billig.",
+                                "options": [],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "choice",
+                        "questions": 1,
+                        "plays": "2"
+                    },
+                    "instances": 5,
+                    "minutes": 8,
+                    "points": 5,
+                    "instructions": "Sie hören Nachrichten am Telefon. Sie hören jeden Text zweimal. Kreuzen Sie an: a, b oder c.",
+                    "task": "Messages left on an answering machine, of three to five sentences: the caller says who they are, what they want and when or where. The question asks for one fact of it, and the options are near each other, such as three times or three places that are all said or likely.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Hallo Tom, hier ist Anna. Wir wollen doch morgen zusammen ins Kino gehen. Der Film beginnt um acht, aber ich möchte vorher noch etwas essen. Treffen wir uns um sieben am Bahnhof? Ruf mich bitte zurück. Tschüs!",
+                        "questions": [
+                            {
+                                "prompt": "Wo möchte Anna Tom treffen?",
+                                "options": [
+                                    "Am Kino.",
+                                    "Am Bahnhof.",
+                                    "Im Restaurant."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "lesen",
+            "title": "Lesen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "truefalse",
+                        "questions": 3
+                    },
+                    "instances": 2,
+                    "scale": "questions",
+                    "minutes": 9,
+                    "points": 5,
+                    "instructions": "Lesen Sie die Texte und die Aufgaben. Kreuzen Sie an: Richtig oder Falsch.",
+                    "task": "Short personal emails or letters of 50 to 70 words, with a greeting and an ending, about plans, an invitation or news. The statements each take up one fact of the text, rightly or changed in one detail, in other words than the text.",
+                    "example": {
+                        "title": "E-Mail",
+                        "shown": "",
+                        "text": "Liebe Maria,\nwie geht es dir? Am Samstag habe ich Geburtstag und mache eine kleine Party. Sie beginnt um 19 Uhr bei mir zu Hause. Kannst du kommen? Meine Schwester backt einen Kuchen, und ich koche Spaghetti. Bring bitte etwas zu trinken mit, zum Beispiel Saft. Ich wohne jetzt in der Gartenstraße 12.\nViele Grüße\nJulia",
+                        "questions": [
+                            {
+                                "prompt": "Julia feiert am Samstag Geburtstag.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Julia backt einen Kuchen.",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Maria soll etwas zu trinken mitbringen.",
+                                "options": [],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 1
+                    },
+                    "instances": 5,
+                    "minutes": 8,
+                    "points": 5,
+                    "instructions": "Lesen Sie die Texte und die Aufgaben. Wo finden Sie Informationen? Kreuzen Sie an: a oder b.",
+                    "task": "A situation of one sentence, such as someone looking for a cheap flight or a doctor open on Saturday, and two short adverts or web pages, a and b, of one to three lines each. Both are about the same thing, and only one fits the situation.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "a) Zahnarztpraxis Dr. Berger – Sprechzeiten: Montag bis Freitag 8–18 Uhr\nb) Zahnarztpraxis Dr. Klein – Sprechzeiten: Montag bis Samstag 9–13 Uhr",
+                        "questions": [
+                            {
+                                "prompt": "Sie haben Zahnschmerzen und möchten am Samstag zum Zahnarzt gehen.",
+                                "options": [
+                                    "a",
+                                    "b"
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "truefalse",
+                        "questions": 1
+                    },
+                    "instances": 5,
+                    "minutes": 8,
+                    "points": 5,
+                    "instructions": "Lesen Sie die Texte und die Aufgaben. Kreuzen Sie an: Richtig oder Falsch.",
+                    "task": "Signs and notices of one to three lines, as found on a door, in a shop, at a station or in a school, with a time, a place or a rule. The statement says what the reader can or must do, rightly or wrongly.",
+                    "example": {
+                        "title": "An der Tür einer Bäckerei",
+                        "shown": "",
+                        "text": "Wir machen Urlaub! Vom 1. bis 14. August ist die Bäckerei geschlossen. Ab 15. August sind wir wieder für Sie da.",
+                        "questions": [
+                            {
+                                "prompt": "Am 10. August können Sie hier Brot kaufen.",
+                                "options": [],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "schreiben",
+            "title": "Schreiben",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "form"
+                    },
+                    "instances": 1,
+                    "minutes": 6,
+                    "points": 5,
+                    "instructions": "Lesen Sie den Text. Ergänzen Sie das Formular mit den Informationen aus dem Text.",
+                    "task": "A short text of four to six sentences about a person who wants to sign up for something, such as a course, a club or a trip, and a form with five gaps for facts the text gives: a name, an age, a number of people, a date, a way to pay. The answer of each gap is one word or a short group of words; the prompt is the field of the form.",
+                    "example": {
+                        "text": "Herr Peter Novak möchte für sich und seine Frau einen Deutschkurs buchen. Er ist 34 Jahre alt und kommt aus Tschechien. Die beiden möchten am Abend lernen, weil sie tagsüber arbeiten. Sie bezahlen bar.",
+                        "fields": [
+                            {
+                                "label": "Familienname:",
+                                "answer": "Novak"
+                            },
+                            {
+                                "label": "Herkunftsland:",
+                                "answer": "Tschechien"
+                            },
+                            {
+                                "label": "Anzahl der Personen:",
+                                "answer": "2"
+                            },
+                            {
+                                "label": "Kurszeit (morgens / abends):",
+                                "answer": "abends"
+                            },
+                            {
+                                "label": "Zahlungsweise (bar / Überweisung):",
+                                "answer": "bar"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "email",
+                        "words": 30
+                    },
+                    "instances": 1,
+                    "minutes": 14,
+                    "points": 10,
+                    "instructions": "Schreiben Sie eine kurze Nachricht (circa 30 Wörter). Schreiben Sie zu allen drei Punkten. Vergessen Sie Anrede und Gruß nicht.",
+                    "task": "A situation of one or two sentences in which the learner writes to a friend, a teacher or an office, and three points to write about, such as why, when and a question. The prompt states the situation's addressee and lists the three points.",
+                    "example": {
+                        "situation": "Sie können morgen nicht zum Deutschkurs kommen. Schreiben Sie an Ihre Lehrerin, Frau Schmidt.",
+                        "points": [
+                            "Schreiben Sie, warum Sie nicht kommen.",
+                            "Schreiben Sie, wann Sie wieder da sind.",
+                            "Fragen Sie nach den Hausaufgaben."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "sprechen",
+            "title": "Sprechen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "introduce",
+                        "prompts": 1
+                    },
+                    "instances": 1,
+                    "minutes": 4,
+                    "points": 3,
+                    "instructions": "Stellen Sie sich vor. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "The learner introduces themselves. The text lists the points of the card; the one prompt asks them to say something to every point.",
+                    "example": {
+                        "card": "Name? · Alter? · Land? · Wohnort? · Sprachen? · Beruf? · Hobby?",
+                        "prompts": [
+                            "Erzählen Sie etwas über sich zu allen Punkten."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "cards",
+                        "prompts": 4
+                    },
+                    "instances": 1,
+                    "scale": "prompts",
+                    "minutes": 5,
+                    "points": 6,
+                    "instructions": "Um Informationen bitten und Informationen geben. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "A theme and word cards of that theme. Half of the prompts give a card and ask the learner to ask a question with its word; the other half give a question of the partner, made with a card, for the learner to answer.",
+                    "example": {
+                        "card": "Thema: Essen und Trinken",
+                        "prompts": [
+                            "Karte: Frühstück. Stellen Sie Ihrem Partner eine Frage.",
+                            "Ihr Partner fragt: „Was trinkst du gern?“ Antworten Sie.",
+                            "Karte: Restaurant. Stellen Sie Ihrem Partner eine Frage.",
+                            "Ihr Partner fragt: „Isst du gern Fisch?“ Antworten Sie."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "requests",
+                        "prompts": 4
+                    },
+                    "instances": 1,
+                    "scale": "prompts",
+                    "minutes": 6,
+                    "points": 6,
+                    "instructions": "Bitten formulieren und darauf reagieren. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "Cards each with a thing or an action, described in words in place of a picture. Half of the prompts give a card and ask the learner to make a request with it; the other half give a request of the partner for the learner to react to.",
+                    "example": {
+                        "card": "Bildkarten",
+                        "prompts": [
+                            "Karte: ein offenes Fenster. Bitten Sie Ihren Partner um etwas.",
+                            "Ihr Partner sagt: „Gib mir bitte einen Kuli.“ Reagieren Sie.",
+                            "Karte: eine Tasse Kaffee. Bitten Sie Ihren Partner um etwas.",
+                            "Ihr Partner sagt: „Kannst du bitte langsamer sprechen?“ Reagieren Sie."
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

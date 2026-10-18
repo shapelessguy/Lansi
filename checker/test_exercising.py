@@ -7,6 +7,7 @@ import os
 import shutil
 from pathlib import Path
 from typing import Any
+from unittest.mock import ANY
 
 import exercising
 import pytest
@@ -58,6 +59,13 @@ def act(context, state, message, model):
         time.sleep(30)
     if message == "print":
         print("not a reply")
+    if message == "mark":
+        state["scored"] = True
+        return Step(state=state, show=None)
+    if message == "score":
+        return Step(state=state, show=None, scores={"tanzen": 3})
+    if message == "context":
+        return Step(state=state, show={"minutes": context["minutes"], "exam": context["exam"]})
     if message == "write":
         said = written(["Ich stehe auf."], ["Wann stehst du auf?"])
         return Step(state=state, show=None, written=said)
@@ -65,7 +73,8 @@ def act(context, state, message, model):
     return Step(state=state, show=state["done"], graded=[grade("right", message)])
 
 def finish(context, state, model):
-    return Step(results={"done": state["done"]})
+    scores = {"lesen": 100 * state["done"] / 3} if state.get("scored") else None
+    return Step(results={"done": state["done"]}, scores=scores)
 
 serve(start, act, finish)
 """
@@ -456,6 +465,8 @@ def test_a_finished_exercise_keeps_its_results_and_takes_no_more_steps(
     assert progress and progress["progress"]["echo"] == {
         "status": "finished",
         "answered": 1,
+        "started_at": ANY,
+        "scores": None,
         "results": {"right": 1, "partial": 0, "wrong": 0},
     }
     with pytest.raises(ValueError, match="finished"):
@@ -861,3 +872,80 @@ def test_what_an_exercise_is_told_of_the_sessions_before_is_kept_short(
     told = practice.guidance("echo")
 
     assert told.endswith("\nSatz Nummer 0; Satz Nummer 1")
+
+
+def test_an_exercise_finished_keeps_the_scores_it_reported(practice: Practice) -> None:
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "mark", LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "Eins.", LEARNER, answering())
+
+    practice.step(session["id"], "echo", "finish", None, LEARNER, answering(LOG_REPLY))
+
+    found = practice._store.session(session["id"])  # noqa: SLF001
+    assert found and found["progress"]["echo"]["scores"] == {"lesen": 33.3}
+    (log,) = practice._store.all_logs()  # noqa: SLF001
+    assert log["content"].endswith("Scores: lesen 33.3")
+
+
+def test_an_exercise_cannot_score_what_there_is_no_score_of(practice: Practice) -> None:
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+
+    with pytest.raises(ExerciseError, match="cannot score tanzen"):
+        practice.step(session["id"], "echo", "act", "score", LEARNER, answering())
+
+
+def test_an_exercise_is_told_its_time_limit_and_takes_nothing_once_it_is_up(
+    directory: Path, tmp_path: Path
+) -> None:
+    now = [1000.0]
+    practice = Practice(
+        UserStore(tmp_path / "user", now=lambda: now[0]),
+        directory=directory,
+        now=lambda: now[0],
+    )
+    session, _ = practice.start_session(
+        "German", LESSON, [], {"echo": 3}, minutes={"echo": 2}
+    )
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    shown, _ = practice.step(
+        session["id"], "echo", "act", "context", LEARNER, answering()
+    )
+    now[0] += 2 * 60 + 29
+
+    practice.step(session["id"], "echo", "act", "Eins.", LEARNER, answering())
+    now[0] += 2
+
+    assert shown == {"minutes": 2, "exam": ""}
+    with pytest.raises(ValueError, match="time for this exercise is up"):
+        practice.step(session["id"], "echo", "act", "Zwei.", LEARNER, answering())
+    # what was done in it is kept all the same
+    practice.step(session["id"], "echo", "finish", None, LEARNER, answering(LOG_REPLY))
+
+
+def test_a_time_limit_is_whole_minutes_up_to_four_hours(practice: Practice) -> None:
+    with pytest.raises(ValueError, match="0 to 240 minutes"):
+        practice.start_session("German", LESSON, [], {"echo": 3}, minutes={"echo": 241})
+
+
+def test_a_session_of_an_exam_tells_its_exercises_the_exam_and_is_kept_from_practice(
+    practice: Practice,
+) -> None:
+    session, _ = practice.start_session(
+        "German",
+        "",
+        [],
+        {"echo": 3},
+        exam="Exam: Goethe A1, Lesen, Teil 1.",
+        reviewing=[],
+    )
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+
+    shown, _ = practice.step(
+        session["id"], "echo", "act", "context", LEARNER, answering()
+    )
+
+    assert shown == {"minutes": 0, "exam": "Exam: Goethe A1, Lesen, Teil 1."}
+    assert session["kind"] == "evaluation"
+    assert practice._store.sessions() == []  # noqa: SLF001

@@ -171,3 +171,20 @@ test("a speech direction saved before it could be written in full gets the langu
     expect(normalizeSettings(moved).speechDirection).toBe(moved.speechDirection);
     expect(normalizeSettings({ speechInstructions: "" }).speechDirection).toMatch(/language\.$/);
 });
+
+test("the time limit of each exercise is remembered, what is not a number left out", () => {
+    const kept = normalizeSettings({ exerciseMinutes: { cloze: 10, stories: "ten" } });
+
+    expect(kept.exerciseMinutes).toEqual({ cloze: 10 });
+    expect(normalizeSettings({}).exerciseMinutes).toEqual({});
+});
+
+test("an evaluation takes 1 to 8 half hours, timed unless it was chosen not to be", () => {
+    expect(normalizeSettings({ evaluationLength: 5, evaluationTimed: false })).toMatchObject({
+        evaluationLength: 5,
+        evaluationTimed: false,
+    });
+    expect(normalizeSettings({ evaluationLength: 9 }).evaluationLength).toBe(2);
+    expect(normalizeSettings({ evaluationLength: 1.5 }).evaluationLength).toBe(2);
+    expect(normalizeSettings({}).evaluationTimed).toBe(true);
+});

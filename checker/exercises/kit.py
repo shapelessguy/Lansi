@@ -7,6 +7,9 @@ An exercise is a directory of its own here, with:
 
     manifest.json   {"title": ..., "description": ..., "options": ...}
     backend.py      what makes the exercise and checks what is answered
+    prompts.toml    what the backend tells the models, as `Prompts` reads
+                    it and checker/prompts.py describes, which
+                    `prompts_beside` gives the backend
     ui/index.js     what the learner sees, a module the app mounts, as
                     kit.js describes, with ui/style.css if it has one
 
@@ -40,7 +43,7 @@ answer, and `finish` is called once the learner is done or leaves, however
 far they got. Each returns a Step: the `state` to be handed back with the
 next call, what the interface is to `show`, how what the learner answered
 was `graded`, what was `written` in the step, and, from `finish`, the
-`results` the exercise keeps for itself.
+`results` the exercise keeps for itself, with the `scores` it came to.
 
 The context is the same for every call:
 
@@ -53,7 +56,9 @@ The context is the same for every call:
      "words": {"mode": "only" | "prefer", "lemmas": [...]} or None,
      "instances": 10,
      "options": {"then": "questions"},
-     "guidance": "..."}
+     "guidance": "...",
+     "minutes": 0,
+     "exam": ""}
 
 A session of no lesson reviews the lessons practised last, and its
 `lesson` is made of them: its id is empty, it has every point of them once,
@@ -78,6 +83,25 @@ it into what it asks the models that make it, as `describe_guidance` does.
 
 `options` has a value for each option of the manifest, as the learner
 chose it, which `option` gives.
+
+`minutes` is how long the learner has for the exercise, or 0 for as long as
+they like. The app keeps the time: once it is up, the exercise is finished,
+and nothing the learner sends after is taken. It is told so that it can
+say so, and is best not made shorter or longer by the exercise.
+
+`exam` is, when the exercise is a part of an evaluation, a mock exam of a
+level, what the exam says that part is: its instructions to the learner,
+what its texts and tasks are like, and an example of one, which the
+exercise is to follow, as `describe_exam` tells a model, in place of the
+lesson. The `lesson` is then made of the points of the level of the exam.
+It is empty in practice.
+
+`scores`, which `finish` may return, say what the learner can do as far
+as the exercise shows it, each a number from 0 to 100, by the names of
+`SCORES`, those it does not show left out. The app keeps them, and an
+evaluation counts the scores of its parts by them, as an exam is marked.
+`score_of` makes the share of the grades that were right into a score, and
+`criteria_scores` the ratings of what was written by `CRITERIA`.
 
 What is `written` is `{"user": [...], "assistant": [...]}`: the texts in the
 language learned that the learner wrote in the step, such as their answers
@@ -125,21 +149,120 @@ import sys
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
+from string import Template
 from typing import Any, Protocol, TextIO
 
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
 RESULTS = ("right", "wrong", "partial")
+# What an exercise may score, from 0 to 100, as an exam marks it: the
+# skills, by how much of what was asked of each was done right, and the
+# ratings of what the learner wrote or said, by `CRITERIA`.
+SCORES = {
+    "lesen": "reading: how many of the questions on texts read were answered right",
+    "hoeren": "listening: how many of the questions on texts heard were answered right",
+    "schreiben": "writing: how well the writing tasks were done",
+    "sprechen": "speaking: how well the speaking tasks were done",
+    "aufgabe": "the task fulfilled: every point dealt with, as long as asked",
+    "kohaerenz": "coherence: one text joined up, for its reader and its register",
+    "wortschatz": "vocabulary: the words of the level, used rightly and with range",
+    "strukturen": "structures: the grammar of the level, used rightly",
+    "aussprache": "pronunciation: what was said can be understood",
+}
+# How what the learner writes or says is rated, from 0 to 4, as the
+# examiners of the Goethe-Institut rate it, by the level of the exam. What a
+# model is told of each is `kit.criteria` of the prompts.
+CRITERIA = ("aufgabe", "kohaerenz", "wortschatz", "strukturen", "aussprache")
 # how much of a reply that could not be read is told with why
 MAX_SHOWN_REPLY = 160
-# What the sentences a learner reads and writes are like at each level.
-LEVEL_SENTENCES = {
-    "A1": "very short, simple main clauses of about 4 to 8 words",
-    "A2": "short sentences of about 6 to 12 words: main clauses, joined at most"
-    " by simple conjunctions such as and, but or because",
-    "B1": "sentences of about 8 to 15 words, with a subordinate clause where one fits",
-    "B2": "sentences of about 10 to 20 words, with subordinate and relative clauses",
-    "C1": "sentences of natural length, up to about 25 words, with complex structures",
-    "C2": "sentences as a native speaker writes them, of any length and structure",
-}
+
+
+class PromptError(Exception):
+    """A prompt is not in its file, or cannot be filled in."""
+
+
+class Prompts:
+    """The prompts of a file, filled in by name, as checker/prompts.py
+    describes: an exercise is run with nothing of the server's, so the kit
+    reads them in the same way itself. An exercise keeps its own in the
+    `prompts.toml` of its directory, which `prompts_beside` reads; those
+    every exercise uses are `kit` of checker/prompts.toml."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self._table: dict[str, Any] | None = None
+
+    def table(self, name: str = "") -> dict[str, Any]:
+        """The table of that name, of prompts or of tables of them; the whole
+        file without a name."""
+        found = self._find(name) if name else self._read()
+        if not isinstance(found, dict):
+            raise PromptError(f"{name} of {self.path} is not a table")
+        return found
+
+    def text(self, name: str) -> str:
+        """The prompt of that name as it is written, not filled in."""
+        found = self._find(name)
+        if not isinstance(found, str):
+            raise PromptError(f"{name} of {self.path} is not a prompt")
+        return found
+
+    def __call__(self, name: str, /, **values: object) -> str:
+        """The prompt of that name filled in with `values`: one it uses that
+        is not given is an error, one it does not use is left out."""
+        text = self.text(name)
+        missing = variables_of(text) - set(values)
+        if missing:
+            listed = ", ".join(f"${each}" for each in sorted(missing))
+            raise PromptError(
+                f"{name} of {self.path} uses {listed}, which the code does not give"
+            )
+        try:
+            return Template(text).substitute(values)
+        except ValueError as error:
+            raise PromptError(f"{name} of {self.path}: {error}") from None
+
+    def _read(self) -> dict[str, Any]:
+        if self._table is None:
+            with self.path.open("rb") as file:
+                self._table = tomllib.load(file)
+        return self._table
+
+    def _find(self, name: str) -> Any:
+        found: Any = self._read()
+        for part in name.split("."):
+            if not isinstance(found, dict) or part not in found:
+                raise PromptError(f"{self.path} has no prompt {name}")
+            found = found[part]
+        return found
+
+
+def variables_of(text: str) -> set[str]:
+    """The names of the variables a prompt uses. Raises PromptError if it
+    has a $ that is neither a variable nor $$."""
+    names = set()
+    for match in Template.pattern.finditer(text):
+        if match.group("invalid") is not None:
+            raise PromptError(
+                f"a $ that starts no variable, at {text[match.start() : match.start() + 20]!r}"
+            )
+        name = match.group("named") or match.group("braced")
+        if name:
+            names.add(name)
+    return names
+
+
+def prompts_beside(file: str) -> Prompts:
+    """The prompts of the exercise whose backend is `file`."""
+    return Prompts(Path(file).resolve().with_name("prompts.toml"))
+
+
+# the prompts every exercise uses, `kit` of the server's
+PROMPTS = Prompts(Path(__file__).resolve().parent.parent / "prompts.toml")
 
 
 class ModelError(Exception):
@@ -170,6 +293,7 @@ class Step:
     graded: list[dict[str, str]] = field(default_factory=list)
     results: Any = None
     written: dict[str, list[str]] = field(default_factory=dict)
+    scores: dict[str, float] | None = None
 
 
 def written(
@@ -236,6 +360,66 @@ def grade_of(grades: list[dict[str, str]]) -> dict[str, str]:
     )
 
 
+def score_of(results: list[str]) -> float | None:
+    """The score of a number of answers by their results, an answer that
+    was partly right counting half, or None if there were none."""
+    if not results:
+        return None
+    right = sum(
+        1.0 if each == "right" else 0.5 if each == "partial" else 0.0
+        for each in results
+    )
+    return round(100 * right / len(results), 1)
+
+
+def describe_criteria(names: list[str]) -> str:
+    """How a model is told to rate by the `CRITERIA` named, one to a line."""
+    return "\n".join(f'- "{name}": {PROMPTS(f"kit.criteria.{name}")}' for name in names)
+
+
+def read_ratings(reply: Any, names: list[str]) -> dict[str, int]:
+    """The rating of each criterion named that a model gave, from 0 to 4.
+    Raises ModelError if one is missing."""
+    found = reply if isinstance(reply, dict) else {}
+    ratings = {}
+    for name in names:
+        value = found.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ModelError(f"the model did not rate {name}")
+        ratings[name] = max(0, min(4, round(value)))
+    return ratings
+
+
+def result_of_ratings(ratings: dict[str, int]) -> str:
+    """The result of a rated answer: right if it is rated 3 or more on
+    average, partial if 1.5 or more, and else wrong."""
+    mean = sum(ratings.values()) / len(ratings) if ratings else 0
+    return "right" if mean >= 3 else "partial" if mean >= 1.5 else "wrong"
+
+
+def criteria_scores(ratings: list[dict[str, int]]) -> dict[str, float]:
+    """The score of each criterion that answers were rated by, from their
+    ratings from 0 to 4, and that of them all as `all`."""
+    scores: dict[str, float] = {}
+    for name in CRITERIA:
+        rated = [each[name] for each in ratings if name in each]
+        if rated:
+            scores[name] = round(100 * sum(rated) / (4 * len(rated)), 1)
+    every = [value for each in ratings for value in each.values()]
+    if every:
+        scores["all"] = round(100 * sum(every) / (4 * len(every)), 1)
+    return scores
+
+
+def describe_exam(context: dict[str, Any]) -> str:
+    """What an exam says the part the exercise is in is like, as a model
+    is told to follow it, on lines of its own; nothing in practice."""
+    exam = str(context.get("exam") or "").strip()
+    if not exam:
+        return ""
+    return f"\n{PROMPTS('kit.exam', exam=exam)}\n"
+
+
 def loose(text: str) -> str:
     """Text as it is when capitals and umlauts are not told apart."""
     text = text.casefold().replace("ß", "ss")
@@ -276,12 +460,19 @@ def describe_lesson(
     them: the rule, and when it applies. The pages of theory in `more_info`
     are left out: they are long, and the points say what is practised."""
     lesson = context["lesson"]
-    lines = [f"Lesson: {lesson['title']} (level {lesson['level']})"]
+    lines = [
+        PROMPTS("kit.lesson.heading", title=lesson["title"], level=lesson["level"])
+    ]
     for point in lesson["points"]:
         if point["role"] in roles:
             lines.append(
-                f"- {point['title']} ({point['role']}): {point['statement']}"
-                f" Applies when: {point['when']}."
+                PROMPTS(
+                    "kit.lesson.point",
+                    title=point["title"],
+                    role=point["role"],
+                    statement=point["statement"],
+                    when=point["when"],
+                )
             )
     return "\n".join(lines)
 
@@ -318,16 +509,8 @@ def describe_plan(context: dict[str, Any], count: int, start: int = 0) -> str:
         f"{number}. {parts[(start + number - 1) % len(parts)]}"
         for number in range(1, count + 1)
     ]
-    again = (
-        " Where the same comes more than once, practise another side of it."
-        if len(parts) < count
-        else ""
-    )
-    return (
-        f"Make them in this order, each centred on the rule named for it.{again}\n"
-        + "\n".join(lines)
-        + "\n"
-    )
+    told = PROMPTS("kit.plan.repeated" if len(parts) < count else "kit.plan.once")
+    return f"{told}\n" + "\n".join(lines) + "\n"
 
 
 def option(context: dict[str, Any], name: str, default: Any) -> Any:
@@ -347,11 +530,10 @@ def describe_level(context: dict[str, Any]) -> str:
     learner knows, and sentences as long and as built as their level
     reads, unless the rules of the lesson need more."""
     level = level_of(context)
-    told = f"The learner is at level {level}: use only words a learner at {level} knows"
-    sentences = LEVEL_SENTENCES.get(level.strip().upper())
+    sentences = PROMPTS.table("kit.level.sentences").get(level.strip().upper())
     if sentences:
-        told += f", and write {sentences}"
-    return f"{told}. Where the rules below need more than that, the rules come first."
+        return PROMPTS("kit.level.with_sentences", level=level, sentences=sentences)
+    return PROMPTS("kit.level.plain", level=level)
 
 
 def describe_made(sentences: list[str]) -> str:
@@ -360,15 +542,16 @@ def describe_made(sentences: list[str]) -> str:
     if not sentences:
         return ""
     listed = "\n".join(f"- {sentence}" for sentence in sentences)
-    return (
-        "\nSentences made already in this exercise. Write other ones, with"
-        f" other words, things and structures:\n{listed}\n"
-    )
+    return f"\n{PROMPTS('kit.made', listed=listed)}\n"
 
 
 def _topic(topic: dict[str, Any]) -> str:
     if topic.get("description"):
-        return f"{topic['title']} ({topic['description']})"
+        return PROMPTS(
+            "kit.topics.described",
+            title=topic["title"],
+            description=topic["description"],
+        )
     return str(topic["title"])
 
 
@@ -376,16 +559,13 @@ def describe_topics(context: dict[str, Any]) -> str:
     """The topics, as a model is told them, or that there are none."""
     topics = context.get("topics") or []
     if not topics:
-        return "Topic: everyday life."
+        return PROMPTS("kit.topics.none")
     if len(topics) == 1:
-        return f"Topic: {_topic(topics[0])}."
+        return PROMPTS("kit.topics.one", topic=_topic(topics[0]))
     listed = "; ".join(_topic(topic) for topic in topics)
     if context.get("mix_topics"):
-        return (
-            f"Topics: {listed}. Mix them: bring them together in the same"
-            " sentences where it makes sense, so that every topic comes up."
-        )
-    return f"Topics: {listed}."
+        return PROMPTS("kit.topics.mixed", topics=listed)
+    return PROMPTS("kit.topics.several", topics=listed)
 
 
 def describe_guidance(context: dict[str, Any]) -> str:
@@ -402,21 +582,8 @@ def describe_words(context: dict[str, Any]) -> str:
     if not words or not words.get("lemmas"):
         return ""
     lemmas = ", ".join(words["lemmas"])
-    language = context["language"]
-    if words["mode"] == "only":
-        return (
-            f"Words the learner knows, those that fit the topic first. Write the"
-            f" {language} sentences with these words alone, in any of their forms,"
-            " besides articles, pronouns, prepositions, conjunctions, numbers,"
-            " auxiliary and modal verbs, and the words the rules above need:\n"
-            f"{lemmas}"
-        )
-    return (
-        f"Words the learner knows, those that fit the topic first. Use these in"
-        f" the {language} sentences wherever they fit, in any of their forms;"
-        " other words are fine where none of these does, as long as a learner"
-        f" at the level knows them:\n{lemmas}"
-    )
+    name = "kit.words.only" if words["mode"] == "only" else "kit.words.prefer"
+    return PROMPTS(name, language=context["language"], lemmas=lemmas)
 
 
 class _StdioModel:
@@ -472,6 +639,7 @@ def serve(start: Start, act: Act, finish: Finish) -> None:
                 "graded": step.graded,
                 "results": step.results,
                 "written": step.written,
+                "scores": step.scores,
             }
         }
     except ModelError as error:

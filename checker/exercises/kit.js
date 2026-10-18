@@ -43,3 +43,29 @@ export function element(tag, props = {}, ...children) {
     made.append(...children.filter((child) => child !== null));
     return made;
 }
+
+/** What the criteria of the kit are called, as `ratingsOf` shows them. */
+const CRITERIA = {
+    aufgabe: "Task",
+    kohaerenz: "Coherence",
+    wortschatz: "Vocabulary",
+    strukturen: "Structures",
+    aussprache: "Pronunciation",
+};
+
+/** The ratings of what was written or said, each from 0 to 4 by a criterion of the kit, as bars. */
+export function ratingsOf(ratings) {
+    return element(
+        "dl",
+        { className: "ratings" },
+        ...Object.entries(ratings).flatMap(([name, value]) => [
+            element("dt", { textContent: CRITERIA[name] ?? name }),
+            element(
+                "dd",
+                {},
+                element("span", { className: "meter" }, element("span", { style: `width: ${value * 25}%` })),
+                element("span", { className: "muted", textContent: ` ${value} / 4` }),
+            ),
+        ]),
+    );
+}

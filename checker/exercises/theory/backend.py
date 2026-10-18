@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from kit import Model, ModelError, Step, describe_lesson, serve
+from kit import Model, ModelError, Step, describe_lesson, prompts_beside, serve
 
 # the line between one page and the next
 _BREAK = re.compile(r"^\s*---\s*$", re.MULTILINE)
@@ -27,29 +27,8 @@ MAX_TURNS = 10
 MAX_CHAT = 100
 MAX_QUESTION = 2000
 
-TEACHING = """\
-You are a patient teacher of {language}. The learner, at level {level}, is \
-reading the lesson below page by page, and asks you about it.
-
-Answer what they ask, about the lesson or about {language}, briefly and \
-clearly: a few sentences, with examples in {language} where they help. \
-Write in the language the learner wrote in; if they wrote in {language}, \
-write simple {language} that a learner at level {level} understands. The \
-learner's own language is {into}: whatever you translate or say the meaning \
-of, say in {into}. If \
-they try the exercise at the end of a page, say which of their answers are \
-right, and correct the others, saying why. Use Markdown for bold, lists and \
-small tables where they help, but no headings. Colour a part of a {language} \
-sentence as the pages do only where it is what the lesson or the question \
-is about, and leave the rest plain: {{v:stehe}} for the conjugated verb, \
-{{p:auf}} a prefix, {{i:aufstehen}} a verb at the end, {{e:st}} an ending, \
-{{c:i}} a vowel that changes, {{x:...}} what is wrong.
-
-{lesson}
-
-The pages of the lesson, with --- between them:
-
-{pages}"""
+# what the exercise tells the model, by name
+PROMPTS = prompts_beside(__file__)
 
 
 def pages_of(text: str) -> list[str]:
@@ -89,7 +68,8 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     messages: list[dict[str, Any]] = [
         {
             "role": "system",
-            "content": TEACHING.format(
+            "content": PROMPTS(
+                "teaching",
                 language=context["language"],
                 into=context["into"],
                 level=level,
@@ -104,7 +84,9 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     messages.append(
         {
             "role": "user",
-            "content": f"(I am on page {page + 1} of {len(pages)}.)\n\n{question}",
+            "content": PROMPTS(
+                "question", page=page + 1, pages=len(pages), question=question
+            ),
         }
     )
     answer = model.ask(messages).strip()

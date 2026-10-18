@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -301,8 +301,50 @@ ORDER BY exercise_logs.written_at;
 DROP TABLE exercise_logs;
 """
 
+# What came with version 16: the evaluations, mock exams of a level, each
+# part of which is a session of one exercise; and for every exercise of a
+# session how long it may take, when it started, the scores it reported and
+# what an exam told it of the part it is.
+_EVALUATIONS = """
+ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'practice';
+ALTER TABLE session_exercises ADD COLUMN minutes INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE session_exercises ADD COLUMN started_at REAL;
+ALTER TABLE session_exercises ADD COLUMN scores TEXT;
+ALTER TABLE session_exercises ADD COLUMN exam TEXT NOT NULL DEFAULT '';
+CREATE TABLE evaluations (
+    id TEXT PRIMARY KEY,
+    -- the language being learned, and the level of the exam
+    language TEXT NOT NULL,
+    level TEXT NOT NULL,
+    -- how long it was to take, in half hours
+    length INTEGER NOT NULL,
+    -- whether each part had to be done in its time
+    timed INTEGER NOT NULL,
+    -- the parts, in the order they are done, in JSON: each with its module,
+    -- its exercise, how it is set and how much it counts
+    plan TEXT NOT NULL,
+    -- "running", "finished" or "abandoned"
+    status TEXT NOT NULL,
+    -- in seconds since the epoch
+    started_at REAL NOT NULL,
+    finished_at REAL,
+    -- the scores and whether it was passed, in JSON, once it is over
+    result TEXT
+);
+CREATE TABLE evaluation_parts (
+    evaluation_id TEXT NOT NULL REFERENCES evaluations (id) ON DELETE CASCADE,
+    -- where it is among the parts of the evaluation, from 0
+    position INTEGER NOT NULL,
+    session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+    PRIMARY KEY (evaluation_id, position)
+);
+"""
+
+# what sessions are for: practice, or a part of an evaluation
+SESSION_KINDS = ("practice", "evaluation")
+
 # what the logs are of
-LOG_KINDS = ("exercise", "translation", "question")
+LOG_KINDS = ("exercise", "translation", "question", "evaluation")
 # What is said of a log when they are listed.
 _LOG_COLUMNS = (
     "id, kind, language, subject, content, written_at, session_id, exercise, source"
@@ -456,6 +498,8 @@ class UserStore:
                 self._db.executescript(_TASKS)
             if version < 15:
                 self._db.executescript(_ACTIVITY_LOGS)
+            if version < 16:
+                self._db.executescript(_EVALUATIONS)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -736,7 +780,9 @@ class UserStore:
                 " JOIN session_exercises ON"
                 " session_exercises.session_id = written.session_id"
                 " AND session_exercises.exercise = written.exercise"
+                # what is written in an exam is not taken in, as in a real one
                 " WHERE written.processed_at IS NULL AND written_at < ?"
+                " AND sessions.kind = 'practice'"
                 " AND (session_exercises.finished_at IS NOT NULL"
                 " OR sessions.status != 'running')",
                 (before,),
@@ -776,30 +822,37 @@ class UserStore:
         guidance: dict[str, str] | None = None,
         lessons: list[str] | None = None,
         options: dict[str, dict[str, str]] | None = None,
+        minutes: dict[str, int] | None = None,
+        exams: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Start a session of practice with the exercises given, each with
         how many instances of it there are to be, the `words` they are to
-        use, if any, and the `guidance` each is given and the `options` it
-        was chosen with, by exercise. A review has no `lesson`, and goes
-        over `lessons`. A session that is still running is abandoned: there
-        is one at a time. Raises ValueError."""
+        use, if any, and the `guidance` each is given, the `options` it was
+        chosen with, how many `minutes` it may take, none for no limit, and
+        what an exam tells it of the part it is, by exercise, which makes it
+        a part of an evaluation. A review has no `lesson`, and goes over
+        `lessons`. A session of the same kind that is still running is
+        abandoned: there is one at a time of each. Raises ValueError."""
         guidance = guidance or {}
         options = options or {}
+        minutes = minutes or {}
+        exams = exams or {}
         if not is_id(session_id):
             raise ValueError("a session needs an id")
         if not exercises:
             raise ValueError("a session needs an exercise")
+        kind = "evaluation" if exams else "practice"
         now = self._now()
         with self._lock, self._db:
             self._db.execute(
                 "UPDATE sessions SET status = 'abandoned', finished_at = ?"
-                " WHERE status = 'running'",
-                (now,),
+                " WHERE status = 'running' AND kind = ?",
+                (now, kind),
             )
             self._db.execute(
                 "INSERT INTO sessions (id, language, lesson, topics, started_at,"
-                " status, words, mix_topics, lessons)"
-                " VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?)",
+                " status, words, mix_topics, lessons, kind)"
+                " VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?, ?)",
                 (
                     session_id,
                     language,
@@ -809,12 +862,13 @@ class UserStore:
                     None if words is None else json.dumps(words, ensure_ascii=False),
                     int(mix_topics),
                     json.dumps(lessons or []),
+                    kind,
                 ),
             )
             self._db.executemany(
-                "INSERT INTO session_exercises"
-                " (session_id, exercise, position, instances, guidance, options)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO session_exercises (session_id, exercise, position,"
+                " instances, guidance, options, minutes, exam)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (
                         session_id,
@@ -823,6 +877,8 @@ class UserStore:
                         instances,
                         guidance.get(exercise, ""),
                         json.dumps(options.get(exercise, {}), ensure_ascii=False),
+                        minutes.get(exercise, 0),
+                        exams.get(exercise, ""),
                     )
                     for position, (exercise, instances) in enumerate(exercises.items())
                 ],
@@ -845,11 +901,16 @@ class UserStore:
                 "status": status,
                 "words": None if words is None else json.loads(words),
                 "mix_topics": bool(mix_topics),
+                "kind": kind,
                 "exercises": {},
                 # what each exercise was told to heed, by exercise
                 "guidance": {},
                 # the options each exercise was chosen with, by exercise
                 "options": {},
+                # how many minutes each exercise may take, 0 for no limit
+                "minutes": {},
+                # what an exam told each exercise of the part it is
+                "exams": {},
                 # what can be told of each exercise from what was kept of it
                 "progress": {},
             }
@@ -864,10 +925,11 @@ class UserStore:
                 words,
                 mix_topics,
                 lessons,
+                kind,
             ) in (
                 self._db.execute(
                     "SELECT id, language, lesson, topics, started_at, finished_at,"
-                    " status, words, mix_topics, lessons FROM sessions"
+                    " status, words, mix_topics, lessons, kind FROM sessions"
                     f" {where} ORDER BY started_at DESC",
                     values,
                 )
@@ -888,16 +950,22 @@ class UserStore:
             finished,
             guidance,
             options,
+            minutes,
+            exam,
+            started_at,
+            scores,
         ) in self._db.execute(
             "SELECT session_id, exercise, instances, state IS NOT NULL,"
-            " finished_at IS NOT NULL, guidance, options FROM session_exercises"
-            " ORDER BY position"
+            " finished_at IS NOT NULL, guidance, options, minutes, exam,"
+            " started_at, scores FROM session_exercises ORDER BY position"
         ):
             if session_id not in sessions:
                 continue
             sessions[session_id]["exercises"][exercise] = instances
             sessions[session_id]["guidance"][exercise] = guidance
             sessions[session_id]["options"][exercise] = json.loads(options)
+            sessions[session_id]["minutes"][exercise] = minutes
+            sessions[session_id]["exams"][exercise] = exam
             sessions[session_id]["progress"][exercise] = {
                 "status": "finished"
                 if finished
@@ -905,6 +973,10 @@ class UserStore:
                 if started
                 else "pending",
                 "answered": sum(graded.get((session_id, exercise), {}).values()),
+                # when it was first shown, in seconds since the epoch
+                "started_at": started_at,
+                # what it scored, as it reported when it finished
+                "scores": None if scores is None else json.loads(scores),
                 "results": {
                     result: graded.get((session_id, exercise), {}).get(result, 0)
                     for result in ("right", "partial", "wrong")
@@ -918,10 +990,10 @@ class UserStore:
             found = self._sessions("WHERE id = ?", (session_id,))
         return found[0] if found else None
 
-    def sessions(self) -> list[dict[str, Any]]:
-        """Every session, the latest first."""
+    def sessions(self, kind: str = "practice") -> list[dict[str, Any]]:
+        """Every session of `kind`, the latest first."""
         with self._lock:
-            return self._sessions("", ())
+            return self._sessions("WHERE kind = ?", (kind,))
 
     def end_session(self, session_id: str, status: str) -> None:
         """Bring a running session to an end, as "finished" or "abandoned"."""
@@ -956,27 +1028,37 @@ class UserStore:
         self, session_id: str, exercise: str, state: Any, shown: Any
     ) -> None:
         """Keep what an exercise keeps from one step to the next, and what
-        it shows, which also has it started."""
+        it shows, which also has it started, at the time of the first."""
         with self._lock, self._db:
             self._db.execute(
-                "UPDATE session_exercises SET state = ?, shown = ?"
+                "UPDATE session_exercises SET state = ?, shown = ?,"
+                " started_at = COALESCE(started_at, ?)"
                 " WHERE session_id = ? AND exercise = ?",
                 (
                     json.dumps(state, ensure_ascii=False),
                     json.dumps(shown, ensure_ascii=False),
+                    self._now(),
                     session_id,
                     exercise,
                 ),
             )
 
-    def finish_exercise(self, session_id: str, exercise: str, results: Any) -> None:
-        """Keep what an exercise reported when it finished."""
+    def finish_exercise(
+        self,
+        session_id: str,
+        exercise: str,
+        results: Any,
+        scores: dict[str, float] | None = None,
+    ) -> None:
+        """Keep what an exercise reported when it finished, with the scores
+        it came to, if it reported any."""
         with self._lock, self._db:
             self._db.execute(
-                "UPDATE session_exercises SET results = ?, finished_at = ?"
-                " WHERE session_id = ? AND exercise = ?",
+                "UPDATE session_exercises SET results = ?, scores = ?,"
+                " finished_at = ? WHERE session_id = ? AND exercise = ?",
                 (
                     json.dumps(results, ensure_ascii=False),
+                    None if scores is None else json.dumps(scores),
                     self._now(),
                     session_id,
                     exercise,
@@ -1170,6 +1252,127 @@ class UserStore:
                 (exercise, exercise, sessions),
             ).fetchall()
         return list(dict.fromkeys(text for (text,) in rows if text.strip()))
+
+    # evaluations
+
+    def start_evaluation(
+        self,
+        evaluation_id: str,
+        language: str,
+        level: str,
+        length: int,
+        timed: bool,
+        plan: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Start an evaluation of `level` made of the parts of `plan`. One
+        that is still running is abandoned: there is one at a time. Raises
+        ValueError."""
+        if not is_id(evaluation_id):
+            raise ValueError("an evaluation needs an id")
+        if not plan.get("parts"):
+            raise ValueError("an evaluation needs a part")
+        now = self._now()
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE evaluations SET status = 'abandoned', finished_at = ?"
+                " WHERE status = 'running'",
+                (now,),
+            )
+            self._db.execute(
+                "INSERT INTO evaluations (id, language, level, length, timed, plan,"
+                " status, started_at) VALUES (?, ?, ?, ?, ?, ?, 'running', ?)",
+                (
+                    evaluation_id,
+                    language,
+                    level,
+                    length,
+                    int(timed),
+                    json.dumps(plan, ensure_ascii=False),
+                    now,
+                ),
+            )
+        evaluation = self.evaluation(evaluation_id)
+        assert evaluation
+        return evaluation
+
+    def _evaluations(self, where: str, values: tuple[Any, ...]) -> list[dict[str, Any]]:
+        evaluations = {
+            evaluation_id: {
+                "id": evaluation_id,
+                "language": language,
+                "level": level,
+                "length": length,
+                "timed": bool(timed),
+                "plan": json.loads(plan),
+                "status": status,
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "result": None if result is None else json.loads(result),
+                # the session of each part that was started, by its place
+                "sessions": {},
+            }
+            for (
+                evaluation_id,
+                language,
+                level,
+                length,
+                timed,
+                plan,
+                status,
+                started_at,
+                finished_at,
+                result,
+            ) in self._db.execute(
+                "SELECT id, language, level, length, timed, plan, status,"
+                f" started_at, finished_at, result FROM evaluations {where}"
+                " ORDER BY started_at DESC",
+                values,
+            )
+        }
+        for evaluation_id, position, session_id in self._db.execute(
+            "SELECT evaluation_id, position, session_id FROM evaluation_parts"
+        ):
+            if evaluation_id in evaluations:
+                evaluations[evaluation_id]["sessions"][str(position)] = session_id
+        return list(evaluations.values())
+
+    def evaluation(self, evaluation_id: str) -> dict[str, Any] | None:
+        """An evaluation, with the sessions of the parts that were started."""
+        with self._lock:
+            found = self._evaluations("WHERE id = ?", (evaluation_id,))
+        return found[0] if found else None
+
+    def evaluations(self) -> list[dict[str, Any]]:
+        """Every evaluation, the latest first."""
+        with self._lock:
+            return self._evaluations("", ())
+
+    def add_part(self, evaluation_id: str, position: int, session_id: str) -> None:
+        """Note the session a part of an evaluation is done in, in place of
+        any it was in before."""
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO evaluation_parts"
+                " (evaluation_id, position, session_id) VALUES (?, ?, ?)",
+                (evaluation_id, position, session_id),
+            )
+
+    def end_evaluation(self, evaluation_id: str, status: str, result: Any) -> None:
+        """Bring a running evaluation to an end, as "finished" or
+        "abandoned", with what it came to."""
+        if status not in ("finished", "abandoned"):
+            raise ValueError("an evaluation ends finished or abandoned")
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE evaluations SET status = ?, finished_at = ?, result = ?"
+                " WHERE id = ? AND status = 'running'",
+                (
+                    status,
+                    self._now(),
+                    json.dumps(result, ensure_ascii=False),
+                    evaluation_id,
+                ),
+            )
 
     # topics
 

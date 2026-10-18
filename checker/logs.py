@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from profiling import Profile
+from prompts import PROMPTS
 
 # Asks a language model the messages given, and replies with what it said and
 # what asking used. Raises TranslationError.
@@ -34,58 +35,6 @@ MAX_WORKED = 2
 MAX_FAILED = 3
 # how much of what was written the model is shown, in characters
 MAX_WRITTEN = 20_000
-
-PROMPT = """\
-You write the log of an exercise that someone learning {language} has just \
-done. The log is not for the learner: it is kept for the models that will \
-later work out what the learner can and cannot do yet, so it must be exact \
-and plain. Do not praise, encourage or soften anything, and do not excuse \
-mistakes. State facts that what the learner wrote shows; draw no conclusion \
-about the learner beyond them. Where several answers show the same mistake, \
-say how many. If the learner wrote too little to judge something, say so \
-rather than guess.
-
-What the learner did is told in two parts that must never be mixed. \
-"Given by the exercise" was written by a model, not by the learner: a \
-sentence with gaps, a sentence to translate, a question. The learner gets no \
-credit and no blame for any of it, and it is never quoted as theirs; it is \
-there only so that you know what was asked. "Written by the learner" is the \
-only thing the learner did, and the only thing you judge. In a sentence with \
-gaps (___), the learner wrote only what went into the gaps, in the order of \
-the gaps: a rule counts as used by the learner only if what they wrote into \
-a gap shows it.
-
-The grades below were given by another model while the exercise ran. Check \
-each against what the learner wrote: where a grade or a correction is wrong, \
-go by what the learner actually wrote, and say the grade was wrong.
-
-The exercise:
-{task}
-
-What the learner did, in the order they did it:
-{record}
-
-Write, in English:
-- "summary": at most {lines} short lines, in this order: how much of the \
-exercise was done; what the learner got right, as the rules and forms they \
-used correctly; what they got wrong, as the rules and forms they used \
-wrongly, the words they did not know and the kinds of mistakes they made. \
-Name the rules of the lesson where they apply. Leave out what was not \
-tested.
-- "worked": at most {worked} examples of what the learner wrote that was \
-right, with the rule or form it shows. None if nothing was right.
-- "failed": at most {failed} examples of what the learner wrote that was \
-wrong, with the correction and what was wrong. None if nothing was wrong.
-In each example, "text" is only the learner's own words, quoted exactly as \
-they wrote them, such as what they put into a gap, and never words the \
-exercise gave; "given" is, if it helps, the part of the exercise they \
-answered, such as the sentence with its gaps.
-
-Reply with JSON only:
-{{"summary": ["...", "..."], \
-"worked": [{{"text": "...", "given": "...", "why": "..."}}], \
-"failed": [{{"text": "...", "given": "...", "correction": "...", \
-"why": "..."}}]}}"""
 
 
 class LogError(Exception):
@@ -114,19 +63,24 @@ def describe_task(task: Task) -> str:
     """What the model is told of the exercise."""
     lesson = task.lesson
     lines = [
-        f"{task.title}: {task.description}",
-        f"Level: {task.level or lesson.get('level', '')}",
-        f"Instances to do: {task.instances}",
+        PROMPTS("logs.task.heading", title=task.title, description=task.description),
+        PROMPTS("logs.task.level", level=task.level or lesson.get("level", "")),
+        PROMPTS("logs.task.instances", count=task.instances),
     ]
     lines += task.options
     if task.topics:
-        lines.append(f"Topics: {'; '.join(task.topics)}")
-    lines.append(f"Lesson: {lesson.get('title', '')}")
+        lines.append(PROMPTS("logs.task.topics", topics="; ".join(task.topics)))
+    lines.append(PROMPTS("logs.task.lesson", title=lesson.get("title", "")))
     for point in lesson.get("points", []):
         if point.get("role") in ("new", "review"):
             lines.append(
-                f"- {point['title']} ({point['role']}): {point['statement']}"
-                f" Applies when: {point['when']}."
+                PROMPTS(
+                    "kit.lesson.point",
+                    title=point["title"],
+                    role=point["role"],
+                    statement=point["statement"],
+                    when=point["when"],
+                )
             )
     return "\n".join(lines)
 
@@ -136,12 +90,17 @@ def describe_record(grades: list[dict[str, str]], written: dict[str, list[str]])
     and else what was written, by the learner and by the exercise."""
     lines = []
     for number, grade in enumerate(grades, start=1):
-        lines.append(f"Instance {number}, graded {grade['result']}")
+        lines.append(
+            PROMPTS("logs.record.instance", number=number, result=grade["result"])
+        )
         parts = [
-            ("Given by the exercise (not the learner's)", grade.get("task", "")),
-            ("Written by the learner", grade["answer"] or "(nothing)"),
-            ("Correct", grade["correction"]),
-            ("Note", grade["note"]),
+            (PROMPTS("logs.record.given"), grade.get("task", "")),
+            (
+                PROMPTS("logs.record.written"),
+                grade["answer"] or PROMPTS("logs.record.nothing"),
+            ),
+            (PROMPTS("logs.record.correction"), grade["correction"]),
+            (PROMPTS("logs.record.note"), grade["note"]),
         ]
         for name, text in parts:
             if text:
@@ -149,11 +108,17 @@ def describe_record(grades: list[dict[str, str]], written: dict[str, list[str]])
                 lines += [f"    {line}" for line in text.splitlines()]
     if not grades:
         # such as a conversation, which is not graded answer by answer
-        lines += [f"Exercise: {text}" for text in written.get("assistant", [])]
-        lines += [f"Learner: {text}" for text in written.get("user", [])]
+        lines += [
+            PROMPTS("logs.record.exercise", text=text)
+            for text in written.get("assistant", [])
+        ]
+        lines += [
+            PROMPTS("logs.record.learner", text=text)
+            for text in written.get("user", [])
+        ]
     record = "\n".join(lines)
     if len(record) > MAX_WRITTEN:
-        record = record[:MAX_WRITTEN] + "\n(the rest is left out)"
+        record = record[:MAX_WRITTEN] + "\n" + PROMPTS("cut.rest")
     return record
 
 
@@ -179,7 +144,8 @@ def write_log(
 ) -> tuple[str, Profile]:
     """The log of an exercise, with what asking for it used. Raises LogError
     and TranslationError."""
-    prompt = PROMPT.format(
+    prompt = PROMPTS(
+        "logs.writing",
         language=task.language,
         task=describe_task(task),
         record=describe_record(grades, written),

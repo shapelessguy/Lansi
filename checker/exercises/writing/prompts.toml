@@ -1,0 +1,109 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+# What the writing exercise tells the models, as checker/prompts.py
+# describes. $level, $lesson, $topics, $words, $guidance, $exam and
+# $criteria are the pieces of `kit` in checker/prompts.toml.
+
+# What makes a task to write: $kind is one of `tasks`, and $made is `made`
+# when tasks were made before.
+making = """
+You make writing tasks for someone learning $language. Make a task of \
+$kind, about the topics below. $level
+
+$lesson
+$topics
+$words$guidance$exam$made
+The "situation" says in one or two sentences of $language who the learner \
+writes to and why. The "points" are three things to write about, each in a \
+short sentence of $language, such as what happened, a reason and a \
+question. The learner writes about $count words.
+
+Reply with JSON alone: {"situation": "...", "points": ["...", "...", "..."]}"""
+
+# what makes a form to fill in from a text, for the kind "form"
+making_form = """
+You make writing tasks for someone learning $language. Write a short \
+text of four to six sentences in $language about someone who signs up for \
+something, such as a course, a club or a trip, about the topics below, and \
+a form with $count fields to fill in with what the text says: a name, a \
+number, a date, a way to pay. $level
+
+$topics
+$guidance$exam$made
+Each field has its "label", as on the form, and the "answer" the text \
+gives, of one word or a few.
+
+Reply with JSON alone: {"text": "...", "fields": [{"label": "...", \
+"answer": "..."}]}"""
+
+# What rates what the learner wrote for a task: $points one to a line, each
+# after a -, and $shape the ratings asked for, each as "name": 0.
+rating = """
+You are an examiner, rating what someone learning $language wrote for a \
+task of an exam at level $level. Rate it as strictly as the examiners of \
+the exam do, by what the level asks for, not by how well it is done for a \
+learner.
+
+The task: $situation
+Points to write about:
+$points
+About $count words are asked for; the learner wrote $written words.
+
+What the learner wrote:
+
+$text
+
+Rate it by each of these, from 0 to 4:
+$criteria
+
+The correction is what the learner wrote with as few changes as make it \
+right and fitting at the level. The note says in a sentence or two of \
+$into what was missing or wrong, and what was done well.
+
+Reply with JSON alone: {"ratings": {$shape}, "correction": "...", \
+"note": "..."}"""
+
+# What checks a form the learner filled in, each a `field` on a line of its
+# own as $fields.
+checking_form = """
+You check a form that someone learning $language filled in with what a \
+text says. The text:
+
+$text
+
+The fields, each with the answer the text gives and the learner's:
+
+$fields
+
+"right" if the learner's answer says what the text gives, even in other \
+words or with a slip of spelling that leaves the word plain; "partial" if \
+it is half of it, or has a mistake that changes the word; "wrong" if it is \
+not what the text gives. The note says in a sentence of $into what was \
+wrong, or "" if nothing was.
+
+Reply with JSON alone, with a verdict for each field in turn: \
+{"verdicts": [{"result": "...", "note": "..."}]}"""
+
+
+# The tasks made before, one to a line as $listed.
+made = """
+Tasks made already in this exercise. Make another, with other \
+people and situations:
+$listed"""
+
+# A field of the form, with the answer the text gives and the learner's.
+field = "$number. $label Text: $answer Learner: $given"
+
+# What each kind of task is, by the option `kind`.
+[tasks]
+message = """
+a short message, such as a text message or an email, to a \
+friend, with du: they are late, cannot come, invite someone, ask for \
+something"""
+email = """
+an email with Sie, to a teacher, an office, a landlord or a \
+boss: a request, an excuse, a thank-you, a change of plan"""
+opinion = """
+an opinion on a question of everyday life, as posted in a \
+forum under what others wrote, with reasons and an example"""

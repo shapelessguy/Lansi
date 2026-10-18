@@ -1,0 +1,22 @@
+{
+    "title": "Speak",
+    "description": "Introduce yourself, ask and answer with word cards, make requests, talk about your life or plan something with a partner, typed as you would say it for now; it is rated as an exam rates speaking. Each instance is a task.",
+    "options": {
+        "kind": {
+            "label": "What to say",
+            "choices": {
+                "introduce": "Introduce yourself",
+                "cards": "Ask and answer with cards",
+                "requests": "Make requests and react",
+                "talk": "Talk about your life",
+                "plan": "Plan something together"
+            }
+        },
+        "prompts": {
+            "label": "Turns in a task",
+            "min": 1,
+            "max": 6,
+            "default": 4
+        }
+    }
+}

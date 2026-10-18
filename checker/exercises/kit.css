@@ -122,3 +122,36 @@ textarea:focus {
 .sentences > .card {
     padding: 10px 14px;
 }
+
+/* ratings by the criteria of the kit, as `ratingsOf` shows them */
+.ratings {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 4px 12px;
+    margin: 8px 0;
+}
+
+.ratings dt,
+.ratings dd {
+    margin: 0;
+}
+
+.ratings dd {
+    display: flex;
+    align-items: center;
+}
+
+.meter {
+    display: inline-block;
+    width: 120px;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--border);
+    overflow: hidden;
+}
+
+.meter > span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+}

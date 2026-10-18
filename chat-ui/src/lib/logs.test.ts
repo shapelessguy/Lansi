@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { byDay, describeSource, type Log, type LogKind, matchesLog, readWhere } from "./logs";
+import { byDay, describeSource, type Log, type LogKind, matchesLog, readWhere, shortened } from "./logs";
 
 function log(more: Partial<Log>): Log {
     return {
@@ -69,5 +69,22 @@ describe("describeSource", () => {
         expect(describeSource(log({ source: { kind: "chat", id: "c1" } }))).toBe("a chat");
         expect(describeSource(log({ kind: "exercise", session: "s1", exercise: "cloze" }))).toBe("practice");
         expect(describeSource(log({}))).toBe("");
+    });
+});
+
+describe("shortened", () => {
+    it("leaves a short log whole", () => {
+        expect(shortened("One line.\nTwo lines.")).toBeNull();
+    });
+
+    it("keeps the first lines of a log of many", () => {
+        expect(shortened("1\n2\n3\n4\n5\n6")).toBe("1\n2\n3\n4\n5…");
+    });
+
+    it("cuts a log of few but long lines", () => {
+        const start = shortened("a ".repeat(300));
+
+        expect(start?.length).toBeLessThanOrEqual(401);
+        expect(start?.endsWith("…")).toBe(true);
     });
 });

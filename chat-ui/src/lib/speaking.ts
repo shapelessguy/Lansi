@@ -136,7 +136,7 @@ export interface SpeechSource {
 }
 
 /** The slot the player is shown in, in the bar of the book reader or of practice. */
-export function dockOf(place: "book" | "practice"): string {
+export function dockOf(place: "book" | "practice" | "evaluation"): string {
     return `[data-speech-dock="${place}"]`;
 }
 
@@ -158,16 +158,23 @@ export function bookSource(bookId: string, selection: BookSelection): SpeechSour
 
 /**
  * A text of an exercise of a session, which the exercise numbers `number`,
- * as something to read aloud. Its audio is kept under the session and the
- * exercise together.
+ * as something to read aloud, with the player in the bar of practice or of
+ * an evaluation. Its audio is kept under the session and the exercise
+ * together.
  */
-export function exerciseSource(sessionId: string, exercise: string, number: number, text: string): SpeechSource {
+export function exerciseSource(
+    sessionId: string,
+    exercise: string,
+    number: number,
+    text: string,
+    place: "practice" | "evaluation" = "practice",
+): SpeechSource {
     return {
         base: `/sessions/${sessionId}-${exercise}`,
         wanted: { message: number, text },
         bookId: null,
         beside: null,
-        dock: dockOf("practice"),
+        dock: dockOf(place),
     };
 }
 

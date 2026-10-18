@@ -9,6 +9,17 @@ from typing import Any
 import pytest
 from storage import UserStore
 
+# What came with version 16, taken out of a store to make it as one was before.
+BEFORE_EVALUATIONS = """
+DROP TABLE evaluation_parts;
+DROP TABLE evaluations;
+ALTER TABLE sessions DROP COLUMN kind;
+ALTER TABLE session_exercises DROP COLUMN minutes;
+ALTER TABLE session_exercises DROP COLUMN started_at;
+ALTER TABLE session_exercises DROP COLUMN scores;
+ALTER TABLE session_exercises DROP COLUMN exam;
+"""
+
 
 @pytest.fixture
 def store(tmp_path: Path) -> UserStore:
@@ -333,6 +344,7 @@ def test_books_can_be_kept_where_things_were_kept_before_there_were_books(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.save_settings({"level": "B1"})
+    before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.execute("DROP TABLE books")  # noqa: SLF001
     before._db.execute("DROP TABLE book_speech")  # noqa: SLF001
     later = (
@@ -422,6 +434,7 @@ def test_sessions_can_be_kept_where_things_were_kept_before_there_were_sessions(
         "embeddings",
         "usage",
     )
+    before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     for table in later:
         before._db.execute(f"DROP TABLE {table}")  # noqa: SLF001
     before._db.execute("PRAGMA user_version = 5")  # noqa: SLF001
@@ -440,6 +453,7 @@ def test_usage_can_be_kept_where_things_were_kept_before_there_was_usage(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.save_settings({"level": "B1"})
+    before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.execute("DROP TABLE written")  # noqa: SLF001
     before._db.execute("DROP TABLE grades")  # noqa: SLF001
     before._db.execute("DROP TABLE usage")  # noqa: SLF001
@@ -462,6 +476,7 @@ def test_the_texts_kept_before_are_dropped_and_sessions_kept(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.start_session("s1", "German", "lesson", [], {"cloze": 3})
+    before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.execute("DROP TABLE written")  # noqa: SLF001
     before._db.execute("DROP TABLE grades")  # noqa: SLF001
     before._db.execute(  # noqa: SLF001
@@ -507,22 +522,29 @@ def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> Non
         "lessons": [],
         "topics": ["t1"],
         "started_at": 10.0,
-        "finished_at": 20.0,
+        "finished_at": 30.0,
         "status": "abandoned",
         "words": None,
         "mix_topics": False,
+        "kind": "practice",
         "exercises": {"cloze": 3, "translation": 2},
         "guidance": {"cloze": "", "translation": ""},
         "options": {"cloze": {}, "translation": {}},
+        "minutes": {"cloze": 0, "translation": 0},
+        "exams": {"cloze": "", "translation": ""},
         "progress": {
             "cloze": {
                 "status": "started",
                 "answered": 1,
+                "started_at": 20.0,
+                "scores": None,
                 "results": {"right": 0, "partial": 1, "wrong": 0},
             },
             "translation": {
                 "status": "pending",
                 "answered": 0,
+                "started_at": None,
+                "scores": None,
                 "results": {"right": 0, "partial": 0, "wrong": 0},
             },
         },
@@ -648,6 +670,7 @@ def test_a_log_can_be_kept_where_findings_were_left_naming_the_logs_before(
     tmp_path: Path,
 ) -> None:
     before = UserStore(tmp_path / "ada")
+    before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.executescript(  # noqa: SLF001
         "CREATE TABLE findings (id INTEGER PRIMARY KEY,"
         " log_id INTEGER NOT NULL REFERENCES logs (id) ON DELETE CASCADE);"
@@ -668,6 +691,7 @@ def test_the_logs_of_exercises_are_among_those_of_everything_once_logs_are_of_mo
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.start_session("s1", "German", "trennbare-verben", [], {"cloze": 3})
+    before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.executescript(  # noqa: SLF001
         "DROP TABLE logs;"
         " CREATE TABLE logs (session_id TEXT NOT NULL REFERENCES sessions (id)"
@@ -742,3 +766,74 @@ def test_a_log_of_no_kind_there_is_is_refused(store: UserStore) -> None:
         store.add_log("exercise", "German", "cloze", "Done.")
     with pytest.raises(ValueError):
         store.add_log("dream", "German", "cloze", "Done.")
+
+
+def test_a_session_of_an_exam_runs_beside_one_of_practice_and_is_not_listed_with_them(
+    store: UserStore,
+) -> None:
+    store.start_session("s1", "German", "lesson", [], {"cloze": 3})
+
+    store.start_session(
+        "s2", "German", "", [], {"comprehension": 2}, exams={"comprehension": "Teil 1"}
+    )
+
+    assert [session["id"] for session in store.sessions()] == ["s1"]
+    assert [session["id"] for session in store.sessions("evaluation")] == ["s2"]
+    found = store.session("s1")
+    assert found and found["status"] == "running"
+
+
+def test_what_is_written_in_an_exam_is_not_taken_into_the_vocabulary(
+    store: UserStore,
+) -> None:
+    store.start_session("s1", "German", "", [], {"writing": 1}, exams={"writing": "x"})
+    store.add_written("s1", "writing", {"user": ["Ich bin krank."]})
+    store.end_session("s1", "finished")
+
+    assert store.unprocessed(float("inf")) == []
+
+
+def test_an_evaluation_keeps_its_plan_the_sessions_of_its_parts_and_what_it_came_to(
+    tmp_path: Path,
+) -> None:
+    times = iter([10.0, 20.0, 30.0, 40.0])
+    store = UserStore(tmp_path / "ada", now=lambda: next(times))
+    plan = {
+        "exam": "A1",
+        "pass": {"total": 60},
+        "modules": [],
+        "parts": [{"module": "lesen"}],
+    }
+    store.start_evaluation("e1", "German", "A1", 2, True, plan)
+    store.start_session(
+        "s1", "German", "", [], {"comprehension": 2}, exams={"comprehension": "x"}
+    )
+
+    store.add_part("e1", 0, "s1")
+    store.end_evaluation("e1", "finished", {"scores": {"lesen": 80}, "passed": None})
+
+    assert store.evaluation("e1") == {
+        "id": "e1",
+        "language": "German",
+        "level": "A1",
+        "length": 2,
+        "timed": True,
+        "plan": plan,
+        "status": "finished",
+        "started_at": 10.0,
+        "finished_at": 30.0,
+        "result": {"scores": {"lesen": 80}, "passed": None},
+        "sessions": {"0": "s1"},
+    }
+
+
+def test_a_new_evaluation_abandons_the_one_that_was_running(store: UserStore) -> None:
+    plan = {"parts": [{"module": "lesen"}]}
+    store.start_evaluation("e1", "German", "A1", 2, True, plan)
+
+    store.start_evaluation("e2", "German", "A2", 1, False, plan)
+
+    assert [(each["id"], each["status"]) for each in store.evaluations()] == [
+        ("e2", "running"),
+        ("e1", "abandoned"),
+    ]

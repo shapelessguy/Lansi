@@ -18,6 +18,7 @@ from typing import Any
 
 from intake import Chat, read_usage, send_chat
 from profiling import Profile, ProfileError
+from prompts import PROMPTS
 from sentences import split_sentences
 
 # How many sentences before those the selection is in are given with it.
@@ -38,30 +39,6 @@ DEFAULT_INTO = "English"
 NO_THINKING = {"reasoning": {"enabled": False}}
 # what the selection is put between in the passage the model is given
 MARKS = ("[[", "]]")
-
-TRANSLATING = """\
-You translate for someone who is learning {language}. You are given a passage \
-in which a selection is marked with [[ and ]]. Translate the selection, and \
-only the selection, into {into}, as it is meant in the passage. If the \
-selection is in {into} already, translate it into {language} instead.
-
-Reply with the translation alone: no quotation marks, no brackets, no notes, \
-no alternatives, and nothing of the rest of the passage."""
-
-CHATTING = """\
-You help someone who is learning {language} with something they are reading. \
-They selected part of a passage and were given a translation of it into \
-{into}. Answer what they ask about it. Be brief, and write in {into} unless \
-they write to you in another language.
-
-The passage, with the selection marked with [[ and ]]:
-{passage}
-
-The selection:
-{selection}
-
-The translation they were given:
-{translation}"""
 
 
 class TranslationError(Exception):
@@ -160,7 +137,7 @@ class Translator:
         learning `language`, with what asking for it used. Raises
         TranslationError."""
         return self._ask(
-            TRANSLATING.format(language=language, into=into),
+            PROMPTS("translating.translating", language=language, into=into),
             [{"role": "user", "content": passage.marked()}],
             api_key,
             model,
@@ -180,7 +157,8 @@ class Translator:
         """What the model says to the last of `messages`, which are what was
         asked and answered so far about the selection of `passage` and the
         `translation` given of it. Raises TranslationError."""
-        instructions = CHATTING.format(
+        instructions = PROMPTS(
+            "translating.chatting",
             language=language,
             into=into,
             passage=passage.marked(),

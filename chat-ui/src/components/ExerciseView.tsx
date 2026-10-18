@@ -18,6 +18,8 @@ interface Props {
     onFinish: () => void;
     /** Has a text of the exercise read aloud, which it numbers `number`. */
     onReadAloud: (text: string, number: number) => void;
+    /** The exercise is shown, which is when its time starts. */
+    onStarted?: () => void;
 }
 
 /** How tall the room for the exercise is while it is being made, in pixels. */
@@ -29,7 +31,7 @@ const WAITING_HEIGHT = 240;
  * describes.
  */
 export function ExerciseView(
-    { sessionId, exercise, theory = false, learner, onUsage, onFinish, onReadAloud }: Props,
+    { sessionId, exercise, theory = false, learner, onUsage, onFinish, onReadAloud, onStarted }: Props,
 ) {
     const host = useRef<HTMLDivElement>(null);
     const [error, setError] = useState<string | null>(null);
@@ -38,8 +40,8 @@ export function ExerciseView(
     const [rendered, setRendered] = useState(false);
     // counted up to start again after a failure
     const [attempt, setAttempt] = useState(0);
-    const latest = useRef({ learner, onUsage, onFinish, onReadAloud });
-    latest.current = { learner, onUsage, onFinish, onReadAloud };
+    const latest = useRef({ learner, onUsage, onFinish, onReadAloud, onStarted });
+    latest.current = { learner, onUsage, onFinish, onReadAloud, onStarted };
 
     useEffect(() => {
         const element = host.current;
@@ -80,6 +82,7 @@ export function ExerciseView(
             unmount = ui.mount(root, kit);
             show(first);
             setRendered(true);
+            latest.current.onStarted?.();
         }).catch((failed: Error) => {
             if (!gone) {
                 setError(failed.message);

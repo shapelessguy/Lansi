@@ -24,6 +24,7 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image, ImageDraw, ImageFilter
 from profiling import Profile, ProfileError, post
+from prompts import PROMPTS
 from storage import UserStore
 
 IMAGES_ENDPOINT = "https://openrouter.ai/api/v1/images"
@@ -42,10 +43,6 @@ MIN_WORDS = 20
 TIMEOUT_SECS = 60
 WITHIN_SECS = 180
 
-# Only the thing itself is asked for. It is drawn on white, which is taken
-# away after, as image models cannot draw on nothing: what is shown is the
-# symbol alone, which fills the place of the icon.
-ICON_PROMPT = """{topic}: one simple, bold symbol of it, alone on plain white. Flat colours, strong shapes. No text, letters or numbers."""
 # how big an icon is kept, on each side, in pixels; it is shown far smaller
 ICON_SIZE = 256
 # How far from white a colour of the background may be and still be taken
@@ -200,7 +197,7 @@ def make_icon(
     """An icon for `topic`, as the bytes of a PNG of the symbol alone with
     the kind of file it is, and what making it used. Raises ProfileError."""
     picture, _, used = draw(
-        ICON_PROMPT.format(topic=topic_text(topic)), api_key, model, "1:1", send
+        PROMPTS("topics.icon", topic=topic_text(topic)), api_key, model, "1:1", send
     )
     return clear_background(picture), "image/png", used
 

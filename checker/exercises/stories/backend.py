@@ -39,6 +39,8 @@ from kit import (
     grade_of,
     level_of,
     option,
+    prompts_beside,
+    score_of,
     serve,
     written,
 )
@@ -55,66 +57,8 @@ MAX_ANSWER_LENGTH = 1000
 MAX_RETELLING_LENGTH = 4000
 MODES = ("questions", "retell", "read")
 
-MAKING = """\
-You write short stories for someone learning {language}. Write a story in \
-{language} of about {length} words, with a title, about the topics below, \
-that uses the rules below several times, where they come naturally. {level}
-
-{lesson}
-{topics}
-{words}{guidance}{made}
-Make it a story, with someone it happens to, something that happens and an \
-end, told in plain paragraphs, with no headings or lists.{asking}
-
-Reply with JSON alone: {{"title": "...", "text": "..."{shape}}}"""
-
-ASKING = """
-
-Then write {count} questions on the story in {language}, at the \
-learner's level, each answered by the story in a short sentence, with that \
-answer."""
-
-ASKED_SHAPE = ', "questions": [{"question": "...", "answer": "..."}]'
-
-JUDGING_ANSWERS = """\
-You check the answers of someone learning {language} at level {level} to \
-questions on a story they read. The story:
-
-{story}
-
-The questions, each with the answer the story gives and the learner's:
-
-{answers}
-
-Judge each answer of the learner, not how close it is to the one given: \
-another wording that is right is right. "right" if it answers the question \
-as the story does, in correct {language}; "partial" if it does with small \
-mistakes, or answers it in part; "wrong" if it does not answer it as the \
-story does. The correction is the learner's answer with as few changes as \
-make it right, or "" if it is right. The note says in a sentence of {into} \
-what was wrong, or "" if nothing was.
-
-Reply with JSON alone, with a verdict for each answer in turn: \
-{{"verdicts": [{{"result": "...", "correction": "...", "note": "..."}}]}}"""
-
-JUDGING_RETELLING = """\
-You check how someone learning {language} at level {level} retold a story \
-they read. The story:
-
-{story}
-
-What the learner wrote:
-
-{retelling}
-
-"right" if it tells what happens in the story, without getting any of it \
-wrong, in correct {language}; "partial" if it has mistakes of language, or \
-leaves out or gets wrong some of what happens; "wrong" if it does not tell \
-the story. The correction is what the learner wrote with as few changes as \
-make it right, or "" if it is right. The note says in a sentence or two of \
-{into} what was wrong, or "" if nothing was.
-
-Reply with JSON alone: {{"result": "...", "correction": "...", "note": "..."}}"""
+# what the exercise tells the models, by name
+PROMPTS = prompts_beside(__file__)
 
 
 def mode_of(context: dict[str, Any]) -> str:
@@ -142,10 +86,7 @@ def describe_stories(stories: list[dict[str, Any]]) -> str:
     if not stories:
         return ""
     listed = "\n".join(f"- {story['title']}" for story in stories)
-    return (
-        "\nStories written already in this exercise. Write another one, with"
-        f" other people, things and happenings:\n{listed}\n"
-    )
+    return f"\n{PROMPTS('made', listed=listed)}\n"
 
 
 def _text(value: Any) -> str:
@@ -197,7 +138,8 @@ def make_story(context: dict[str, Any], state: dict[str, Any], model: Model) -> 
     if len(stories) > len(state["done"]) or len(stories) >= context["instances"]:
         return
     mode = mode_of(context)
-    prompt = MAKING.format(
+    prompt = PROMPTS(
+        "making",
         language=context["language"],
         length=length_of(context),
         level=describe_level(context),
@@ -206,10 +148,12 @@ def make_story(context: dict[str, Any], state: dict[str, Any], model: Model) -> 
         words=describe_words(context),
         guidance=describe_guidance(context),
         made=describe_stories(stories),
-        asking=ASKING.format(language=context["language"], count=questions_of(context))
+        asking=PROMPTS(
+            "asking", language=context["language"], count=questions_of(context)
+        )
         if mode == "questions"
         else "",
-        shape=ASKED_SHAPE if mode == "questions" else "",
+        shape=PROMPTS("asked_shape") if mode == "questions" else "",
     )
     reply = ask_json(model, [{"role": "user", "content": prompt}])
     stories.append(read_story(reply, mode, questions_of(context)))
@@ -226,12 +170,17 @@ def judge_answers(
     verdicts: dict[int, tuple[str, str, str]] = {}
     if given:
         listed = "\n\n".join(
-            f"{place}. {questions[number]['question']}\n"
-            f"Answer: {questions[number]['answer']}\n"
-            f"Learner: {answers[number]}"
+            PROMPTS(
+                "answer",
+                number=place,
+                question=questions[number]["question"],
+                answer=questions[number]["answer"],
+                given=answers[number],
+            )
             for place, number in enumerate(given, 1)
         )
-        prompt = JUDGING_ANSWERS.format(
+        prompt = PROMPTS(
+            "judging_answers",
             language=context["language"],
             level=level_of(context),
             story=story["text"],
@@ -263,7 +212,8 @@ def judge_retelling(
 ) -> dict[str, str]:
     """What the learner is told of how they retold a story. Raises
     ModelError."""
-    prompt = JUDGING_RETELLING.format(
+    prompt = PROMPTS(
+        "judging_retelling",
         language=context["language"],
         level=level_of(context),
         story=story["text"],
@@ -426,6 +376,11 @@ def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
         {"story": story, **answered}
         for story, answered in zip(state["stories"], state["done"])
     ]
+    # each question answered counts as reading, and a retelling as writing
+    score = score_of(
+        [each["result"] for answered in state["done"] for each in answered["feedback"]]
+    )
+    skill = {"questions": "lesen", "retell": "schreiben"}.get(mode_of(context))
     return Step(
         state=state,
         results={
@@ -433,6 +388,7 @@ def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
             "mode": mode_of(context),
             "total": context["instances"],
         },
+        scores=None if score is None or skill is None else {skill: score},
     )
 
 

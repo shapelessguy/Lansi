@@ -14,10 +14,16 @@ export const WHERE_ATTRIBUTE = "data-where";
 export type Where =
     | { kind: "book"; id: string; title: string; page: number }
     | { kind: "chat"; id: string }
-    | { kind: "exercise"; session: string; exercise: string };
+    | { kind: "exercise"; session: string; exercise: string }
+    | { kind: "evaluation"; evaluation: string; level: string };
 
 /** What the logs are of. */
-export const LOG_KINDS = { exercise: "Exercise", translation: "Translation", question: "Question" } as const;
+export const LOG_KINDS = {
+    exercise: "Exercise",
+    translation: "Translation",
+    question: "Question",
+    evaluation: "Evaluation",
+} as const;
 export type LogKind = keyof typeof LOG_KINDS;
 
 /**
@@ -36,8 +42,33 @@ export interface Log {
     /** The session and the exercise, for the log of an exercise. */
     session: string | null;
     exercise: string | null;
-    /** Where else it was done, with the id of the log of the translation for a question about one. */
-    source: Partial<Where> & { translation?: number };
+    /**
+     * Where else it was done, with the id of the log of the translation for a
+     * question about one, and the scores of an evaluation.
+     */
+    source: Partial<Where> & {
+        translation?: number;
+        level?: string;
+        scores?: Record<string, number | null>;
+        passed?: boolean | null;
+    };
+}
+
+/** How much of a long log is shown until more is asked for: lines, and characters. */
+export const SHOWN_LINES = 5;
+export const SHOWN_CHARACTERS = 400;
+
+/**
+ * The start of what a log says, as it is shown until more is asked for,
+ * or null if it is short enough to be shown whole.
+ */
+export function shortened(content: string): string | null {
+    const lines = content.split("\n");
+    if (lines.length <= SHOWN_LINES && content.length <= SHOWN_CHARACTERS) {
+        return null;
+    }
+    const start = lines.slice(0, SHOWN_LINES).join("\n");
+    return start.length > SHOWN_CHARACTERS ? `${start.slice(0, SHOWN_CHARACTERS).trimEnd()}…` : `${start}…`;
 }
 
 /** How many logs the server sends at a time. */
@@ -104,6 +135,9 @@ export function describeSource(log: Log): string {
     }
     if (source.kind === "exercise" || log.kind === "exercise") {
         return "practice";
+    }
+    if (source.kind === "evaluation" || log.kind === "evaluation") {
+        return `an evaluation${source.level ? ` at ${source.level}` : ""}`;
     }
     return "";
 }

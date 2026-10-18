@@ -38,6 +38,8 @@ from kit import (
     grade,
     loose,
     option,
+    prompts_beside,
+    score_of,
     serve,
     written,
 )
@@ -58,68 +60,8 @@ MAX_LABEL = 80
 # how big a marker is drawn for the judge, as a part of the width
 MARKER_SIZE = 0.024
 
-PLANNING = """\
-You plan a picture for someone learning {language} at level {level}: a \
-drawing of one scene with things in it that the learner will label in \
-{language}.
-
-{topics}
-{words}{guidance}
-Choose a scene that fits the topics and has room for many things: a \
-particular place and moment, rather than the first that comes to mind for \
-the topic. Then choose \
-{count} different things in it that are concrete objects, clearly visible, \
-of a fair size and apart from one another, and whose names a learner at \
-level {level} knows or should learn.{avoid}
-
-For each thing, say in English what it is, for the illustrator, such as "a \
-wooden kitchen table". For the scene, say in English what the picture shows, \
-in one sentence that leaves the things out.
-
-Reply with JSON alone: {{"scene": "A sunny kitchen seen from the door.", \
-"things": ["a wooden kitchen table", "a red kettle"]}}"""
-
-DRAWING = """\
-{scene} In it, each clearly visible, once, and apart from the others: \
-{things}. A clear, colourful illustration. No text, letters, labels or \
-numbers."""
-
-# The boxes are asked for as Gemini models are taught to give them, which
-# they do far better than points.
-LOCATING = """\
-These are things that should be in the picture, numbered:
-{things}
-
-Detect each of them that is in the picture, and give its bounding box, tight \
-around the thing itself, as "box_2d": [ymin, xmin, ymax, xmax], each from 0 \
-to 1000 of the height or the width of the picture. Leave out a thing that is \
-not in the picture, or that cannot be told apart from the others.
-
-Reply with JSON alone: {{"boxes": [{{"n": 1, "box_2d": [520, 380, 700, 610]}}]}}"""
-
-JUDGING = """\
-Someone learning {language} at level {level} labelled the things in this \
-picture. Each thing is marked with a numbered circle, and this is what they \
-wrote for each, with what the illustrator meant to draw there:
-{labels}
-
-For each number, look at the thing under its circle, and judge what was \
-written as its name in {language}:
-- "right": a correct name of that thing, with the right article if \
-{language} has articles. A capital first letter does not matter.
-- "partial": the right word with a small mistake, such as in its article, a \
-missing article, its spelling, umlauts or capitals; or a word so near in \
-meaning that it is not quite the name of the thing.
-- "wrong": not a name of that thing, or nothing written.
-
-For each, give also "correct": the everyday name of the thing in {language}, \
-in the singular, with its article if {language} has articles, or what was \
-written if that is right; "translation": its name in {into}; and "note": in \
-{into}, in a few words, what was not right, or "" if it was.
-
-Reply with JSON alone: {{"labels": [{{"n": 1, "result": "partial", \
-"correct": "der Pokal", "translation": "trophy", "note": "Preis is a prize, \
-the cup is der Pokal."}}]}}"""
+# what the exercise tells the models, by name
+PROMPTS = prompts_beside(__file__)
 
 
 def _level(context: dict[str, Any]) -> str:
@@ -138,10 +80,7 @@ def describe_words(context: dict[str, Any]) -> str:
     given = words["lemmas"]
     chosen = sorted(random.sample(range(len(given)), min(SHOWN_WORDS, len(given))))
     lemmas = ", ".join(given[index] for index in chosen)
-    return (
-        "Some words the learner knows. Choose things that are named by these"
-        f" words where they fit the scene:\n{lemmas}\n"
-    )
+    return f"{PROMPTS('words', lemmas=lemmas)}\n"
 
 
 def read_plan(reply: Any) -> tuple[str, list[dict[str, Any]]]:
@@ -294,16 +233,11 @@ def make_picture(
     before and with none of the things `drawn` in them. Raises ModelError."""
     avoid = ""
     if scenes:
-        avoid += (
-            " The learner has had pictures of these scenes already; choose one"
-            f" clearly different from all of them: {'; '.join(scenes)}."
-        )
+        avoid += " " + PROMPTS("avoid.scenes", scenes="; ".join(scenes))
     if drawn:
-        avoid += (
-            " None of these may be in the picture, under any name, as the learner"
-            f" has labelled them already: {'; '.join(drawn)}."
-        )
-    plan = PLANNING.format(
+        avoid += " " + PROMPTS("avoid.drawn", drawn="; ".join(drawn))
+    plan = PROMPTS(
+        "planning",
         language=context["language"],
         level=_level(context),
         topics=describe_topics(context),
@@ -317,7 +251,7 @@ def make_picture(
     except ModelError as error:
         raise ModelError(f"planning the picture: {error}") from None
     listed = ", ".join(thing["thing"] for thing in things)
-    image = model.draw(DRAWING.format(scene=scene, things=listed), ASPECT_RATIO)
+    image = model.draw(PROMPTS("drawing", scene=scene, things=listed), ASPECT_RATIO)
     picture: dict[str, Any] = {
         "image": image,
         "scene": scene,
@@ -345,7 +279,7 @@ def locate(model: Model, picture: dict[str, Any]) -> None:
     try:
         reply = ask_json(
             model,
-            [_with_picture(LOCATING.format(things=numbered), picture["image"])],
+            [_with_picture(PROMPTS("locating", things=numbered), picture["image"])],
             look=True,
         )
         found = read_points(reply, picture["planned"])
@@ -428,8 +362,9 @@ def judge(
     lines = []
     for number, (item, label) in enumerate(zip(picture["items"], picture["labels"]), 1):
         given = json.dumps(label, ensure_ascii=False) if label else "(nothing)"
-        lines.append(f"{number}. {given} (the illustrator meant: {item['thing']})")
-    prompt = JUDGING.format(
+        lines.append(PROMPTS("label", number=number, given=given, thing=item["thing"]))
+    prompt = PROMPTS(
+        "judging",
         language=context["language"],
         level=_level(context),
         labels="\n".join(lines),
@@ -578,11 +513,14 @@ def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
         except ModelError:
             pass
     done = state["done"] + _done(picture)
+    # each thing that was judged counts
+    score = score_of([item["judged"]["result"] for item in done if item["judged"]])
     return Step(
         state=state,
         graded=graded,
         results={"items": done, "pictures": state["drawn"]},
         written=said,
+        scores=None if score is None else {"wortschatz": score},
     )
 
 

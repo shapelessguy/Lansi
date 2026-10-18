@@ -1,0 +1,50 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+# What the translation exercise tells the models, as checker/prompts.py
+# describes. $level, $lesson, $topics, $words, $guidance and $made are the
+# pieces of `kit` in checker/prompts.toml.
+
+# what makes a set of sentences to translate
+making = """
+You write translation exercises for someone learning $language. Write \
+$count different sentences in $into which, translated into $language, \
+need the rules below, and keep to the topics below. $level
+
+$lesson
+$topics
+$words$guidance$made
+
+Give each sentence with a good translation into $language.
+
+Reply with JSON alone: {"items": [{"source": "...", "reference": "..."}]}"""
+
+# What judges the translations of a set, each a `sentence` as $sentences,
+# with a blank line between them.
+judging = """
+You check translations by someone learning $language at level $level. \
+The lesson they practise:
+
+$lesson
+
+The sentences, each in $into, with a good translation and the learner's:
+
+$sentences
+
+Judge each translation of the learner, not how close it is to the good one: \
+another wording that is right is right. "right" if it is correct $language \
+and means the sentence, "partial" if it has small mistakes, "wrong" if it \
+has mistakes in the rules of the lesson or does not mean the sentence. The \
+correction is the learner's translation with as few changes as make it \
+right, or "" if it is right. The note says in a sentence of $into what was \
+wrong, or "" if nothing was.
+
+Reply with JSON alone, with a verdict for each sentence in turn: \
+{"verdicts": [{"result": "...", "correction": "...", "note": "..."}]}"""
+
+
+# A sentence to translate, with a good translation and the learner's.
+sentence = """
+$number. In $into: $source
+   Good: $reference
+   The learner's: $given"""

@@ -95,6 +95,10 @@ export interface ExerciseProgress {
     answered: number;
     /** How many of the grades are of each result. */
     results: Record<Grade["result"], number>;
+    /** When it was first shown, in seconds since the epoch, or null if it was not yet. */
+    started_at: number | null;
+    /** What it scored, from 0 to 100 by what it shows, once it is finished, or null. */
+    scores: Record<string, number> | null;
 }
 
 export interface PracticeSession {
@@ -116,6 +120,10 @@ export interface PracticeSession {
     exercises: Record<string, number>;
     /** The options each exercise was chosen with, by exercise. */
     options: Record<string, Record<string, string>>;
+    /** How many minutes each exercise may take, 0 for no limit, by exercise. */
+    minutes: Record<string, number>;
+    /** "evaluation" for a part of an evaluation, which is not listed with practice. */
+    kind: "practice" | "evaluation";
     progress: Record<string, ExerciseProgress>;
 }
 
@@ -135,10 +143,13 @@ export interface Learner {
 /** How many instances of an exercise there are unless the learner says otherwise. */
 export const DEFAULT_INSTANCES = 5;
 export const MAX_INSTANCES = 50;
+/** The longest time limit an exercise may have, in minutes, as the server takes it. */
+export const MAX_MINUTES = 240;
 /** What the requests of the exercises are counted under. */
 export const USAGE_ID = "practice";
 
-async function call<Reply>(path: string, init: RequestInit = {}): Promise<Reply> {
+/** Asks the checker server, and resolves with what it replied, or rejects with why it could not. */
+export async function call<Reply>(path: string, init: RequestInit = {}): Promise<Reply> {
     let response: Response;
     try {
         response = await checkerFetch(path, init);
@@ -152,7 +163,8 @@ async function call<Reply>(path: string, init: RequestInit = {}): Promise<Reply>
     return reply;
 }
 
-function posting(body: object, learner?: Learner): RequestInit {
+/** A POST of `body`, with the models of `learner` and who they are, if given. */
+export function posting(body: object, learner?: Learner): RequestInit {
     return {
         method: "POST",
         // the server asks the model with the key; it is not kept there
@@ -222,9 +234,19 @@ export function startSession(
     choosing: Choosing,
     apiKey: string,
     options: Record<string, Record<string, OptionValue>> = {},
+    minutes: Record<string, number> = {},
 ): Promise<PracticeSession & { usage: ProfileUsage[] }> {
     const chosenOptions = Object.fromEntries(Object.entries(options).filter(([id]) => id in exercises));
-    const init = posting({ language, lesson: lesson ?? "", topics, exercises, options: chosenOptions, ...choosing });
+    const chosenMinutes = Object.fromEntries(Object.entries(minutes).filter(([id]) => id in exercises));
+    const init = posting({
+        language,
+        lesson: lesson ?? "",
+        topics,
+        exercises,
+        options: chosenOptions,
+        minutes: chosenMinutes,
+        ...choosing,
+    });
     return call("/sessions", { ...init, headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {} });
 }
 
@@ -373,6 +395,27 @@ export function endSession(
 /** What a request of an exercise used, as the usage is counted. */
 export function practiceUsage(used: ProfileUsage, at: number): UsageEntry {
     return profileUsage(used, at, "practice", USAGE_ID);
+}
+
+/**
+ * How many seconds are left of the time an exercise of a session has, at
+ * `now` in milliseconds, or null if it has no limit or has not started.
+ */
+export function secondsLeft(session: PracticeSession, exercise: string, now: number): number | null {
+    const limit = session.minutes?.[exercise] ?? 0;
+    const started = session.progress[exercise]?.started_at ?? null;
+    if (!limit || started === null) {
+        return null;
+    }
+    return Math.max(0, Math.round(started + 60 * limit - now / 1000));
+}
+
+/** A time left, such as 4:05 or 1:02:30. */
+export function clock(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const rest = String(seconds % 60).padStart(2, "0");
+    return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
 }
 
 /** The number of instances that can be had, from what was typed. */

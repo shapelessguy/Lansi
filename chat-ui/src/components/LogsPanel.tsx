@@ -12,6 +12,7 @@ import {
     type LogKind,
     LOGS_AT_A_TIME,
     matchesLog,
+    shortened,
 } from "../lib/logs";
 
 interface Props {
@@ -42,6 +43,16 @@ export function LogsPanel({ active, revision, onOpenBook }: Props) {
     const [state, setState] = useState<State>({ status: "loading" });
     const [kinds, setKinds] = useState<ReadonlySet<LogKind>>(() => new Set(Object.keys(LOG_KINDS) as LogKind[]));
     const [query, setQuery] = useState("");
+    // the long logs shown whole, by their ids
+    const [opened, setOpened] = useState<ReadonlySet<number>>(new Set());
+
+    function toggleOpened(id: number) {
+        const next = new Set(opened);
+        if (!next.delete(id)) {
+            next.add(id);
+        }
+        setOpened(next);
+    }
 
     const load = useCallback(() => {
         let stopped = false;
@@ -115,14 +126,30 @@ export function LogsPanel({ active, revision, onOpenBook }: Props) {
                                 {logs.map((log) => {
                                     const where = describeSource(log);
                                     const { source } = log;
+                                    const start = shortened(log.content);
+                                    const whole = opened.has(log.id);
                                     return (
-                                        <li key={log.id} className={`log-entry ${log.kind}`}>
+                                        <li
+                                            key={log.id}
+                                            className={`log-entry ${log.kind}${whole ? " opened" : ""}`}
+                                        >
                                             <div className="log-head">
                                                 <span className="log-kind">{LOG_KINDS[log.kind] ?? log.kind}</span>
-                                                <span className="log-subject">{log.subject}</span>
+                                                <span className="log-subject" title={log.subject}>
+                                                    {log.subject}
+                                                </span>
                                                 <span className="log-time">{time(log.writtenAt)}</span>
                                             </div>
-                                            <p className="log-content">{log.content}</p>
+                                            <p className="log-content">{start && !whole ? start : log.content}</p>
+                                            {start && (
+                                                <button
+                                                    className="link log-toggle"
+                                                    aria-expanded={whole}
+                                                    onClick={() => toggleOpened(log.id)}
+                                                >
+                                                    {whole ? "Show less" : "Show more"}
+                                                </button>
+                                            )}
                                             {where && (
                                                 <p className="log-where">
                                                     {source.kind === "book" && source.id

@@ -1,0 +1,89 @@
+# Copyright: Ankitects Pty Ltd and contributors
+# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+# What the stories exercise tells the models, as checker/prompts.py
+# describes. $level, $lesson, $topics, $words and $guidance are the pieces
+# of `kit` in checker/prompts.toml.
+
+# What writes a story: $made is `made` when stories were written before,
+# and, when questions are to be answered on it, $asking is `asking` and
+# $shape is `asked_shape`.
+making = """
+You write short stories for someone learning $language. Write a story in \
+$language of about $length words, with a title, about the topics below, \
+that uses the rules below several times, where they come naturally. $level
+
+$lesson
+$topics
+$words$guidance$made
+Make it a story, with someone it happens to, something that happens and an \
+end, told in plain paragraphs, with no headings or lists.$asking
+
+Reply with JSON alone: {"title": "...", "text": "..."$shape}"""
+
+# The stories written before, their titles one to a line as $listed.
+made = """
+Stories written already in this exercise. Write another one, with \
+other people, things and happenings:
+$listed"""
+
+# what the reply has besides, when questions are asked
+asked_shape = ', "questions": [{"question": "...", "answer": "..."}]'
+
+# what asks for questions on the story, after a blank line
+asking = """
+
+
+Then write $count questions on the story in $language, at the \
+learner's level, each answered by the story in a short sentence, with that \
+answer."""
+
+# What judges the answers to the questions on a story, each an `answer` as
+# $answers, with a blank line between them.
+judging_answers = """
+You check the answers of someone learning $language at level $level to \
+questions on a story they read. The story:
+
+$story
+
+The questions, each with the answer the story gives and the learner's:
+
+$answers
+
+Judge each answer of the learner, not how close it is to the one given: \
+another wording that is right is right. "right" if it answers the question \
+as the story does, in correct $language; "partial" if it does with small \
+mistakes, or answers it in part; "wrong" if it does not answer it as the \
+story does. The correction is the learner's answer with as few changes as \
+make it right, or "" if it is right. The note says in a sentence of $into \
+what was wrong, or "" if nothing was.
+
+Reply with JSON alone, with a verdict for each answer in turn: \
+{"verdicts": [{"result": "...", "correction": "...", "note": "..."}]}"""
+
+# what judges how the learner retold a story
+judging_retelling = """
+You check how someone learning $language at level $level retold a story \
+they read. The story:
+
+$story
+
+What the learner wrote:
+
+$retelling
+
+"right" if it tells what happens in the story, without getting any of it \
+wrong, in correct $language; "partial" if it has mistakes of language, or \
+leaves out or gets wrong some of what happens; "wrong" if it does not tell \
+the story. The correction is what the learner wrote with as few changes as \
+make it right, or "" if it is right. The note says in a sentence or two of \
+$into what was wrong, or "" if nothing was.
+
+Reply with JSON alone: {"result": "...", "correction": "...", "note": "..."}"""
+
+# A question on the story, with the answer the story gives and the
+# learner's.
+answer = """
+$number. $question
+Answer: $answer
+Learner: $given"""
