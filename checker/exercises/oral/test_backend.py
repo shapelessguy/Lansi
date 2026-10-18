@@ -28,7 +28,7 @@ TASK = {
     ],
 }
 RATED = {
-    "ratings": {"aufgabe": 4, "wortschatz": 2, "strukturen": 2},
+    "ratings": {"task": 4, "vocabulary": 2, "structures": 2},
     "corrections": ["", "Ich trinke gern Tee."],
     "note": "The verb is second.",
 }
@@ -95,8 +95,8 @@ def test_speaking_scores_the_ratings_without_pronunciation() -> None:
     scores = finish(CONTEXT, state, model).scores
 
     assert scores == {
-        "sprechen": 66.7,
-        "aufgabe": 100.0,
-        "wortschatz": 50.0,
-        "strukturen": 50.0,
+        "speaking": 66.7,
+        "task": 100.0,
+        "vocabulary": 50.0,
+        "structures": 50.0,
     }

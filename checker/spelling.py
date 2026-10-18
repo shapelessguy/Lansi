@@ -90,7 +90,8 @@ class Speller:
 
 def _with_capital_of(word: str, suggestion: str) -> str:
     """The dictionary is in lower case, so a suggestion for a capitalised word,
-    such as a German noun, is given its capital back."""
+    such as a noun of a language that writes nouns so, is given its capital
+    back."""
     return suggestion.capitalize() if word[0].isupper() else suggestion
 
 

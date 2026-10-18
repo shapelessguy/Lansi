@@ -5,9 +5,10 @@
 lesson, and checked against what the model meant to go into each gap.
 
 A sentence is written with its gaps in brackets, such as
-`Ich [stehe] um 6 Uhr [auf].`, and a gap that takes more than one answer
+`I [get] [up] at six.`, and a gap that takes more than one answer
 lists them with `|`. A sentence is right if every gap is, partial if some
-are, or if they differ only in capitals or umlauts, and wrong otherwise.
+are, or if they differ only in capitals, in the marks on letters or in the
+letters of the language written otherwise, and wrong otherwise.
 
 An instance is a set of sentences, as many as the option `sentences` says,
 shown and checked together, and graded once. The sets are made one at a time: the first when the
@@ -39,7 +40,9 @@ from kit import (
     describe_words,
     grade,
     grade_of,
+    letters_of,
     loose,
+    marks_of,
     option,
     prompts_beside,
     score_of,
@@ -96,9 +99,15 @@ def fills(answers: list[str]) -> str:
     return GAPS_JOINED.join(" ".join(answer.split()) or "(empty)" for answer in answers)
 
 
-def judge(text: str, given: list[str]) -> tuple[str, str]:
+def judge(
+    text: str,
+    given: list[str],
+    letters: dict[str, str] | None = None,
+    marks: str = "accents",
+) -> tuple[str, str]:
     """Whether what was given for the gaps of a sentence is right, partial
-    or wrong, with a note on a gap that is almost right."""
+    or wrong, with a note on a gap that is almost right: one that is right
+    but for its capitals, its `marks` or its `letters`, as `loose` has them."""
     gaps = answers_of(text)
     exact = near = 0
     almost = []
@@ -106,10 +115,12 @@ def judge(text: str, given: list[str]) -> tuple[str, str]:
         answer = " ".join(answer.split())
         if answer in accepted:
             exact += 1
-        elif answer and loose(answer) in {loose(each) for each in accepted}:
+        elif answer and loose(answer, letters) in {
+            loose(each, letters) for each in accepted
+        }:
             near += 1
             almost.append(f"{answer} → {accepted[0]}")
-    note = f"capitals or umlauts: {', '.join(almost)}" if almost else ""
+    note = f"capitals or {marks}: {', '.join(almost)}" if almost else ""
     if exact == len(gaps):
         return "right", note
     if exact or near:
@@ -117,21 +128,24 @@ def judge(text: str, given: list[str]) -> tuple[str, str]:
     return "wrong", note
 
 
-def hints_of(text: str, hints: Any) -> list[str]:
+def hints_of(text: str, hints: Any, letters: dict[str, str] | None = None) -> list[str]:
     """A hint for each gap of a sentence, from those the model gave: empty
-    where it gave none, or one that is what goes into the gap, but for
-    capitals and umlauts, as that would give the answer away."""
+    where it gave none, or one that is what goes into the gap, as `loose`
+    has it with the `letters` of the language, as that would give the
+    answer away."""
     given = hints if isinstance(hints, list) else []
     kept = []
     for number, accepted in enumerate(answers_of(text)):
         hint = given[number] if number < len(given) else ""
         hint = " ".join(hint.split()) if isinstance(hint, str) else ""
-        answers = {loose(answer) for answer in accepted}
-        kept.append("" if loose(hint) in answers else hint)
+        answers = {loose(answer, letters) for answer in accepted}
+        kept.append("" if loose(hint, letters) in answers else hint)
     return kept
 
 
-def read_items(reply: Any, count: int = SENTENCES) -> list[dict[str, Any]]:
+def read_items(
+    reply: Any, count: int = SENTENCES, letters: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     """The sentences the model made, those with a gap and no more than
     `count`. Raises ModelError if there are none."""
     listed = reply.get("items") if isinstance(reply, dict) else None
@@ -144,7 +158,7 @@ def read_items(reply: Any, count: int = SENTENCES) -> list[dict[str, Any]]:
         items.append(
             {
                 "text": item["text"].strip(),
-                "hints": hints_of(item["text"], item.get("hints")),
+                "hints": hints_of(item["text"], item.get("hints"), letters),
                 "translation": str(item.get("translation") or ""),
             }
         )
@@ -181,13 +195,13 @@ def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> No
         into=context["into"],
     )
     reply = ask_json(model, [{"role": "user", "content": prompt}])
-    sets.append(read_items(reply, sentences_of(context)))
+    sets.append(read_items(reply, sentences_of(context), letters_of(context)))
 
 
-def check(text: str, given: list[str]) -> dict[str, str]:
+def check(context: dict[str, Any], text: str, given: list[str]) -> dict[str, str]:
     """What the learner is told of the answers given for the gaps of a
     sentence, which is graded as it is."""
-    result, note = judge(text, given)
+    result, note = judge(text, given, letters_of(context), marks_of(context))
     correct = filled(text, [gap[0] for gap in answers_of(text)])
     answered = filled(text, given)
     return {
@@ -252,7 +266,8 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
             for given in answers
         ]
         feedback = [
-            check(item["text"], given) for item, given in zip(items, given_gaps)
+            check(context, item["text"], given)
+            for item, given in zip(items, given_gaps)
         ]
         # the learner wrote only what went into the gaps, and is graded on it
         graded = grade_of(
@@ -298,7 +313,7 @@ def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
     return Step(
         state=state,
         results={"sets": done, "total": context["instances"]},
-        scores=None if score is None else {"strukturen": score},
+        scores=None if score is None else {"structures": score},
     )
 
 

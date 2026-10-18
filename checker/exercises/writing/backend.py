@@ -3,8 +3,9 @@
 
 """Tasks of writing, made by a model, as the option `kind` says:
 
-    message     a short message to a friend, with du
-    email       an email with Sie, to a teacher, an office or a landlord
+    message     a short message to a friend, addressed informally
+    email       an email addressed formally, to a teacher, an office or a
+                landlord
     opinion     an opinion on a question, as posted in a forum
     form        a form to fill in with what a short text says
 
@@ -40,6 +41,7 @@ from kit import (
     describe_words,
     grade,
     grade_of,
+    letters_of,
     level_of,
     loose,
     option,
@@ -53,7 +55,7 @@ from kit import (
 
 KINDS = ("message", "email", "opinion", "form")
 # what is rated of what is written
-RATED = ["aufgabe", "kohaerenz", "wortschatz", "strukturen"]
+RATED = ["task", "coherence", "vocabulary", "structures"]
 WORDS = 40
 # how many fields a form has
 FIELDS = 5
@@ -186,7 +188,9 @@ def check_form(
     for number, (field, answer) in enumerate(zip(fields, answers)):
         if not answer:
             verdicts[number] = ("wrong", "")
-        elif loose(answer) == loose(field["answer"]):
+        elif loose(answer, letters_of(context)) == loose(
+            field["answer"], letters_of(context)
+        ):
             verdicts[number] = ("right", "")
     asked = [number for number in range(len(fields)) if number not in verdicts]
     if asked:
@@ -374,7 +378,7 @@ def scores_of(done: list[dict[str, Any]]) -> dict[str, float] | None:
     scores = {
         name: score for name, score in criteria_scores(rated).items() if name != "all"
     }
-    return {"schreiben": round(sum(tasks) / len(tasks), 1), **scores}
+    return {"writing": round(sum(tasks) / len(tasks), 1), **scores}
 
 
 def finish(context: dict[str, Any], state: Any, model: Model) -> Step:

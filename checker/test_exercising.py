@@ -77,7 +77,7 @@ def act(context, state, message, model):
     return Step(state=state, show=state["done"], graded=[grade("right", message)])
 
 def finish(context, state, model):
-    scores = {"lesen": 100 * state["done"] / 3} if state.get("scored") else None
+    scores = {"reading": 100 * state["done"] / 3} if state.get("scored") else None
     return Step(results={"done": state["done"]}, scores=scores)
 
 serve(start, act, finish)
@@ -338,6 +338,9 @@ def test_an_exercise_is_told_the_lesson_with_its_points(
     )
     assert context["lesson"]["id"] == LESSON
     assert context["lesson"]["points"][0]["statement"]
+    # what German does its own way with its letters, for answers to be compared by
+    assert context["letters"]["ß"] == "ss"
+    assert context["marks"] == "umlauts"
 
 
 def test_what_the_learner_and_the_models_wrote_in_a_step_is_kept(
@@ -893,9 +896,9 @@ def test_an_exercise_finished_keeps_the_scores_it_reported(practice: Practice) -
     practice.step(session["id"], "echo", "finish", None, LEARNER, answering(LOG_REPLY))
 
     found = practice._store.session(session["id"])  # noqa: SLF001
-    assert found and found["progress"]["echo"]["scores"] == {"lesen": 33.3}
+    assert found and found["progress"]["echo"]["scores"] == {"reading": 33.3}
     (log,) = practice._store.all_logs()  # noqa: SLF001
-    assert log["content"].endswith("Scores: lesen 33.3")
+    assert log["content"].endswith("Scores: reading 33.3")
 
 
 def test_an_exercise_cannot_score_what_there_is_no_score_of(practice: Practice) -> None:

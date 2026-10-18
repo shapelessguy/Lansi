@@ -240,23 +240,23 @@ def test_a_score_is_the_share_of_answers_right_one_partly_right_counting_half() 
 
 
 def test_ratings_are_kept_within_0_and_4_and_one_missing_is_a_failure() -> None:
-    ratings = read_ratings({"aufgabe": 5, "wortschatz": 2.6}, ["aufgabe", "wortschatz"])
+    ratings = read_ratings({"task": 5, "vocabulary": 2.6}, ["task", "vocabulary"])
 
-    assert ratings == {"aufgabe": 4, "wortschatz": 3}
-    with pytest.raises(ModelError, match="did not rate wortschatz"):
-        read_ratings({"aufgabe": 3}, ["aufgabe", "wortschatz"])
+    assert ratings == {"task": 4, "vocabulary": 3}
+    with pytest.raises(ModelError, match="did not rate vocabulary"):
+        read_ratings({"task": 3}, ["task", "vocabulary"])
 
 
 def test_answers_rated_3_or_more_on_average_are_right_and_from_1_5_partly() -> None:
-    assert result_of_ratings({"aufgabe": 4, "strukturen": 2}) == "right"
-    assert result_of_ratings({"aufgabe": 2, "strukturen": 1}) == "partial"
-    assert result_of_ratings({"aufgabe": 1, "strukturen": 1}) == "wrong"
+    assert result_of_ratings({"task": 4, "structures": 2}) == "right"
+    assert result_of_ratings({"task": 2, "structures": 1}) == "partial"
+    assert result_of_ratings({"task": 1, "structures": 1}) == "wrong"
 
 
 def test_the_score_of_a_criterion_is_the_share_of_the_most_of_its_ratings() -> None:
-    scores = criteria_scores([{"aufgabe": 4, "strukturen": 2}, {"aufgabe": 2}])
+    scores = criteria_scores([{"task": 4, "structures": 2}, {"task": 2}])
 
-    assert scores == {"aufgabe": 75.0, "strukturen": 50.0, "all": 66.7}
+    assert scores == {"task": 75.0, "structures": 50.0, "all": 66.7}
 
 
 def test_the_exam_is_told_only_when_the_exercise_is_part_of_one() -> None:

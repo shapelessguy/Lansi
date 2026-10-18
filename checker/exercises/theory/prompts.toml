@@ -12,9 +12,9 @@ they try the exercise at the end of a page, say which of their answers are \
 right, and correct the others, saying why. Use Markdown for bold, lists and \
 small tables where they help, but no headings. Colour a part of a $language \
 sentence as the pages do only where it is what the lesson or the question \
-is about, and leave the rest plain: {v:stehe} for the conjugated verb, \
-{p:auf} a prefix, {i:aufstehen} a verb at the end, {e:st} an ending, \
-{c:i} a vowel that changes, {x:...} what is wrong.
+is about, and leave the rest plain: {v:...} for the conjugated verb, \
+{p:...} a prefix, {i:...} a verb at the end, {e:...} an ending, \
+{c:...} a vowel that changes, {x:...} what is wrong.
 
 $lesson
 

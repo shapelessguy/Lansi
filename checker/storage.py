@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -340,6 +340,45 @@ CREATE TABLE evaluation_parts (
 );
 """
 
+# What came with version 17: the scores are named in English, by the skill
+# or the criterion they are of, not by the words of the German exams, in the
+# scores of the exercises and in the plans and the results of evaluations.
+_SCORE_NAMES = {
+    "hoeren": "listening",
+    "lesen": "reading",
+    "schreiben": "writing",
+    "sprechen": "speaking",
+    "aufgabe": "task",
+    "kohaerenz": "coherence",
+    "wortschatz": "vocabulary",
+    "strukturen": "structures",
+    "aussprache": "pronunciation",
+}
+_RENAMED_SCORES = {
+    **_SCORE_NAMES,
+    **{
+        f"{module}_{criterion}": f"{_SCORE_NAMES[module]}_{english}"
+        for module in ("schreiben", "sprechen")
+        for criterion, english in list(_SCORE_NAMES.items())[4:]
+    },
+}
+
+
+def _renaming_scores(column: str) -> str:
+    """`column`, of JSON, with every name of a score that is a string of
+    its own renamed."""
+    for old, new in _RENAMED_SCORES.items():
+        column = f"replace({column}, '\"{old}\"', '\"{new}\"')"
+    return column
+
+
+_ENGLISH_SCORES = f"""
+UPDATE session_exercises SET scores = {_renaming_scores("scores")}
+    WHERE scores IS NOT NULL;
+UPDATE evaluations SET plan = {_renaming_scores("plan")},
+    result = {_renaming_scores("result")};
+"""
+
 # what sessions are for: practice, or a part of an evaluation
 SESSION_KINDS = ("practice", "evaluation")
 
@@ -497,6 +536,8 @@ class UserStore:
                 self._db.executescript(_ACTIVITY_LOGS)
             if version < 16:
                 self._db.executescript(_EVALUATIONS)
+            if version < 17:
+                self._db.executescript(_ENGLISH_SCORES)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:

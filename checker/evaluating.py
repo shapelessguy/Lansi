@@ -1,14 +1,15 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-"""Evaluations: mock exams of a level, as the Goethe-Institut sets them,
-made of the exercises of practice.
+"""Evaluations: mock exams of a level, as the institute that examines a
+language sets them, made of the exercises of practice.
 
 The exam of each level is kept by hand in a template, for each language in
-a directory named after it by its English name, such as
-`evaluations/German/A1.json`. A template names the exam, how it is passed,
-the themes its texts are drawn from, and its modules, Hören, Lesen,
-Schreiben and Sprechen, each with how much it counts and its parts. A part
+`evaluations/` of its directory in languages/, such as
+`languages/german/evaluations/A1.json`. A template names the exam, how it
+is passed, the themes its texts are drawn from, and its modules, which are
+the skills of `MODULES`, each with what it is called in the exam, how much
+it counts and its parts. A part
 is an exercise of practice with the options it is set to, how many
 instances it has, how many minutes it takes and how many points it is worth
 in its module, as the real exam has it, with the instructions the learner
@@ -59,25 +60,27 @@ from exercising import (
     do_now,
     exercises,
 )
+from languages import LANGUAGES_DIRECTORY, directory_of
 from logs import LogError, describe_record, format_log, read_log
 from profiling import Profile
 from prompts import PROMPTS
 from storage import UserStore
 from translating import TranslationError
 
-EVALUATIONS_DIRECTORY = Path(__file__).parent / "evaluations"
+# where the directories of the languages are, each with its evaluations/
+EVALUATIONS_DIRECTORY = LANGUAGES_DIRECTORY
 LEVELS = ("A1", "A2", "B1", "B2", "C1", "C2")
 # how long an evaluation may take, in half hours
 LENGTHS = range(1, 9)
 # the modules of an exam, which are the skills the exercises score
-MODULES = ("hoeren", "lesen", "schreiben", "sprechen")
+MODULES = ("listening", "reading", "writing", "speaking")
 # how what is written or said is rated, as the exercises score it
-CRITERIA = ("aufgabe", "kohaerenz", "wortschatz", "strukturen", "aussprache")
+CRITERIA = ("task", "coherence", "vocabulary", "structures", "pronunciation")
 # the modules that are rated by the criteria
-RATED = ("schreiben", "sprechen")
+RATED = ("writing", "speaking")
 # What an evaluation scores, each from 0 to 100, or None when it was not
 # shown: each module, each criterion of the modules that are rated, such as
-# "schreiben_aufgabe", and the total.
+# "writing_task", and the total.
 SCORES = (
     *MODULES,
     *(f"{module}_{criterion}" for module in RATED for criterion in CRITERIA),
@@ -233,12 +236,9 @@ def exams(
     """The exams there are of `language`, by level. They are read again
     each time, so that a change to a template is seen at once. Raises
     EvaluationError."""
-    folder = directory / language
-    if (
-        not language
-        or not folder.is_dir()
-        or folder.resolve().parent != directory.resolve()
-    ):
+    found_directory = directory_of(language, directory)
+    folder = found_directory / "evaluations" if found_directory else None
+    if folder is None or not folder.is_dir():
         return {}
     manifests = {
         manifest.id: manifest

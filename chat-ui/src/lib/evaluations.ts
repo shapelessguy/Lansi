@@ -6,7 +6,7 @@ import { call, type Learner, posting, type PracticeSession } from "./practice";
 import type { BackgroundTask } from "./tasks";
 import { profileUsage, type UsageEntry } from "./usage";
 
-/** A module of an exam, such as Lesen, with how much it counts. */
+/** A module of an exam, such as reading, with what the exam calls it and how much it counts. */
 export interface ExamModule {
     id: string;
     title: string;
@@ -16,7 +16,7 @@ export interface ExamModule {
 /** The exam there is of a level, as its template has it. */
 export interface ExamLevel {
     level: string;
-    /** What the exam is called, such as "Goethe-Zertifikat A1: Start Deutsch 1". */
+    /** What the exam is called, as its template names it. */
     exam: string;
     /** How long it takes in full. */
     minutes: number;
@@ -71,24 +71,30 @@ export const LENGTHS = { min: 1, max: 8 } as const;
 /** What the requests of the evaluations are counted under. */
 export const USAGE_ID = "evaluations";
 
-/** The scores an evaluation has, in order, with what each is called. */
-export const SCORES: Record<string, string> = {
-    hoeren: "Hören",
-    lesen: "Lesen",
-    schreiben: "Schreiben",
-    sprechen: "Sprechen",
-    schreiben_aufgabe: "Schreiben: task",
-    schreiben_kohaerenz: "Schreiben: coherence",
-    schreiben_wortschatz: "Schreiben: vocabulary",
-    schreiben_strukturen: "Schreiben: structures",
-    schreiben_aussprache: "Schreiben: pronunciation",
-    sprechen_aufgabe: "Sprechen: task",
-    sprechen_kohaerenz: "Sprechen: coherence",
-    sprechen_wortschatz: "Sprechen: vocabulary",
-    sprechen_strukturen: "Sprechen: structures",
-    sprechen_aussprache: "Sprechen: pronunciation",
-    total: "Total",
+/** The skills an exam is made of, which are its modules, with what each is called. */
+export const MODULES: Record<string, string> = {
+    listening: "Listening",
+    reading: "Reading",
+    writing: "Writing",
+    speaking: "Speaking",
 };
+/** How what is written or said is rated, with what each criterion is called. */
+const CRITERIA: Record<string, string> = {
+    task: "task",
+    coherence: "coherence",
+    vocabulary: "vocabulary",
+    structures: "structures",
+    pronunciation: "pronunciation",
+};
+/** The modules that are rated by the criteria. */
+const RATED = ["writing", "speaking"];
+
+/** The scores an evaluation has, in order: each module, each criterion of those that are rated, and the total. */
+export const SCORES: string[] = [
+    ...Object.keys(MODULES),
+    ...RATED.flatMap((module) => Object.keys(CRITERIA).map((criterion) => `${module}_${criterion}`)),
+    "total",
+];
 
 /** A length of half hours, as it is said, such as "1 h 30 min". */
 export function describeLength(length: number): string {
@@ -107,11 +113,31 @@ export function currentPart(evaluation: Evaluation): number | null {
     return next === -1 ? null : next;
 }
 
-/** The scores that were shown, in the order of `SCORES`, each with what it is called. */
-export function shownScores(result: EvaluationResult): { name: string; label: string; value: number }[] {
-    return Object.entries(SCORES).flatMap(([name, label]) => {
+/** What a module is called in the exam of its `modules`, or else in English. */
+export function moduleTitle(modules: ExamModule[], id: string): string {
+    return modules.find((module) => module.id === id)?.title ?? MODULES[id] ?? id;
+}
+
+/**
+ * The scores that were shown, in the order of `SCORES`, each with what it is
+ * called, a module as the exam of its `modules` calls it.
+ */
+export function shownScores(
+    result: EvaluationResult,
+    modules: ExamModule[] = [],
+): { name: string; label: string; value: number }[] {
+    return SCORES.flatMap((name) => {
         const value = result.scores[name];
-        return typeof value === "number" ? [{ name, label, value }] : [];
+        if (typeof value !== "number") {
+            return [];
+        }
+        const [module, criterion] = name.split("_");
+        const label = name === "total"
+            ? "Total"
+            : criterion
+            ? `${moduleTitle(modules, module)}: ${CRITERIA[criterion] ?? criterion}`
+            : moduleTitle(modules, module);
+        return [{ name, label, value }];
     });
 }
 

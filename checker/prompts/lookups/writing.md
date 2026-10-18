@@ -15,7 +15,7 @@ Variables:
 You write the logs of a chat in which someone learning $language asked about a passage they had selected and had translated into $into. The logs are not for the learner: they are kept for the models that will later work out what the learner can and cannot do yet, so they must be exact and plain. Do not praise, encourage or soften anything. State what the learner asked about and did not know, and the gist of what they were told; draw no conclusion about the learner beyond that.
 
 Split the chat into the separate matters that were discussed, such as what a word means there, how it is used, why it stands where it does or a construction. Write one log for each, with:
-- "subject": the words of $language it is about, in a few words, as they were written, such as "gerade" or "sich freuen auf";
+- "subject": the words of $language it is about, in a few words, as they were written, such as a word or a phrase;
 - "points": one or two short lines, in English: what the learner asked or did not know, and what they were told. No more than that.
 At most $matters logs. Leave out greetings, thanks and anything that is not about the language.
 

@@ -12,10 +12,12 @@ import {
     type Evaluation,
     type EvaluationResult,
     type ExamLevel,
+    type ExamModule,
     fetchEvaluations,
     fetchLevels,
     finishPart,
     LENGTHS,
+    moduleTitle,
     shownScores,
     startEvaluation,
     startPart,
@@ -41,14 +43,6 @@ interface Props {
     onEnded: () => void;
 }
 
-/** What each module of an exam is called, for those that are not in the plan. */
-const MODULE_TITLES: Record<string, string> = {
-    hoeren: "Hören",
-    lesen: "Lesen",
-    schreiben: "Schreiben",
-    sprechen: "Sprechen",
-};
-
 function day(seconds: number): string {
     return new Date(seconds * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
@@ -59,8 +53,8 @@ function passedOf(result: EvaluationResult): string {
 }
 
 /** The scores of an evaluation, each with a bar. */
-function ScoreTable({ result }: { result: EvaluationResult }) {
-    const shown = shownScores(result);
+function ScoreTable({ result, modules }: { result: EvaluationResult; modules: ExamModule[] }) {
+    const shown = shownScores(result, modules);
     if (shown.length === 0) {
         return <p className="practice-detail">Nothing was scored.</p>;
     }
@@ -84,7 +78,7 @@ function ScoreTable({ result }: { result: EvaluationResult }) {
 type Loaded<T> = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; items: T[] };
 
 /**
- * Evaluations: a mock exam of the learner's level, as the Goethe-Institut
+ * Evaluations: a mock exam of the learner's level, as the institute that examines the language
  * sets it, made of the exercises of practice, part after part, each in a
  * session of its own and in its time if it is timed. Once it is over, the
  * server has its log written, with the scores.
@@ -129,10 +123,6 @@ export function Evaluations(
 
     function titleOf(id: string): string {
         return exercises.find((each) => each.id === id)?.title ?? id;
-    }
-
-    function moduleTitle(of: Evaluation, id: string): string {
-        return of.plan.modules.find((module) => module.id === id)?.title ?? MODULE_TITLES[id] ?? id;
     }
 
     function begin() {
@@ -221,7 +211,7 @@ export function Evaluations(
                         {part && (
                             <>
                                 {" · "}
-                                {moduleTitle(evaluation, part.module)} {part.title} ({at! + 1} of{" "}
+                                {moduleTitle(evaluation.plan.modules, part.module)} {part.title} ({at! + 1} of{" "}
                                 {evaluation.parts.length})
                             </>
                         )}
@@ -263,7 +253,7 @@ export function Evaluations(
                             className={`evaluation-part ${each.status}${number === at ? " current" : ""}`}
                             title={titleOf(each.exercise)}
                         >
-                            <span>{moduleTitle(evaluation, each.module)}</span>
+                            <span>{moduleTitle(evaluation.plan.modules, each.module)}</span>
                             <span className="practice-detail">{each.title}</span>
                         </li>
                     ))}
@@ -288,7 +278,7 @@ export function Evaluations(
                         : part && (
                             <section className="evaluation-next">
                                 <h2>
-                                    {moduleTitle(evaluation, part.module)} · {part.title}
+                                    {moduleTitle(evaluation.plan.modules, part.module)} · {part.title}
                                 </h2>
                                 <p>{part.instructions}</p>
                                 <p className="practice-detail">
@@ -315,7 +305,7 @@ export function Evaluations(
                         <h2>
                             {ended.plan.exam}: {passedOf(ended.result)}
                         </h2>
-                        <ScoreTable result={ended.result} />
+                        <ScoreTable result={ended.result} modules={ended.plan.modules} />
                         <p className="practice-detail">
                             The log of the evaluation is being written, with these scores.
                         </p>
@@ -429,7 +419,9 @@ export function Evaluations(
                                             {passedOf(each.result)}
                                         </span>
                                     </button>
-                                    {opened === each.id && <ScoreTable result={each.result} />}
+                                    {opened === each.id && (
+                                        <ScoreTable result={each.result} modules={each.plan.modules} />
+                                    )}
                                 </li>
                             ))}
                         </ul>

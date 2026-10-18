@@ -29,7 +29,7 @@ TASK = {
     ],
 }
 RATED = {
-    "ratings": {"aufgabe": 4, "kohaerenz": 3, "wortschatz": 3, "strukturen": 2},
+    "ratings": {"task": 4, "coherence": 3, "vocabulary": 3, "structures": 2},
     "correction": "Liebe Frau Schmidt, ich bin krank.",
     "note": "The verb is second.",
 }
@@ -82,16 +82,16 @@ def test_writing_scores_the_ratings_as_shares_of_the_most_by_each_criterion() ->
     step = finish(CONTEXT, state, model)
 
     assert step.scores == {
-        "schreiben": 75.0,
-        "aufgabe": 100.0,
-        "kohaerenz": 75.0,
-        "wortschatz": 75.0,
-        "strukturen": 50.0,
+        "writing": 75.0,
+        "task": 100.0,
+        "coherence": 75.0,
+        "vocabulary": 75.0,
+        "structures": 50.0,
     }
 
 
 def test_a_rating_without_every_criterion_is_a_failure() -> None:
-    model = FakeModel(TASK, {"ratings": {"aufgabe": 4}})
+    model = FakeModel(TASK, {"ratings": {"task": 4}})
     state = start(CONTEXT, model).state
 
     with pytest.raises(ModelError, match="did not rate"):
@@ -112,4 +112,4 @@ def test_a_form_takes_what_the_text_says_as_it_is_without_asking_a_model() -> No
         "wrong",
     ]
     assert len(model.asked) == 1
-    assert finish(context, step.state, model).scores == {"schreiben": 50.0}
+    assert finish(context, step.state, model).scores == {"writing": 50.0}

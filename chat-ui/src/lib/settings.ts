@@ -135,7 +135,8 @@ export const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
 /**
  * The languages that can be learned, by their English names: those the
  * checker server has a spelling dictionary for. The forms of words are
- * stored by rules of its own for German, and by general ones for the others.
+ * stored by the rules of a language where the checker has any, and by
+ * general ones otherwise.
  */
 export const LANGUAGES = [
     "German",

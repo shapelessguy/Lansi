@@ -51,10 +51,11 @@ points to say something about, such as name, age, country, where they \
 live, languages, work and hobbies, separated by ·; the one prompt asks \
 them to say something to every point."""
 cards = """
-A theme in the "card", such as "Einkaufen", and turns: half \
+A theme in the "card", such as shopping, and turns: half \
 give a word card of the theme and ask the learner to ask their partner \
-a question with its word ("Karte: Brot. Stellen Sie eine Frage."), the \
-other half give a question of the partner for the learner to answer."""
+a question with its word, such as the card of the word for bread with \
+the request to ask about it, the other half give a question of the \
+partner for the learner to answer."""
 requests = """
 Cards with a thing or an action, described in words in place \
 of a picture. Half of the turns give a card and ask the learner to ask \

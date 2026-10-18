@@ -124,7 +124,7 @@ export function byDay(logs: Log[], locale?: string): { day: string; logs: Log[] 
     return days;
 }
 
-/** Where a log says it was done, in a few words, such as "Der Hund, p. 12". */
+/** Where a log says it was done, in a few words, such as "The Hobbit, p. 12". */
 export function describeSource(log: Log): string {
     const { source } = log;
     if (source.kind === "book") {

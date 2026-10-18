@@ -45,7 +45,7 @@ CREATE TABLE forms (
     form TEXT NOT NULL,
     -- the form in small letters, which is what words are looked up by
     folded TEXT NOT NULL,
-    -- which form it is, such as "präsens 1sg". One spelling can be several.
+    -- which form it is, such as "present 1st singular". One spelling can be several.
     tags TEXT NOT NULL DEFAULT '',
     UNIQUE (entry_id, form, tags)
 );
@@ -201,10 +201,10 @@ class Vocabulary:
         one. Should it be a form of several, the one it is the dictionary
         form of is preferred, and then the one stored first.
 
-        A separable verb comes apart in a sentence: "Der Film fängt abends
-        an." So a word that is the first part of a stored form in two parts,
-        such as "fängt an", is that form if the other part comes later in
-        the `sentence` it was used in."""
+        A form in two words, such as one of a verb whose parts come apart
+        in a sentence, has words between them where it is used. So a word
+        that is the first of a stored form in two words is that form if the
+        other comes later in the `sentence` it was used in."""
         folded = fold(word)
         with self._lock:
             row = self._db.execute(

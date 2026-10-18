@@ -520,7 +520,7 @@ def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
         graded=graded,
         results={"items": done, "pictures": state["drawn"]},
         written=said,
-        scores=None if score is None else {"wortschatz": score},
+        scores=None if score is None else {"vocabulary": score},
     )
 
 

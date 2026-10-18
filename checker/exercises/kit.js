@@ -46,11 +46,11 @@ export function element(tag, props = {}, ...children) {
 
 /** What the criteria of the kit are called, as `ratingsOf` shows them. */
 const CRITERIA = {
-    aufgabe: "Task",
-    kohaerenz: "Coherence",
-    wortschatz: "Vocabulary",
-    strukturen: "Structures",
-    aussprache: "Pronunciation",
+    task: "Task",
+    coherence: "Coherence",
+    vocabulary: "Vocabulary",
+    structures: "Structures",
+    pronunciation: "Pronunciation",
 };
 
 /** The ratings of what was written or said, each from 0 to 4 by a criterion of the kit, as bars. */

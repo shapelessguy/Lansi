@@ -552,6 +552,20 @@ def test_asking_for_the_words_of_a_language_names_which_vocabulary_is_meant(
     assert entry["lemma"] == "Hund"
 
 
+def test_the_words_of_a_language_come_with_how_its_forms_are_laid_out(
+    url: str,
+) -> None:
+    _, german = get(f"{url}/vocabulary/words?language=German")
+    _, italian = get(f"{url}/vocabulary/words?language=Italian")
+
+    assert [table["title"] for table in german["tables"]["noun"]] == [
+        "der",
+        "die",
+        "das",
+    ]
+    assert italian["tables"] == {}
+
+
 def test_the_import_is_told_which_language_the_anki_words_are_of(url: str) -> None:
     settings = json.dumps(
         {"enabled": True, "language": "Arabic", "anki_language": "German"}
@@ -1552,10 +1566,10 @@ def test_the_exams_there_are_of_a_language_are_listed_by_level(with_users: str) 
     levels = json.loads(listed)["levels"]
     assert [level["level"] for level in levels][:2] == ["A1", "A2"]
     assert [module["id"] for module in levels[0]["modules"]] == [
-        "hoeren",
-        "lesen",
-        "schreiben",
-        "sprechen",
+        "listening",
+        "reading",
+        "writing",
+        "speaking",
     ]
 
 
@@ -1577,7 +1591,7 @@ def test_an_evaluation_is_started_and_its_first_part_in_a_session_of_its_own(
 
     part = json.loads(started)["evaluation"]["parts"][0]
     assert (part["module"], part["exercise"], part["status"]) == (
-        "hoeren",
+        "listening",
         "comprehension",
         "running",
     )

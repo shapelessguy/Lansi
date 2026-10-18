@@ -27,7 +27,8 @@ A language-learning chat built on an Anki collection. Three parts:
   `checker/prompts/`, a Markdown file for each kind of prompt, with
   `$variables`, as `prompts.py` describes; what an exercise tells them is
   in the `prompts.toml` of its directory. Practice is made of
-  lessons, which are grammar points kept by hand in `checker/grammar/`
+  lessons, which are grammar points kept by hand in the `grammar/` of each
+  language
   (`grammar.py`), and exercises, each a directory in `checker/exercises/`
   with a backend run in a process of its own and an interface, a module
   the app mounts in a shadow root, as `exercises/kit.py` and
@@ -38,10 +39,15 @@ A language-learning chat built on an Anki collection. Three parts:
   once an exercise is over, a model writes its log from them (`logs.py`), a
   short account of what worked and what did not, for the models that
   profile the learner rather than for the learner. Evaluations are mock
-  exams of a level, as the Goethe-Institut sets them, kept by hand in
-  `checker/evaluations/<language>/<level>.json`: each part is an exercise of
+  exams of a level, as the institute that examines the language sets
+  them, kept by hand in
+  `checker/languages/<language>/evaluations/<level>.json`: each part is an exercise of
   practice with its options, done in a session of its own, and an
   evaluation counts up the scores the exercises report (`evaluating.py`).
+  Everything that is of one language alone is in its directory in
+  `checker/languages/`, as `languages/__init__.py` describes: its
+  categories of words and their prompts, its lessons, its exams and
+  whatever else it does its own way.
   Who may log in is in
   `users.json` at the top of the repository, which holds passwords: do not
   read it.
@@ -61,6 +67,13 @@ as a final step before marking a task as completed. `just test`, `just lint`
 and `just fix-fmt` run one stage each.
 
 ## Conventions
+
+- Nothing outside `checker/languages/<language>/` is written for one
+  language: not the code, the prompts, the exercises or the app. Where
+  something differs by language, give `Language` (`languages/__init__.py`)
+  a general attribute or method that fits every language, and set what one
+  language does in its own directory. An exercise, which cannot import the
+  server's modules, is told what it needs in its context.
 
 - Source files start with the copyright header the existing ones have.
 - Tests are named for the unit, what is expected and when, such as

@@ -44,7 +44,7 @@ export function unlinkAnki(): Promise<AnkiState> {
 /** A deck of the linked collection, with whether its words are among those had. */
 export interface AnkiDeck {
     id: number;
-    /** The full name, such as "Deutsch::Verben". */
+    /** The full name, such as "Languages::Verbs". */
     name: string;
     total_cards: number;
     chosen: boolean;

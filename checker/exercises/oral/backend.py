@@ -56,11 +56,11 @@ TURNS = 4
 WHOLE = ("introduce", "talk")
 # what is rated of each kind of task: a turn of a few words is not one text
 RATED = {
-    "introduce": ["aufgabe", "kohaerenz", "wortschatz", "strukturen"],
-    "cards": ["aufgabe", "wortschatz", "strukturen"],
-    "requests": ["aufgabe", "wortschatz", "strukturen"],
-    "talk": ["aufgabe", "kohaerenz", "wortschatz", "strukturen"],
-    "plan": ["aufgabe", "kohaerenz", "wortschatz", "strukturen"],
+    "introduce": ["task", "coherence", "vocabulary", "structures"],
+    "cards": ["task", "vocabulary", "structures"],
+    "requests": ["task", "vocabulary", "structures"],
+    "talk": ["task", "coherence", "vocabulary", "structures"],
+    "plan": ["task", "coherence", "vocabulary", "structures"],
 }
 MAX_ANSWER_LENGTH = 2000
 
@@ -261,7 +261,7 @@ def scores_of(done: list[dict[str, Any]]) -> dict[str, float] | None:
     scores = {
         name: score for name, score in criteria_scores(rated).items() if name != "all"
     }
-    return {"sprechen": round(sum(tasks) / len(tasks), 1), **scores}
+    return {"speaking": round(sum(tasks) / len(tasks), 1), **scores}
 
 
 def finish(context: dict[str, Any], state: Any, model: Model) -> Step:

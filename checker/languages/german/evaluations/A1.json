@@ -20,7 +20,7 @@
     ],
     "modules": [
         {
-            "id": "hoeren",
+            "id": "listening",
             "title": "Hören",
             "weight": 25,
             "parts": [
@@ -116,7 +116,7 @@
             ]
         },
         {
-            "id": "lesen",
+            "id": "reading",
             "title": "Lesen",
             "weight": 25,
             "parts": [
@@ -215,7 +215,7 @@
             ]
         },
         {
-            "id": "schreiben",
+            "id": "writing",
             "title": "Schreiben",
             "weight": 25,
             "parts": [
@@ -280,7 +280,7 @@
             ]
         },
         {
-            "id": "sprechen",
+            "id": "speaking",
             "title": "Sprechen",
             "weight": 25,
             "parts": [

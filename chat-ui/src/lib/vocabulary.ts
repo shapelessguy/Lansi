@@ -31,13 +31,15 @@ export function describeUses(word: Pick<ListedWord, "used" | "seen">): string {
 export interface Vocabulary {
     /** The categories, in the order they are to be shown in. */
     categories: string[];
+    /** How the forms of a word of each category are laid out, as the language has it. */
+    tables: FormTables;
     words: ListedWord[];
 }
 
 export interface WordForm {
     id: number;
     form: string;
-    /** Which form of the word it is, such as "präsens ich". May be empty. */
+    /** Which form of the word it is, such as "present 1st singular". May be empty. */
     tags: string;
 }
 
@@ -205,7 +207,7 @@ function describe(value: unknown): string {
 /** A form in a table, with the other shape it takes, if it has one. */
 export interface FormCell {
     form: string;
-    /** For a separable verb, the form it has at the end of a subordinate clause: "anfange" for "fange an". */
+    /** The other form shown beside it, such as the one a verb has at the end of a subordinate clause. */
     also: string;
 }
 
@@ -214,6 +216,8 @@ export interface FormTable {
     title: string;
     columns: string[];
     rows: { label: string; cells: FormCell[] }[];
+    /** What the `also` of a cell is, or nothing if the table has none. */
+    also: string;
 }
 
 export interface FormLayout {
@@ -222,56 +226,35 @@ export interface FormLayout {
     others: { label: string; form: string }[];
 }
 
-interface TablePlan {
+/** A table the forms of a category are laid out in, as the checker server tells it of a language. */
+export interface FormTablePlan {
     title: string;
     columns: string[];
     rows: string[];
-    /** The tags of the form that goes where a column and a row meet. */
-    tags: (column: string, row: string) => string;
+    /** The tags of the form that goes where a column and a row meet, with `{column}` and `{row}` in them. */
+    tags: string;
+    /** The tags of another form shown beside it, likewise, with what that form is. */
+    also?: { tags: string; title: string };
 }
 
-const PERSONS = ["ich", "du", "er", "wir", "ihr", "sie"];
-const CASES = ["nominativ", "genitiv", "dativ", "akkusativ"];
+/** The tables of each category that has any. */
+export type FormTables = Record<string, FormTablePlan[]>;
 
-/** The tables the forms of each category are laid out in. */
-const PLANS: Record<string, TablePlan[]> = {
-    verb: [
-        {
-            title: "Indikativ",
-            columns: ["präsens", "präteritum"],
-            rows: PERSONS,
-            tags: (tense, person) => `${tense} ${person}`,
-        },
-        {
-            title: "Konjunktiv",
-            columns: ["konjunktiv I", "konjunktiv II"],
-            rows: PERSONS,
-            tags: (tense, person) => `${tense} ${person}`,
-        },
-    ],
-    noun: ["der", "die", "das"].map((article) => ({
-        title: article,
-        columns: ["singular", "plural"],
-        rows: CASES,
-        tags: (number, grammaticalCase) => `${article} ${grammaticalCase} ${number}`,
-    })),
-    adjective: [
-        {
-            title: "Endings",
-            columns: ["positiv", "komparativ", "superlativ"],
-            rows: ["-e", "-er", "-es", "-en", "-em"],
-            tags: (degree, ending) => `${degree} ${ending}`,
-        },
-    ],
-};
+/** Tags with the column and the row put in. */
+function tagsOf(template: string, column: string, row: string): string {
+    return template.replaceAll("{column}", column).replaceAll("{row}", row);
+}
 
 /**
- * The forms of a word laid out to be read: verbs by person and tense, nouns
- * by case and number for each gender, adjectives by ending and degree. A
- * form that fits no table, and every form of the other categories, is
- * listed with its tags. A table none of whose forms are there is left out.
+ * The forms of a word laid out to be read, in the `tables` its language has
+ * for its category, such as verbs by person and tense. A form that fits no
+ * table, and every form of a category that has none, is listed with its
+ * tags. A table none of whose forms are there is left out.
  */
-export function layOutForms(entry: Pick<VocabularyEntry, "category" | "lemma" | "forms">): FormLayout {
+export function layOutForms(
+    entry: Pick<VocabularyEntry, "category" | "lemma" | "forms">,
+    tables: FormTables = {},
+): FormLayout {
     const byTags = new Map<string, string[]>();
     for (const form of entry.forms) {
         byTags.set(form.tags, [...(byTags.get(form.tags) ?? []), form.form]);
@@ -281,21 +264,22 @@ export function layOutForms(entry: Pick<VocabularyEntry, "category" | "lemma" | 
         placed.add(tags);
         return (byTags.get(tags) ?? []).join(", ");
     };
-    const tables: FormTable[] = [];
-    for (const plan of PLANS[entry.category] ?? []) {
-        if (!plan.rows.some((row) => plan.columns.some((column) => byTags.has(plan.tags(column, row))))) {
+    const laidOut: FormTable[] = [];
+    for (const plan of tables[entry.category] ?? []) {
+        if (!plan.rows.some((row) => plan.columns.some((column) => byTags.has(tagsOf(plan.tags, column, row))))) {
             continue;
         }
-        tables.push({
+        laidOut.push({
             title: plan.title,
             columns: plan.columns,
             rows: plan.rows.map((row) => ({
                 label: row,
                 cells: plan.columns.map((column) => ({
-                    form: take(plan.tags(column, row)),
-                    also: take(`${plan.tags(column, row)} nebensatz`),
+                    form: take(tagsOf(plan.tags, column, row)),
+                    also: plan.also ? take(tagsOf(plan.also.tags, column, row)) : "",
                 })),
             })),
+            also: plan.also?.title ?? "",
         });
     }
     const others = entry.forms
@@ -304,5 +288,5 @@ export function layOutForms(entry: Pick<VocabularyEntry, "category" | "lemma" | 
             label: form.tags || (form.form === entry.lemma ? "dictionary form" : "–"),
             form: form.form,
         }));
-    return { tables, others };
+    return { tables: laidOut, others };
 }

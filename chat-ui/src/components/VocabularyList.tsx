@@ -10,6 +10,7 @@ import {
     detailRows,
     fetchEntry,
     fetchVocabulary,
+    type FormTables,
     groupWords,
     layOutForms,
     type ListedWord,
@@ -172,7 +173,7 @@ export function VocabularyList(
                             .filter(Boolean).join(" · ")}
                     </span>
                 </button>
-                {openId === word.id && <Entry state={entryState} />}
+                {openId === word.id && <Entry state={entryState} tables={vocabulary?.tables ?? {}} />}
             </li>
         );
     }
@@ -256,7 +257,7 @@ export function VocabularyList(
     );
 }
 
-function Entry({ state }: { state: EntryState }) {
+function Entry({ state, tables }: { state: EntryState; tables: FormTables }) {
     if (state.status === "loading") {
         return <p className="entry sidebar-note">Loading…</p>;
     }
@@ -264,7 +265,7 @@ function Entry({ state }: { state: EntryState }) {
         return <p className="entry sidebar-note error">{state.message}</p>;
     }
     const { entry } = state;
-    const layout = layOutForms(entry);
+    const layout = layOutForms(entry, tables);
     return (
         <div className="entry">
             <dl>
@@ -294,9 +295,7 @@ function Entry({ state }: { state: EntryState }) {
                                 {row.cells.map((cell, index) => (
                                     <td key={index}>
                                         {cell.form || "–"}
-                                        {cell.also && (
-                                            <small title="At the end of a subordinate clause">{cell.also}</small>
-                                        )}
+                                        {cell.also && <small title={table.also}>{cell.also}</small>}
                                     </td>
                                 ))}
                             </tr>

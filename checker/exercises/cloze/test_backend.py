@@ -35,8 +35,12 @@ LESSON = {
         }
     ],
 }
+# what German does its own way with its letters, as the server tells it
+LETTERS = {"ß": "ss", "ä": "ae", "ö": "oe", "ü": "ue"}
 CONTEXT = {
     "language": "German",
+    "letters": LETTERS,
+    "marks": "umlauts",
     "into": "English",
     "level": "A1",
     "lesson": LESSON,
@@ -127,10 +131,23 @@ def test_an_answer_is_right_only_when_every_gap_is(
 
 
 def test_an_answer_that_differs_only_in_an_umlaut_is_partial_with_a_note() -> None:
-    result, note = judge("Er [fährt] nach Berlin.", ["faehrt"])
+    result, note = judge("Er [fährt] nach Berlin.", ["faehrt"], LETTERS, "umlauts")
 
     assert result == "partial"
-    assert "faehrt → fährt" in note
+    assert note == "capitals or umlauts: faehrt → fährt"
+
+
+def test_an_answer_without_the_accents_of_a_language_is_partial() -> None:
+    result, note = judge("Il [était] là.", ["etait"])
+
+    assert result == "partial"
+    assert note == "capitals or accents: etait → était"
+
+
+def test_a_letter_written_otherwise_is_wrong_in_a_language_that_has_no_such_letter() -> (
+    None
+):
+    assert judge("Er [fährt] nach Berlin.", ["faehrt"])[0] == "wrong"
 
 
 def test_a_set_of_five_sentences_with_gaps_is_made_when_it_starts() -> None:
@@ -171,7 +188,7 @@ def test_each_gap_has_its_own_hint_but_none_that_gives_the_answer_away() -> None
     assert step.show["items"][0]["hints"] == ["stehen", ""]
     assert step.show["items"][1]["hints"] == ["kaufen", ""]
     assert hints_of("Er gibt [mir] das [Buch].", ["MIR", 3]) == ["", ""]
-    assert hints_of("Ich [möchte] das.", ["moechte"]) == [""]
+    assert hints_of("Ich [möchte] das.", ["moechte"], LETTERS) == [""]
 
 
 def test_each_sentence_of_a_set_is_told_the_rule_it_is_centred_on() -> None:

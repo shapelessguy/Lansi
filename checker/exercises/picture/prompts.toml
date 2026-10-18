@@ -46,7 +46,7 @@ written as its name in $language:
 - "right": a correct name of that thing, with the right article if \
 $language has articles. A capital first letter does not matter.
 - "partial": the right word with a small mistake, such as in its article, a \
-missing article, its spelling, umlauts or capitals; or a word so near in \
+missing article, its spelling, the marks on its letters or capitals; or a word so near in \
 meaning that it is not quite the name of the thing.
 - "wrong": not a name of that thing, or nothing written.
 
@@ -56,8 +56,8 @@ written if that is right; "translation": its name in $into; and "note": in \
 $into, in a few words, what was not right, or "" if it was.
 
 Reply with JSON alone: {"labels": [{"n": 1, "result": "partial", \
-"correct": "der Pokal", "translation": "trophy", "note": "Preis is a prize, \
-the cup is der Pokal."}]}"""
+"correct": "...", "translation": "trophy", "note": "That is the word for a \
+prize, not for this cup."}]}"""
 
 label = "$number. $given (the illustrator meant: $thing)"
 

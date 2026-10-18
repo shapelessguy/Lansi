@@ -24,7 +24,8 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from intake import DEFAULT_LANGUAGE, Intake, Outcome, Word
+from intake import Intake, Outcome, Word
+from languages import DEFAULT_LANGUAGE, language_of
 from models import Model
 from profiling import Profile
 
@@ -50,7 +51,6 @@ WORDS_SQL = (
 
 _MARKUP = re.compile(r"\[sound:[^\]]*\]|<[^>]*>")
 _IN_BRACKETS = re.compile(r"\([^)]*\)")
-_ARTICLE_OR_SICH = re.compile(r"^(der|die|das|sich)\s+", re.IGNORECASE)
 # a single word, which may have an apostrophe or a hyphen inside it
 _SINGLE_WORD = re.compile(r"[^\W\d_]+(?:['’-][^\W\d_]+)*")
 
@@ -193,15 +193,21 @@ class AnkiLink:
             raise AnkiUnavailable("the deck-status server cannot be reached") from None
 
 
-def vocabulary_words(note: str) -> list[str]:
-    """The words an Anki note gives the vocabulary. A note may hold a noun
-    with its article ("der Hund"), a verb with sich, several spellings
-    ("gern, gerne") and an abbreviation in brackets. Expressions of several
-    words give nothing: the vocabulary takes words one by one."""
+def vocabulary_words(note: str, language: str = DEFAULT_LANGUAGE) -> list[str]:
+    """The words an Anki note of `language` gives the vocabulary. A note may
+    hold several spellings, separated by commas, an abbreviation in brackets,
+    and before a word one of the `note_prefixes` of the language, such as an
+    article. Expressions of several words give nothing: the vocabulary takes
+    words one by one."""
+    prefixes = language_of(language).note_prefixes
     text = _MARKUP.sub("", note).replace("&nbsp;", " ").replace("&amp;", "&")
     words: dict[str, None] = {}
     for part in _IN_BRACKETS.sub("", text).split(","):
-        word = _ARTICLE_OR_SICH.sub("", part.strip()).rstrip(".!?")
+        word = part.strip()
+        first, _, rest = word.partition(" ")
+        if rest and first.lower() in prefixes:
+            word = rest.strip()
+        word = word.rstrip(".!?")
         if _SINGLE_WORD.fullmatch(word):
             words[word] = None
     return list(words)
@@ -315,11 +321,11 @@ class AnkiImporter:
         except AnkiUnavailable as error:
             self._update(state="unavailable", message=str(error))
             return False
-        words = [word for note in notes for word in vocabulary_words(note)]
         # The Anki words are of a language of their own, whichever one is
         # being studied at present, and go into the vocabulary of that one.
         with self._lock:
             language = self._language
+        words = [word for note in notes for word in vocabulary_words(note, language)]
         new = self._intake.vocabulary_of(language).not_taken(words)
         # A word that failed is sent again, after those that were not tried.
         to_try = [word for word in new if self._tries.get(word, 0) < MAX_TRIES]

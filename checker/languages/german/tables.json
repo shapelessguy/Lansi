@@ -1,0 +1,46 @@
+{
+    "verb": [
+        {
+            "title": "Indikativ",
+            "columns": ["präsens", "präteritum"],
+            "rows": ["ich", "du", "er", "wir", "ihr", "sie"],
+            "tags": "{column} {row}",
+            "also": { "tags": "{column} {row} nebensatz", "title": "At the end of a subordinate clause" }
+        },
+        {
+            "title": "Konjunktiv",
+            "columns": ["konjunktiv I", "konjunktiv II"],
+            "rows": ["ich", "du", "er", "wir", "ihr", "sie"],
+            "tags": "{column} {row}",
+            "also": { "tags": "{column} {row} nebensatz", "title": "At the end of a subordinate clause" }
+        }
+    ],
+    "noun": [
+        {
+            "title": "der",
+            "columns": ["singular", "plural"],
+            "rows": ["nominativ", "genitiv", "dativ", "akkusativ"],
+            "tags": "der {row} {column}"
+        },
+        {
+            "title": "die",
+            "columns": ["singular", "plural"],
+            "rows": ["nominativ", "genitiv", "dativ", "akkusativ"],
+            "tags": "die {row} {column}"
+        },
+        {
+            "title": "das",
+            "columns": ["singular", "plural"],
+            "rows": ["nominativ", "genitiv", "dativ", "akkusativ"],
+            "tags": "das {row} {column}"
+        }
+    ],
+    "adjective": [
+        {
+            "title": "Endings",
+            "columns": ["positiv", "komparativ", "superlativ"],
+            "rows": ["-e", "-er", "-es", "-en", "-em"],
+            "tags": "{column} {row}"
+        }
+    ]
+}

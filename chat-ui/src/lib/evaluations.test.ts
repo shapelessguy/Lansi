@@ -7,7 +7,7 @@ import { currentPart, describeLength, type Evaluation, type EvaluationPart, show
 
 function part(status: EvaluationPart["status"]): EvaluationPart {
     return {
-        module: "lesen",
+        module: "reading",
         title: "Teil 1",
         exercise: "comprehension",
         options: {},
@@ -60,14 +60,23 @@ describe("currentPart", () => {
 describe("shownScores", () => {
     it("are those that were shown, in the order of the scores, with their names", () => {
         const shown = shownScores({
-            scores: { total: 70, lesen: 80, hoeren: null, schreiben_aufgabe: 50 },
+            scores: { total: 70, reading: 80, listening: null, writing_task: 50 },
             passed: null,
         });
 
         expect(shown).toEqual([
-            { name: "lesen", label: "Lesen", value: 80 },
-            { name: "schreiben_aufgabe", label: "Schreiben: task", value: 50 },
+            { name: "reading", label: "Reading", value: 80 },
+            { name: "writing_task", label: "Writing: task", value: 50 },
             { name: "total", label: "Total", value: 70 },
         ]);
+    });
+
+    it("call a module as the exam calls it", () => {
+        const shown = shownScores(
+            { scores: { reading: 80, writing_task: 50 }, passed: null },
+            [{ id: "reading", title: "Lesen", weight: 1 }, { id: "writing", title: "Schreiben", weight: 1 }],
+        );
+
+        expect(shown.map((score) => score.label)).toEqual(["Lesen", "Schreiben: task"]);
     });
 });

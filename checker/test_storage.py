@@ -794,7 +794,7 @@ def test_an_evaluation_keeps_its_plan_the_sessions_of_its_parts_and_what_it_came
         "exam": "A1",
         "pass": {"total": 60},
         "modules": [],
-        "parts": [{"module": "lesen"}],
+        "parts": [{"module": "reading"}],
     }
     store.start_evaluation("e1", "German", "A1", 2, True, plan)
     store.start_session(
@@ -802,7 +802,7 @@ def test_an_evaluation_keeps_its_plan_the_sessions_of_its_parts_and_what_it_came
     )
 
     store.add_part("e1", 0, "s1")
-    store.end_evaluation("e1", "finished", {"scores": {"lesen": 80}, "passed": None})
+    store.end_evaluation("e1", "finished", {"scores": {"reading": 80}, "passed": None})
 
     assert store.evaluation("e1") == {
         "id": "e1",
@@ -814,13 +814,13 @@ def test_an_evaluation_keeps_its_plan_the_sessions_of_its_parts_and_what_it_came
         "status": "finished",
         "started_at": 10.0,
         "finished_at": 30.0,
-        "result": {"scores": {"lesen": 80}, "passed": None},
+        "result": {"scores": {"reading": 80}, "passed": None},
         "sessions": {"0": "s1"},
     }
 
 
 def test_a_new_evaluation_abandons_the_one_that_was_running(store: UserStore) -> None:
-    plan = {"parts": [{"module": "lesen"}]}
+    plan = {"parts": [{"module": "reading"}]}
     store.start_evaluation("e1", "German", "A1", 2, True, plan)
 
     store.start_evaluation("e2", "German", "A2", 1, False, plan)
@@ -829,3 +829,30 @@ def test_a_new_evaluation_abandons_the_one_that_was_running(store: UserStore) ->
         ("e2", "running"),
         ("e1", "abandoned"),
     ]
+
+
+def test_the_scores_kept_before_are_named_in_english(tmp_path: Path) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.start_session("s1", "German", "", [], {"writing": 1})
+    before.finish_exercise("s1", "writing", {}, {"lesen": 80.0, "aufgabe": 50.0})
+    plan = {
+        "modules": [{"id": "lesen", "title": "Lesen"}],
+        "parts": [{"module": "lesen"}],
+    }
+    before.start_evaluation("e1", "German", "A1", 2, True, plan)
+    before.end_evaluation(
+        "e1", "finished", {"scores": {"schreiben_aufgabe": 50}, "passed": None}
+    )
+    before._db.execute("PRAGMA user_version = 16")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+
+    session = store.session("s1")
+    assert session is not None
+    assert session["progress"]["writing"]["scores"] == {"reading": 80.0, "task": 50.0}
+    evaluation = store.evaluation("e1")
+    assert evaluation is not None
+    assert evaluation["plan"]["modules"] == [{"id": "reading", "title": "Lesen"}]
+    assert evaluation["plan"]["parts"] == [{"module": "reading"}]
+    assert evaluation["result"]["scores"] == {"writing_task": 50}

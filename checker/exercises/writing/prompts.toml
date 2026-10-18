@@ -81,11 +81,11 @@ field = "$number. $label Text: $answer Learner: $given"
 [tasks]
 message = """
 a short message, such as a text message or an email, to a \
-friend, with du: they are late, cannot come, invite someone, ask for \
+friend, addressed informally: they are late, cannot come, invite someone, ask for \
 something"""
 email = """
-an email with Sie, to a teacher, an office, a landlord or a \
-boss: a request, an excuse, a thank-you, a change of plan"""
+an email addressed formally, to a teacher, an office, a landlord \
+or a boss: a request, an excuse, a thank-you, a change of plan"""
 opinion = """
 an opinion on a question of everyday life, as posted in a \
 forum under what others wrote, with reasons and an example"""

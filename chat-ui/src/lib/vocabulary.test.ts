@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
     describeUses,
     detailRows,
+    type FormTables,
     groupWords,
     layOutForms,
     listWords,
@@ -17,6 +18,7 @@ const unused = { created_at: "2026-10-13 12:00:00", used: 0, seen: 0, first_used
 
 const vocabulary: Vocabulary = {
     categories: ["noun", "verb", "adjective"],
+    tables: {},
     words: [
         { id: 3, category: "verb", lemma: "gehen", forms: 30, ...unused },
         { id: 1, category: "noun", lemma: "Apfel", forms: 6, ...unused },
@@ -90,6 +92,43 @@ function forms(...pairs: [tags: string, form: string][]): WordForm[] {
     return pairs.map(([tags, form], index) => ({ id: index + 1, tags, form }));
 }
 
+// tables of German, as the checker server tells them
+const PERSONS = ["ich", "du", "er", "wir", "ihr", "sie"];
+const CASES = ["nominativ", "genitiv", "dativ", "akkusativ"];
+const NEBENSATZ = { tags: "{column} {row} nebensatz", title: "At the end of a subordinate clause" };
+const TABLES: FormTables = {
+    verb: [
+        {
+            title: "Indikativ",
+            columns: ["präsens", "präteritum"],
+            rows: PERSONS,
+            tags: "{column} {row}",
+            also: NEBENSATZ,
+        },
+        {
+            title: "Konjunktiv",
+            columns: ["konjunktiv I", "konjunktiv II"],
+            rows: PERSONS,
+            tags: "{column} {row}",
+            also: NEBENSATZ,
+        },
+    ],
+    noun: ["der", "die", "das"].map((article) => ({
+        title: article,
+        columns: ["singular", "plural"],
+        rows: CASES,
+        tags: `${article} {row} {column}`,
+    })),
+    adjective: [
+        {
+            title: "Endings",
+            columns: ["positiv", "komparativ", "superlativ"],
+            rows: ["-e", "-er", "-es", "-en", "-em"],
+            tags: "{column} {row}",
+        },
+    ],
+};
+
 describe("layOutForms", () => {
     it("lays a verb out by person and tense, and lists its other forms", () => {
         const layout = layOutForms({
@@ -104,7 +143,7 @@ describe("layOutForms", () => {
                 ["imperativ du", "geh"],
                 ["", "gehen"],
             ),
-        });
+        }, TABLES);
 
         expect(layout.tables.map((table) => [table.title, table.columns])).toEqual([
             ["Indikativ", ["präsens", "präteritum"]],
@@ -127,7 +166,7 @@ describe("layOutForms", () => {
             category: "verb",
             lemma: "anfangen",
             forms: forms(["präsens ich", "fange an"], ["präsens ich nebensatz", "anfange"]),
-        });
+        }, TABLES);
 
         expect(layout.tables).toHaveLength(1);
         expect(layout.tables[0].rows[0].cells[0]).toEqual({ form: "fange an", also: "anfange" });
@@ -143,7 +182,7 @@ describe("layOutForms", () => {
                 ["der dativ plural", "Bänden"],
                 ["das dativ plural", "Bändern"],
             ),
-        });
+        }, TABLES);
 
         expect(layout.tables.map((table) => table.title)).toEqual(["der", "das"]);
         expect(layout.tables[0].columns).toEqual(["singular", "plural"]);
@@ -156,7 +195,7 @@ describe("layOutForms", () => {
             category: "adjective",
             lemma: "hoch",
             forms: forms(["komparativ", "höher"], ["positiv -e", "hohe"], ["superlativ -en", "höchsten"]),
-        });
+        }, TABLES);
 
         expect(layout.tables[0].columns).toEqual(["positiv", "komparativ", "superlativ"]);
         expect(layout.tables[0].rows[0].cells.map((cell) => cell.form)).toEqual(["hohe", "", ""]);
@@ -169,7 +208,7 @@ describe("layOutForms", () => {
             category: "pronoun",
             lemma: "ich",
             forms: forms(["akkusativ", "mich"], ["", "ich"], ["", "meiner"]),
-        });
+        }, TABLES);
 
         expect(layout.tables).toEqual([]);
         expect(layout.others).toEqual([
@@ -197,7 +236,9 @@ describe("groupWords, in an order", () => {
         { ...unused, id: 4, category: "noun", lemma: "Ärger", forms: 1 },
     ];
     const lemmas = (sort: Parameters<typeof groupWords>[2]) =>
-        groupWords({ categories: ["noun"], words: [...words] }, "", sort)[0].words.map((word) => word.lemma);
+        groupWords({ categories: ["noun"], tables: {}, words: [...words] }, "", sort)[0].words.map((word) =>
+            word.lemma
+        );
 
     it("goes by the alphabet unless told otherwise, with ä next to a", () => {
         expect(lemmas(undefined)).toEqual(["Apfel", "Ärger", "Hund", "Zug"]);

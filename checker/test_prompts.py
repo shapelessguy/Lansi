@@ -9,6 +9,13 @@ import pytest
 from prompts import PROMPTS, PromptError, Prompts, read_prompts, variables_of
 
 DIRECTORY = Path(__file__).resolve().parent / "prompts"
+# the prompts of the server, and those of each language that has any
+FILES = sorted(
+    [
+        *DIRECTORY.rglob("*.md"),
+        *DIRECTORY.parent.glob("languages/*/prompts/**/*.md"),
+    ]
+)
 
 
 def write(tmp_path: Path, name: str, text: str) -> Prompts:
@@ -75,8 +82,8 @@ def test_a_dollar_that_starts_no_variable_is_an_error() -> None:
 
 @pytest.mark.parametrize(
     "path",
-    sorted(DIRECTORY.rglob("*.md")),
-    ids=lambda path: path.relative_to(DIRECTORY).as_posix(),
+    FILES,
+    ids=lambda path: path.relative_to(DIRECTORY.parent).as_posix(),
 )
 def test_every_file_of_prompts_has_prompts_that_can_be_filled_in(path: Path) -> None:
     text = path.read_text(encoding="utf-8")

@@ -9,6 +9,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 
+from languages import languages_of_their_own
 from profiling import Profile, WordRating
 from spelling import SpellingIssue
 
@@ -18,35 +19,11 @@ _LINE = re.compile(r"[^\r\n]+")
 # followed by any quotes or brackets that close what was just said.
 _SENTENCE_END = re.compile(r"[.!?…]+[\"'“”‘’«»)\]]*")
 
-# Words that are written with a full stop but do not end a sentence. Compared
-# without the final full stop, in lower case.
+# Words that are written with a full stop but do not end a sentence, those
+# of every language that has rules of its own. Compared without the final
+# full stop, in lower case.
 ABBREVIATIONS = frozenset(
-    {
-        # German
-        "bzw",
-        "ca",
-        "d.h",
-        "evtl",
-        "ggf",
-        "inkl",
-        "nr",
-        "s.o",
-        "s.u",
-        "u.a",
-        "vgl",
-        "z.b",
-        # English
-        "e.g",
-        "i.e",
-        "mr",
-        "mrs",
-        "ms",
-        "vs",
-        # both
-        "dr",
-        "prof",
-        "st",
-    }
+    word for language in languages_of_their_own() for word in language.abbreviations
 )
 
 

@@ -48,6 +48,7 @@ was `graded`, what was `written` in the step, and, from `finish`, the
 The context is the same for every call:
 
     {"language": "German", "into": "English", "level": "A1",
+     "letters": {"ß": "ss", ...}, "marks": "umlauts",
      "lesson": {"id": ..., "title": ..., "level": ..., "more_info": ...,
                 "points": [{"id": ..., "role": "new", "title": ...,
                             "statement": ..., "when": ..., ...}]},
@@ -127,6 +128,13 @@ left halfway still counts. Once the exercise is over, the app has a model
 write its log from them and from what was written: a short account, for
 the app rather than the learner, of what worked and what did not.
 
+`letters` and `marks` are what the language does its own way with its
+letters, as checker/languages/ says it: the letters that may be written
+otherwise by someone who cannot type them, each with how, and what the
+marks on its letters are called. `loose` compares answers by them, so that
+one that differs only in capitals, marks or such letters is almost right
+rather than wrong, and an exercise names the marks so where it says why.
+
 `level` is the learner's, and may be empty, when the level of the lesson is
 taken: `describe_level` tells a model how hard what it writes is to be.
 
@@ -163,20 +171,20 @@ RESULTS = ("right", "wrong", "partial")
 # skills, by how much of what was asked of each was done right, and the
 # ratings of what the learner wrote or said, by `CRITERIA`.
 SCORES = {
-    "lesen": "reading: how many of the questions on texts read were answered right",
-    "hoeren": "listening: how many of the questions on texts heard were answered right",
-    "schreiben": "writing: how well the writing tasks were done",
-    "sprechen": "speaking: how well the speaking tasks were done",
-    "aufgabe": "the task fulfilled: every point dealt with, as long as asked",
-    "kohaerenz": "coherence: one text joined up, for its reader and its register",
-    "wortschatz": "vocabulary: the words of the level, used rightly and with range",
-    "strukturen": "structures: the grammar of the level, used rightly",
-    "aussprache": "pronunciation: what was said can be understood",
+    "reading": "how many of the questions on texts read were answered right",
+    "listening": "how many of the questions on texts heard were answered right",
+    "writing": "how well the writing tasks were done",
+    "speaking": "how well the speaking tasks were done",
+    "task": "every point dealt with, as long as asked",
+    "coherence": "one text joined up, for its reader and its register",
+    "vocabulary": "the words of the level, used rightly and with range",
+    "structures": "the grammar of the level, used rightly",
+    "pronunciation": "what was said can be understood",
 }
 # How what the learner writes or says is rated, from 0 to 4, as the
-# examiners of the Goethe-Institut rate it, by the level of the exam. What a
+# examiners of a language exam rate it, by the level of the exam. What a
 # model is told of each is `kit.criteria` of the prompts.
-CRITERIA = ("aufgabe", "kohaerenz", "wortschatz", "strukturen", "aussprache")
+CRITERIA = ("task", "coherence", "vocabulary", "structures", "pronunciation")
 # how much of a reply that could not be read is told with why
 MAX_SHOWN_REPLY = 160
 
@@ -476,11 +484,31 @@ def describe_exam(context: dict[str, Any]) -> str:
     return f"\n{PROMPTS('kit.exam', exam=exam)}\n"
 
 
-def loose(text: str) -> str:
-    """Text as it is when capitals and umlauts are not told apart."""
-    text = text.casefold().replace("ß", "ss")
-    for umlaut, written in (("ä", "ae"), ("ö", "oe"), ("ü", "ue")):
-        text = text.replace(umlaut, written)
+def letters_of(context: dict[str, Any]) -> dict[str, str]:
+    """The `letters` of the context: those of the language that may be
+    written otherwise, each with how."""
+    letters = context.get("letters")
+    if not isinstance(letters, dict):
+        return {}
+    return {
+        str(letter): str(written)
+        for letter, written in letters.items()
+        if str(letter) and isinstance(written, str)
+    }
+
+
+def marks_of(context: dict[str, Any]) -> str:
+    """What the marks on the letters of the language are called."""
+    return str(context.get("marks") or "accents")
+
+
+def loose(text: str, letters: dict[str, str] | None = None) -> str:
+    """Text as it is when capitals and the marks on letters are not told
+    apart, nor the `letters` of the language, of `letters_of`, from how they
+    are written otherwise."""
+    text = text.casefold()
+    for letter, written in (letters or {}).items():
+        text = text.replace(letter.casefold(), written.casefold())
     folded = unicodedata.normalize("NFKD", text)
     return "".join(char for char in folded if not unicodedata.combining(char))
 

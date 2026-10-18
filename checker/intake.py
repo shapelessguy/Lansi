@@ -33,8 +33,8 @@ from categories import (
     dictionary_form,
     one_of,
     shape,
-    writes_nouns_with_capitals,
 )
+from languages import DEFAULT_LANGUAGE, language_of
 from models import Model
 from profiling import Profile, ProfileError, Profiler, Questions, post
 from prompts import PROMPTS
@@ -77,10 +77,6 @@ def category_questions(language: str) -> Questions:
         )
     }
 
-
-# The language the vocabulary is of, unless whoever sends the words says
-# another.
-DEFAULT_LANGUAGE = "German"
 
 VERDICT_SCHEMA = shape(
     verdict=one_of("form", "new", "elsewhere", "reject"),
@@ -463,7 +459,7 @@ class Intake:
         if self._known and self._known(word.word):
             # it is in the dictionary, so it is a word
             ruled_out.add("other")
-        capitals = writes_nouns_with_capitals(self.language)
+        capitals = language_of(self.language).nouns_have_capitals
         if capitals and not word.sentence and word.word.islower():
             # Nouns and names have a capital letter in this language. Someone
             # writing a sentence may leave it out, but a word on its own is

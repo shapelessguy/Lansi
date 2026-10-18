@@ -4,14 +4,14 @@
 """The grammar of each language: the grammar points, and the lessons made of
 them.
 
-A grammar point is one decision the learner makes, such as where the prefix
-of a separable verb goes. A lesson is a selection of points, each with the
+A grammar point is one decision the learner makes, such as which ending a
+verb takes. A lesson is a selection of points, each with the
 role it has there: taught as `new`, practised again as `review`, or only
 shown ahead of time as `preview`. A lesson holds no grammar of its own but
 what the book says that fits no point, in `more_info`.
 
-They are kept by hand, for each language in a directory named after it by
-its English name: the points in `points.json`, each lesson in a file of
+They are kept by hand, for each language in `grammar/` of its directory in
+languages/: the points in `points.json`, each lesson in a file of
 its own in `lessons/`, and the order the lessons are taught in, as a list
 of their ids, in `order.json`. They are read again whenever they are asked for, so
 that a change to them is seen without starting the server again.
@@ -24,7 +24,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-GRAMMAR_DIRECTORY = Path(__file__).parent / "grammar"
+from languages import LANGUAGES_DIRECTORY, directory_of
+
+# where the directories of the languages are, each with its grammar/
+GRAMMAR_DIRECTORY = LANGUAGES_DIRECTORY
 LEVELS = ("A1", "A2", "B1", "B2", "C1", "C2")
 ROLES = ("new", "review", "preview")
 
@@ -153,12 +156,8 @@ class Grammar:
 
     def _language_directory(self, language: str) -> Path | None:
         """Where the grammar of `language` is, whatever its case, if anywhere."""
-        if not self._directory.is_dir():
-            return None
-        for directory in self._directory.iterdir():
-            if directory.is_dir() and directory.name.lower() == language.lower():
-                return directory
-        return None
+        directory = directory_of(language, self._directory)
+        return directory / "grammar" if directory else None
 
     def points(self, language: str) -> dict[str, Point]:
         """The points of `language`, by their ids. Raises GrammarError."""

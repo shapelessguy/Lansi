@@ -380,7 +380,7 @@ def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
     score = score_of(
         [each["result"] for answered in state["done"] for each in answered["feedback"]]
     )
-    skill = {"questions": "lesen", "retell": "schreiben"}.get(mode_of(context))
+    skill = {"questions": "reading", "retell": "writing"}.get(mode_of(context))
     return Step(
         state=state,
         results={

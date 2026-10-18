@@ -7,10 +7,10 @@ beside it (`checker/exercises/theory/`).
 
 ## Where things are
 
-- `<Language>/points.json`: the grammar points, each one decision the
+- `points.json`: the grammar points, each one decision the
   learner makes: `id`, `level`, `title`, `statement`, `when`,
   `confused_with`, `requires`. Add the points a lesson needs here first.
-- `<Language>/lessons/<id>.json`: one file per lesson: `id`, `level`,
+- `lessons/<id>.json`: one file per lesson: `id`, `level`,
   `title`, `points` (each `{ "id": ..., "role": "new" | "review" | "preview" }`)
   and `more_info`, the pages of theory.
 - Ask before adding fields to points or lessons: only what something reads

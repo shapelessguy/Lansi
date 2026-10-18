@@ -11,9 +11,9 @@ from typing import Any
 import intake as intake_module
 import pytest
 from intake import Intake, Outcome, Word, category_questions, read_words, send_chat
+from languages.german.test_categories import verb
 from models import Model
 from profiling import Answer, Profile, ProfileError, Profiler, Questions
-from test_categories import verb
 from vocabulary import Form, Rejection, Vocabularies, Vocabulary
 
 KEY = "the-key"

@@ -4,7 +4,7 @@ What a word can be found to be that is not stored, as the decision model is told
 
 ## Prompt: name
 
-A proper name of a person, place or brand: Maria, Berlin, Deutschland.
+A proper name of a person, place or brand: Maria, Paris, Toyota.
 
 ## Prompt: other
 

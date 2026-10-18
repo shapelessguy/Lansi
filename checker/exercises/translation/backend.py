@@ -252,7 +252,7 @@ def finish(context: dict[str, Any], state: Any, model: Model) -> Step:
     return Step(
         state=state,
         results={"sets": done, "total": context["instances"]},
-        scores=None if score is None else {"strukturen": score},
+        scores=None if score is None else {"structures": score},
     )
 
 

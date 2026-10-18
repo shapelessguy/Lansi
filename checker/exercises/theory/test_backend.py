@@ -141,7 +141,7 @@ def test_finishing_keeps_how_many_questions_there_were_and_no_logs() -> None:
 
 
 def test_the_lessons_that_are_kept_have_theory_to_show() -> None:
-    lessons = Path(__file__).parents[2] / "grammar" / "German" / "lessons"
+    lessons = Path(__file__).parents[2] / "languages" / "german" / "grammar" / "lessons"
     for path in lessons.glob("*.json"):
         lesson = json.loads(path.read_text(encoding="utf-8"))
         step = start({**CONTEXT, "lesson": lesson}, FakeModel())

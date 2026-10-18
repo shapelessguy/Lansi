@@ -32,7 +32,7 @@ def act(context, state, message, model):
     return Step(state=state, show="ok", graded=[grade("right", message)])
 
 def finish(context, state, model):
-    return Step(results={}, scores={context["options"]["skill"]: 80, "aufgabe": 50})
+    return Step(results={}, scores={context["options"]["skill"]: 80, "task": 50})
 
 serve(start, act, finish)
 """
@@ -42,7 +42,7 @@ MANIFEST = {
     "options": {
         "skill": {
             "label": "Skill",
-            "choices": {"lesen": "Lesen", "schreiben": "Schreiben"},
+            "choices": {"reading": "Lesen", "writing": "Schreiben"},
         },
         "count": {"label": "Count", "min": 1, "max": 10, "default": 4},
     },
@@ -54,14 +54,14 @@ TEMPLATE = {
     "themes": ["Wohnen"],
     "modules": [
         {
-            "id": "lesen",
+            "id": "reading",
             "title": "Lesen",
             "weight": 25,
             "parts": [
                 {
                     "title": "Teil 1",
                     "exercise": "scored",
-                    "options": {"skill": "lesen", "count": 4},
+                    "options": {"skill": "reading", "count": 4},
                     "instances": 1,
                     "scale": "count",
                     "minutes": 20,
@@ -73,14 +73,14 @@ TEMPLATE = {
             ],
         },
         {
-            "id": "schreiben",
+            "id": "writing",
             "title": "Schreiben",
             "weight": 25,
             "parts": [
                 {
                     "title": "Teil 1",
                     "exercise": "scored",
-                    "options": {"skill": "schreiben"},
+                    "options": {"skill": "writing"},
                     "instances": 2,
                     "minutes": 40,
                     "points": 10,
@@ -122,12 +122,12 @@ def directory(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def templates(tmp_path: Path) -> Path:
-    """A directory of templates, with the exam of A1 in German."""
-    (tmp_path / "evaluations" / "German").mkdir(parents=True)
-    (tmp_path / "evaluations" / "German" / "A1.json").write_text(
+    """A directory of languages, with the exam of A1 in German."""
+    (tmp_path / "languages" / "German" / "evaluations").mkdir(parents=True)
+    (tmp_path / "languages" / "German" / "evaluations" / "A1.json").write_text(
         json.dumps(TEMPLATE), encoding="utf-8"
     )
-    return tmp_path / "evaluations"
+    return tmp_path / "languages"
 
 
 @pytest.fixture
@@ -150,10 +150,10 @@ def test_the_exams_of_german_name_exercises_and_options_there_are() -> None:
     known = {manifest.id for manifest in exercises()}
     for exam in found.values():
         assert {part.module for part in exam.parts} == {
-            "hoeren",
-            "lesen",
-            "schreiben",
-            "sprechen",
+            "listening",
+            "reading",
+            "writing",
+            "speaking",
         }
         assert {part.exercise for part in exam.parts} <= known
     assert found["A1"].minutes == 80
@@ -164,7 +164,9 @@ def test_a_template_with_an_exercise_there_is_not_is_refused(
 ) -> None:
     broken = json.loads(json.dumps(TEMPLATE))
     broken["modules"][0]["parts"][0]["exercise"] = "dance"
-    (templates / "German" / "A1.json").write_text(json.dumps(broken), encoding="utf-8")
+    (templates / "German" / "evaluations" / "A1.json").write_text(
+        json.dumps(broken), encoding="utf-8"
+    )
 
     with pytest.raises(EvaluationError, match="no exercise 'dance'"):
         exams("German", templates, directory)
@@ -175,7 +177,9 @@ def test_a_template_with_an_option_its_exercise_does_not_have_is_refused(
 ) -> None:
     broken = json.loads(json.dumps(TEMPLATE))
     broken["modules"][0]["parts"][0]["options"]["skill"] = "singen"
-    (templates / "German" / "A1.json").write_text(json.dumps(broken), encoding="utf-8")
+    (templates / "German" / "evaluations" / "A1.json").write_text(
+        json.dumps(broken), encoding="utf-8"
+    )
 
     with pytest.raises(EvaluationError, match="singen"):
         exams("German", templates, directory)
@@ -260,14 +264,14 @@ def test_an_evaluation_done_to_the_end_is_scored_by_its_parts_and_logged(
         )
 
     assert ended["status"] == "finished"
-    assert ended["result"]["scores"]["lesen"] == 80
-    assert ended["result"]["scores"]["schreiben_aufgabe"] == 50
+    assert ended["result"]["scores"]["reading"] == 80
+    assert ended["result"]["scores"]["writing_task"] == 50
     assert ended["result"]["scores"]["total"] == 80
     assert ended["result"]["passed"] is True
     (log, *exercise_logs) = evaluations._store.all_logs()  # noqa: SLF001
     assert log["kind"] == "evaluation"
     assert log["content"].startswith("Both parts done.")
-    assert "Scores: lesen 80" in log["content"]
+    assert "Scores: reading 80" in log["content"]
     assert log["source"]["scores"]["total"] == 80
     assert [each["kind"] for each in exercise_logs] == ["exercise", "exercise"]
 
@@ -284,8 +288,8 @@ def test_an_evaluation_ended_early_is_abandoned_and_not_passed(
     ended, _ = evaluations.end(evaluation["id"], LEARNER, answering())
 
     assert ended["status"] == "abandoned"
-    assert ended["result"]["scores"]["lesen"] == 80
-    assert ended["result"]["scores"]["schreiben"] is None
+    assert ended["result"]["scores"]["reading"] == 80
+    assert ended["result"]["scores"]["writing"] is None
     assert (ended["result"]["scores"]["total"], ended["result"]["passed"]) == (
         None,
         None,
@@ -297,18 +301,18 @@ def test_a_module_counts_its_parts_by_their_points_and_a_part_not_done_as_none()
 ):
     plan = {
         "pass": {"module": 60},
-        "modules": [{"id": "lesen", "weight": 1}, {"id": "hoeren", "weight": 3}],
+        "modules": [{"id": "reading", "weight": 1}, {"id": "listening", "weight": 3}],
         "parts": [
-            {"module": "lesen", "points": 5},
-            {"module": "lesen", "points": 15},
-            {"module": "hoeren", "points": 5},
+            {"module": "reading", "points": 5},
+            {"module": "reading", "points": 15},
+            {"module": "listening", "points": 5},
         ],
     }
 
-    result = score(plan, [{"lesen": 100}, None, {"hoeren": 70}])
+    result = score(plan, [{"reading": 100}, None, {"listening": 70}])
 
-    assert result["scores"]["lesen"] == 25
-    assert result["scores"]["hoeren"] == 70
+    assert result["scores"]["reading"] == 25
+    assert result["scores"]["listening"] == 70
     # (25 + 3 * 70) / 4
     assert result["scores"]["total"] == 58.8
     # as every module must reach 60

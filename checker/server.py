@@ -53,7 +53,6 @@ from exercising import (
 )
 from grammar import GrammarError
 from intake import (
-    DEFAULT_LANGUAGE,
     MAX_WORDS,
     Intake,
     Outcome,
@@ -61,6 +60,7 @@ from intake import (
     read_words,
     send_chat,
 )
+from languages import DEFAULT_LANGUAGE, language_of
 from live import LiveChecker
 from logs import LogError
 from lookups import asked_anything, translation_log, write_question_logs
@@ -1211,8 +1211,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
         elif intake and intake.has_vocabulary(named):
             # asking after a language does not make a vocabulary of it
             vocabulary = intake.vocabulary_of(named)
-        elif intake and url.path == "/vocabulary/words":
-            self._reply(HTTPStatus.OK, {"categories": list(CATEGORIES), "words": []})
+        # how the forms of a word of the language are laid out
+        tables = language_of(named or (intake.language if intake else "")).form_tables()
+        if intake and not vocabulary and url.path == "/vocabulary/words":
+            self._reply(
+                HTTPStatus.OK,
+                {"categories": list(CATEGORIES), "tables": tables, "words": []},
+            )
             return
         if vocabulary and url.path == "/vocabulary/words":
             # Every stored word, without what is known about it, which is
@@ -1222,6 +1227,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 {
                     # in the order they are to be shown in
                     "categories": list(CATEGORIES),
+                    "tables": tables,
                     "words": [asdict(word) for word in vocabulary.listing()],
                 },
             )

@@ -111,7 +111,7 @@ def test_reading_scores_the_share_of_the_questions_answered_right() -> None:
 
     step = finish(CONTEXT, state, model)
 
-    assert step.scores == {"lesen": 50.0}
+    assert step.scores == {"reading": 50.0}
 
 
 def test_listening_scores_as_hearing_and_says_how_often_the_text_may_be_heard() -> None:
@@ -123,7 +123,7 @@ def test_listening_scores_as_hearing_and_says_how_often_the_text_may_be_heard() 
 
     assert "read aloud" in model.asked[0]
     assert (started.show["by"], started.show["plays"]) == ("listening", 1)
-    assert finish(context, state, model).scores == {"hoeren": 100.0}
+    assert finish(context, state, model).scores == {"listening": 100.0}
 
 
 def test_statements_are_answered_richtig_or_falsch_whatever_options_the_model_gave() -> (

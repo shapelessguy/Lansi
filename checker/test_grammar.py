@@ -25,7 +25,7 @@ def point(point_id: str, **more: Any) -> dict[str, Any]:
 
 
 def write(directory: Path, points: list[Any], lessons: dict[str, Any]) -> Grammar:
-    german = directory / "German"
+    german = directory / "German" / "grammar"
     (german / "lessons").mkdir(parents=True)
     (german / "points.json").write_text(json.dumps(points), encoding="utf-8")
     for name, lesson in lessons.items():
@@ -134,7 +134,7 @@ def test_lessons_are_listed_in_the_order_kept_and_the_others_after_them(
             "mango": lesson("mango", ("a", "new")),
         },
     )
-    (tmp_path / "German" / "order.json").write_text(
+    (tmp_path / "German" / "grammar" / "order.json").write_text(
         json.dumps(["zebra", "later"]), encoding="utf-8"
     )
 
@@ -150,7 +150,7 @@ def test_the_order_kept_names_only_lessons_there_are_and_each_once(
     tmp_path: Path,
 ) -> None:
     grammar = write(tmp_path, [point("a")], {"one": lesson("one", ("a", "new"))})
-    order = tmp_path / "German" / "order.json"
+    order = tmp_path / "German" / "grammar" / "order.json"
 
     order.write_text(json.dumps(["one", "gone"]), encoding="utf-8")
     with pytest.raises(GrammarError, match="no lesson gone"):

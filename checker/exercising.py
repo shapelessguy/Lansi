@@ -43,6 +43,7 @@ from typing import Any
 
 from grammar import Grammar
 from intake import read_usage
+from languages import language_of
 from logs import LogError, Task, has_anything, write_log
 from models import Model
 from profiling import Profile, ProfileError
@@ -86,15 +87,15 @@ SHOWN_WORDS = 15
 REVIEWED_LESSONS = 10
 # what an exercise may score, as `SCORES` of exercises/kit.py names them
 SCORES = (
-    "lesen",
-    "hoeren",
-    "schreiben",
-    "sprechen",
-    "aufgabe",
-    "kohaerenz",
-    "wortschatz",
-    "strukturen",
-    "aussprache",
+    "reading",
+    "listening",
+    "writing",
+    "speaking",
+    "task",
+    "coherence",
+    "vocabulary",
+    "structures",
+    "pronunciation",
 )
 # the longest time limit an exercise may have, in minutes
 MAX_MINUTES = 240
@@ -975,8 +976,11 @@ class Practice:
                 f"the lesson {session['lesson'] or 'of the review'} is gone"
             )
         topics = [self._store.topic(topic) for topic in session["topics"]]
+        language = language_of(session["language"])
         return {
             "language": session["language"],
+            "letters": dict(language.equivalents),
+            "marks": language.marks,
             "into": context.get("into") or "English",
             "level": context.get("level") or "",
             "lesson": lesson,
