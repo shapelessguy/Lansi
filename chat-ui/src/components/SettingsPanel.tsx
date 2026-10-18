@@ -2,6 +2,15 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { useEffect, useState } from "react";
+import {
+    type AnkiDeck,
+    type AnkiState,
+    chooseAnkiDecks,
+    describeAnki,
+    fetchAnkiDecks,
+    linkAnki,
+    unlinkAnki,
+} from "../lib/anki";
 import { newId } from "../lib/ids";
 
 import { fetchOpenRouterModels, type ListedModel, type ModelKind } from "../lib/models";
@@ -37,8 +46,11 @@ const TABS: { id: SettingsTab; label: string }[] = [
 
 interface Props {
     settings: Settings;
-    /** Whether the user has Anki words, and so the settings of their import. */
-    ankiWords: boolean;
+    /** The Anki account the user may link, once it is known whether there is one. */
+    anki: AnkiState | null;
+    onAnki: (anki: AnkiState) => void;
+    /** Says that other Anki decks were chosen, whose words are to be fetched. */
+    onDecks: () => void;
     /** The sets of words of the language being learned, which the exercises can be given. */
     sets: WordSet[];
     tab: SettingsTab;
@@ -52,8 +64,161 @@ interface TabProps {
     onChange: (settings: Settings) => void;
 }
 
-function GeneralTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: boolean }) {
+/** The decks of the linked collection, to choose those whose words are had. */
+function AnkiDecks({ onDecks }: { onDecks: () => void }) {
+    const [decks, setDecks] = useState<AnkiDeck[] | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let current = true;
+        fetchAnkiDecks().then(
+            (listed) => current && setDecks(listed),
+            (failed: Error) => current && setError(failed.message),
+        );
+        return () => {
+            current = false;
+        };
+    }, []);
+
+    function toggle(deck: AnkiDeck) {
+        if (!decks) {
+            return;
+        }
+        // the decks inside it go with it, and can be changed one by one afterwards
+        const ticked = !deck.chosen;
+        const goes = (each: AnkiDeck) => each.id === deck.id || each.name.startsWith(`${deck.name}::`);
+        const chosen = decks.filter((each) => (goes(each) ? ticked : each.chosen)).map((each) => each.id);
+        setError(null);
+        chooseAnkiDecks(chosen).then(
+            (listed) => {
+                setDecks(listed);
+                onDecks();
+            },
+            (failed: Error) => setError(failed.message),
+        );
+    }
+
+    return (
+        <fieldset className="anki-decks">
+            <legend>Decks</legend>
+            {decks === null && !error && <small className="import-status">Loading the decks…</small>}
+            {decks?.map((deck) => {
+                const parts = deck.name.split("::");
+                return (
+                    <label key={deck.id} className="check" style={{ paddingLeft: (parts.length - 1) * 18 }}>
+                        <input type="checkbox" checked={deck.chosen} onChange={() => toggle(deck)} />
+                        <span title={deck.name}>{parts[parts.length - 1]}</span>
+                        <small>{deck.total_cards} cards</small>
+                    </label>
+                );
+            })}
+            {error && <small className="import-status error">{error}</small>}
+            {decks && (
+                <small className="import-status">
+                    The words of unticked decks are left out of the Anki tab and the import. Decks made later are
+                    ticked.
+                </small>
+            )}
+        </fieldset>
+    );
+}
+
+/** Links an Anki account, or says how the linked one is doing and unlinks it. */
+function AnkiAccount(
+    { anki, onAnki, onDecks }: { anki: AnkiState | null; onAnki: (anki: AnkiState) => void; onDecks: () => void },
+) {
+    const [username, setUsername] = useState("");
+    const [password, setPassword] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    function settle(asked: Promise<AnkiState>) {
+        setBusy(true);
+        setError(null);
+        asked.then(
+            (state) => {
+                setPassword("");
+                onAnki(state);
+            },
+            (failed: Error) => setError(failed.message),
+        ).finally(() => setBusy(false));
+    }
+
+    if (anki === null) {
+        return <small className="import-status">Asking whether an Anki account is linked…</small>;
+    }
+    if (anki.linked) {
+        return (
+            <>
+                <div className="anki-account">
+                    <span>
+                        AnkiWeb account linked
+                        <small className={anki.error ? "error" : undefined}>{describeAnki(anki)}</small>
+                    </span>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                            window.confirm("Unlink your Anki account? Its words stay in the vocabulary.")
+                            && settle(unlinkAnki())}
+                    >
+                        Unlink
+                    </button>
+                </div>
+                {error && <small className="import-status error">{error}</small>}
+                {anki.last_sync !== null && <AnkiDecks onDecks={onDecks} />}
+            </>
+        );
+    }
+    return (
+        <form
+            onSubmit={(event) => {
+                event.preventDefault();
+                settle(linkAnki(username.trim(), password));
+            }}
+        >
+            <label className="field">
+                <span>AnkiWeb email</span>
+                <input
+                    type="email"
+                    autoComplete="username"
+                    spellCheck={false}
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                />
+            </label>
+            <label className="field">
+                <span>AnkiWeb password</span>
+                <span className="input-row">
+                    <input
+                        type="password"
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                    />
+                    <button type="submit" disabled={busy || !username.trim() || !password}>
+                        {busy ? "Linking…" : "Link"}
+                    </button>
+                </span>
+                <small>
+                    Your password is only used to log in once, and is not kept. A copy of your collection is kept on
+                    this server and synced every few minutes, for the Anki tab and the vocabulary.
+                </small>
+            </label>
+            {error && <small className="import-status error" role="alert">{error}</small>}
+        </form>
+    );
+}
+
+function GeneralTab(
+    { settings, onChange, anki, onAnki, onDecks }: TabProps & {
+        anki: AnkiState | null;
+        onAnki: (anki: AnkiState) => void;
+        onDecks: () => void;
+    },
+) {
     const [showKey, setShowKey] = useState(false);
+    const ankiWords = anki?.linked ?? false;
 
     return (
         <>
@@ -88,6 +253,8 @@ function GeneralTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: b
                 />
                 <small>The language text you select is translated into, and exercises explain in.</small>
             </label>
+            <h3>Anki</h3>
+            <AnkiAccount anki={anki} onAnki={onAnki} onDecks={onDecks} />
             {ankiWords && (
                 <>
                     <label className="toggle">
@@ -642,7 +809,7 @@ function QuestionsTab({ settings, onChange }: TabProps) {
     );
 }
 
-export function SettingsPanel({ settings, ankiWords, sets, tab, onTab, onChange, onClose }: Props) {
+export function SettingsPanel({ settings, anki, onAnki, onDecks, sets, tab, onTab, onChange, onClose }: Props) {
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onClose();
         window.addEventListener("keydown", onKeyDown);
@@ -669,7 +836,15 @@ export function SettingsPanel({ settings, ankiWords, sets, tab, onTab, onChange,
             }
         >
             <div className="settings-body" role="tabpanel">
-                {tab === "general" && <GeneralTab settings={settings} onChange={onChange} ankiWords={ankiWords} />}
+                {tab === "general" && (
+                    <GeneralTab
+                        settings={settings}
+                        onChange={onChange}
+                        anki={anki}
+                        onAnki={onAnki}
+                        onDecks={onDecks}
+                    />
+                )}
                 {tab === "models" && <ModelsTab settings={settings} onChange={onChange} />}
                 {tab === "content" && <ContentTab settings={settings} onChange={onChange} />}
                 {tab === "questions" && <QuestionsTab settings={settings} onChange={onChange} />}

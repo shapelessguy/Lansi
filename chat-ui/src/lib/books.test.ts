@@ -4,8 +4,6 @@
 import { expect, test } from "vitest";
 
 import {
-    describeSync,
-    type FolderSync,
     MAX_FONT_SIZE,
     MIN_FONT_SIZE,
     normalizeReading,
@@ -41,8 +39,6 @@ test("a link that is inside another or outside the text is not one", () => {
     ]);
 });
 
-const sync: FolderSync = { state: "synced", folder: "C:\\Books", found: 3, unread: [], revision: 1, suggestion: "" };
-
 test("the pages are counted by the columns the text is laid out in", () => {
     expect(pageCount(800, 800, 48)).toBe(1);
     expect(pageCount(800 * 3 + 48 * 2, 800, 48)).toBe(3);
@@ -53,14 +49,6 @@ test("a paragraph is on the page of the column it starts in", () => {
     expect(pageOf(0, 800, 48)).toBe(0);
     expect(pageOf(847.6, 800, 48)).toBe(1);
     expect(pageOf(848 * 2, 800, 48)).toBe(2);
-});
-
-test("what the folder of books is doing is said in a line", () => {
-    expect(describeSync(sync)).toBe("3 e-books in the folder.");
-    expect(describeSync({ ...sync, found: 1, unread: [{ file: "a.epub", reason: "locked" }] }))
-        .toBe("1 e-book in the folder, 1 of which cannot be read.");
-    expect(describeSync({ ...sync, state: "missing" })).toMatch(/cannot be found/);
-    expect(describeSync({ ...sync, state: "syncing" })).toBe("Looking through the folder…");
 });
 
 test("the text is made larger and smaller a step at a time, within limits", () => {

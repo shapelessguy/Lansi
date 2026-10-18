@@ -1,13 +1,15 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-"""Brings the words of the Anki collection into the vocabulary of the
+"""Brings the words of a user's Anki collection into the vocabulary of the
 language they are of.
 
-Every few seconds the deck-status server, if it is there, is asked for the
-words that have a card in review, and those the vocabulary was never given
-are taken into it, a few at a time. The key and the model this needs are
-those of the chat, which hands them over and can switch the import off.
+Each user may link an Anki account of their own, whose collection the
+deck-status server keeps a copy of; the checker alone reaches that server.
+Every few seconds it is asked for the words that have a card in review, and
+those the vocabulary was never given are taken into it, a few at a time. The
+key and the model this needs are those of the chat, which hands them over
+and can switch the import off.
 """
 
 from __future__ import annotations
@@ -16,9 +18,11 @@ import json
 import re
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from typing import Any
 
 from intake import DEFAULT_LANGUAGE, Intake, Outcome, Word
 from models import Model
@@ -41,7 +45,7 @@ MAX_TRIES = 3
 # field the note is sorted by, which is the word.
 WORDS_SQL = (
     "select n.sfld from cards c join notes n on n.id = c.nid"
-    " where c.type in (2, 3) group by n.id order by n.id"
+    " where c.type in (2, 3){decks} group by n.id order by n.id"
 )
 
 _MARKUP = re.compile(r"\[sound:[^\]]*\]|<[^>]*>")
@@ -51,26 +55,142 @@ _ARTICLE_OR_SICH = re.compile(r"^(der|die|das|sich)\s+", re.IGNORECASE)
 _SINGLE_WORD = re.compile(r"[^\W\d_]+(?:['’-][^\W\d_]+)*")
 
 
+# One row per note that has a card in review or being relearned, with the
+# earliest day one of those cards is due and the longest interval, for the
+# words the chat lists.
+KNOWN_WORDS_SQL = (
+    "select n.id, n.mid, n.sfld, n.flds,"
+    " min(case when c.odue > 0 then c.odue else c.due end), max(c.ivl)"
+    " from cards c join notes n on n.id = c.nid"
+    " where c.type in (2, 3){decks} group by n.id"
+)
+
+
 class AnkiUnavailable(Exception):
     """The Anki words could not be fetched. The message says why."""
 
 
-def fetch_anki_notes(url: str = DECK_STATUS_URL) -> list[str]:
-    """What each note with a card in review holds as its word, as the
-    deck-status server at `url` gives it. Raises AnkiUnavailable."""
-    request = urllib.request.Request(
-        f"{url}/sql", data=json.dumps({"sql": WORDS_SQL}).encode(), method="POST"
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECS) as response:
-            rows = json.load(response)
-        return [str(row[0]) for row in rows]
-    except urllib.error.HTTPError as error:
-        raise AnkiUnavailable(
-            f"the deck-status server refused the request ({error.code})"
-        ) from None
-    except (OSError, ValueError, IndexError, TypeError):
-        raise AnkiUnavailable("the deck-status server cannot be reached") from None
+class AnkiRefused(AnkiUnavailable):
+    """The deck-status server refused what was asked, such as a login to an
+    Anki account with the wrong password. The message says why."""
+
+
+# how long logging in to an Anki account may take
+LINK_TIMEOUT_SECS = 60
+# no more of what the deck-status server says of a refusal is passed on
+MAX_REASON_LENGTH = 300
+
+
+class AnkiLink:
+    """The Anki account a user may link, whose collection the deck-status
+    server at `url` keeps a copy of."""
+
+    def __init__(self, user: str, url: str = DECK_STATUS_URL) -> None:
+        self._base = f"{url}/users/{urllib.parse.quote(user, safe='')}"
+
+    def state(self) -> dict[str, Any]:
+        """Whether an account is linked, with when its collection was last
+        synced, in Unix seconds, and why the last sync failed, if it did."""
+        reply = self._ask("")
+        status = reply.get("status") or {}
+        return {
+            "linked": bool(reply.get("linked")),
+            "last_sync": status.get("last_sync"),
+            "error": status.get("last_sync_error"),
+        }
+
+    def link(self, username: str, password: str) -> dict[str, Any]:
+        """Log in to the Anki account of `username`, whose collection is
+        kept from now on, and return the state. The password is not kept.
+        Raises AnkiRefused if the login is refused."""
+        self._ask(
+            "/link",
+            {"username": username, "password": password},
+            timeout=LINK_TIMEOUT_SECS,
+        )
+        return self.state()
+
+    def unlink(self) -> dict[str, Any]:
+        """Forget the Anki account, and the copy of its collection."""
+        self._ask("/link", method="DELETE")
+        return self.state()
+
+    def decks(self) -> list[dict[str, Any]]:
+        """The decks of the collection, parents before their children, each
+        with its id, its full name ("Deutsch::Verben") and its counts.
+        Raises AnkiUnavailable, or AnkiRefused before the first sync."""
+        decks = self._ask("/decks").get("decks", [])
+        return [deck for deck in decks if isinstance(deck, dict)]
+
+    @staticmethod
+    def _without_decks(skipped: list[int]) -> str:
+        """What leaves the cards of the `skipped` decks out of a query."""
+        if not skipped:
+            return ""
+        listed = ", ".join(str(int(deck_id)) for deck_id in skipped)
+        # a card moved into a filtered deck still belongs to its own one
+        return f" and not (c.did in ({listed}) or c.odid in ({listed}))"
+
+    def notes(self, skipped: list[int] | None = None) -> list[str]:
+        """What each note with a card in review holds as its word, leaving
+        out the cards of the `skipped` decks. Raises AnkiUnavailable."""
+        sql = WORDS_SQL.format(decks=self._without_decks(skipped or []))
+        rows = self._ask("/sql", {"sql": sql})
+        try:
+            return [str(row[0]) for row in rows]
+        except (IndexError, TypeError):
+            raise AnkiUnavailable(
+                "the deck-status server gave rows of another shape"
+            ) from None
+
+    def known_words(self, skipped: list[int] | None = None) -> dict[str, Any]:
+        """The notes with a card in review, leaving out the cards of the
+        `skipped` decks, as rows of KNOWN_WORDS_SQL, with the names of the
+        fields of each of their notetypes and the timing of the day the due
+        days count from. The chat makes its list of words of them. Raises
+        AnkiUnavailable."""
+        sql = KNOWN_WORDS_SQL.format(decks=self._without_decks(skipped or []))
+        rows = self._ask("/sql", {"sql": sql})
+        timing = self._ask("/api/schedTimingToday")
+        try:
+            notetypes = list(dict.fromkeys(int(row[1]) for row in rows))
+        except (TypeError, ValueError, IndexError):
+            raise AnkiUnavailable(
+                "the deck-status server gave rows of another shape"
+            ) from None
+        field_names = {
+            str(ntid): self._ask("/api/getFieldNames", {"ntid": ntid}).get("vals", [])
+            for ntid in notetypes
+        }
+        return {"rows": rows, "timing": timing, "field_names": field_names}
+
+    def _ask(
+        self,
+        path: str,
+        body: object | None = None,
+        method: str | None = None,
+        timeout: float = TIMEOUT_SECS,
+    ) -> Any:
+        """What the deck-status server answers at `path` of the user's
+        collection, posted `body` if there is one. Raises AnkiUnavailable,
+        or AnkiRefused with the reason the server gives."""
+        request = urllib.request.Request(
+            f"{self._base}{path}",
+            data=None if body is None else json.dumps(body).encode(),
+            method=method or ("GET" if body is None else "POST"),
+            headers={} if body is None else {"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            reason = error.read().decode(errors="replace").strip()
+            raise AnkiRefused(
+                reason[:MAX_REASON_LENGTH]
+                or f"the deck-status server refused the request ({error.code})"
+            ) from None
+        except (OSError, ValueError):
+            raise AnkiUnavailable("the deck-status server cannot be reached") from None
 
 
 def vocabulary_words(note: str) -> list[str]:
@@ -109,7 +229,7 @@ class AnkiImporter:
     def __init__(
         self,
         intake: Intake,
-        fetch_notes: Callable[[], list[str]] = fetch_anki_notes,
+        fetch_notes: Callable[[], list[str]],
         api_key: str = "",
         batch: int = BATCH,
         on_taken: Callable[[list[Outcome]], None] | None = None,

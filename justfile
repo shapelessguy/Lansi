@@ -10,14 +10,16 @@ default:
 dev:
     cd chat-ui && npm install && npm run all
 
-# Sync a copy of the collection periodically and serve its contents as JSON on
-# http://127.0.0.1:8090 (try /decks). Settings are read from deck-status/.env.
+# Sync a copy of the Anki collection of each user who linked one, and serve
+# its contents as JSON on http://127.0.0.1:8090 (try /users/<name>/decks).
+# Optional settings are read from deck-status/.env.
 deck-status:
     cargo run --target-dir out/rust -p anki-deck-status
 
-# Run the chat GUI on port 5173, open to the LAN (http://<this machine>:5173
-# from another one; Windows may ask to let Node through the firewall). It reads the known words from the
-# deck-status server, so start `just deck-status` first.
+# Run the chat GUI on http://127.0.0.1:5173/lansi/, for this machine alone:
+# from elsewhere it is opened through the nginx of CyanHouse, at /lansi/. It
+# reads the known words through the checker server, so start `just checker`
+# (and `just deck-status`) first.
 chat-ui:
     cd chat-ui && npm install && npm run dev
 

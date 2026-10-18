@@ -1,13 +1,13 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-// Waits until the deck-status and checker servers accept connections, so that
-// the GUI is started last and finds both of them running.
+// Waits until the checker server accepts connections, so that the GUI is
+// started last and finds it running. The deck-status server is not waited
+// for: only the checker reaches it, and the GUI runs without it.
 
 import { connect } from "node:net";
 
 const servers = {
-    "deck-status": process.env.ANKI_STATUS_URL ?? "http://127.0.0.1:8090",
     checker: process.env.CHECKER_URL ?? "http://127.0.0.1:8092",
 };
 const RETRY_MS = 500;

@@ -3,12 +3,14 @@
 
 import { expect, test } from "vitest";
 
-import { dueDate, plainText, seesAnkiWords, type Timing, wordsFromRows } from "./anki";
+import { type AnkiState, describeAnki, dueDate, plainText, type Timing, wordsFromRows } from "./anki";
 
-test("the Anki words are shown to the user whose collection they are from, and to nobody else", () => {
-    expect(seesAnkiWords("cian_cl")).toBe(true);
-    expect(seesAnkiWords("someone_else")).toBe(false);
-    expect(seesAnkiWords("")).toBe(false);
+test("a linked Anki account says when it last synced, or why it could not", () => {
+    const anki: AnkiState = { linked: true, last_sync: new Date(2026, 9, 18, 22, 40).getTime() / 1000, error: null };
+
+    expect(describeAnki(anki, "en-GB")).toBe("Last synced 18 Oct, 22:40.");
+    expect(describeAnki({ ...anki, last_sync: null })).toMatch(/first sync is running/);
+    expect(describeAnki({ ...anki, error: "network down" })).toBe("The last sync failed: network down");
 });
 
 // day 137 of the collection, which ends at local midnight after 2026-10-12

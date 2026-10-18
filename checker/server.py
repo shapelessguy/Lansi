@@ -31,8 +31,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from anki_import import DECK_STATUS_URL, AnkiImporter, fetch_anki_notes
-from book_sync import BookSync
+from anki_import import (
+    DECK_STATUS_URL,
+    AnkiImporter,
+    AnkiLink,
+    AnkiRefused,
+    AnkiUnavailable,
+)
 from books import BookError, read_epub
 from categories import CATEGORIES
 from evaluating import EvaluationError, Evaluations
@@ -114,8 +119,6 @@ MAX_BODY_BYTES = 1_000_000
 MAX_BOOK_BYTES = 200_000_000
 # the request header the name of the file of a book comes in, encoded as in a URL
 FILE_NAME_HEADER = "X-File-Name"
-# no folder is named in more
-MAX_PATH_LENGTH = 1000
 # How much of the text on either side of a selection is looked at for the
 # sentences its words are in.
 MAX_AROUND_LENGTH = 2000
@@ -141,9 +144,10 @@ DATA_DIRECTORY = Path(__file__).parent / "data"
 # The file that says who may log in, unless CHECKER_USERS names another. It
 # is edited by hand, and read every time someone logs in.
 USERS_FILE = Path(__file__).parent.parent / "users.json"
-# The user whose collection the deck-status server keeps, unless
-# CHECKER_ANKI_USER names another. The Anki words are imported for nobody else.
-ANKI_USER = "cian_cl"
+# no AnkiWeb name or password is longer
+MAX_ANKI_LOGIN_LENGTH = 500
+# no collection has more decks to choose
+MAX_ANKI_DECKS = 5000
 
 
 def describe(sentences: list[Sentence]) -> str:
@@ -272,10 +276,9 @@ class Account:
     store: UserStore | None = None
     # what takes the words of the chats and the exercises into the vocabulary
     processor: Processor | None = None
-    # whether the Anki words are this user's, and so are imported
-    anki: bool = True
-    # what takes the books of a folder into those the user reads
-    book_sync: BookSync | None = None
+    # the Anki account the user may link, whose words are listed and
+    # imported; the deck-status server is reached only through it
+    anki: AnkiLink | None = None
     # what translates a selection, and answers what is asked about it
     translator: Translator | None = None
     # the language being studied, by its English name
@@ -361,6 +364,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if not self._find_account() or self._kept("PUT") or self._sets("PUT"):
             return
         try:
+            if self._anki("PUT"):
+                return
             if self._books("PUT") or self._speech("PUT"):
                 return
         except ValueError as error:
@@ -372,6 +377,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if not self._find_account() or self._kept("DELETE") or self._sets("DELETE"):
             return
         if self._books("DELETE") or self._speech("DELETE") or self._topics("DELETE"):
+            return
+        if self._anki("DELETE"):
             return
         self._reply(HTTPStatus.NOT_FOUND, {"error": "no such path"})
 
@@ -419,14 +426,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             GET /books/ID      a book with its paragraphs
             GET /books/ID/cover  the picture on its cover, as a file
             DELETE /books/ID   remove a book
-            GET /books/folder  the folder the books are taken from, and
-                               what the taking of them is doing
-            PUT /books/folder  take the books from the `{"folder": ...}`
-                               that is sent from now on, or from none
-            POST /books/sync   look through the folder now
         """
         store = self.account.store
-        sync = self.account.book_sync
         path = urlsplit(self.path).path
         one = re.fullmatch(r"/books/([^/]+)", path)
         cover = re.fullmatch(r"/books/([^/]+)/cover", path)
@@ -443,18 +444,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(picture[0])
             return True
-        if sync and path in ("/books/folder", "/books/sync"):
-            if method == "PUT" and path == "/books/folder":
-                folder = self._read_body().get("folder")
-                if not isinstance(folder, str) or len(folder) > MAX_PATH_LENGTH:
-                    raise ValueError('expected {"folder": "..."}')
-                sync.choose(folder)
-            elif method == "POST" and path == "/books/sync":
-                sync.start()
-            elif method != "GET" or path != "/books/folder":
-                return False
-            self._reply(HTTPStatus.OK, asdict(sync.status()))
-        elif method == "GET" and not one:
+        if method == "GET" and not one:
             self._reply(HTTPStatus.OK, {"books": store.books()})
         elif method == "POST" and not one:
             length = int(self.headers.get("Content-Length") or 0)
@@ -1117,6 +1107,84 @@ class CheckerHandler(BaseHTTPRequestHandler):
         usage = [describe_usage(profile) for profile in used]
         self._reply(HTTPStatus.OK, {**session, "usage": usage})
 
+    def _anki(self, method: str) -> bool:
+        """Answers a request about the Anki account of the user, and returns
+        whether the request was one.
+
+            GET /anki          whether an account is linked, when its
+                               collection was last synced and why the last
+                               sync failed, if it did
+            POST /anki/link    link the account of the `{"username": ...,
+                               "password": ...}` that is sent; the password
+                               is not kept
+            DELETE /anki/link  forget the account and its collection
+            GET /anki/words    the words of the chosen decks that have a
+                               card in review
+            GET /anki/decks    the decks of the collection, each saying
+                               whether it is chosen
+            PUT /anki/decks    choose the `{"decks": [id, ...]}` that are
+                               sent, and no other of the decks there are;
+                               those made later are chosen
+        """
+        path = urlsplit(self.path).path
+        if path not in ("/anki", "/anki/link", "/anki/words", "/anki/decks"):
+            return False
+        store = self.account.store
+        anki = self.account.anki
+        if anki is None:
+            self._reply(HTTPStatus.NOT_FOUND, {"error": "there is no Anki here"})
+            return True
+        try:
+            if method == "GET" and path == "/anki":
+                self._reply(HTTPStatus.OK, anki.state())
+            elif method == "POST" and path == "/anki/link":
+                body = self._read_body()
+                username, password = body.get("username"), body.get("password")
+                if not (
+                    isinstance(username, str)
+                    and isinstance(password, str)
+                    and username.strip()
+                    and password
+                    and len(username) + len(password) <= MAX_ANKI_LOGIN_LENGTH
+                ):
+                    raise ValueError('expected {"username": "...", "password": "..."}')
+                self._reply(HTTPStatus.OK, anki.link(username.strip(), password))
+            elif method == "DELETE" and path == "/anki/link":
+                self._reply(HTTPStatus.OK, anki.unlink())
+            elif method == "GET" and path == "/anki/words":
+                skipped = store.skipped_anki_decks() if store else []
+                self._reply(HTTPStatus.OK, anki.known_words(skipped))
+            elif method in ("GET", "PUT") and path == "/anki/decks" and store:
+                if method == "PUT":
+                    decks = self._read_body().get("decks")
+                    if not (
+                        isinstance(decks, list)
+                        and len(decks) <= MAX_ANKI_DECKS
+                        and all(type(deck) is int for deck in decks)
+                    ):
+                        raise ValueError('expected {"decks": [id, ...]}')
+                    there = [deck.get("id") for deck in anki.decks()]
+                    store.save_skipped_anki_decks(
+                        [
+                            deck
+                            for deck in there
+                            if isinstance(deck, int) and deck not in decks
+                        ]
+                    )
+                skipped = store.skipped_anki_decks()
+                listed = [
+                    {**deck, "chosen": deck.get("id") not in skipped}
+                    for deck in anki.decks()
+                ]
+                self._reply(HTTPStatus.OK, {"decks": listed})
+            else:
+                return False
+        except AnkiRefused as error:
+            self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+        except AnkiUnavailable as error:
+            self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
+        return True
+
     def do_GET(self) -> None:
         if self._exercise_ui():
             return
@@ -1125,6 +1193,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if self._practice("GET") or self._topics("GET") or self._evaluating("GET"):
             return
         if self._books("GET") or self._speech("GET"):
+            return
+        if self._anki("GET"):
             return
         if urlsplit(self.path).path == "/tasks":
             # what is done in the background, and what came of it
@@ -1172,7 +1242,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         try:
             if self.path == "/login":
                 self._log_in()
-            elif not self._find_account() or self._kept("POST"):
+            elif not self._find_account() or self._kept("POST") or self._anki("POST"):
                 pass
             elif self._books("POST") or self._speech("POST", api_key):
                 pass
@@ -1433,8 +1503,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if anki_language is not None and not isinstance(anki_language, str):
             raise ValueError("anki_language must be text or null")
         importer.configure(
-            # the Anki words of one user are not taken in for another
-            self.account.anki and body.get("enabled") is not False,
+            # without an Anki account, there is nothing to take in
+            self.account.anki is not None and body.get("enabled") is not False,
             model,
             decision_model,
             (anki_language or "").strip()[:MAX_LANGUAGE_LENGTH] or None,
@@ -1687,12 +1757,13 @@ def make_server(
     importer: AnkiImporter | None = None,
     users: Users | None = None,
     accounts: Accounts | None = None,
+    anki: AnkiLink | None = None,
 ) -> CheckerServer:
     """A server with an account for each user, or, given a `checker`, with
     the one account made of it and what else is given, for whoever asks."""
     if accounts is None:
         assert checker is not None
-        one = Account(checker, intake, importer)
+        one = Account(checker, intake, importer, anki=anki)
         accounts = Accounts(lambda user: one)
     return CheckerServer(port, accounts, users)
 
@@ -1706,7 +1777,6 @@ if __name__ == "__main__":
     model = os.environ.get("CHECKER_PROFILE_MODEL", DEFAULT_MODEL)
     data_directory = Path(os.environ.get("CHECKER_DATA") or DATA_DIRECTORY)
     deck_status_url = os.environ.get("ANKI_STATUS_URL", DECK_STATUS_URL)
-    anki_user = os.environ.get("CHECKER_ANKI_USER") or ANKI_USER
 
     def make_account(user: str) -> Account:
         """Everything a user has, with the vocabularies in a directory of
@@ -1720,16 +1790,18 @@ if __name__ == "__main__":
             model=os.environ.get("CHECKER_CHAT_MODEL", ""),
             known=speller.knows,
         )
+        kept = UserStore(user_directory(data_directory, user))
+        anki = AnkiLink(user, deck_status_url)
         importer = AnkiImporter(
             intake,
-            partial(fetch_anki_notes, deck_status_url),
+            # the words of the decks the user chose
+            lambda: anki.notes(kept.skipped_anki_decks()),
             api_key=os.environ.get("OPENROUTER_API_KEY", ""),
             on_taken=lambda outcomes: log(
                 f"{datetime.now():%H:%M:%S} Anki words taken in for {user}\n"
                 f"{describe_outcomes(outcomes)}"
             ),
         )
-        kept = UserStore(user_directory(data_directory, user))
         kept.add_starter_topics(STARTER_TOPICS)
         processor = Processor(
             kept,
@@ -1748,14 +1820,7 @@ if __name__ == "__main__":
             importer,
             kept,
             processor,
-            anki=user == anki_user,
-            book_sync=BookSync(
-                kept,
-                on_synced=lambda added, removed: log(
-                    f"{datetime.now():%H:%M:%S} books of {user} synced with the"
-                    f" folder: {added} added, {removed} removed"
-                ),
-            ),
+            anki=anki,
             # the language model asked when a request names none
             translator=Translator(model=os.environ.get("CHECKER_CHAT_MODEL", "")),
             speaker=Speaker(kept),
@@ -1767,17 +1832,13 @@ if __name__ == "__main__":
                 later=in_background(tasks, "log"),
             ),
         )
-        assert account.book_sync and account.practice
+        assert account.practice
         account.evaluations = Evaluations(
             kept, account.practice, later=in_background(tasks, "log")
         )
-        account.book_sync.watch()
         processor.watch()
         account.study(language)
-        if account.anki:
-            importer.watch()
-        else:
-            importer.configure(False, Model(), Model())
+        importer.watch()
         return account
 
     users = Users(os.environ.get("CHECKER_USERS") or USERS_FILE, data_directory)
@@ -1805,7 +1866,7 @@ if __name__ == "__main__":
             ' {"name": "password"}.',
             flush=True,
         )
-    print(f"Anki words are imported from {deck_status_url} for {anki_user}", flush=True)
+    print(f"The Anki accounts of the users are kept by {deck_status_url}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

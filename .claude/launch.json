@@ -2,6 +2,19 @@
     "version": "0.0.1",
     "configurations": [
         {
+            "name": "linux-checker",
+            "runtimeExecutable": "/home/claudio/.local/bin/just",
+            "runtimeArgs": ["--justfile", "/home/claudio/Documents/Lansi/justfile", "checker"],
+            "port": 8092
+        },
+        {
+            "name": "linux-ui",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["--prefix", "/home/claudio/Documents/Lansi/chat-ui", "run", "dev"],
+            "port": 5173,
+            "url": "http://127.0.0.1:5173"
+        },
+        {
             "name": "chat-ui",
             "runtimeExecutable": "npm",
             "runtimeArgs": [

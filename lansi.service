@@ -1,0 +1,22 @@
+# Lansi as a service: the three parts in one tmux session, as `just dev` runs
+# them. Installed as /etc/systemd/system/lansi.service (see the README).
+#
+# The session has a tmux server of its own (-L lansi): one already running,
+# such as that of cyanhouse-api, would take the session in, and the command
+# would leave nothing behind for systemd to follow. Rust and just are in the
+# home directory, so PATH is set on the command itself.
+
+[Unit]
+Description=Lansi (deck-status, checker and chat GUI) in tmux
+After=network.target
+
+[Service]
+Type=forking
+User=claudio
+WorkingDirectory=/home/claudio/Documents/Lansi
+ExecStart=/usr/bin/tmux -L lansi new -s lansi -d '/usr/bin/env PATH=/home/claudio/.cargo/bin:/home/claudio/.local/bin:/usr/local/bin:/usr/bin:/bin /home/claudio/.local/bin/just dev'
+ExecStop=/usr/bin/tmux -L lansi kill-session -t lansi
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

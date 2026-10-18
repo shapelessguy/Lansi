@@ -323,7 +323,6 @@ def test_a_book_is_listed_without_what_it_says_and_given_whole_when_asked_for(
         "author": "Ada Autorin",
         "language": "de",
         "addedAt": 12500,
-        "source": None,
         "cover": False,
     }
     assert store.books() == [listed]
@@ -369,29 +368,22 @@ def test_books_can_be_kept_where_things_were_kept_before_there_were_books(
     assert store.settings() == {"level": "B1"}
 
 
-def test_a_book_from_the_folder_is_known_by_its_file_and_stays_as_long_ago_added(
-    tmp_path: Path,
-) -> None:
-    times = iter([10.0, 20.0, 30.0])
+def test_the_anki_decks_left_out_are_kept(store: UserStore) -> None:
+    none = store.skipped_anki_decks()
+
+    store.save_skipped_anki_decks([1781273623688, 2])
+
+    assert (none, store.skipped_anki_decks()) == ([], [1781273623688, 2])
+
+
+def test_a_book_kept_again_stays_as_long_ago_added(tmp_path: Path) -> None:
+    times = iter([10.0, 20.0])
     store = UserStore(tmp_path / "ada", now=lambda: next(times))
-    store.add_book("book-1", "Der Hund", "", "", [], "tiere/hund.epub", "1:100")
-    store.add_book("by-hand", "Die Katze", "", "", [])
+    store.add_book("book-1", "Der Hund", "", "", [])
 
-    read_again = store.add_book(
-        "book-1", "Der große Hund", "", "", [], "tiere/hund.epub", "2:120"
-    )
+    read_again = store.add_book("book-1", "Der große Hund", "", "", [])
 
-    assert store.books_from_folder() == {"tiere/hund.epub": ("book-1", "2:120")}
     assert (read_again["title"], read_again["addedAt"]) == ("Der große Hund", 10000)
-    assert read_again["source"] == "tiere/hund.epub"
-
-
-def test_the_folder_of_books_is_kept(store: UserStore) -> None:
-    nowhere = store.books_folder()
-
-    store.save_books_folder(r"C:\Users\ada\OneDrive\Bücher")
-
-    assert (nowhere, store.books_folder()) == ("", r"C:\Users\ada\OneDrive\Bücher")
 
 
 def test_the_cover_of_a_book_is_kept_with_it_and_removed_with_it(

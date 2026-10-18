@@ -1,16 +1,80 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { checkerFetch } from "./session";
 import type { Word } from "./words";
 
-/** Where the dev server forwards requests to the deck-status server. */
-const BASE = "/anki";
-/** The user whose collection the deck-status server keeps. */
-const ANKI_USER = "cian_cl";
+/** Whether the user has linked an Anki account, whose collection the server keeps a copy of. */
+export interface AnkiState {
+    linked: boolean;
+    /** Unix seconds of the last sync of the collection, or null before the first. */
+    last_sync: number | null;
+    /** Why the last sync failed, if it did. */
+    error: string | null;
+}
 
-/** Whether the Anki words are `user`'s to see. */
-export function seesAnkiWords(user: string): boolean {
-    return user === ANKI_USER;
+async function ankiReply<T>(asked: Promise<Response>): Promise<T> {
+    let response: Response;
+    try {
+        response = await asked;
+    } catch {
+        throw new Error("Could not reach the checker server. Is `just checker` running?");
+    }
+    if (!response.ok) {
+        const detail = await response.json().then((reply: { error?: string }) => reply.error, () => undefined);
+        throw new Error(detail ?? response.statusText);
+    }
+    return response.json();
+}
+
+export function fetchAnkiState(): Promise<AnkiState> {
+    return ankiReply(checkerFetch("/anki"));
+}
+
+/** Links the Anki account of `username`. The server keeps no password, only what it is given to sync with. */
+export function linkAnki(username: string, password: string): Promise<AnkiState> {
+    return ankiReply(checkerFetch("/anki/link", { method: "POST", body: JSON.stringify({ username, password }) }));
+}
+
+/** Forgets the Anki account, and the copy of its collection. */
+export function unlinkAnki(): Promise<AnkiState> {
+    return ankiReply(checkerFetch("/anki/link", { method: "DELETE" }));
+}
+
+/** A deck of the linked collection, with whether its words are among those had. */
+export interface AnkiDeck {
+    id: number;
+    /** The full name, such as "Deutsch::Verben". */
+    name: string;
+    total_cards: number;
+    chosen: boolean;
+}
+
+export async function fetchAnkiDecks(): Promise<AnkiDeck[]> {
+    return (await ankiReply<{ decks: AnkiDeck[] }>(checkerFetch("/anki/decks"))).decks;
+}
+
+/** Has the words of the decks `ids` be those had, and no other deck's that there is now. */
+export async function chooseAnkiDecks(ids: number[]): Promise<AnkiDeck[]> {
+    const asked = checkerFetch("/anki/decks", { method: "PUT", body: JSON.stringify({ decks: ids }) });
+    return (await ankiReply<{ decks: AnkiDeck[] }>(asked)).decks;
+}
+
+/** What a linked Anki account is doing, in a line. */
+export function describeAnki(anki: AnkiState, locale?: string): string {
+    if (anki.error) {
+        return `The last sync failed: ${anki.error}`;
+    }
+    if (anki.last_sync === null) {
+        return "The first sync is running, which can take a minute.";
+    }
+    const when = new Date(anki.last_sync * 1000).toLocaleString(locale, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+    return `Last synced ${when}.`;
 }
 
 export interface Timing {
@@ -20,16 +84,8 @@ export interface Timing {
     next_day_at: number;
 }
 
-// One row per note that has a card in review or being relearned, with the
-// earliest day one of those cards is due.
-const KNOWN_WORDS_SQL = `
-select n.id, n.mid, n.sfld, n.flds,
-       min(case when c.odue > 0 then c.odue else c.due end),
-       max(c.ivl)
-from cards c join notes n on n.id = c.nid
-where c.type in (2, 3)
-group by n.id`;
-
+// One row of the notes with a card in review, as the checker server hands
+// them over from the deck-status server.
 type KnownWordRow = [
     noteId: number,
     notetypeId: number,
@@ -38,23 +94,6 @@ type KnownWordRow = [
     due: number,
     interval: number,
 ];
-
-async function request<T>(path: string, body?: unknown): Promise<T> {
-    let response: Response;
-    try {
-        response = await fetch(BASE + path, {
-            method: body === undefined ? "GET" : "POST",
-            body: body === undefined ? undefined : JSON.stringify(body),
-        });
-    } catch {
-        throw new Error("Could not reach the deck-status server. Is `just deck-status` running?");
-    }
-    if (!response.ok) {
-        const detail = (await response.text()) || response.statusText;
-        throw new Error(`deck-status server: ${detail}`);
-    }
-    return response.json();
-}
 
 /** Converts the day a card is due into a calendar date, as YYYY-MM-DD. */
 export function dueDate(due: number, timing: Timing): string {
@@ -107,16 +146,23 @@ export function wordsFromRows(
     });
 }
 
-/** Fetches every word with at least one card that has graduated to review. */
+/** What the checker server hands over of the Anki collection. */
+interface AnkiWords {
+    rows: KnownWordRow[];
+    timing: Timing;
+    /** The names of the fields of each notetype, by its id. */
+    field_names: Record<string, string[]>;
+}
+
+/**
+ * Fetches every word with at least one card that has graduated to review,
+ * through the checker server, which alone reaches the deck-status server.
+ */
 export async function fetchKnownWords(): Promise<Word[]> {
-    const [rows, timing] = await Promise.all([
-        request<KnownWordRow[]>("/sql", { sql: KNOWN_WORDS_SQL }),
-        request<Timing>("/api/schedTimingToday"),
-    ]);
-    const notetypeIds = [...new Set(rows.map((row) => row[1]))];
-    const fieldNames = await Promise.all(
-        notetypeIds.map((ntid) => request<{ vals: string[] }>("/api/getFieldNames", { ntid })),
-    );
-    const fieldNamesByNotetype = new Map(notetypeIds.map((ntid, index) => [ntid, fieldNames[index].vals]));
+    const { rows, timing, field_names: fieldNames } = await ankiReply<AnkiWords>(checkerFetch("/anki/words"))
+        .catch((error: Error) => {
+            throw new Error(`Anki words: ${error.message}`);
+        });
+    const fieldNamesByNotetype = new Map(Object.entries(fieldNames).map(([ntid, names]) => [Number(ntid), names]));
     return wordsFromRows(rows, fieldNamesByNotetype, timing);
 }

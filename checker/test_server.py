@@ -9,14 +9,14 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 from unittest.mock import ANY
 
 import pytest
-from anki_import import AnkiImporter
-from book_sync import BookSync
+from anki_import import AnkiImporter, AnkiLink, AnkiRefused, AnkiUnavailable
 from evaluating import Evaluations
 from exercising import Practice, Runner
 from intake import Intake
@@ -58,7 +58,8 @@ def url() -> Iterator[str]:
     chat.judged("Katzze", "reject", reason="misspelt")
     intake = Intake(vocabulary, FakeProfiler({"Claudio": "name"}), chat)
     importer = AnkiImporter(intake, lambda: ["der Hund", "Claudio"])
-    server = make_server(0, checker, intake, importer)
+    # the import goes by the words above, and only needs there to be Anki
+    server = make_server(0, checker, intake, importer, anki=AnkiLink("ada"))
     IMPORTERS[f"http://127.0.0.1:{server.server_port}"] = importer
     INTAKES[f"http://127.0.0.1:{server.server_port}"] = intake
     # checking often for the request to stop keeps the tests quick
@@ -565,27 +566,167 @@ def test_the_import_is_told_which_language_the_anki_words_are_of(url: str) -> No
     assert IMPORTERS[url]._language == "German"  # noqa: SLF001
 
 
-def test_the_import_stays_off_for_a_user_the_anki_words_are_not_of() -> None:
+def test_the_import_stays_off_for_a_user_without_anki() -> None:
     intake = Intake(Vocabulary(), FakeProfiler(), FakeChat())
     importer = AnkiImporter(intake, lambda: ["der Hund"])
-    account = Account(LiveChecker(Speller(language=None)), intake, importer, anki=False)
+    account = Account(LiveChecker(Speller(language=None)), intake, importer, anki=None)
+    with server_of(account) as url:
+        post(f"{url}/vocabulary/import", b'{"enabled": true}', key="the-key")
+        importer.look()
+        _, after = post(f"{url}/vocabulary/import", b'{"enabled": true}')
+
+    assert isinstance(after, dict)
+    assert (after["state"], after["taken"]) == ("off", 0)
+
+
+@contextmanager
+def server_of(account: Account) -> Iterator[str]:
+    """The address of a server of `account` alone, stopped afterwards."""
     server = make_server(0, accounts=Accounts(lambda user: account))
     thread = threading.Thread(
         target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
     )
     thread.start()
-    url = f"http://127.0.0.1:{server.server_port}"
     try:
-        post(f"{url}/vocabulary/import", b'{"enabled": true}', key="the-key")
-        importer.look()
-        _, after = post(f"{url}/vocabulary/import", b'{"enabled": true}')
+        yield f"http://127.0.0.1:{server.server_port}"
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
 
-    assert isinstance(after, dict)
-    assert (after["state"], after["taken"]) == ("off", 0)
+
+def ask(url: str, method: str, body: object | None = None) -> tuple[int, Any]:
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(url, data=data, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status, json.load(response)
+    except urllib.error.HTTPError as error:
+        return error.code, json.load(error)
+
+
+ANKI_WORDS = {
+    "rows": [[1, 2, "Hund", "Hund\x1fdog", 10, 30]],
+    "timing": {},
+    "field_names": {},
+}
+
+
+class FakeAnki(AnkiLink):
+    """An Anki account linked with the password "right", in place of the
+    deck-status server."""
+
+    def __init__(self) -> None:
+        super().__init__("ada", "http://127.0.0.1:1")
+        self.linked = False
+        self.there = True
+
+    def state(self) -> dict[str, Any]:
+        return {"linked": self.linked, "last_sync": None, "error": None}
+
+    def link(self, username: str, password: str) -> dict[str, Any]:
+        if password != "right":
+            raise AnkiRefused("AnkiWeb ID or password was incorrect")
+        self.linked = True
+        return self.state()
+
+    def unlink(self) -> dict[str, Any]:
+        self.linked = False
+        return self.state()
+
+    def decks(self) -> list[dict[str, Any]]:
+        return [{"id": 1, "name": "Deutsch"}, {"id": 2, "name": "Englisch"}]
+
+    def known_words(self, decks: list[int] | None = None) -> dict[str, Any]:
+        self.asked_decks = decks
+        if not self.there:
+            raise AnkiUnavailable("the deck-status server cannot be reached")
+        if not self.linked:
+            raise AnkiRefused("no Anki account is linked")
+        return ANKI_WORDS
+
+
+def test_an_anki_account_is_linked_and_its_words_given_to_its_user() -> None:
+    anki = FakeAnki()
+    account = Account(LiveChecker(Speller(language=None)), anki=anki)
+    login = {"username": "ada@example.com", "password": "right"}
+
+    with server_of(account) as url:
+        before = ask(f"{url}/anki", "GET")
+        linked = ask(f"{url}/anki/link", "POST", login)
+        words = ask(f"{url}/anki/words", "GET")
+
+    assert before == (200, {"linked": False, "last_sync": None, "error": None})
+    assert linked == (200, {"linked": True, "last_sync": None, "error": None})
+    assert words == (200, ANKI_WORDS)
+
+
+def test_a_wrong_anki_password_is_refused_with_the_reason() -> None:
+    account = Account(LiveChecker(Speller(language=None)), anki=FakeAnki())
+    login = {"username": "ada@example.com", "password": "wrong"}
+
+    with server_of(account) as url:
+        refused = ask(f"{url}/anki/link", "POST", login)
+        unsent = ask(f"{url}/anki/link", "POST", {"username": "ada@example.com"})
+
+    assert refused == (400, {"error": "AnkiWeb ID or password was incorrect"})
+    assert unsent[0] == 400
+
+
+def test_the_anki_words_are_refused_once_the_account_is_unlinked() -> None:
+    anki = FakeAnki()
+    anki.linked = True
+    account = Account(LiveChecker(Speller(language=None)), anki=anki)
+
+    with server_of(account) as url:
+        unlinked = ask(f"{url}/anki/link", "DELETE")
+        words = ask(f"{url}/anki/words", "GET")
+
+    assert unlinked == (200, {"linked": False, "last_sync": None, "error": None})
+    assert words == (400, {"error": "no Anki account is linked"})
+
+
+def test_the_anki_words_say_why_when_the_deck_status_server_is_not_there() -> None:
+    anki = FakeAnki()
+    anki.there = False
+    account = Account(LiveChecker(Speller(language=None)), anki=anki)
+
+    with server_of(account) as url:
+        words = ask(f"{url}/anki/words", "GET")
+
+    assert words == (502, {"error": "the deck-status server cannot be reached"})
+
+
+def test_the_anki_decks_unticked_are_left_out_and_all_others_kept_in(
+    tmp_path: Path,
+) -> None:
+    anki = FakeAnki()
+    anki.linked = True
+    store = UserStore(tmp_path / "ada")
+    account = Account(LiveChecker(Speller(language=None)), store=store, anki=anki)
+
+    with server_of(account) as url:
+        before = ask(f"{url}/anki/decks", "GET")
+        chosen = ask(f"{url}/anki/decks", "PUT", {"decks": [2]})
+        ask(f"{url}/anki/words", "GET")
+        left_out = anki.asked_decks
+        ask(f"{url}/anki/decks", "PUT", {"decks": []})
+        ask(f"{url}/anki/words", "GET")
+        refused = ask(f"{url}/anki/decks", "PUT", {"decks": ["Englisch"]})
+
+    assert [deck["chosen"] for deck in before[1]["decks"]] == [True, True]
+    assert [deck["chosen"] for deck in chosen[1]["decks"]] == [False, True]
+    assert (left_out, anki.asked_decks) == ([1], [1, 2])
+    assert refused[0] == 400
+
+
+def test_there_is_no_anki_for_an_account_without_it() -> None:
+    account = Account(LiveChecker(Speller(language=None)))
+
+    with server_of(account) as url:
+        state = ask(f"{url}/anki", "GET")
+
+    assert state == (404, {"error": "there is no Anki here"})
 
 
 # the language model of each server with users, by its address
@@ -620,8 +761,6 @@ def with_users(tmp_path: Path) -> Iterator[str]:
             LiveChecker(Speller(language=None)),
             intake,
             store=store,
-            # the folder is looked through before the request is answered
-            book_sync=BookSync(store, background=lambda job: job()),
             translator=Translator(model),
             speaker=Speaker(store, FakeVoice()),
             tasks=tasks,
@@ -865,35 +1004,6 @@ def test_a_file_that_is_not_a_book_is_refused_with_the_reason(with_users: str) -
         {"error": "the file is not an EPUB book"},
     )
     assert json.loads(books) == {"books": []}
-
-
-def test_the_books_of_a_folder_a_user_chooses_are_kept_for_that_user(
-    with_users: str, tmp_path: Path
-) -> None:
-    ada = log_in(with_users, "ada", "a password")
-    ben = log_in(with_users, "ben", "another one")
-    folder = tmp_path / "OneDrive" / "Books" / "German"
-    folder.mkdir(parents=True)
-    (folder / "hund.epub").write_bytes(epub(page("<p>Es war einmal.</p>")))
-    chosen = json.dumps({"folder": str(folder.parent)}).encode()
-
-    _, before, _ = send(f"{with_users}/books/folder", "GET", ada)
-    _, after, _ = send(f"{with_users}/books/folder", "PUT", ada, chosen)
-    (folder / "katze.epub").write_bytes(epub(page("<p>Text.</p>")))
-    _, looked, _ = send(f"{with_users}/books/sync", "POST", ada)
-    _, of_ada, _ = send(f"{with_users}/books", "GET", ada)
-    _, of_ben, _ = send(f"{with_users}/books", "GET", ben)
-    refused, _, _ = send(f"{with_users}/books/folder", "PUT", ada, b'{"folder": 3}')
-
-    assert json.loads(before)["state"] == "off"
-    assert (json.loads(after)["state"], json.loads(after)["found"]) == ("synced", 1)
-    assert (json.loads(looked)["found"], json.loads(looked)["revision"]) == (2, 2)
-    assert sorted(book["source"] for book in json.loads(of_ada)["books"]) == [
-        "German/hund.epub",
-        "German/katze.epub",
-    ]
-    assert json.loads(of_ben) == {"books": []}
-    assert refused == 400
 
 
 def test_the_cover_of_a_book_is_given_as_the_file_it_is(with_users: str) -> None:

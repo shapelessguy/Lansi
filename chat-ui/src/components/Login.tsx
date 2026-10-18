@@ -28,7 +28,7 @@ export function Login() {
         <main className="login">
             <form onSubmit={submit}>
                 <h1>
-                    <img src="/lansi.svg" alt="" width={32} height={32} />
+                    <img src={`${import.meta.env.BASE_URL}lansi.svg`} alt="" width={32} height={32} />
                     Lansi
                 </h1>
                 <label className="field">

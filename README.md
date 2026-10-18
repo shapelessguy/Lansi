@@ -2,11 +2,15 @@
 
 A language-learning chat built on an Anki collection.
 
-- `deck-status/` keeps a synced copy of the collection and serves its contents
-  as JSON on http://127.0.0.1:8090. Settings are read from `deck-status/.env`.
-- `chat-ui/` is the GUI, on http://localhost:5173: a chat, a reader of books
-  and practice with lessons and exercises, which use the words you know,
-  through OpenRouter.
+- `deck-status/` keeps a synced copy of the Anki collection of each user who
+  linked one, and serves its contents as JSON on http://127.0.0.1:8090, under
+  `/users/<name>/`. Optional settings, such as `ANKI_STATUS_INTERVAL_MINS`,
+  are read from `deck-status/.env`.
+- `chat-ui/` is the GUI, on http://127.0.0.1:5173/lansi/: a chat, a reader
+  of books and practice with lessons and exercises, which use the words you
+  know, through OpenRouter. It is the only part opened from other machines,
+  through the nginx of CyanHouse at `/lansi/`; it reaches the checker through
+  its own `/lansi/checker` proxy, and the checker alone reaches deck-status.
 - `checker/` splits what is typed in the chat into sentences, spell-checks
   them and has each finished sentence profiled, on http://127.0.0.1:8092. It
   is also where everything a user has is kept: the chats, the books, the
@@ -24,6 +28,19 @@ just dev
 
 starts all three parts in one terminal. `just --list` shows the other
 commands, such as `just test` and `just check`.
+
+On the server, the same runs as a service, in a tmux session, from
+[lansi.service](lansi.service):
+
+```
+sudo cp lansi.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now lansi.service
+```
+
+`sudo systemctl status lansi.service` tells whether it runs, and
+`tmux -L lansi attach -t lansi` shows what it prints (`Ctrl+b d` leaves it running).
+The GUI is then opened through the nginx of CyanHouse, at `/lansi/`.
 
 ## Users
 
@@ -69,9 +86,17 @@ each word: `known`, `added`, `form`, `skipped`, `rejected` or `failed`.
 `GET /vocabulary/words` lists the stored words, and
 `GET /vocabulary/words/<id>` gives everything stored of one.
 
+## Anki
+
+Each user can link an AnkiWeb account in Settings → General. The password is
+used once, by deck-status, to log in; only the sync key it gets back is kept,
+with a copy of the collection, in `deck-status/data/users/<name>/`, which is
+synced every 15 minutes. Unlinking removes both. The words with a card in
+review are then listed in the Anki tab of the Library.
+
 Every ten seconds the checker also asks the deck-status server for the Anki
-words that have a card in review, and takes those the vocabulary was never
-given into it, ten at a time. It uses the key and the models of the chat,
+words of each user that have a card in review, and takes those the
+vocabulary was never given into it, ten at a time. It uses the key and the models of the chat,
 which hands them over while it is open; the switch for it is in the
 Vocabulary tab of the Library. Expressions of several words are passed over.
 

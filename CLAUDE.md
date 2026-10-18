@@ -9,10 +9,14 @@
 A language-learning chat built on an Anki collection. Three parts:
 
 - `deck-status/`: Rust (axum) server that keeps a synced copy of the
-  collection and serves its contents as JSON. Settings come from `deck-status/.env`, which may hold a
-  password: do not read it.
-- `chat-ui/`: React + TypeScript GUI (Vite), talking to OpenRouter and to the
-  two servers through the dev server's `/anki` and `/checker` proxies.
+  collection of each user who linked an Anki account, in
+  `deck-status/data/users/<name>/` with the sync key, and serves its contents
+  as JSON under `/users/<name>/` (`users.rs`). Optional settings come from
+  `deck-status/.env`: do not read it.
+- `chat-ui/`: React + TypeScript GUI (Vite), served under `/lansi/` on
+  127.0.0.1 for the nginx of CyanHouse, talking to OpenRouter and, through
+  the dev server's `/lansi/checker` proxy, to the checker; only the checker
+  reaches deck-status, which the browser never does.
 - `checker/`: Python server that splits typed text into sentences,
   spell-checks them and profiles finished sentences with a decision model.
   It also keeps everything a user has, in `checker/data/users/<name>/`:

@@ -8,21 +8,16 @@
 mod api;
 mod mirror;
 mod status;
+mod users;
 
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::path::Path as FsPath;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
-use anki::backend::Backend;
-use anki_io::create_dir_all;
-use anki_io::read_to_string;
-use anki_io::write_file;
-use anki_proto::sync::SyncAuth;
-use anki_proto::sync::SyncLoginRequest;
-use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
@@ -45,20 +40,19 @@ use axum::Router;
 use serde::Deserialize;
 use tokio::net::TcpListener;
 
+use serde_json::json;
+
 use crate::api::ApiError;
-use crate::mirror::media_folder;
-use crate::mirror::open_backend;
-use crate::mirror::Mirror;
-use crate::mirror::SharedStatus;
+use crate::users::LinkError;
+use crate::users::Users;
 
 /// Read from environment variables prefixed with `ANKI_STATUS_`.
 #[derive(Deserialize, Debug)]
 struct Config {
-    /// Folder holding the copy of the collection and the saved sync key.
+    /// Folder holding a folder for each user, with the copy of their
+    /// collection and the sync key it was linked with.
+    #[serde(default = "default_data_dir")]
     data_dir: PathBuf,
-    /// Only needed on the first run, to obtain the sync key.
-    username: Option<String>,
-    password: Option<String>,
     /// A self-hosted sync server. AnkiWeb is used if unset.
     endpoint: Option<String>,
     #[serde(default = "default_interval_mins")]
@@ -72,6 +66,10 @@ struct Config {
     port: u16,
     /// If set, requests must send it as `Authorization: Bearer <token>`.
     token: Option<String>,
+}
+
+fn default_data_dir() -> PathBuf {
+    PathBuf::from("deck-status/data")
 }
 
 fn default_interval_mins() -> u64 {
@@ -93,14 +91,12 @@ fn filled(value: &Option<String>) -> Option<String> {
 
 #[derive(Clone)]
 struct AppState {
-    backend: Backend,
-    status: SharedStatus,
-    media_folder: PathBuf,
+    users: Arc<Users>,
     token: Option<String>,
 }
 
-// The backend runs its own async tasks to sync, so it is set up before ours
-// are started.
+// The backends run their own async tasks to sync, so they are set up before
+// ours are started.
 fn main() -> Result<()> {
     let config: Config = envy::prefixed("ANKI_STATUS_")
         .from_env()
@@ -109,21 +105,18 @@ fn main() -> Result<()> {
     if !config.host.is_loopback() && token.is_none() {
         bail!("ANKI_STATUS_TOKEN must be set to accept connections from other machines");
     }
-    create_dir_all(&config.data_dir)?;
-    let collection_path = config.data_dir.join("collection.anki2");
-    let backend = open_backend(&collection_path)?;
-    let auth = sync_auth(&config, &backend)?;
-
+    let interval = Duration::from_secs(config.interval_mins.max(1) * 60);
+    let users = Users::new(
+        config.data_dir.join("users"),
+        filled(&config.endpoint),
+        interval,
+        config.sync_media,
+    );
+    users.load()?;
     let state = AppState {
-        backend: backend.clone(),
-        status: SharedStatus::default(),
-        media_folder: media_folder(&collection_path),
+        users: Arc::new(users),
         token,
     };
-    let mirror = Mirror::new(backend, auth, config.sync_media);
-    let interval = Duration::from_secs(config.interval_mins.max(1) * 60);
-    let shared = state.status.clone();
-    std::thread::spawn(move || mirror.run(interval, shared));
 
     let addr = SocketAddr::new(config.host, config.port);
     tokio::runtime::Runtime::new()?.block_on(serve(addr, state))
@@ -131,54 +124,25 @@ fn main() -> Result<()> {
 
 async fn serve(addr: SocketAddr, state: AppState) -> Result<()> {
     let app = Router::new()
-        .route("/decks", get(decks))
         .route("/api", get(api_methods))
-        .route("/api/{method}", get(api_call).post(api_call))
-        .route("/sql", post(sql))
-        .route("/media/{name}", get(media))
+        .route("/users/{user}", get(user_state))
+        .route("/users/{user}/link", post(link).delete(unlink))
+        .route("/users/{user}/decks", get(decks))
+        .route("/users/{user}/api/{method}", get(api_call).post(api_call))
+        .route("/users/{user}/sql", post(sql))
+        .route("/users/{user}/media/{name}", get(media))
         .layer(middleware::from_fn_with_state(state.clone(), require_token))
         .with_state(state);
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("listening on {addr}"))?;
-    println!("Serving on http://{addr}/decks");
+    println!("Serving on http://{addr}/users/<name>/decks");
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
         })
         .await?;
     Ok(())
-}
-
-/// Returns the saved sync key, logging in to obtain and save one if there is
-/// none yet.
-fn sync_auth(config: &Config, backend: &Backend) -> Result<SyncAuth> {
-    let endpoint = filled(&config.endpoint);
-    let key_path = config.data_dir.join("hkey");
-    let hkey = if key_path.exists() {
-        read_to_string(&key_path)?.trim().to_owned()
-    } else {
-        let (Some(username), Some(password)) = (filled(&config.username), filled(&config.password))
-        else {
-            bail!("set ANKI_STATUS_USERNAME and ANKI_STATUS_PASSWORD for the first run");
-        };
-        let request = SyncLoginRequest {
-            username,
-            password,
-            endpoint: endpoint.clone(),
-        };
-        let auth: SyncAuth = api::run(backend, "syncLogin", &request)
-            .map_err(|err| anyhow!(err))
-            .context("logging in")?;
-        write_file(&key_path, &auth.hkey)?;
-        println!("Logged in; sync key saved to {}", key_path.display());
-        auth.hkey
-    };
-    Ok(SyncAuth {
-        hkey,
-        endpoint,
-        io_timeout_secs: None,
-    })
 }
 
 async fn require_token(State(state): State<AppState>, request: Request, next: Next) -> Response {
@@ -200,8 +164,66 @@ fn authorized(headers: &HeaderMap, token: Option<&str>) -> bool {
     sent == Some(token)
 }
 
-async fn decks(State(state): State<AppState>) -> Response {
-    match state.status.read().unwrap().clone() {
+fn not_linked() -> Response {
+    (StatusCode::NOT_FOUND, "no Anki account is linked").into_response()
+}
+
+/// Whether `user` has a collection, with what its last sync left.
+async fn user_state(State(state): State<AppState>, Path(user): Path<String>) -> Response {
+    match state.users.get(&user) {
+        Some(linked) => {
+            let status = linked.status.read().unwrap().clone();
+            Json(json!({ "linked": true, "status": status })).into_response()
+        }
+        None => Json(json!({ "linked": false })).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct LinkRequest {
+    username: String,
+    password: String,
+}
+
+/// Logs in to a sync account and mirrors its collection for `user`.
+async fn link(
+    State(state): State<AppState>,
+    Path(user): Path<String>,
+    Json(request): Json<LinkRequest>,
+) -> Response {
+    let linked = tokio::task::spawn_blocking(move || {
+        state.users.link(&user, request.username, request.password)
+    })
+    .await;
+    match linked {
+        Ok(Ok(())) => Json(json!({ "linked": true })).into_response(),
+        Ok(Err(LinkError::BadName)) => (StatusCode::NOT_FOUND, "no such user").into_response(),
+        Ok(Err(LinkError::Taken)) => (
+            StatusCode::CONFLICT,
+            "an Anki account is linked already, or still being unlinked",
+        )
+            .into_response(),
+        Ok(Err(LinkError::Refused(message))) => (StatusCode::BAD_REQUEST, message).into_response(),
+        Ok(Err(LinkError::Failed(err))) => {
+            eprintln!("linking failed: {err:#}");
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("{err:#}")).into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "linking failed").into_response(),
+    }
+}
+
+/// Stops mirroring the collection of `user` and removes it.
+async fn unlink(State(state): State<AppState>, Path(user): Path<String>) -> Response {
+    state.users.unlink(&user);
+    Json(json!({ "linked": false })).into_response()
+}
+
+async fn decks(State(state): State<AppState>, Path(user): Path<String>) -> Response {
+    let Some(linked) = state.users.get(&user) else {
+        return not_linked();
+    };
+    let status = linked.status.read().unwrap().clone();
+    match status {
         Some(status) => Json(status).into_response(),
         None => (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -217,17 +239,23 @@ async fn api_methods() -> Response {
 
 async fn api_call(
     State(state): State<AppState>,
-    Path(method): Path<String>,
+    Path((user, method)): Path<(String, String)>,
     body: Bytes,
 ) -> Response {
+    let Some(linked) = state.users.get(&user) else {
+        return not_linked();
+    };
     // backend calls block on the collection, so keep them off the async threads
     let result =
-        tokio::task::spawn_blocking(move || api::call_json(&state.backend, &method, &body)).await;
+        tokio::task::spawn_blocking(move || api::call_json(&linked.backend, &method, &body)).await;
     json_response(result)
 }
 
-async fn sql(State(state): State<AppState>, body: Bytes) -> Response {
-    let result = tokio::task::spawn_blocking(move || api::query(&state.backend, &body)).await;
+async fn sql(State(state): State<AppState>, Path(user): Path<String>, body: Bytes) -> Response {
+    let Some(linked) = state.users.get(&user) else {
+        return not_linked();
+    };
+    let result = tokio::task::spawn_blocking(move || api::query(&linked.backend, &body)).await;
     json_response(result)
 }
 
@@ -247,11 +275,17 @@ fn json_response(result: Result<Result<Vec<u8>, ApiError>, tokio::task::JoinErro
     }
 }
 
-async fn media(State(state): State<AppState>, Path(name): Path<String>) -> Response {
+async fn media(
+    State(state): State<AppState>,
+    Path((user, name)): Path<(String, String)>,
+) -> Response {
+    let Some(linked) = state.users.get(&user) else {
+        return not_linked();
+    };
     if !is_plain_file_name(&name) {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match tokio::fs::read(state.media_folder.join(&name)).await {
+    match tokio::fs::read(linked.media_folder.join(&name)).await {
         Ok(data) => ([(CONTENT_TYPE, content_type(&name))], data).into_response(),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }

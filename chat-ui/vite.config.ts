@@ -4,30 +4,27 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-// The deck-status server does not allow requests from other origins, so the
-// dev server forwards /anki to it.
-const deckStatusUrl = process.env.ANKI_STATUS_URL ?? "http://127.0.0.1:8090";
-// The same goes for the checker server, under /checker.
+// The checker server does not allow requests from other origins, so the dev
+// server forwards /lansi/checker to it. The deck-status server is reached only
+// by the checker, and never from the browser.
 const checkerUrl = process.env.CHECKER_URL ?? "http://127.0.0.1:8092";
 
 export default defineConfig({
     plugins: [react()],
+    // the GUI is served under /lansi/ by the nginx of CyanHouse
+    base: "/lansi/",
     server: {
         port: 5173,
-        // listen on every interface, so the GUI can be opened from other
-        // machines of the LAN; the two servers it forwards to stay on 127.0.0.1
-        host: true,
+        // only nginx, on this machine, reaches the GUI; it is opened from
+        // elsewhere through it
+        host: "127.0.0.1",
         // file change events are sometimes missed on Windows when a file is saved
         // several times in a row, which leaves the page running an old version
         watch: { usePolling: true, interval: 300 },
         proxy: {
-            "/anki": {
-                target: deckStatusUrl,
-                rewrite: (path) => path.replace(/^\/anki/, ""),
-            },
-            "/checker": {
+            "/lansi/checker": {
                 target: checkerUrl,
-                rewrite: (path) => path.replace(/^\/checker/, ""),
+                rewrite: (path) => path.replace(/^\/lansi\/checker/, ""),
             },
         },
     },

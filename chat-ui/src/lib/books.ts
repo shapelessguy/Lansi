@@ -13,8 +13,6 @@ export interface ListedBook {
     language: string;
     /** In milliseconds since the epoch. */
     addedAt: number;
-    /** The name of its file in the folder the books are taken from, if it is from there. */
-    source?: string | null;
     /** Whether there is a picture of its cover. */
     cover?: boolean;
 }
@@ -134,57 +132,6 @@ export function fetchCover(id: string): Promise<string> {
         cover.catch(() => covers.delete(id));
     }
     return cover;
-}
-
-/** What the server's taking of the books from a folder is doing. */
-export interface FolderSync {
-    /**
-     * "off": there is no folder
-     * "missing": the folder is not there, so nothing is added or removed
-     * "syncing": the folder is being looked through
-     * "synced": the books are those of the folder
-     */
-    state: "off" | "missing" | "syncing" | "synced";
-    /** The folder, on the machine the server runs on; empty if there is none. */
-    folder: string;
-    /** How many e-books the folder had the last time it was looked through. */
-    found: number;
-    /** The files in it that could not be read as books, each with the reason. */
-    unread: { file: string; reason: string }[];
-    /** Goes up whenever a look has added or removed a book. */
-    revision: number;
-    /** A folder of OneDrive on that machine, if there is one, to start from. */
-    suggestion: string;
-}
-
-export async function fetchFolderSync(): Promise<FolderSync> {
-    return (await send("/folder")).json();
-}
-
-/** Has the books taken from `folder` from now on, with those of the folders inside it, or from none if it is empty. */
-export async function chooseFolder(folder: string): Promise<FolderSync> {
-    return (await send("/folder", { method: "PUT", body: JSON.stringify({ folder }) })).json();
-}
-
-/** Has the folder looked through now, without waiting for the next time it is. */
-export async function syncFolder(): Promise<FolderSync> {
-    return (await send("/sync", { method: "POST" })).json();
-}
-
-/** What the taking of the books from a folder is doing, in a line. */
-export function describeSync(sync: FolderSync): string {
-    switch (sync.state) {
-        case "off":
-            return "Name a folder, such as one in OneDrive, to keep its e-books here.";
-        case "missing":
-            return "The folder cannot be found. Its books stay until it can.";
-        case "syncing":
-            return "Looking through the folder…";
-        default: {
-            const found = `${sync.found} ${sync.found === 1 ? "e-book" : "e-books"} in the folder`;
-            return sync.unread.length > 0 ? `${found}, ${sync.unread.length} of which cannot be read.` : `${found}.`;
-        }
-    }
 }
 
 /**

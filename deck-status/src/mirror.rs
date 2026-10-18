@@ -4,6 +4,7 @@
 //! A local copy of the collection that is kept up to date by syncing.
 
 use std::path::Path;
+use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
@@ -82,8 +83,14 @@ impl Mirror {
         }
     }
 
-    /// Syncs and publishes the deck status every `interval`. Never returns.
-    pub(crate) fn run(mut self, interval: Duration, shared: SharedStatus) {
+    /// Syncs and publishes the deck status every `interval`, until `stop`
+    /// is dropped or sent to.
+    pub(crate) fn run(
+        mut self,
+        interval: Duration,
+        shared: SharedStatus,
+        stop: mpsc::Receiver<()>,
+    ) {
         loop {
             match self.sync() {
                 Ok(()) => {
@@ -101,7 +108,12 @@ impl Mirror {
                 Ok(status) => *shared.write().unwrap() = Some(status),
                 Err(message) => eprintln!("reading decks failed: {message}"),
             }
-            std::thread::sleep(interval);
+            if !matches!(
+                stop.recv_timeout(interval),
+                Err(mpsc::RecvTimeoutError::Timeout)
+            ) {
+                return;
+            }
         }
     }
 

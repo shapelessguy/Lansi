@@ -3,11 +3,21 @@
 
 from __future__ import annotations
 
+import json
+import threading
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
 import pytest
-from anki_import import AnkiImporter, AnkiUnavailable, vocabulary_words
+from anki_import import (
+    AnkiImporter,
+    AnkiLink,
+    AnkiRefused,
+    AnkiUnavailable,
+    vocabulary_words,
+)
 from intake import Intake
 from models import Model
 from test_intake import CHAT, DECIDER, KEY, MODEL, FakeChat, FakeProfiler, savable
@@ -299,3 +309,141 @@ def test_the_anki_words_go_into_the_vocabulary_of_their_own_language(
     assert vocabularies.of("German").not_taken(["Hund", "Katze", "gern"]) == []
     assert "a vocabulary of German" in chat.bodies[0]["messages"][0]["content"]
     assert not vocabularies.has("Arabic")
+
+
+class DeckStatus(BaseHTTPRequestHandler):
+    """Stands in for the deck-status server, with the collection of ada
+    linked, holding one note of each of two notetypes in a deck with one
+    inside it and another beside it, and the right password for linking
+    ben."""
+
+    # the last query it was sent
+    sql = ""
+
+    def _answer(self, reply: object, status: int = 200) -> None:
+        body = (reply if isinstance(reply, str) else json.dumps(reply)).encode()
+        self.send_response(status)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:
+        if self.path == "/users/ada":
+            self._answer({"linked": True, "status": {"last_sync": 1700, "decks": []}})
+        elif self.path == "/users/ben":
+            self._answer({"linked": False})
+        elif self.path == "/users/ada/decks":
+            decks = [
+                {"id": 1, "name": "Deutsch"},
+                {"id": 2, "name": "Deutsch::Verben"},
+                {"id": 3, "name": "Englisch"},
+            ]
+            self._answer({"decks": decks})
+        elif self.path == "/users/ada/api/schedTimingToday":
+            self._answer({"days_elapsed": 100, "next_day_at": 1_700_000_000})
+        else:
+            self._answer("no Anki account is linked", 404)
+
+    def do_POST(self) -> None:
+        asked = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if self.path == "/users/ben/link":
+            if asked == {"username": "ben@example.com", "password": "right"}:
+                self._answer({"linked": True})
+            else:
+                self._answer("AnkiWeb ID or password was incorrect", 400)
+        elif self.path == "/users/ada/sql":
+            DeckStatus.sql = asked["sql"]
+            self._answer(
+                [[1, 7, "Hund", "Hund\x1fdog", 99, 30], [2, 8, "gehen", "", 98, 4]]
+            )
+        elif self.path == "/users/ada/api/getFieldNames":
+            self._answer({"vals": [f"Front of {asked['ntid']}", "Back"]})
+        else:
+            self._answer("no Anki account is linked", 404)
+
+    def log_message(self, format: str, *args: Any) -> None:
+        pass
+
+
+@pytest.fixture
+def deck_status() -> Iterator[str]:
+    """The address of a stand-in deck-status server, stopped after the test."""
+    server = HTTPServer(("127.0.0.1", 0), DeckStatus)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}"
+    server.shutdown()
+    server.server_close()
+
+
+def test_the_known_words_come_with_their_field_names_and_the_timing(
+    deck_status: str,
+) -> None:
+    known = AnkiLink("ada", deck_status).known_words()
+
+    assert [row[2] for row in known["rows"]] == ["Hund", "gehen"]
+    assert known["timing"] == {"days_elapsed": 100, "next_day_at": 1_700_000_000}
+    assert known["field_names"] == {
+        "7": ["Front of 7", "Back"],
+        "8": ["Front of 8", "Back"],
+    }
+
+
+def test_the_notes_of_a_linked_account_are_its_words(deck_status: str) -> None:
+    assert AnkiLink("ada", deck_status).notes() == ["1", "2"]
+
+
+def test_the_cards_of_the_decks_left_out_are_not_asked_for(deck_status: str) -> None:
+    ada = AnkiLink("ada", deck_status)
+
+    ada.notes([1, 2])
+    without_two = DeckStatus.sql
+    ada.known_words([3])
+    without_one = DeckStatus.sql
+    ada.notes()
+    with_all = DeckStatus.sql
+
+    assert "not (c.did in (1, 2) or c.odid in (1, 2))" in without_two
+    assert "not (c.did in (3) or c.odid in (3))" in without_one
+    assert "c.did" not in with_all
+
+
+def test_the_state_of_an_account_says_whether_it_is_linked_and_when_it_synced(
+    deck_status: str,
+) -> None:
+    assert AnkiLink("ada", deck_status).state() == {
+        "linked": True,
+        "last_sync": 1700,
+        "error": None,
+    }
+    assert AnkiLink("ben", deck_status).state() == {
+        "linked": False,
+        "last_sync": None,
+        "error": None,
+    }
+
+
+def test_an_account_is_linked_with_the_right_password(deck_status: str) -> None:
+    ben = AnkiLink("ben", deck_status)
+
+    with pytest.raises(AnkiRefused, match="password was incorrect"):
+        ben.link("ben@example.com", "wrong")
+    ben.link("ben@example.com", "right")
+
+
+def test_the_words_of_a_user_without_an_account_are_refused_with_the_reason(
+    deck_status: str,
+) -> None:
+    with pytest.raises(AnkiRefused, match="no Anki account is linked"):
+        AnkiLink("ben", deck_status).known_words()
+
+
+def test_the_known_words_cannot_be_had_when_the_deck_status_server_is_not_there() -> (
+    None
+):
+    server = HTTPServer(("127.0.0.1", 0), DeckStatus)
+    url = f"http://127.0.0.1:{server.server_port}"
+    server.server_close()
+
+    with pytest.raises(AnkiUnavailable, match="cannot be reached"):
+        AnkiLink("ada", url).known_words()

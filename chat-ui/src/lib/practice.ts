@@ -442,7 +442,7 @@ export interface ExerciseInterface {
 
 /** The address of a file the interfaces of the exercises are made of, from the directory of the exercises. */
 export function interfaceAddress(path: string): string {
-    return `/checker/exercises/${path.split("/").map(encodeURIComponent).join("/")}`;
+    return `${import.meta.env.BASE_URL}checker/exercises/${path.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 /** A stylesheet the interface of an exercise is given, or null if there is none to be had. */

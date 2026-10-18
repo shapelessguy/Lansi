@@ -1076,11 +1076,6 @@ div.book-cover {
     font-weight: 600;
 }
 
-.book-folder {
-    flex: 1;
-    min-width: 0;
-}
-
 /* chat */
 
 .chat-header {
@@ -1732,6 +1727,73 @@ div.book-cover {
 
 .import-status {
     color: var(--muted);
+}
+
+/* the linked Anki account, with its button beside it */
+.anki-account {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+}
+
+.anki-account span {
+    display: grid;
+    min-width: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.anki-account small {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.anki-account small.error {
+    color: var(--danger);
+}
+
+/* the decks of the collection, those inside another indented under it */
+.anki-decks {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    max-height: 280px;
+    margin: 0 0 14px;
+    padding: 6px 10px 8px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.anki-decks legend {
+    padding: 0 4px;
+    font-weight: 600;
+}
+
+.anki-decks .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    cursor: pointer;
+}
+
+.anki-decks .check span {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.anki-decks .check small,
+.anki-decks > small {
+    color: var(--muted);
+    font-size: 0.87rem;
 }
 
 .vocabulary-flat {

@@ -23,20 +23,9 @@ import { UsagePanel } from "./components/UsagePanel";
 import { VocabularyList } from "./components/VocabularyList";
 import { WordList } from "./components/WordList";
 import { WritingChecks } from "./components/WritingChecks";
-import { fetchKnownWords, seesAnkiWords } from "./lib/anki";
+import { type AnkiState, fetchAnkiState, fetchKnownWords } from "./lib/anki";
 import { useAnkiImport } from "./lib/ankiImport";
-import {
-    addBook,
-    changeReading,
-    chooseFolder,
-    deleteBook,
-    fetchBooks,
-    fetchFolderSync,
-    type FolderSync,
-    type ListedBook,
-    loadReading,
-    syncFolder,
-} from "./lib/books";
+import { addBook, changeReading, deleteBook, fetchBooks, type ListedBook, loadReading } from "./lib/books";
 import {
     activeChat,
     type ChatStore,
@@ -131,8 +120,11 @@ export function App({ user, initialSettings, initialChats }: Props) {
     // where the chat puts the sentence checks, which are made of what it knows
     const [panelSlot, setPanelSlot] = useState<HTMLElement | null>(null);
     const [wordsState, setWordsState] = useState<WordsState>({ status: "loading" });
-    // the Anki words are those of one user, and the tab with them is that user's alone
-    const ankiWords = seesAnkiWords(user);
+    // the Anki account the user may link, whose words have a tab of their own
+    const [anki, setAnki] = useState<AnkiState | null>(null);
+    const ankiWords = anki?.linked ?? false;
+    // goes up when other Anki decks are chosen, for their words to be fetched
+    const [decksRevision, setDecksRevision] = useState(0);
     // text a clicked word adds to the message being written
     const [picked, setPicked] = useState<{ word: string; nonce: number } | null>(null);
     // tells the usage the server has from what it had before something was recorded
@@ -235,35 +227,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
 
     useEffect(loadBooks, [loadBooks]);
 
-    // The server takes the books of a folder by itself. It is asked how that
-    // is going, often while it looks through the folder and seldom
-    // otherwise, and the books are listed again when it has changed them.
-    const [bookSync, setBookSync] = useState<FolderSync | null>(null);
-    const syncRevision = useRef<number | null>(null);
-    const followSync = useCallback((sync: FolderSync) => {
-        setBookSync(sync);
-        if (syncRevision.current !== null && syncRevision.current !== sync.revision) {
-            fetchBooks().then((books) => setBooksState({ status: "ready", books }), () => undefined);
-        }
-        syncRevision.current = sync.revision;
-    }, []);
-    const syncing = bookSync?.state === "syncing";
-    useEffect(() => {
-        let stopped = false;
-        const look = () => fetchFolderSync().then((sync) => stopped || followSync(sync), () => undefined);
-        look();
-        const timer = setInterval(look, syncing ? 1500 : 15000);
-        return () => {
-            stopped = true;
-            clearInterval(timer);
-        };
-    }, [syncing, followSync]);
-
-    function tellSync(asked: Promise<FolderSync>) {
-        setBookError(null);
-        asked.then(followSync, (error: Error) => setBookError(error.message));
-    }
-
     function openBook(id: string | null) {
         setBookId(changeReading((reading) => ({ ...reading, bookId: id })).bookId);
         if (id !== null) {
@@ -322,9 +285,24 @@ export function App({ user, initialSettings, initialChats }: Props) {
             (words) => setWordsState({ status: "ready", words }),
             (error: Error) => setWordsState({ status: "error", message: error.message }),
         );
-    }, [ankiWords]);
+        // the words are fetched again once the first sync has brought them
+    }, [ankiWords, anki?.last_sync, decksRevision]);
 
     useEffect(loadWords, [loadWords]);
+
+    // Whether an Anki account is linked is asked once, and again every few
+    // seconds while its first sync runs.
+    const firstSync = ankiWords && anki?.last_sync === null && !anki.error;
+    useEffect(() => {
+        let stopped = false;
+        const ask = () => fetchAnkiState().then((state) => stopped || setAnki(state), () => undefined);
+        ask();
+        const timer = firstSync ? setInterval(ask, 5000) : undefined;
+        return () => {
+            stopped = true;
+            clearInterval(timer);
+        };
+    }, [firstSync]);
 
     // The checker server takes the Anki words into the vocabulary by itself,
     // with the key and the models it is handed here.
@@ -657,9 +635,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 selectedId={bookId}
                                 adding={addingBook}
                                 addError={bookError}
-                                sync={bookSync}
-                                onFolder={(folder) => tellSync(chooseFolder(folder))}
-                                onSync={() => tellSync(syncFolder())}
                                 onSelect={openBook}
                                 onAdd={takeBook}
                                 onDelete={removeBook}
@@ -855,7 +830,9 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     {panel === "settings" && (
                         <SettingsPanel
                             settings={settings}
-                            ankiWords={ankiWords}
+                            anki={anki}
+                            onAnki={setAnki}
+                            onDecks={() => setDecksRevision((revision) => revision + 1)}
                             sets={sets}
                             tab={settingsTab}
                             onTab={setSettingsTab}

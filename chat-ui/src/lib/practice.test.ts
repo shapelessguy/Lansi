@@ -162,9 +162,9 @@ describe("resuming a session", () => {
 
 describe("interfaceAddress", () => {
     it("gives the files of an interface from the checker, each part of the path escaped", () => {
-        expect(interfaceAddress("cloze/ui/index.js")).toBe("/checker/exercises/cloze/ui/index.js");
-        expect(interfaceAddress("kit.css")).toBe("/checker/exercises/kit.css");
-        expect(interfaceAddress("a b/ui/x.css")).toBe("/checker/exercises/a%20b/ui/x.css");
+        expect(interfaceAddress("cloze/ui/index.js")).toBe("/lansi/checker/exercises/cloze/ui/index.js");
+        expect(interfaceAddress("kit.css")).toBe("/lansi/checker/exercises/kit.css");
+        expect(interfaceAddress("a b/ui/x.css")).toBe("/lansi/checker/exercises/a%20b/ui/x.css");
     });
 });
 

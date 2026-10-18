@@ -73,9 +73,9 @@ CREATE TABLE books (
 );
 """
 
-# What came with version 3: where a book that is from the folder of books is
-# from, which is the name of its file there, and what tells that file from a
-# later one of the same name.
+# What came with version 3: where a book that was from the folder of books
+# was from, and what told its file from a later one of the same name. Books
+# are no longer taken from a folder, and the two are left empty.
 _BOOK_SOURCES = """
 ALTER TABLE books ADD COLUMN source TEXT;
 ALTER TABLE books ADD COLUMN stamp TEXT;
@@ -367,7 +367,7 @@ RESULTS = ("right", "wrong", "partial")
 _SENTENCE_ID = re.compile(r"\d{1,9}\.\d{1,9}")
 
 # What is listed of a book.
-_LISTED = "id, title, author, language, added_at, source, cover_type"
+_LISTED = "id, title, author, language, added_at, cover_type"
 
 # An id is given by the app, and is part of the name of a file for a topic.
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,119}")
@@ -405,7 +405,6 @@ def _listed(
     author: str,
     language: str,
     added_at: int,
-    source: str | None,
     cover_type: str | None,
 ) -> dict[str, Any]:
     """A book as it is listed, without what it says."""
@@ -415,8 +414,6 @@ def _listed(
         "author": author,
         "language": language,
         "addedAt": added_at,
-        # the name of its file in the folder of books, if it is from there
-        "source": source,
         # whether there is a picture of its cover
         "cover": cover_type is not None,
     }
@@ -608,7 +605,7 @@ class UserStore:
             row = self._db.execute(
                 f"SELECT {_LISTED}, blocks FROM books WHERE id = ?", (book_id,)
             ).fetchone()
-        return {**_listed(*row[:7]), "blocks": json.loads(row[7])} if row else None
+        return {**_listed(*row[:6]), "blocks": json.loads(row[6])} if row else None
 
     def add_book(
         self,
@@ -617,15 +614,10 @@ class UserStore:
         author: str,
         language: str,
         blocks: list[dict[str, Any]],
-        source: str | None = None,
-        stamp: str | None = None,
         cover: tuple[bytes, str] | None = None,
     ) -> dict[str, Any]:
-        """Keep a book, and return it as it is listed. A book that is from
-        the folder of books has the name of its file there as its `source`,
-        and what tells that file from a later one of the same name as its
-        `stamp`. `cover` is the picture on its cover with the kind of file
-        it is. A book that was kept before stays as long ago added as it
+        """Keep a book, and return it as it is listed. `cover` is the
+        picture on its cover with the kind of file it is. A book that was kept before stays as long ago added as it
         was. Raises ValueError for an id that is not one."""
         if not is_id(book_id):
             raise ValueError("a book needs an id")
@@ -637,11 +629,10 @@ class UserStore:
                 (self._covers / book_id).unlink(missing_ok=True)
             self._db.execute(
                 "INSERT INTO books (id, title, author, language, added_at, blocks,"
-                " source, stamp, cover_type)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET"
+                " cover_type)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET"
                 " title = excluded.title, author = excluded.author,"
                 " language = excluded.language, blocks = excluded.blocks,"
-                " source = excluded.source, stamp = excluded.stamp,"
                 " cover_type = excluded.cover_type",
                 (
                     book_id,
@@ -650,8 +641,6 @@ class UserStore:
                     language,
                     int(self._now() * 1000),
                     json.dumps(blocks, ensure_ascii=False),
-                    source,
-                    stamp,
                     cover[1] if cover else None,
                 ),
             )
@@ -732,30 +721,6 @@ class UserStore:
             sentence_id: (text, model, voice)
             for sentence_id, text, model, voice in rows
         }
-
-    def books_from_folder(self) -> dict[str, tuple[str, str]]:
-        """The books that are from the folder of books: the id and the stamp
-        of each, by the name of its file."""
-        with self._lock:
-            rows = self._db.execute(
-                "SELECT source, id, stamp FROM books WHERE source IS NOT NULL"
-            ).fetchall()
-        return {source: (book_id, stamp or "") for source, book_id, stamp in rows}
-
-    def books_folder(self) -> str:
-        """The folder the books are taken from, or nothing if there is none."""
-        with self._lock:
-            row = self._db.execute(
-                "SELECT body FROM kept WHERE name = 'books_folder'"
-            ).fetchone()
-        return str(json.loads(row[0])) if row else ""
-
-    def save_books_folder(self, folder: str) -> None:
-        with self._lock, self._db:
-            self._db.execute(
-                "INSERT OR REPLACE INTO kept (name, body) VALUES ('books_folder', ?)",
-                (json.dumps(folder, ensure_ascii=False),),
-            )
 
     # processing
 
@@ -1547,6 +1512,23 @@ class UserStore:
                 "SELECT body FROM kept WHERE name = 'settings'"
             ).fetchone()
         return json.loads(row[0]) if row else None
+
+    def skipped_anki_decks(self) -> list[int]:
+        """The ids of the Anki decks whose words are left out. Every other
+        deck's are had, those made later too."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT body FROM kept WHERE name = 'skipped_anki_decks'"
+            ).fetchone()
+        return [int(deck_id) for deck_id in json.loads(row[0])] if row else []
+
+    def save_skipped_anki_decks(self, decks: list[int]) -> None:
+        with self._lock, self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO kept (name, body)"
+                " VALUES ('skipped_anki_decks', ?)",
+                (json.dumps(decks),),
+            )
 
     def save_settings(self, settings: dict[str, Any]) -> None:
         with self._lock, self._db:

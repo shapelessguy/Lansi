@@ -8,8 +8,8 @@ export interface Session {
 }
 
 const STORAGE_KEY = "chat-ui.session";
-/** Where the dev server forwards requests to the checker server. */
-const BASE = "/checker";
+/** Where the dev server forwards requests to the checker server, under the base the GUI is served at. */
+const BASE = `${import.meta.env.BASE_URL}checker`;
 
 export function normalizeSession(stored: unknown): Session | null {
     if (typeof stored !== "object" || stored === null) {
