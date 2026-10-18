@@ -78,7 +78,7 @@ def describe_chat(messages: list[dict[str, str]]) -> str:
         for message in messages
     )
     if len(chat) > MAX_CHAT:
-        chat = chat[:MAX_CHAT] + "\n" + PROMPTS("cut.rest")
+        chat = chat[:MAX_CHAT] + "\n" + PROMPTS("cut")
     return chat
 
 

@@ -1,11 +1,3 @@
-# Copyright: Ankitects Pty Ltd and contributors
-# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
-
-# What the cloze exercise tells the model, as checker/prompts.py describes.
-# $level, $lesson, $plan, $topics, $words, $guidance and $made are the
-# pieces of `kit` in checker/prompts.toml.
-
-# what makes a set of sentences with gaps
 making = """
 You write fill-in-the-gap exercises for someone learning $language. Write \
 $count different sentences in $language that practise the rules below, \

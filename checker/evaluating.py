@@ -371,12 +371,12 @@ def listed_scores(result: dict[str, Any]) -> str:
         for name, value in result["scores"].items()
         if value is not None
     )
-    return scores or PROMPTS("evaluating.no_scores")
+    return scores or PROMPTS("evaluating.scores.none")
 
 
 def describe_scores(result: dict[str, Any]) -> str:
     """The scores of an evaluation, as its log has them."""
-    return PROMPTS("evaluating.scores", scores=listed_scores(result))
+    return PROMPTS("evaluating.scores.listed", scores=listed_scores(result))
 
 
 def describe_passed(result: dict[str, Any]) -> str:
@@ -637,11 +637,11 @@ class Evaluations:
                 "evaluating.part.nothing"
             )
             blocks.append(
-                f"{title}\n{PROMPTS('evaluating.scores', scores=scored)}\n{done}"
+                f"{title}\n{PROMPTS('evaluating.scores.listed', scores=scored)}\n{done}"
             )
         record = "\n\n".join(blocks)
         if len(record) > MAX_RECORD:
-            record = record[:MAX_RECORD] + "\n" + PROMPTS("cut.rest")
+            record = record[:MAX_RECORD] + "\n" + PROMPTS("cut")
         return record
 
     def _log_later(self, evaluation: dict[str, Any], ask: Asker) -> None:

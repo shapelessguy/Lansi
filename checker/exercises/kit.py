@@ -186,11 +186,10 @@ class PromptError(Exception):
 
 
 class Prompts:
-    """The prompts of a file, filled in by name, as checker/prompts.py
-    describes: an exercise is run with nothing of the server's, so the kit
-    reads them in the same way itself. An exercise keeps its own in the
-    `prompts.toml` of its directory, which `prompts_beside` reads; those
-    every exercise uses are `kit` of checker/prompts.toml."""
+    """The prompts an exercise keeps in the `prompts.toml` of its directory,
+    which `prompts_beside` reads, filled in by name: a prompt is a string of
+    the file, found by its dotted name, and a table of strings is the
+    variants of one. A prompt is filled in as checker/prompts.py describes."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -214,17 +213,7 @@ class Prompts:
     def __call__(self, name: str, /, **values: object) -> str:
         """The prompt of that name filled in with `values`: one it uses that
         is not given is an error, one it does not use is left out."""
-        text = self.text(name)
-        missing = variables_of(text) - set(values)
-        if missing:
-            listed = ", ".join(f"${each}" for each in sorted(missing))
-            raise PromptError(
-                f"{name} of {self.path} uses {listed}, which the code does not give"
-            )
-        try:
-            return Template(text).substitute(values)
-        except ValueError as error:
-            raise PromptError(f"{name} of {self.path}: {error}") from None
+        return _fill(self.text(name), f"{name} of {self.path}", values)
 
     def _read(self) -> dict[str, Any]:
         if self._table is None:
@@ -239,6 +228,73 @@ class Prompts:
                 raise PromptError(f"{self.path} has no prompt {name}")
             found = found[part]
         return found
+
+
+class SharedPrompts:
+    """The prompts every exercise uses, kept in checker/prompts/kit/ and
+    read as checker/prompts.py reads them: an exercise is run with nothing
+    of the server's, so the kit reads them itself. `kit.topics.one` is the
+    variant `one` of checker/prompts/kit/topics.md."""
+
+    def __init__(self, directory: Path) -> None:
+        self.directory = directory
+        self._files: dict[Path, dict[str, str]] = {}
+
+    def table(self, name: str) -> dict[str, str]:
+        """The variants of the prompt of that name, by their names."""
+        variants = self._file(self.directory.joinpath(*name.split(".")))
+        if variants is None or "" in variants:
+            raise PromptError(f"there are no variants of a prompt {name}")
+        return variants
+
+    def text(self, name: str) -> str:
+        """The prompt of that name as it is written, not filled in."""
+        parts = name.split(".")
+        whole = self._file(self.directory.joinpath(*parts))
+        if whole is not None and "" in whole:
+            return whole[""]
+        variants = self._file(self.directory.joinpath(*parts[:-1]))
+        if variants is not None and parts[-1] in variants:
+            return variants[parts[-1]]
+        raise PromptError(f"there is no prompt {name} in {self.directory}")
+
+    def __call__(self, name: str, /, **values: object) -> str:
+        """The prompt of that name filled in with `values`."""
+        return _fill(self.text(name), name, values)
+
+    def _file(self, path: Path) -> dict[str, str] | None:
+        path = path.with_name(path.name + ".md")
+        if path not in self._files:
+            if not path.is_file():
+                return None
+            text = path.read_text(encoding="utf-8")
+            headings = list(_HEADING.finditer(text))
+            self._files[path] = {
+                heading.group(1) or "": text[
+                    heading.end() : headings[number + 1].start()
+                    if number + 1 < len(headings)
+                    else len(text)
+                ].strip("\r\n")
+                for number, heading in enumerate(headings)
+            }
+        return self._files[path]
+
+
+# the heading a shared prompt, or a variant of one, starts under
+_HEADING = re.compile(r"^## Prompt(?:: (\S+))?[ \t]*$", re.MULTILINE)
+
+
+def _fill(text: str, name: str, values: dict[str, object]) -> str:
+    """`text` with each of its variables replaced by its value: one it uses
+    that is not given is an error, one it does not use is left out."""
+    missing = variables_of(text) - set(values)
+    if missing:
+        listed = ", ".join(f"${each}" for each in sorted(missing))
+        raise PromptError(f"{name} uses {listed}, which the code does not give")
+    try:
+        return Template(text).substitute(values)
+    except ValueError as error:
+        raise PromptError(f"{name}: {error}") from None
 
 
 def variables_of(text: str) -> set[str]:
@@ -261,8 +317,8 @@ def prompts_beside(file: str) -> Prompts:
     return Prompts(Path(file).resolve().with_name("prompts.toml"))
 
 
-# the prompts every exercise uses, `kit` of the server's
-PROMPTS = Prompts(Path(__file__).resolve().parent.parent / "prompts.toml")
+# the prompts every exercise uses, those of kit/ in the server's
+PROMPTS = SharedPrompts(Path(__file__).resolve().parent.parent / "prompts")
 
 
 class ModelError(Exception):
@@ -530,7 +586,7 @@ def describe_level(context: dict[str, Any]) -> str:
     learner knows, and sentences as long and as built as their level
     reads, unless the rules of the lesson need more."""
     level = level_of(context)
-    sentences = PROMPTS.table("kit.level.sentences").get(level.strip().upper())
+    sentences = PROMPTS.table("kit.level_sentences").get(level.strip().upper())
     if sentences:
         return PROMPTS("kit.level.with_sentences", level=level, sentences=sentences)
     return PROMPTS("kit.level.plain", level=level)

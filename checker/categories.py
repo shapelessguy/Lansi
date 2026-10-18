@@ -4,12 +4,13 @@
 """The categories the words of the vocabulary are divided into, and what is
 stored of a word in each.
 
-What a model is told about a category is `categories` of prompts.toml, to
-be tuned in one place: how the decision model is to recognise it, what makes
+What a model is told about a category is in prompts/categories/, to be
+tuned in one place: how the decision model is to recognise it, what makes
 two words the same entry, and what a language model is told when it
-describes a new word. The shape of that description is here. The shapes are given to the model as JSON schemas, so it has
-no say in how its answer is laid out, and the forms of a word are worked out
-from the filled-in shape here rather than left to it to list.
+describes a new word. The shape of that description is here. The shapes
+are given to the model as JSON schemas, so it has no say in how its answer
+is laid out, and the forms of a word are worked out from the filled-in
+shape here rather than left to it to list.
 
 The rules written out there are those of German. A word of any other
 language is stored by rules that fit every language: under the form a
@@ -72,12 +73,12 @@ MEANINGS = several(TEXT)
 
 
 def _told(name: str) -> str:
-    """A text of `categories` of the prompts, with the rules it uses."""
+    """A prompt of prompts/categories/, with the rules it uses."""
     return PROMPTS(
         f"categories.{name}",
-        meanings_rule=PROMPTS("categories.meanings_rule"),
-        empty_rule=PROMPTS("categories.empty_rule"),
-        listing=PROMPTS("categories.listing"),
+        meanings_rule=PROMPTS("categories.rules.meanings"),
+        empty_rule=PROMPTS("categories.rules.empty"),
+        listing=PROMPTS("categories.rules.listing"),
     )
 
 
@@ -87,14 +88,14 @@ def _german(
     read: Callable[[dict[str, Any]], Description],
     rules: str = "",
 ) -> Category:
-    """A category of German, as `categories.german` of the prompts tells it,
+    """A category of German, as the prompts of prompts/categories/ tell it,
     judged and described by the rules of `rules` if it has none of its own."""
     told = rules or name
     return Category(
         name,
-        _told(f"german.{name}.criterion"),
-        _told(f"german.{told}.judging"),
-        _told(f"german.{told}.describing"),
+        _told(f"criteria.{name}"),
+        _told(f"judging.{told}"),
+        _told(f"describing.{told}"),
         schema,
         read,
     )
@@ -316,9 +317,9 @@ def read_generic(reply: dict[str, Any]) -> Description:
 GENERIC: dict[str, Category] = {
     name: Category(
         name,
-        _told(f"generic.criteria.{name}"),
-        _told("generic.judging"),
-        _told("generic.describing"),
+        _told(f"generic_criteria.{name}"),
+        _told("judging.generic"),
+        _told("describing.generic"),
         GENERIC_SCHEMA,
         read_generic,
     )

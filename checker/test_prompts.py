@@ -6,62 +6,66 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from prompts import PROMPTS, PromptError, Prompts, every_prompt, variables_of
+from prompts import PROMPTS, PromptError, Prompts, read_prompts, variables_of
 
-CHECKER = Path(__file__).resolve().parent
+DIRECTORY = Path(__file__).resolve().parent / "prompts"
 
 
-def write(tmp_path: Path, text: str) -> Prompts:
-    path = tmp_path / "prompts.toml"
+def write(tmp_path: Path, name: str, text: str) -> Prompts:
+    path = tmp_path / name
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
-    return Prompts(path)
+    return Prompts(tmp_path)
 
 
-def test_a_prompt_is_filled_in_with_the_values_it_uses(tmp_path: Path) -> None:
-    prompts = write(tmp_path, 'greeting = "Hello $name, at level ${level}A."\n')
-    assert prompts("greeting", name="Anna", level="B") == "Hello Anna, at level BA."
-
-
-def test_a_prompt_is_found_by_its_dotted_name_among_its_variants(
+def test_a_prompt_is_what_comes_under_its_heading_after_the_description(
     tmp_path: Path,
 ) -> None:
-    prompts = write(tmp_path, '[topics]\none = "Topic: $topic."\nnone = "No topic."\n')
+    prompts = write(
+        tmp_path,
+        "intake/greeting.md",
+        "# Greeting\n\nWhat greets.\n\n- `$name`: who\n\n## Prompt\n\nHello $name.\n\nBye.\n",
+    )
+    assert prompts("intake.greeting", name="Anna") == "Hello Anna.\n\nBye."
+
+
+def test_a_variant_is_found_by_its_name_after_that_of_its_file(tmp_path: Path) -> None:
+    prompts = write(
+        tmp_path,
+        "topics.md",
+        "# Topics\n\n## Prompt: one\n\nTopic: $topic.\n\n## Prompt: none\n\nNo topic.\n",
+    )
     assert prompts("topics.one", topic="food") == "Topic: food."
     assert prompts.table("topics") == {"one": "Topic: $topic.", "none": "No topic."}
 
 
 def test_a_value_is_left_out_when_the_prompt_does_not_use_it(tmp_path: Path) -> None:
-    prompts = write(tmp_path, 'short = "Be brief."\n')
+    prompts = write(tmp_path, "short.md", "## Prompt\nBe brief.\n")
     assert prompts("short", language="German") == "Be brief."
 
 
 def test_a_value_may_be_called_name(tmp_path: Path) -> None:
-    prompts = write(tmp_path, 'about = "The category $name."\n')
+    prompts = write(tmp_path, "about.md", "## Prompt\nThe category $name.\n")
     assert prompts("about", name="noun") == "The category noun."
 
 
 def test_braces_and_a_doubled_dollar_are_kept_as_they_are(tmp_path: Path) -> None:
-    prompts = write(tmp_path, "reply = 'Reply {\"items\": []} for $$5.'\n")
+    prompts = write(tmp_path, "reply.md", '## Prompt\nReply {"items": []} for $$5.\n')
     assert prompts("reply") == 'Reply {"items": []} for $5.'
 
 
-def test_a_line_ending_in_a_backslash_goes_on_without_a_break(tmp_path: Path) -> None:
-    prompts = write(tmp_path, 'long = """\nOne \\\ntwo.\n\nThree."""\n')
-    assert prompts("long") == "One two.\n\nThree."
-
-
 def test_a_prompt_is_an_error_when_it_uses_a_value_not_given(tmp_path: Path) -> None:
-    prompts = write(tmp_path, 'greeting = "Hello $name in $language."\n')
+    prompts = write(tmp_path, "greeting.md", "## Prompt\nHello $name in $language.\n")
     with pytest.raises(PromptError, match=r"\$language"):
         prompts("greeting", name="Anna")
 
 
-def test_a_prompt_is_an_error_when_it_is_not_in_the_file(tmp_path: Path) -> None:
-    prompts = write(tmp_path, '[topics]\none = "Topic."\n')
+def test_a_prompt_is_an_error_when_there_is_none_of_that_name(tmp_path: Path) -> None:
+    prompts = write(tmp_path, "topics.md", "## Prompt: one\nTopic.\n")
     with pytest.raises(PromptError, match="no prompt topics.two"):
         prompts("topics.two")
-    with pytest.raises(PromptError, match="not a prompt"):
-        prompts("topics")
+    with pytest.raises(PromptError, match="no prompt others"):
+        prompts("others")
 
 
 def test_a_dollar_that_starts_no_variable_is_an_error() -> None:
@@ -69,17 +73,20 @@ def test_a_dollar_that_starts_no_variable_is_an_error() -> None:
         variables_of("It costs $ 5.")
 
 
-def prompt_files() -> list[Path]:
-    return [CHECKER / "prompts.toml", *sorted(CHECKER.glob("exercises/*/prompts.toml"))]
-
-
-@pytest.mark.parametrize("path", prompt_files(), ids=lambda path: path.parent.name)
-def test_every_prompt_of_a_file_is_one_that_can_be_filled_in(path: Path) -> None:
-    prompts = every_prompt(Prompts(path).table())
+@pytest.mark.parametrize(
+    "path",
+    sorted(DIRECTORY.rglob("*.md")),
+    ids=lambda path: path.relative_to(DIRECTORY).as_posix(),
+)
+def test_every_file_of_prompts_has_prompts_that_can_be_filled_in(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    assert text.startswith("# "), "a file starts with its title"
+    prompts = read_prompts(text)
     assert prompts
-    for name, text in prompts.items():
-        for variable in variables_of(text):
-            assert variable.isidentifier(), (name, variable)
+    for variant, prompt in prompts.items():
+        assert prompt, variant
+        for variable in variables_of(prompt):
+            assert f"`${variable}`" in text, f"${variable} is not described"
 
 
 def test_the_prompts_of_the_server_have_the_kit_of_the_exercises() -> None:

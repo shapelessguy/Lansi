@@ -1,12 +1,3 @@
-# Copyright: Ankitects Pty Ltd and contributors
-# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
-
-# What the writing exercise tells the models, as checker/prompts.py
-# describes. $level, $lesson, $topics, $words, $guidance, $exam and
-# $criteria are the pieces of `kit` in checker/prompts.toml.
-
-# What makes a task to write: $kind is one of `tasks`, and $made is `made`
-# when tasks were made before.
 making = """
 You make writing tasks for someone learning $language. Make a task of \
 $kind, about the topics below. $level
@@ -21,7 +12,6 @@ question. The learner writes about $count words.
 
 Reply with JSON alone: {"situation": "...", "points": ["...", "...", "..."]}"""
 
-# what makes a form to fill in from a text, for the kind "form"
 making_form = """
 You make writing tasks for someone learning $language. Write a short \
 text of four to six sentences in $language about someone who signs up for \
@@ -37,8 +27,6 @@ gives, of one word or a few.
 Reply with JSON alone: {"text": "...", "fields": [{"label": "...", \
 "answer": "..."}]}"""
 
-# What rates what the learner wrote for a task: $points one to a line, each
-# after a -, and $shape the ratings asked for, each as "name": 0.
 rating = """
 You are an examiner, rating what someone learning $language wrote for a \
 task of an exam at level $level. Rate it as strictly as the examiners of \
@@ -64,8 +52,6 @@ $into what was missing or wrong, and what was done well.
 Reply with JSON alone: {"ratings": {$shape}, "correction": "...", \
 "note": "..."}"""
 
-# What checks a form the learner filled in, each a `field` on a line of its
-# own as $fields.
 checking_form = """
 You check a form that someone learning $language filled in with what a \
 text says. The text:
@@ -85,17 +71,13 @@ wrong, or "" if nothing was.
 Reply with JSON alone, with a verdict for each field in turn: \
 {"verdicts": [{"result": "...", "note": "..."}]}"""
 
-
-# The tasks made before, one to a line as $listed.
 made = """
 Tasks made already in this exercise. Make another, with other \
 people and situations:
 $listed"""
 
-# A field of the form, with the answer the text gives and the learner's.
 field = "$number. $label Text: $answer Learner: $given"
 
-# What each kind of task is, by the option `kind`.
 [tasks]
 message = """
 a short message, such as a text message or an email, to a \

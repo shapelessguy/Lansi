@@ -1,14 +1,3 @@
-# Copyright: Ankitects Pty Ltd and contributors
-# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
-
-# What the comprehension exercise tells the models, as checker/prompts.py
-# describes. $level, $lesson, $topics, $words, $guidance and $exam are the
-# pieces of `kit` in checker/prompts.toml.
-
-# What writes a text with its questions: $kind is one of `texts` or of
-# `any_text`, $by one
-# of `by`, $answers one of `answering`, $heard is `heard` when the text is
-# listened to, and $made is `made` when texts were written before.
 making = """
 You write texts for someone learning $language to show they understand \
 them, $by. Write $kind, of about $length words, about the topics below, \
@@ -30,30 +19,24 @@ Reply with JSON alone: {"title": "...", "shown": "...", "text": "...", \
 something to be read beside the text, such as a list to choose from. \
 "answer" is the place of the right answer among the options, from 0."""
 
-# said of a text that is listened to
 heard = """
 The text is read aloud, not shown: write it as it is spoken, \
 with no headings, and the numbers and times in words where they are \
 said so."""
 
-# The texts written before, one to a line as $listed.
 made = """
 Texts written already in this exercise. Write another, with other \
 people, places, numbers and happenings:
 $listed"""
 
-# whether the texts are read or listened to
 [by]
 reading = "by reading them"
 listening = "by listening to them"
 
-# What text is written when any kind will do, by whether it is read or
-# listened to.
 [any_text]
 reading = "a text to be read, such as an email, an article or adverts"
 listening = "a text to be heard, such as a conversation or an announcement"
 
-# What each kind of text is, by the option `text`.
 [texts]
 message = "a personal email or letter, with a greeting and an ending"
 article = "a short newspaper article, with a title"
@@ -64,7 +47,6 @@ announcement = "an announcement, as heard at a station, an airport or in a shop"
 phone = "a message left on an answering machine"
 interview = "a radio interview, each line with who says it"
 
-# How the questions are answered, by the option `answers`.
 [answering]
 choice = """
 Each question is a question, or the start of a sentence, with \

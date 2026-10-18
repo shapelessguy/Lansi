@@ -1,12 +1,3 @@
-# Copyright: Ankitects Pty Ltd and contributors
-# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
-
-# What the oral exercise tells the models, as checker/prompts.py describes.
-# $level, $topics, $words, $guidance, $exam and $criteria are the pieces of
-# `kit` in checker/prompts.toml.
-
-# What makes a speaking task: $task is one of `tasks`, and $made is `made`
-# when tasks were made before.
 making = """
 You make speaking tasks for someone learning $language, which they answer \
 as they would speak, to an examiner or a partner. $task Write it all in \
@@ -19,15 +10,11 @@ to, as on a card or said by the partner, in a sentence or two.
 
 Reply with JSON alone: {"card": "...", "prompts": ["..."]}"""
 
-# The tasks made before, one to a line as $listed.
 made = """
 Tasks made already in this exercise. Make another, on other themes \
 and things:
 $listed"""
 
-# What rates what the learner said to a task: $turns are each a `turn`,
-# with a blank line between them, and $shape the ratings asked for, each
-# as "name": 0.
 rating = """
 You are an examiner of speaking, rating what someone learning $language \
 said in a task of an exam at level $level. Rate it as strictly as the \
@@ -53,12 +40,10 @@ what was done well.
 Reply with JSON alone: {"ratings": {$shape}, "corrections": \
 ["..."], "note": "..."}"""
 
-# A turn of a task, with what the learner said to it.
 turn = """
 $number. $prompt
 Learner: $answer"""
 
-# What each kind of task is, by the option `kind`.
 [tasks]
 introduce = """
 The learner introduces themselves. The "card" lists the \

@@ -19,10 +19,10 @@ A language-learning chat built on an Anki collection. Three parts:
   the chats, books, sessions of practice and settings (`storage.py`) and a vocabulary for
   each language (`intake.py`, `vocabulary.py`); a book is an EPUB file read
   into its text and font sizes (`books.py`); the categories of words are
-  in `categories.py`. Everything the server tells the models is in
-  `checker/prompts.toml`, by dotted name and with `$variables`, as
-  `prompts.py` describes; what an exercise tells them is in the
-  `prompts.toml` of its directory. Practice is made of
+  in `categories.py`. What the server tells the models is in
+  `checker/prompts/`, a Markdown file for each kind of prompt, with
+  `$variables`, as `prompts.py` describes; what an exercise tells them is
+  in the `prompts.toml` of its directory. Practice is made of
   lessons, which are grammar points kept by hand in `checker/grammar/`
   (`grammar.py`), and exercises, each a directory in `checker/exercises/`
   with a backend run in a process of its own and an interface, a module

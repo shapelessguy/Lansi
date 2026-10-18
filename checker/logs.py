@@ -118,7 +118,7 @@ def describe_record(grades: list[dict[str, str]], written: dict[str, list[str]])
         ]
     record = "\n".join(lines)
     if len(record) > MAX_WRITTEN:
-        record = record[:MAX_WRITTEN] + "\n" + PROMPTS("cut.rest")
+        record = record[:MAX_WRITTEN] + "\n" + PROMPTS("cut")
     return record
 
 

@@ -1,13 +1,3 @@
-# Copyright: Ankitects Pty Ltd and contributors
-# License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
-
-# What the stories exercise tells the models, as checker/prompts.py
-# describes. $level, $lesson, $topics, $words and $guidance are the pieces
-# of `kit` in checker/prompts.toml.
-
-# What writes a story: $made is `made` when stories were written before,
-# and, when questions are to be answered on it, $asking is `asking` and
-# $shape is `asked_shape`.
 making = """
 You write short stories for someone learning $language. Write a story in \
 $language of about $length words, with a title, about the topics below, \
@@ -21,16 +11,13 @@ end, told in plain paragraphs, with no headings or lists.$asking
 
 Reply with JSON alone: {"title": "...", "text": "..."$shape}"""
 
-# The stories written before, their titles one to a line as $listed.
 made = """
 Stories written already in this exercise. Write another one, with \
 other people, things and happenings:
 $listed"""
 
-# what the reply has besides, when questions are asked
 asked_shape = ', "questions": [{"question": "...", "answer": "..."}]'
 
-# what asks for questions on the story, after a blank line
 asking = """
 
 
@@ -38,8 +25,6 @@ Then write $count questions on the story in $language, at the \
 learner's level, each answered by the story in a short sentence, with that \
 answer."""
 
-# What judges the answers to the questions on a story, each an `answer` as
-# $answers, with a blank line between them.
 judging_answers = """
 You check the answers of someone learning $language at level $level to \
 questions on a story they read. The story:
@@ -61,7 +46,6 @@ what was wrong, or "" if nothing was.
 Reply with JSON alone, with a verdict for each answer in turn: \
 {"verdicts": [{"result": "...", "correction": "...", "note": "..."}]}"""
 
-# what judges how the learner retold a story
 judging_retelling = """
 You check how someone learning $language at level $level retold a story \
 they read. The story:
@@ -81,8 +65,6 @@ $into what was wrong, or "" if nothing was.
 
 Reply with JSON alone: {"result": "...", "correction": "...", "note": "..."}"""
 
-# A question on the story, with the answer the story gives and the
-# learner's.
 answer = """
 $number. $question
 Answer: $answer
