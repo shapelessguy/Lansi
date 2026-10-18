@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { canAsk } from "../lib/models";
 
 import type { ProfileUsage } from "../lib/checker";
 import {
@@ -336,7 +337,7 @@ export function Evaluations(
                         </span>
                     </div>
                 )}
-                {!learner.apiKey && (
+                {!canAsk(learner.model, learner.apiKey) && (
                     <p className="practice-note">
                         The parts are made by a model. <button onClick={onOpenSettings}>Add your OpenRouter key</button>
                     </p>

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Any, Literal
 
+from models import Model
 from profiling import (
     QUESTIONS,
     Answer,
@@ -80,9 +81,9 @@ class LiveChecker:
     A sentence is profiled when the writer's caret leaves it, which is when it
     goes from being typed to done. Each question about it is then sent on a
     thread of its own, all of them at once, and the text is answered without
-    waiting for them. A model on this machine is asked all the questions
-    about a sentence in one request instead, as it answers one request at a
-    time, and it needs no key. Going back into a sentence that has been profiled and
+    waiting for them. A model at an address of the learner's own is asked
+    all the questions about a sentence in one request instead, as such a
+    server may answer one request at a time. Going back into a sentence that has been profiled and
     leaving it unchanged does not profile it again, while changing it does.
 
     If a sentence is changed, or the caret goes back onto it, while questions
@@ -129,28 +130,28 @@ class LiveChecker:
         self,
         text: str,
         caret: int | None = None,
-        api_key: str | None = None,
-        model: str | None = None,
+        model: Model | None = None,
         questions: Questions | None = None,
         rate_words: bool = False,
     ) -> list[Sentence]:
         """Split `text` into sentences and fill in what is known about each.
 
         `caret` is where the writer's caret is in `text`, if known; the
-        sentence it is on is treated as still being written. `api_key` is the
-        OpenRouter key to profile sentences with; without one, none are,
-        unless there is a model on this machine to ask.
-        `model` and `questions` are the model to profile them with and the
-        questions to ask it, if not the usual ones; with no questions at all,
-        nothing is profiled. With `rate_words`, the words of each sentence
+        sentence it is on is treated as still being written. `model` is the
+        model to profile them with; without one that can be asked, such as
+        one on OpenRouter with no key, none are. `questions` are the
+        questions to ask it, if not the usual ones; with no questions at
+        all, nothing is profiled. With `rate_words`, the words of each sentence
         are rated once it has been profiled."""
         sentences = split_sentences(text, caret)
         if questions is None:
             questions = QUESTIONS
-        # a model on this machine is asked in place of the one named
-        local = self._profiler.local_model() if self._profiler else None
-        asked_model = f"local:{local}" if local else model or ""
-        can_ask = bool(self._profiler and (local or api_key))
+        if self._profiler and model:
+            model = self._profiler.named(model)
+        asked_model = f"{model.url} {model.name}" if model else ""
+        can_ask = bool(self._profiler and model and model.problem() is None)
+        # one at an address of the learner's own is asked all at once
+        together = bool(model and not model.on_openrouter)
         # what to ask in each request
         to_ask: list[tuple[str, dict[str, _Question]]] = []
         # the sentences to rate the words of, each with what is known of it
@@ -184,7 +185,7 @@ class LiveChecker:
                     elif can_ask:
                         asked = self._asked[key] = self._asking[key] = _Asked()
                         new[name] = (questions[name], key, asked)
-                if local and new:
+                if together and new:
                     to_ask.append((sentence.text, new))
                 else:
                     to_ask += [
@@ -217,9 +218,7 @@ class LiveChecker:
             self._forget_the_oldest()
             self._in_flight += len(to_ask) + len(to_rate)
         for sentence_text, new in to_ask:
-            self._background(
-                partial(self._ask, sentence_text, new, api_key or "", model)
-            )
+            self._background(partial(self._ask, sentence_text, new, model or Model()))
         for sentence_text, assessment, doubt, words_key, rated in to_rate:
             self._background(
                 partial(
@@ -229,8 +228,7 @@ class LiveChecker:
                     doubt,
                     words_key,
                     rated,
-                    api_key or "",
-                    model,
+                    model or Model(),
                 )
             )
         return sentences
@@ -245,11 +243,6 @@ class LiveChecker:
             for sentence in sentences:
                 sentence.spelling = self._speller.check(sentence.text)
         return sentences
-
-    def local_model(self) -> str | None:
-        """The model on this machine that sentences are profiled by at
-        present, if they are."""
-        return self._profiler.local_model() if self._profiler else None
 
     def study(self, language: str) -> None:
         """Go by `language`, given by its English name, from now on: it is
@@ -324,8 +317,7 @@ class LiveChecker:
         self,
         sentence_text: str,
         new: dict[str, _Question],
-        api_key: str,
-        model: str | None,
+        model: Model,
     ) -> None:
         """Ask questions about a sentence in one request and keep the
         answers, unless the sentence was changed or gone back to while
@@ -335,7 +327,6 @@ class LiveChecker:
         try:
             profile = self._profiler.profile(
                 sentence_text,
-                api_key,
                 model,
                 {name: question for name, (question, _, _) in new.items()},
             )
@@ -344,8 +335,7 @@ class LiveChecker:
         finally:
             with self._lock:
                 self._in_flight -= 1
-                # the model on this machine is not paid for
-                if profile and not profile.local:
+                if profile:
                     self._unbilled.append(profile)
                 for name, (_, key, asked) in new.items():
                     # the same question may have been asked afresh since
@@ -367,8 +357,7 @@ class LiveChecker:
         doubt: float,
         key: _Key,
         rated: _Asked,
-        api_key: str,
-        model: str | None,
+        model: Model,
     ) -> None:
         """Have the words of a sentence rated and keep the ratings, unless
         the sentence was changed or gone back to while waiting for them.
@@ -377,7 +366,7 @@ class LiveChecker:
         ratings, profile, error = None, None, None
         try:
             ratings, profile = self._profiler.rate_words(
-                sentence_text, assessment, api_key, model
+                sentence_text, assessment, model
             )
             ratings = weigh_ratings(ratings, doubt)
         except ProfileError as failure:
@@ -385,7 +374,7 @@ class LiveChecker:
         finally:
             with self._lock:
                 self._in_flight -= 1
-                if profile and not profile.local:
+                if profile:
                     self._unbilled.append(profile)
                 if self._asking.get(key) is rated:
                     del self._asking[key]

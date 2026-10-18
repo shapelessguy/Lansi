@@ -44,6 +44,7 @@ from typing import Any
 from grammar import Grammar
 from intake import read_usage
 from logs import LogError, Task, has_anything, write_log
+from models import Model
 from profiling import Profile, ProfileError
 from storage import UserStore
 from topics import (
@@ -56,7 +57,7 @@ from topics import (
     draw,
     make_icon,
     rank,
-    send_to_openrouter,
+    send_to_model,
     topic_text,
 )
 from translating import TranslationError, read_text
@@ -150,7 +151,7 @@ class Choosing:
     # Whether the words are those nearest the topics, rather than those
     # used last.
     topic_words: bool = True
-    embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    embedding_model: Model = Model(DEFAULT_EMBEDDING_MODEL)
 
 
 @dataclass
@@ -287,36 +288,35 @@ def ui_file(
 
 
 def model_asker(
-    chat: Callable[[dict[str, Any], str], dict[str, Any]], api_key: str, model: str
+    chat: Callable[[dict[str, Any], Model], dict[str, Any]], model: Model
 ) -> Asker:
-    """What asks `model` with `api_key`, as the exercises want it asked."""
+    """What asks `model`, as the exercises want it asked."""
 
     def ask(messages: list[dict[str, Any]]) -> tuple[str, Profile]:
-        if not api_key:
-            raise TranslationError("an OpenRouter key is needed")
-        if not model:
-            raise TranslationError("no model was named")
+        problem = model.problem()
+        if problem:
+            raise TranslationError(problem)
         try:
             response = chat(
-                {"model": model, "messages": messages, "usage": {"include": True}},
-                api_key,
+                {"model": model.name, "messages": messages, "usage": {"include": True}},
+                model,
             )
         except ProfileError as error:
             raise TranslationError(str(error)) from None
-        return read_text(response), read_usage(response, model)
+        return read_text(response), read_usage(response, model.name)
 
     return ask
 
 
-def model_drawer(api_key: str, model: str, send: Send = send_to_openrouter) -> Drawer:
-    """What has the image `model` draw with `api_key`, as the exercises want
-    pictures drawn."""
+def model_drawer(model: Model, send: Send = send_to_model) -> Drawer:
+    """What has the image `model` draw, as the exercises want pictures
+    drawn."""
 
     def draw_picture(prompt: str, aspect_ratio: str) -> tuple[str, Profile]:
-        if not model:
+        if not model.name:
             raise TranslationError("no image model was named")
         try:
-            picture, _, used = draw(prompt, api_key, model, aspect_ratio, send)
+            picture, _, used = draw(prompt, model, aspect_ratio, send)
             return as_picture(picture), used
         except ProfileError as error:
             raise TranslationError(str(error)) from None
@@ -579,7 +579,7 @@ class Practice:
         lemmas_of: Callable[[str], list[str]] = lambda language: [],
         draw: Callable[[list[str]], str] = random.choice,
         on_words: Callable[[str], None] = lambda line: None,
-        send: Send = send_to_openrouter,
+        send: Send = send_to_model,
         later: Later = do_now,
         now: Callable[[], float] = time.time,
     ) -> None:
@@ -588,7 +588,7 @@ class Practice:
         self._grammar = grammar or Grammar()
         self._runner = runner or Runner(directory)
         self._directory = directory
-        # what sends the requests for icons and embeddings to OpenRouter
+        # what sends the requests for icons and embeddings to the models
         self._send = send
         self.embeddings = embeddings or Embeddings(store, send)
         # the words of the vocabulary of a language, those used last first
@@ -617,7 +617,6 @@ class Practice:
         topics: list[str],
         chosen: dict[str, int],
         choosing: Choosing | None = None,
-        api_key: str = "",
         options: dict[str, Any] | None = None,
         minutes: dict[str, int] | None = None,
         exam: str = "",
@@ -685,7 +684,7 @@ class Practice:
             for exercise in chosen
         }
         words, used = self._words(
-            language, [topic_text(each) for each in about if each], choosing, api_key
+            language, [topic_text(each) for each in about if each], choosing
         )
         session = self._store.start_session(
             uuid.uuid4().hex,
@@ -741,7 +740,7 @@ class Practice:
         )
 
     def _words(
-        self, language: str, topics: list[str], choosing: Choosing, api_key: str
+        self, language: str, topics: list[str], choosing: Choosing
     ) -> tuple[dict[str, Any] | None, list[Profile]]:
         """The words the exercises of a session about `topics` are to
         use, as `choosing` says, with what embedding them used."""
@@ -756,14 +755,14 @@ class Practice:
         if not (choosing.topic_words and topics):
             return {"mode": "prefer", "lemmas": candidates[:MAX_WORDS]}, []
         model = choosing.embedding_model
-        missing = self.embeddings.missing(candidates + topics, model)
+        missing = self.embeddings.missing(candidates + topics, model.name)
         if len(missing) > MAX_EMBEDDED_AT_START:
             raise ValueError(
                 f"{len(missing)} words of the vocabulary are not embedded yet:"
                 " wait for them to be, and start again"
             )
-        used = self.embeddings.embed(missing, api_key, model)
-        ranked = rank(self.embeddings, topics, candidates, model)
+        used = self.embeddings.embed(missing, model)
+        ranked = rank(self.embeddings, topics, candidates, model.name)
         words = choose_words(ranked, MAX_WORDS)
         nearest = ", ".join(
             f"{word} {score:.2f}" for word, score in ranked[:SHOWN_WORDS]
@@ -776,10 +775,10 @@ class Practice:
         return words, used
 
     def make_icon(
-        self, topic: dict[str, Any], api_key: str, model: str
+        self, topic: dict[str, Any], model: Model
     ) -> tuple[bytes, str, Profile]:
         """An icon for `topic`, made by the image `model`. Raises ProfileError."""
-        return make_icon(topic, api_key, model, self._send)
+        return make_icon(topic, model, self._send)
 
     def vocabulary_to_embed(self, language: str, model: str) -> list[str]:
         """The words of the vocabulary of `language` that `model` has not

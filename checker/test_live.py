@@ -10,10 +10,10 @@ from dataclasses import replace
 
 import pytest
 from live import LiveChecker
+from models import Model
 from profiling import (
     QUESTIONS,
     Answer,
-    LocalModel,
     Profile,
     ProfileError,
     Profiler,
@@ -25,6 +25,8 @@ from spelling import Speller
 
 WORDS = ["ich", "habe", "einen", "hund", "er", "ist", "gut", "sehr"]
 KEY = "test-key"
+# the usual model, on OpenRouter
+KEYED = Model(key=KEY)
 TWO = "Ich habe einen Hund. Er ist gut."
 
 
@@ -48,8 +50,8 @@ YES = Answer("choice", choice="yes")
 class FakeProfiler(Profiler):
     """Records what it is asked instead of asking Jev, and says yes to it."""
 
-    def __init__(self, local: LocalModel | None = None) -> None:
-        super().__init__(local=local)
+    def __init__(self) -> None:
+        super().__init__()
         self.asked: list[str] = []
         self.keys: list[str] = []
         self.models: list[str | None] = []
@@ -61,23 +63,21 @@ class FakeProfiler(Profiler):
     def profile(
         self,
         sentence: str,
-        api_key: str,
-        model: str | None = None,
+        model: Model,
         questions: Questions | None = None,
     ) -> Profile:
         self.asked.append(sentence)
-        self.keys.append(api_key)
-        self.models.append(model)
+        self.keys.append(model.key)
+        self.models.append(model.name)
         self.questions.append(questions)
 
         if self.failing:
             raise ProfileError("no credit left")
         return Profile(
             {name: YES for name in questions or {}},
-            local=self.local_model() is not None,
             cost=0.001,
             id=f"request-{len(self.asked)}",
-            model=model or "usual",
+            model=model.name,
             input_tokens=100,
         )
 
@@ -85,8 +85,7 @@ class FakeProfiler(Profiler):
         self,
         sentence: str,
         assessment: list[dict[str, str]],
-        api_key: str,
-        model: str | None = None,
+        model: Model,
     ) -> tuple[list[WordRating], Profile]:
         self.rated.append((sentence, assessment))
         if self.failing:
@@ -122,7 +121,7 @@ def ask(
     questions: Questions = POLITE,
 ) -> list[Sentence]:
     """Check a text with a key and, unless others are given, one question."""
-    return checker.check(text, caret, KEY, questions=questions)
+    return checker.check(text, caret, KEYED, questions=questions)
 
 
 def misspelled(checker: LiveChecker, text: str) -> list[list[str]]:
@@ -261,7 +260,7 @@ def test_undoing_a_change_does_not_profile_the_earlier_wording_again(
 def test_nothing_is_profiled_without_a_key_until_one_is_given(
     checker: LiveChecker, profiler: FakeProfiler
 ) -> None:
-    checker.check("Er ist gut.", api_key=None, questions=POLITE)
+    checker.check("Er ist gut.", model=Model(), questions=POLITE)
     asked_without_key = list(profiler.asked)
 
     ask(checker, "Er ist gut.")
@@ -281,7 +280,7 @@ def test_nothing_is_profiled_without_a_profiler() -> None:
 def test_a_sentence_is_profiled_with_the_model_asked_for(
     checker: LiveChecker, profiler: FakeProfiler
 ) -> None:
-    checker.check(TWO, api_key=KEY, model="some/model", questions=POLITE)
+    checker.check(TWO, model=Model("some/model", key=KEY), questions=POLITE)
 
     assert profiler.models == ["some/model", "some/model"]
 
@@ -289,8 +288,8 @@ def test_a_sentence_is_profiled_with_the_model_asked_for(
 def test_a_sentence_is_profiled_again_when_the_model_changes(
     checker: LiveChecker, profiler: FakeProfiler
 ) -> None:
-    checker.check("Er ist gut.", api_key=KEY, model="one/model", questions=POLITE)
-    checker.check("Er ist gut.", api_key=KEY, model="other/model", questions=POLITE)
+    checker.check("Er ist gut.", model=Model("one/model", key=KEY), questions=POLITE)
+    checker.check("Er ist gut.", model=Model("other/model", key=KEY), questions=POLITE)
 
     assert profiler.models == ["one/model", "other/model"]
 
@@ -311,7 +310,7 @@ def test_each_question_about_a_sentence_is_a_request_of_its_own(
 def test_the_usual_questions_are_asked_when_none_are_given(
     checker: LiveChecker, profiler: FakeProfiler
 ) -> None:
-    checker.check("Er ist gut.", api_key=KEY)
+    checker.check("Er ist gut.", model=KEYED)
 
     assert profiler.questions == [{name: asked} for name, asked in QUESTIONS.items()]
 
@@ -539,7 +538,7 @@ def test_the_oldest_answers_are_forgotten_when_too_many_are_remembered(
 
 def rate(checker: LiveChecker, text: str, caret: int | None = None) -> list[Sentence]:
     """Check a text with a key and one question, and have the words rated."""
-    return checker.check(text, caret, KEY, questions=POLITE, rate_words=True)
+    return checker.check(text, caret, KEYED, questions=POLITE, rate_words=True)
 
 
 def test_the_words_of_a_sentence_are_rated_once_it_is_profiled_by_what_was_found(
@@ -599,11 +598,10 @@ def test_the_ratings_of_words_are_weighed_by_how_wrong_the_sentence_was_found() 
         def profile(
             self,
             sentence: str,
-            api_key: str,
-            model: str | None = None,
+            model: Model,
             questions: Questions | None = None,
         ) -> Profile:
-            profile = super().profile(sentence, api_key, model, questions)
+            profile = super().profile(sentence, model, questions)
             profile.answers = {
                 name: replace(answer, best=0.9)
                 for name, answer in profile.answers.items()
@@ -716,85 +714,56 @@ def test_words_that_could_not_be_rated_leave_the_reason_and_are_not_tried_every_
     assert (sentence.words, sentence.profile_error) == ([], "no credit left")
 
 
-# a model on this machine
+# a model at an address of the learner's own
+
+AT_HOME = Model("local/clef", "http://127.0.0.1:10000/v1")
 
 
-def local_model(name: str | None = "local/clef") -> LocalModel:
-    """A local model that is found, under that name, or not found."""
-    local = LocalModel(probe=lambda _endpoint: name)
-    local.look()
-    return local
+def ask_at_home(
+    checker: LiveChecker, text: str, questions: Questions = POLITE
+) -> list[Sentence]:
+    return checker.check(text, None, AT_HOME, questions=questions)
 
 
-@pytest.fixture
-def local_profiler() -> FakeProfiler:
-    return FakeProfiler(local_model())
-
-
-@pytest.fixture
-def local_checker(local_profiler: FakeProfiler) -> LiveChecker:
-    return LiveChecker(
-        Speller(language=None, words=WORDS),
-        local_profiler,
-        background=lambda job: job(),
-    )
-
-
-def test_a_local_model_is_asked_all_the_questions_about_a_sentence_in_one_request(
-    local_checker: LiveChecker, local_profiler: FakeProfiler
+def test_a_model_at_an_address_is_asked_all_the_questions_about_a_sentence_at_once(
+    checker: LiveChecker, profiler: FakeProfiler
 ) -> None:
-    ask(local_checker, TWO, questions=THREE_QUESTIONS)
-    sentences = ask(local_checker, TWO, questions=THREE_QUESTIONS)
+    ask_at_home(checker, TWO, questions=THREE_QUESTIONS)
+    sentences = ask_at_home(checker, TWO, questions=THREE_QUESTIONS)
 
-    assert local_profiler.asked == ["Ich habe einen Hund.", "Er ist gut."]
-    assert local_profiler.questions == [THREE_QUESTIONS, THREE_QUESTIONS]
+    assert profiler.asked == ["Ich habe einen Hund.", "Er ist gut."]
+    assert profiler.questions == [THREE_QUESTIONS, THREE_QUESTIONS]
     assert [sentence.processed for sentence in sentences] == [True, True]
 
 
-def test_a_local_model_is_asked_without_a_key(
-    local_checker: LiveChecker, local_profiler: FakeProfiler
+def test_a_model_at_an_address_is_asked_without_an_openrouter_key(
+    checker: LiveChecker, profiler: FakeProfiler
 ) -> None:
-    local_checker.check("Er ist gut.", api_key=None, questions=POLITE)
+    ask_at_home(checker, "Er ist gut.")
 
-    assert local_profiler.asked == ["Er ist gut."]
+    assert (profiler.asked, profiler.keys) == (["Er ist gut."], [""])
 
 
-def test_a_local_model_is_asked_only_the_questions_it_has_not_answered(
-    local_checker: LiveChecker, local_profiler: FakeProfiler
+def test_a_model_at_an_address_is_asked_only_the_questions_it_has_not_answered(
+    checker: LiveChecker, profiler: FakeProfiler
 ) -> None:
-    ask(local_checker, "Er ist gut.", questions=POLITE)
+    ask_at_home(checker, "Er ist gut.", questions=POLITE)
 
-    ask(local_checker, "Er ist gut.", questions=THREE_QUESTIONS)
+    ask_at_home(checker, "Er ist gut.", questions=THREE_QUESTIONS)
 
-    assert [list(asked or {}) for asked in local_profiler.questions] == [
+    assert [list(asked or {}) for asked in profiler.questions] == [
         ["polite"],
         ["formal", "short"],
     ]
 
 
-def test_what_a_local_model_answers_is_not_billed(local_checker: LiveChecker) -> None:
-    ask(local_checker, TWO, questions=THREE_QUESTIONS)
-
-    assert local_checker.billing() == ([], False)
-
-
-def test_a_sentence_is_profiled_again_when_a_local_model_takes_over() -> None:
-    found: list[str | None] = [None]
-    local = LocalModel(probe=lambda _endpoint: found[0])
-    profiler = FakeProfiler(local)
-    checker = LiveChecker(
-        Speller(language=None, words=WORDS), profiler, background=lambda job: job()
-    )
-    ask(checker, "Er ist gut.")
-
-    found[0] = "local/clef"
-    local.look()
-    ask(checker, "Er ist gut.")
-    (sentence,) = ask(checker, "Er ist gut.")
+def test_a_sentence_is_profiled_again_by_a_model_of_the_same_id_elsewhere(
+    checker: LiveChecker, profiler: FakeProfiler
+) -> None:
+    checker.check("Er ist gut.", model=Model("local/clef", key=KEY), questions=POLITE)
+    ask_at_home(checker, "Er ist gut.")
 
     assert len(profiler.asked) == 2
-    assert checker.local_model() == "local/clef"
-    assert sentence.processed is True
 
 
 # Profiling on threads. A request to Jev is stood in for by one that takes
@@ -819,14 +788,13 @@ class SlowProfiler(FakeProfiler):
     def profile(
         self,
         sentence: str,
-        api_key: str,
-        model: str | None = None,
+        model: Model,
         questions: Questions | None = None,
     ) -> Profile:
         with self._counting:
             self._running += 1
             self.most_at_once = max(self.most_at_once, self._running)
-            answer = super().profile(sentence, api_key, model, questions)
+            answer = super().profile(sentence, model, questions)
         time.sleep(REQUEST_SECS)
         with self._counting:
             self._running -= 1

@@ -1,12 +1,12 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { errorMessage, type ModelChoice, OPENROUTER_URL, sendChat } from "./models";
+
 export interface ChatMessage {
     role: "system" | "user" | "assistant";
     content: string;
 }
-
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
 /** What a reply used. OpenRouter sends it in the last event of the reply. */
 export interface ReplyUsage {
@@ -89,7 +89,7 @@ export async function fetchGenerationUsage(apiKey: string, generationId: string)
         await new Promise((resolve) => setTimeout(resolve, 1500));
         try {
             const response = await fetch(
-                `https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(generationId)}`,
+                `${OPENROUTER_URL}/generation?id=${encodeURIComponent(generationId)}`,
                 {
                     headers: { Authorization: `Bearer ${apiKey}` },
                 },
@@ -104,42 +104,26 @@ export async function fetchGenerationUsage(apiKey: string, generationId: string)
     return null;
 }
 
-async function errorMessage(response: Response): Promise<string> {
-    const body = await response.text();
-    try {
-        return JSON.parse(body).error.message;
-    } catch {
-        return body || `OpenRouter request failed (${response.status})`;
-    }
-}
-
 /**
- * Sends the conversation and calls `onText` with each piece of the reply as it
- * arrives. Returns what the reply used, or null if that was not reported.
+ * Sends the conversation to `model`, wherever it is asked, and calls
+ * `onText` with each piece of the reply as it arrives. Returns what the
+ * reply used, or null if that was not reported.
  */
 export async function streamChat(options: {
     apiKey: string;
-    model: string;
+    model: ModelChoice;
     messages: ChatMessage[];
     signal: AbortSignal;
     onText: (text: string) => void;
 }): Promise<ReplyUsage | null> {
-    const response = await fetch(ENDPOINT, {
-        method: "POST",
-        headers: {
-            Authorization: `Bearer ${options.apiKey}`,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            model: options.model,
-            messages: options.messages,
-            stream: true,
-            usage: { include: true },
-        }),
-        signal: options.signal,
-    });
+    const response = await sendChat(
+        options.model,
+        { messages: options.messages, stream: true, usage: { include: true } },
+        options.apiKey,
+        options.signal,
+    );
     if (!response.ok || !response.body) {
-        throw new Error(await errorMessage(response));
+        throw new Error(await errorMessage(response, options.model.url || "OpenRouter"));
     }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";

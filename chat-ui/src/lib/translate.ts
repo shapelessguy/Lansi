@@ -3,6 +3,7 @@
 
 import type { ProfileUsage } from "./checker";
 import type { Log, Where } from "./logs";
+import { type ModelChoice, modelRequest } from "./models";
 import type { ChatMessage } from "./openrouter";
 import { checkerFetch } from "./session";
 import type { BackgroundTask } from "./tasks";
@@ -31,7 +32,7 @@ export interface Translated {
 /** Who is asked, and for whom. */
 export interface Asking {
     apiKey: string;
-    model: string;
+    model: ModelChoice;
     /** The language being learned. */
     language: string;
     /** The language to translate into. */
@@ -147,7 +148,12 @@ async function ask<Reply>(path: string, body: object, asking: Asking, signal?: A
             method: "POST",
             // the server asks the model with the key; it is not kept there
             headers: asking.apiKey ? { "X-OpenRouter-Key": asking.apiKey } : {},
-            body: JSON.stringify({ ...body, model: asking.model, language: asking.language, into: asking.into }),
+            body: JSON.stringify({
+                ...body,
+                model: modelRequest(asking.model),
+                language: asking.language,
+                into: asking.into,
+            }),
             signal,
         });
     } catch (error) {
@@ -215,7 +221,7 @@ export async function endChatAbout(
         headers: asking.apiKey ? { "X-OpenRouter-Key": asking.apiKey } : {},
         body: JSON.stringify({
             ...chatAbout(translated, messages),
-            model: asking.model,
+            model: modelRequest(asking.model),
             language: asking.language,
             into: asking.into,
         }),
@@ -236,12 +242,12 @@ export async function endChatAbout(
 export async function takeWords(
     picked: Picked,
     asking: Asking,
-    decisionModel: string,
+    decisionModel: ModelChoice,
     signal?: AbortSignal,
 ): Promise<BackgroundTask> {
     const { task } = await ask<{ task: BackgroundTask }>(
         "/vocabulary/selection",
-        { ...picked, decision_model: decisionModel },
+        { ...picked, decision_model: modelRequest(decisionModel) },
         asking,
         signal,
     );

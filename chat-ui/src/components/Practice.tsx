@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { canAsk } from "../lib/models";
 
 import type { ProfileUsage } from "../lib/checker";
 import {
@@ -162,7 +163,8 @@ export function Practice(
     // The words of the vocabulary are embedded once, in the background, so
     // that the words of a topic can be found when a session starts.
     const vocabulary = exerciseVocabularyOf(settings, language);
-    const embedFor = active && settings.exerciseTopicWords && vocabulary !== "none" && learner.apiKey
+    const embedFor = active && settings.exerciseTopicWords && vocabulary !== "none"
+            && canAsk(settings.embeddingModel, learner.apiKey)
         ? settings.embeddingModel
         : null;
     useEffect(() => {
@@ -495,7 +497,7 @@ export function Practice(
                         </span>
                     </div>
                 )}
-                {!learner.apiKey && (
+                {!canAsk(learner.model, learner.apiKey) && (
                     <p className="practice-note">
                         The exercises are made by a model.{" "}
                         <button onClick={onOpenSettings}>Add your OpenRouter key</button>

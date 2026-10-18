@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { type ModelChoice, modelRequest } from "./models";
 import { checkerFetch } from "./session";
 import { LANGUAGE_PLACEHOLDER, LEVEL_PLACEHOLDER } from "./settings";
 import { pcmToWav } from "./speech";
@@ -39,7 +40,7 @@ export interface Reading {
 /** Who reads, and how. */
 export interface Voice {
     apiKey: string;
-    model: string;
+    model: ModelChoice;
     voice: string;
     /** How to read, such as "slowly and clearly". Not spoken. */
     instructions: string;
@@ -232,7 +233,7 @@ export async function startReading(source: SpeechSource, voice: Voice, signal?: 
         headers: voice.apiKey ? { "X-OpenRouter-Key": voice.apiKey } : {},
         body: JSON.stringify({
             ...source.wanted,
-            model: voice.model,
+            model: modelRequest(voice.model),
             voice: voice.voice,
             instructions: voice.instructions,
         }),

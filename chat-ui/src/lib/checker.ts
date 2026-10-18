@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { type ModelChoice, modelRequest } from "./models";
 import type { ProfileAnswer, RequestQuestions } from "./questions";
 import { checkerFetch } from "./session";
 
@@ -68,8 +69,6 @@ export interface ProfileUsage {
 export interface LiveCheck {
     text: string;
     sentences: Sentence[];
-    /** The model on this machine that answers the questions at present, or null if OpenRouter does. */
-    localModel: string | null;
 }
 
 /** The checker server's reply to a text. */
@@ -82,8 +81,6 @@ export interface CheckReply {
     usage: ProfileUsage[];
     /** Whether requests to the model are still out. */
     pending: boolean;
-    /** The model on this machine that answers the questions at present, or null if OpenRouter does. */
-    local_model: string | null;
 }
 
 /**
@@ -99,7 +96,7 @@ export async function fetchCheck(
     text: string,
     caret: number | null,
     apiKey: string,
-    model: string,
+    model: ModelChoice,
     questions: RequestQuestions,
     rateWords: boolean,
     language: string,
@@ -109,7 +106,15 @@ export async function fetchCheck(
         method: "POST",
         // the server profiles finished sentences with the key; it stays on this machine until then
         headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {},
-        body: JSON.stringify({ text, caret, model, questions, words: rateWords, language, profile }),
+        body: JSON.stringify({
+            text,
+            caret,
+            model: modelRequest(model),
+            questions,
+            words: rateWords,
+            language,
+            profile,
+        }),
     });
     if (!response.ok) {
         throw new Error(`checker server: ${response.status}`);
@@ -157,13 +162,6 @@ export function spellingIssues(check: LiveCheck | null, text: string, caret: num
         )
         .filter((issue) => text.slice(issue.start, issue.end) === issue.word)
         .filter((issue) => caret === null || caret < issue.start || caret > issue.end);
-}
-
-/** The models OpenRouter offers that can profile a sentence: those that answer set questions. Needs no key. */
-export async function fetchProfileModels(): Promise<string[]> {
-    const response = await fetch("https://openrouter.ai/api/v1/models?output_modalities=decisions");
-    const models: { id: string }[] = (await response.json()).data;
-    return models.map((model) => model.id);
 }
 
 /** A stretch of the text, with what is to be shown on it. */

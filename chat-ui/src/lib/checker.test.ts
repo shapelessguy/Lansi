@@ -23,7 +23,6 @@ function sentence(text: string, start: number, spelling: Sentence["spelling"]): 
 const text = "Ich habe einen Hundd. Er ist gutt.";
 const check: LiveCheck = {
     text,
-    localModel: null,
     sentences: [
         sentence("Ich habe einen Hundd.", 0, [{ word: "Hundd", start: 15, end: 20, suggestions: ["Hund"] }]),
         sentence("Er ist gutt.", 22, [{ word: "gutt", start: 7, end: 11, suggestions: ["gut"] }]),

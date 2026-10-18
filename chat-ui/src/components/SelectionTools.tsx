@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { useEffect, useRef, useState } from "react";
+import type { ModelChoice } from "../lib/models";
 
 import { readWhere, type Where, WHERE_ATTRIBUTE } from "../lib/logs";
 import { markedAncestor, regionOf, selectableShadowRoots, selectedRange } from "../lib/selection";
@@ -25,7 +26,7 @@ interface Props {
     translating: Asking;
     /** Who looks into the words that are new to the vocabulary, and the model that sorts them into categories. */
     describing: Asking;
-    decisionModel: string;
+    decisionModel: ModelChoice;
     onUsage: (entry: UsageEntry) => void;
     /** Told the selection and its translation when a chat about them is asked for. */
     onChat: (translated: Translated) => void;

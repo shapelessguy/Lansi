@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { newId } from "../lib/ids";
 
-import { fetchProfileModels } from "../lib/checker";
+import { fetchOpenRouterModels, type ListedModel, type ModelKind } from "../lib/models";
 import { isAskable, newQuestion, type ProfileQuestion, type QuestionOption } from "../lib/questions";
 import type { WordSet } from "../lib/sets";
 import {
@@ -20,8 +20,8 @@ import {
     TRANSLATION_LANGUAGES,
     WORDS_PLACEHOLDER,
 } from "../lib/settings";
-import { fetchSpeechModels, type SpeechModel } from "../lib/speech";
 import { LevelPicker } from "./Level";
+import { ModelPicker, OpenChoice } from "./ModelPicker";
 import { SidePanel } from "./SidePanel";
 
 export type SettingsTab = "general" | "models" | "content" | "questions" | "exercises" | "look";
@@ -136,124 +136,128 @@ function GeneralTab({ settings, onChange, ankiWords }: TabProps & { ankiWords: b
 }
 
 function ModelsTab({ settings, onChange }: TabProps) {
-    const [speechModels, setSpeechModels] = useState<SpeechModel[]>([]);
-    const [profileModels, setProfileModels] = useState<string[]>([]);
-    const voices = speechModels.find((model) => model.id === settings.speechModel)?.voices ?? [];
+    const [listed, setListed] = useState<Partial<Record<ModelKind, ListedModel[]>>>({});
+    const ids = (kind: ModelKind) => (listed[kind] ?? []).map((model) => model.id);
+    const speechModel = settings.speechModel;
+    const voices = speechModel.url
+        ? []
+        : listed.speech?.find((model) => model.id === speechModel.model)?.voices ?? [];
 
-    // suggestions only; the fields work without them
+    // suggestions only; every model can be typed without them
     useEffect(() => {
-        fetchSpeechModels().then(setSpeechModels, () => undefined);
-        fetchProfileModels().then(setProfileModels, () => undefined);
+        let stopped = false;
+        for (const kind of ["text", "reasoning", "vision", "decisions", "speech", "image", "embeddings"] as const) {
+            fetchOpenRouterModels(kind).then(
+                (found) => stopped || setListed((current) => ({ ...current, [kind]: found })),
+                () => undefined,
+            );
+        }
+        return () => {
+            stopped = true;
+        };
     }, []);
+
+    const picker = (
+        key:
+            | "model"
+            | "translationModel"
+            | "reasoningModel"
+            | "profileModel"
+            | "speechModel"
+            | "embeddingModel"
+            | "imageModel"
+            | "visionModel",
+        label: string,
+        kind: ModelKind,
+        none?: string,
+    ) => (
+        <ModelPicker
+            label={label}
+            value={settings[key]}
+            onChange={(chosen) => onChange({ ...settings, [key]: chosen })}
+            listed={ids(kind)}
+            none={none}
+        />
+    );
 
     return (
         <>
             <p className="hint">
-                Every model is an id from{" "}
-                <a href="https://openrouter.ai/models" target="_blank" rel="noreferrer">openrouter.ai/models</a>.
+                Each model is one of{" "}
+                <a href="https://openrouter.ai/models" target="_blank" rel="noreferrer">OpenRouter's</a>, asked with
+                your key, or one on a server that takes OpenAI's requests, such as one running on this machine, asked at
+                its address. Such a server's key is kept with your settings.
             </p>
             <h3>Writing</h3>
-            <label className="field">
+            <div className="field">
                 <span>Chat and text model</span>
-                <input
-                    type="text"
-                    spellCheck={false}
-                    placeholder="openrouter/auto"
-                    value={settings.model}
-                    onChange={(event) => onChange({ ...settings, model: event.target.value.trim() })}
-                />
-                <small>Answers in the chat, and makes and checks the exercises.</small>
-            </label>
-            <label className="field">
-                <span>Translation model</span>
-                <input
-                    type="text"
-                    spellCheck={false}
-                    placeholder={settings.model}
-                    value={settings.translationModel}
-                    onChange={(event) => onChange({ ...settings, translationModel: event.target.value.trim() })}
-                />
+                {picker("model", "Chat and text model", "text")}
                 <small>
-                    Translates the text you select. A small, quick model does this well. Left empty, the chat model is
-                    used.
+                    Answers in the chat, and makes and checks the exercises. It answers without reasoning first.
                 </small>
-            </label>
+            </div>
+            <div className="field">
+                <span>Translation model</span>
+                {picker("translationModel", "Translation model", "text", "the chat model")}
+                <small>Translates the text you select. A small, quick model does this well.</small>
+            </div>
+            <div className="field">
+                <span>Reasoning model</span>
+                {picker("reasoningModel", "Reasoning model", "reasoning", "the chat model")}
+                <small>Thinks over what needs it before it answers. The list has the models that can reason.</small>
+            </div>
 
             <h3>Checking</h3>
-            <label className="field">
+            <div className="field">
                 <span>Sentence check model</span>
-                <Choice
-                    options={profileModels}
-                    placeholder="typesafe/jev-1.13"
-                    value={settings.profileModel}
-                    onChange={(profileModel) => onChange({ ...settings, profileModel })}
-                />
+                {picker("profileModel", "Sentence check model", "decisions")}
                 <small>
                     Answers the questions about each sentence you finish typing in the chat, and sorts new words into
-                    categories.
+                    categories. It is a decision model: a server of your own is asked at <code>/decisions</code>{" "}
+                    under its address.
                 </small>
-            </label>
+            </div>
 
             <h3>Speech</h3>
-            <label className="field">
+            <div className="field">
                 <span>Speech model</span>
-                <Choice
-                    options={speechModels.map((model) => model.id)}
-                    value={settings.speechModel}
-                    onChange={(speechModel) => onChange({ ...settings, speechModel })}
-                />
+                {picker("speechModel", "Speech model", "speech")}
                 <small>Reads the books, the replies and the stories aloud.</small>
-            </label>
-            <label className="field">
+            </div>
+            <div className="field">
                 <span>Voice</span>
-                <Choice
+                <OpenChoice
+                    label="Voice"
                     options={voices}
+                    placeholder="Voice name"
                     value={settings.speechVoice}
                     onChange={(speechVoice) => onChange({ ...settings, speechVoice })}
                 />
-                <small>Voice names depend on the speech model.</small>
-            </label>
+                <small>The voices there are depend on the speech model.</small>
+            </div>
 
             <h3>Topics</h3>
-            <label className="field">
+            <div className="field">
                 <span>Embedding model</span>
-                <input
-                    type="text"
-                    spellCheck={false}
-                    placeholder="baai/bge-m3"
-                    value={settings.embeddingModel}
-                    onChange={(event) => onChange({ ...settings, embeddingModel: event.target.value.trim() })}
-                />
+                {picker("embeddingModel", "Embedding model", "embeddings")}
                 <small>
                     Embeds every word of your vocabulary once, and each topic, to find the words of a topic. One that
                     knows many languages works best.
                 </small>
-            </label>
-            <label className="field">
+            </div>
+            <div className="field">
                 <span>Image model</span>
-                <input
-                    type="text"
-                    spellCheck={false}
-                    placeholder="google/gemini-3.1-flash-lite-image"
-                    value={settings.imageModel}
-                    onChange={(event) => onChange({ ...settings, imageModel: event.target.value.trim() })}
-                />
+                {picker("imageModel", "Image model", "image")}
                 <small>Makes the icon of each topic you add, and the pictures of exercises.</small>
-            </label>
-            <label className="field">
+            </div>
+            <div className="field">
                 <span>Vision model</span>
-                <input
-                    type="text"
-                    spellCheck={false}
-                    placeholder="the chat model"
-                    value={settings.visionModel}
-                    onChange={(event) => onChange({ ...settings, visionModel: event.target.value.trim() })}
-                />
+                {picker("visionModel", "Vision model", "vision", "the chat model")}
                 <small>
                     Finds where each thing is on the picture of an exercise. It must see pictures, and a small model
                     often points beside them: one such as Gemini Flash, rather than Flash Lite, is far better at it.
                 </small>
-            </label>
+            </div>
         </>
     );
 }

@@ -4,6 +4,7 @@
 import { type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Markdown from "react-markdown";
+import { canAsk } from "../lib/models";
 
 import { isAtEnd, type StoredChat } from "../lib/chats";
 import { type ProfileUsage, sentenceAtCaret } from "../lib/checker";
@@ -186,7 +187,7 @@ export function Chat(
                     at: Date.now(),
                     category: "chat",
                     chatId,
-                    model: usage.model ?? settings.model,
+                    model: usage.model ?? settings.model.model,
                     promptTokens: usage.promptTokens,
                     completionTokens: usage.completionTokens,
                     cost: usage.cost,
@@ -302,7 +303,7 @@ export function Chat(
                     {error && <div className="message error" role="alert">{error}</div>}
                 </div>
 
-                {!settings.apiKey && (
+                {!canAsk(settings.model, settings.apiKey) && (
                     <div className="notice">
                         Add your OpenRouter API key in{" "}
                         <button className="link" onClick={onOpenSettings}>Settings</button> to start chatting.
@@ -346,7 +347,11 @@ export function Chat(
                         {busy
                             ? <button type="button" onClick={() => abort.abort()}>Stop</button>
                             : (
-                                <button type="submit" className="primary" disabled={!draft.trim() || !settings.apiKey}>
+                                <button
+                                    type="submit"
+                                    className="primary"
+                                    disabled={!draft.trim() || !canAsk(settings.model, settings.apiKey)}
+                                >
                                     Send
                                 </button>
                             )}
@@ -363,8 +368,7 @@ export function Chat(
                     hasText={draft.trim() !== ""}
                     checkerRunning={check !== null}
                     hasKey={settings.apiKey !== ""}
-                    localModel={check?.localModel ?? null}
-                    remoteModel={settings.profileModel}
+                    model={settings.profileModel}
                     onEditQuestions={onEditQuestions}
                     onClose={onCloseChecks}
                 />,

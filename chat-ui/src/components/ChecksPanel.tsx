@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { doubt, type Sentence } from "../lib/checker";
+import type { ModelChoice } from "../lib/models";
 import { answerFraction, askedQuestions, describeAnswer, isAskable, type ProfileQuestion } from "../lib/questions";
 import { SidePanel } from "./SidePanel";
 
@@ -19,10 +20,8 @@ interface Props {
     /** Whether the checker server has answered at all. */
     checkerRunning: boolean;
     hasKey: boolean;
-    /** The model on this machine that answers the questions at present, or null if OpenRouter does. */
-    localModel: string | null;
-    /** The model that answers them on OpenRouter otherwise. */
-    remoteModel: string;
+    /** The model that answers the questions. */
+    model: ModelChoice;
     onEditQuestions: () => void;
     onClose: () => void;
 }
@@ -105,8 +104,7 @@ export function ChecksPanel(
         hasText,
         checkerRunning,
         hasKey,
-        localModel,
-        remoteModel,
+        model,
         onEditQuestions,
         onClose,
     }: Props,
@@ -162,7 +160,7 @@ export function ChecksPanel(
                         : (
                             <>
                                 <blockquote className="checks-sentence">{sentence.text}</blockquote>
-                                {!hasKey && !localModel
+                                {!hasKey && !model.url
                                     ? <p className="checks-note">Add your OpenRouter API key in the settings.</p>
                                     : asked.length === 0
                                     ? <p className="checks-note">No question is turned on.</p>
@@ -178,15 +176,15 @@ export function ChecksPanel(
                 <section>
                     <h3>Answered by</h3>
                     <p className="checks-model">
-                        <span className={localModel ? "badge local" : "badge"}>
-                            {localModel ? "Local" : "OpenRouter"}
+                        <span className={model.url ? "badge local" : "badge"} title={model.url || undefined}>
+                            {model.url ? "Own server" : "OpenRouter"}
                         </span>
-                        {localModel ?? remoteModel}
+                        {model.model}
                     </p>
                 </section>
                 <p className="usage-note">
-                    {localModel
-                        ? "The model on this machine is used while it is running, and is not billed."
+                    {model.url
+                        ? `Turning a question on asks it about the finished sentences in the box, at ${model.url}.`
                         : "Turning a question on asks it about the finished sentences in the box, which is billed."}
                 </p>
             </div>

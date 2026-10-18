@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { useEffect, useRef, useState } from "react";
+import { type ModelChoice, modelRequest } from "./models";
 
 import type { ProfileUsage } from "./checker";
 import { checkerFetch } from "./session";
@@ -40,8 +41,8 @@ interface ImportReply extends ImportStatus {
 export async function syncImport(
     enabled: boolean,
     apiKey: string,
-    model: string,
-    decisionModel: string,
+    model: ModelChoice,
+    decisionModel: ModelChoice,
     language: string,
     ankiLanguage: string,
 ): Promise<ImportReply> {
@@ -52,8 +53,8 @@ export async function syncImport(
             headers: apiKey ? { "X-OpenRouter-Key": apiKey } : undefined,
             body: JSON.stringify({
                 enabled,
-                model,
-                decision_model: decisionModel,
+                model: modelRequest(model),
+                decision_model: modelRequest(decisionModel),
                 language,
                 anki_language: ankiLanguage,
             }),
@@ -71,9 +72,9 @@ interface Options {
     enabled: boolean;
     apiKey: string;
     /** The model that judges and describes new words. */
-    model: string;
-    /** The model that sorts words into categories when there is none on this machine. */
-    decisionModel: string;
+    model: ModelChoice;
+    /** The model that sorts words into categories. */
+    decisionModel: ModelChoice;
     /** The language being learned. */
     language: string;
     /** The language the Anki words are of, and so the vocabulary they go into. */

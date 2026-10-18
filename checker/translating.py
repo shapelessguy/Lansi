@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from intake import Chat, read_usage, send_chat
+from models import Model
 from profiling import Profile, ProfileError
 from prompts import PROMPTS
 from sentences import split_sentences
@@ -36,7 +37,6 @@ MAX_MESSAGE_LENGTH = 10_000
 DEFAULT_INTO = "English"
 # A translation of a few words takes no thinking over, and a model that
 # thinks first keeps the reader waiting, and is paid for what it thought.
-NO_THINKING = {"reasoning": {"enabled": False}}
 # what the selection is put between in the passage the model is given
 MARKS = ("[[", "]]")
 
@@ -130,8 +130,7 @@ class Translator:
         passage: Passage,
         language: str,
         into: str,
-        api_key: str,
-        model: str | None = None,
+        model: Model,
     ) -> tuple[str, Profile]:
         """The selection of `passage` in the language `into`, for someone
         learning `language`, with what asking for it used. Raises
@@ -139,9 +138,7 @@ class Translator:
         return self._ask(
             PROMPTS("translating.translating", language=language, into=into),
             [{"role": "user", "content": passage.marked()}],
-            api_key,
             model,
-            NO_THINKING,
         )
 
     def answer(
@@ -151,8 +148,7 @@ class Translator:
         messages: list[dict[str, str]],
         language: str,
         into: str,
-        api_key: str,
-        model: str | None = None,
+        model: Model,
     ) -> tuple[str, Profile]:
         """What the model says to the last of `messages`, which are what was
         asked and answered so far about the selection of `passage` and the
@@ -165,57 +161,41 @@ class Translator:
             selection=passage.selection,
             translation=translation,
         )
-        return self._ask(instructions, messages, api_key, model)
+        return self._ask(instructions, messages, model)
 
     def asker(
-        self, api_key: str, model: str | None = None
+        self, model: Model
     ) -> Callable[[list[dict[str, Any]]], tuple[str, Profile]]:
         """What asks the model the messages it is given, as they are, such
         as for the logs of what was asked. It raises TranslationError."""
-        return lambda messages: self._send(messages, api_key, model)
+        return lambda messages: self._send(messages, model)
 
     def _ask(
         self,
         instructions: str,
         messages: list[dict[str, str]],
-        api_key: str,
-        model: str | None,
-        more: dict[str, Any] | None = None,
+        model: Model,
     ) -> tuple[str, Profile]:
         system = {"role": "system", "content": instructions}
-        return self._send([system, *messages], api_key, model, more)
+        return self._send([system, *messages], model)
 
     def _send(
         self,
         messages: list[dict[str, Any]],
-        api_key: str,
-        model: str | None,
-        more: dict[str, Any] | None = None,
+        model: Model,
     ) -> tuple[str, Profile]:
-        model = model or self._model
-        if not api_key:
-            raise TranslationError("an OpenRouter key is needed")
-        if not model:
-            raise TranslationError("no model was named")
+        model = model.or_named(self._model)
+        problem = model.problem()
+        if problem:
+            raise TranslationError(problem)
         body = {
-            "model": model,
+            "model": model.name,
             "messages": messages,
             "usage": {"include": True},
-            **(more or {}),
         }
         try:
-            try:
-                response = self._chat(body, api_key)
-            except ProfileError as error:
-                if not more or "(400)" not in str(error):
-                    raise
-                # A model that cannot do as the extras say, such as one that
-                # cannot but think, is asked without them.
-                response = self._chat(
-                    {name: value for name, value in body.items() if name not in more},
-                    api_key,
-                )
+            response = self._chat(body, model)
         except ProfileError as error:
             # whatever kept the model from answering is what there is to say
             raise TranslationError(str(error)) from None
-        return read_text(response), read_usage(response, model)
+        return read_text(response), read_usage(response, model.name)

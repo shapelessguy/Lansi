@@ -9,7 +9,8 @@ from typing import Any
 import pytest
 from anki_import import AnkiImporter, AnkiUnavailable, vocabulary_words
 from intake import Intake
-from test_intake import KEY, MODEL, FakeChat, FakeProfiler, savable
+from models import Model
+from test_intake import CHAT, DECIDER, KEY, MODEL, FakeChat, FakeProfiler, savable
 from vocabulary import Vocabularies, Vocabulary
 
 NOTES = ["der Hund", "von Anfang an", "gern, gerne", "Claudio", "die Katze"]
@@ -50,7 +51,7 @@ def chat() -> FakeChat:
 def importer(vocabulary: Vocabulary, chat: FakeChat, anki: Anki) -> AnkiImporter:
     profiler = FakeProfiler({"Claudio": "name", "gern": "adverb", "gerne": "adverb"})
     importer = AnkiImporter(Intake(vocabulary, profiler, chat), anki, batch=3)
-    importer.configure(True, KEY, MODEL, None)
+    importer.configure(True, CHAT, DECIDER)
     return importer
 
 
@@ -142,7 +143,7 @@ def test_nothing_is_taken_in_while_the_import_is_off_or_has_no_key(
 
     importer.look()
     without_key, _ = importer.status()
-    importer.configure(False, KEY, MODEL, None)
+    importer.configure(False, CHAT, DECIDER)
     importer.look()
     switched_off, _ = importer.status()
 
@@ -153,7 +154,7 @@ def test_nothing_is_taken_in_while_the_import_is_off_or_has_no_key(
 def test_a_key_that_was_handed_over_is_kept_when_none_comes_with_the_next_word(
     importer: AnkiImporter,
 ) -> None:
-    importer.configure(True, "", MODEL, None)
+    importer.configure(True, Model(MODEL), Model())
 
     importer.look()
 
@@ -165,7 +166,7 @@ def test_words_that_all_fail_are_tried_again_and_the_reason_is_given(
 ) -> None:
     importer = AnkiImporter(Intake(vocabulary, FakeProfiler(), chat), anki, batch=2)
     # no model is named, so no new word can be judged
-    importer.configure(True, KEY, None, None)
+    importer.configure(True, Model(key=KEY), DECIDER)
 
     importer.look()
     importer.look()
@@ -184,7 +185,7 @@ def test_a_word_that_fails_is_sent_again_after_the_others_and_then_taken_in(
     chat.rescues["Hund"] = savable("", "")
     profiler = FakeProfiler({"Claudio": "name"})
     importer = AnkiImporter(Intake(vocabulary, profiler, chat), anki, batch=2)
-    importer.configure(True, KEY, MODEL, None)
+    importer.configure(True, CHAT, DECIDER)
 
     importer.look()
     after_failing = vocabulary.not_taken(["Hund", "gern"])
@@ -209,7 +210,7 @@ def test_a_word_that_keeps_failing_is_given_up_on_after_a_few_tries(
     chat.rescues["Hund"] = savable("", "")
     profiler = FakeProfiler({"Claudio": "name"})
     importer = AnkiImporter(Intake(vocabulary, profiler, chat), anki, batch=2)
-    importer.configure(True, KEY, MODEL, None)
+    importer.configure(True, CHAT, DECIDER)
 
     for _ in range(8):
         importer.look()
@@ -242,9 +243,9 @@ def test_each_word_is_counted_as_soon_as_it_is_taken_in(
     seen = []
 
     class Watching(FakeChat):
-        def __call__(self, body: dict[str, Any], api_key: str) -> dict[str, Any]:
+        def __call__(self, body: dict[str, Any], model: Model) -> dict[str, Any]:
             seen.append(importer.status()[0])
-            return chat(body, api_key)
+            return chat(body, model)
 
     importer._intake._chat = Watching()  # noqa: SLF001
     importer._intake._workers = 1  # noqa: SLF001
@@ -263,10 +264,10 @@ def test_each_word_is_counted_as_soon_as_it_is_taken_in(
 def test_an_import_switched_on_again_no_longer_says_it_is_off(
     importer: AnkiImporter,
 ) -> None:
-    importer.configure(False, KEY, MODEL, None)
+    importer.configure(False, CHAT, DECIDER)
     switched_off = importer.status()[0].state
 
-    importer.configure(True, KEY, MODEL, None)
+    importer.configure(True, CHAT, DECIDER)
 
     assert (switched_off, importer.status()[0].state) == ("off", "waiting")
 
@@ -289,7 +290,7 @@ def test_the_anki_words_go_into_the_vocabulary_of_their_own_language(
     vocabularies = Vocabularies(tmp_path)
     intake = Intake(vocabularies, FakeProfiler({"Claudio": "name"}), chat)
     importer = AnkiImporter(intake, anki, batch=5)
-    importer.configure(True, KEY, MODEL, None, "German")
+    importer.configure(True, CHAT, DECIDER, "German")
     # another language is being studied, and has been all along
     intake.language = "Arabic"
 

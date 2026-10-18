@@ -3,6 +3,7 @@
 
 import { expect, test } from "vitest";
 
+import { onOpenRouter } from "./models";
 import type { WordLists } from "./sets";
 import { defaultSettings, exerciseVocabularyOf, expandPrompt, normalizeSettings, withoutKey } from "./settings";
 
@@ -31,8 +32,8 @@ test("stored values are kept and gaps are filled from the defaults", () => {
     const settings = normalizeSettings({ apiKey: "sk-or-test", model: "" });
 
     expect(settings.apiKey).toBe("sk-or-test");
-    expect(settings.model).toBe(defaultSettings().model);
-    expect(settings.profileModel).toBe("typesafe/jev-1.13");
+    expect(settings.model).toEqual(defaultSettings().model);
+    expect(settings.profileModel).toEqual(onOpenRouter("typesafe/jev-1.13"));
     expect(settings.enterSends).toBe(true);
     expect(settings.rateWords).toBe(true);
     expect(settings.contexts).toEqual(defaultSettings().contexts);
@@ -123,7 +124,10 @@ test("the exercise settings are kept, and those that cannot be are the usual one
 
     expect([kept.exerciseMixTopics, kept.exerciseTopicWords]).toEqual([true, false]);
     expect(kept.exerciseVocabulary).toEqual({ German: "set-1" });
-    expect([kept.imageModel, kept.embeddingModel]).toEqual(["some/image", defaultSettings().embeddingModel]);
+    expect([kept.imageModel, kept.embeddingModel]).toEqual([
+        onOpenRouter("some/image"),
+        defaultSettings().embeddingModel,
+    ]);
     expect([unusable.exerciseMixTopics, unusable.exerciseVocabulary]).toEqual([false, {}]);
 });
 
@@ -143,9 +147,18 @@ test("how many times each exercise is done is remembered, what is not a number l
     expect(normalizeSettings({}).exerciseInstances).toEqual({});
 });
 
-test("the vision model is kept, and left blank for the chat model", () => {
-    expect(normalizeSettings({ visionModel: " some/seeing " }).visionModel).toBe("some/seeing");
-    expect(normalizeSettings({}).visionModel).toBe("");
+test("the vision model is kept, and names none for the chat model", () => {
+    expect(normalizeSettings({ visionModel: " some/seeing " }).visionModel).toEqual(onOpenRouter("some/seeing"));
+    expect(normalizeSettings({}).visionModel).toEqual(onOpenRouter(""));
+});
+
+test("a model at an address is kept with its address and key", () => {
+    const atHome = { model: "jev", url: "http://127.0.0.1:10000/v1", key: "k" };
+
+    const kept = normalizeSettings({ profileModel: atHome, model: { url: 3 } });
+
+    expect(kept.profileModel).toEqual(atHome);
+    expect(kept.model).toEqual(defaultSettings().model);
 });
 
 test("the exercises are given the whole vocabulary of a language unless the settings say otherwise", () => {
@@ -187,4 +200,9 @@ test("an evaluation takes 1 to 8 half hours, timed unless it was chosen not to b
     expect(normalizeSettings({ evaluationLength: 9 }).evaluationLength).toBe(2);
     expect(normalizeSettings({ evaluationLength: 1.5 }).evaluationLength).toBe(2);
     expect(normalizeSettings({}).evaluationTimed).toBe(true);
+});
+
+test("the reasoning model is kept, and names none for the chat model", () => {
+    expect(normalizeSettings({ reasoningModel: "some/thinker" }).reasoningModel).toEqual(onOpenRouter("some/thinker"));
+    expect(normalizeSettings({}).reasoningModel).toEqual(onOpenRouter(""));
 });

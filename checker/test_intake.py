@@ -8,14 +8,19 @@ import threading
 from pathlib import Path
 from typing import Any
 
+import intake as intake_module
 import pytest
-from intake import Intake, Outcome, Word, category_questions, read_words
+from intake import Intake, Outcome, Word, category_questions, read_words, send_chat
+from models import Model
 from profiling import Answer, Profile, ProfileError, Profiler, Questions
 from test_categories import verb
 from vocabulary import Form, Rejection, Vocabularies, Vocabulary
 
 KEY = "the-key"
 MODEL = "some/chat-model"
+CHAT = Model(MODEL, key=KEY)
+# the usual decision model, on OpenRouter
+DECIDER = Model(key=KEY)
 
 
 class FakeProfiler(Profiler):
@@ -26,7 +31,6 @@ class FakeProfiler(Profiler):
         super().__init__()
         self.categories = categories or {}
         self.asked: list[tuple[dict[str, Any], str | None]] = []
-        self.local = False
         # how much of a yes other categories are given than the one told
         self.also: dict[str, float] = {}
 
@@ -34,17 +38,15 @@ class FakeProfiler(Profiler):
         self,
         state: dict[str, Any],
         questions: Questions,
-        api_key: str,
-        model: str | None = None,
+        model: Model,
     ) -> Profile:
         self.questions = questions
-        self.asked.append((state, model))
+        self.asked.append((state, model.name or None))
         likely = {self.categories.get(state["word"], "noun"): 0.9, **self.also}
         return Profile(
             {name: Answer("noul", yes=likely.get(name, 0.1)) for name in questions},
             cost=0.0001,
             id=f"decision-{len(self.asked)}",
-            local=self.local,
         )
 
 
@@ -91,8 +93,8 @@ class FakeChat:
             if body["response_format"]["json_schema"]["name"] == name
         ]
 
-    def __call__(self, body: dict[str, Any], api_key: str) -> dict[str, Any]:
-        assert api_key == KEY
+    def __call__(self, body: dict[str, Any], model: Model) -> dict[str, Any]:
+        assert model.key == KEY
         with self._lock:
             self.bodies.append(body)
             number = len(self.bodies)
@@ -135,7 +137,7 @@ def intake(vocabulary: Vocabulary, profiler: FakeProfiler, chat: FakeChat) -> In
 
 
 def take(intake: Intake, *words: str) -> list[Outcome]:
-    outcomes, _ = intake.take([Word(word) for word in words], KEY, MODEL)
+    outcomes, _ = intake.take([Word(word) for word in words], CHAT, DECIDER)
     return outcomes
 
 
@@ -233,7 +235,7 @@ def test_a_new_noun_is_stored_with_a_capital_letter_when_the_model_gave_none(
     chat.judged("hand", "new", "hand")
     chat.descriptions["Hand"] = {"genders": []}
 
-    (outcome,), _ = intake.take([Word("hand", "Gib mir die hand.")], KEY, MODEL)
+    (outcome,), _ = intake.take([Word("hand", "Gib mir die hand.")], CHAT, DECIDER)
 
     assert outcome.status == "added"
     assert outcome.entry is not None and outcome.entry.lemma == "Hand"
@@ -341,8 +343,8 @@ def test_a_word_found_to_be_no_word_is_not_sorted_again_when_met_in_another_sent
 ) -> None:
     chat.judged("Hundd", "reject", reason="misspelt")
 
-    (outcome,), _ = intake.take([Word("Hundd", "Der Hundd bellt.")], KEY, MODEL)
-    (again,), _ = intake.take([Word("hundd", "Ich sehe den hundd.")], KEY, MODEL)
+    (outcome,), _ = intake.take([Word("Hundd", "Der Hundd bellt.")], CHAT, DECIDER)
+    (again,), _ = intake.take([Word("hundd", "Ich sehe den hundd.")], CHAT, DECIDER)
 
     assert (outcome.status, outcome.reason) == ("rejected", "misspelt")
     assert (again.status, again.reason) == ("rejected", "misspelt")
@@ -356,7 +358,7 @@ def test_a_word_found_not_savable_when_asked_again_is_not_sorted_again(
     chat.judged("Hunds", "form", "Hund")
 
     take(intake, "Hunds")
-    (again,), _ = intake.take([Word("Hunds", "Des Hunds Knochen.")], KEY, MODEL)
+    (again,), _ = intake.take([Word("Hunds", "Des Hunds Knochen.")], CHAT, DECIDER)
 
     assert (again.status, again.reason) == ("rejected", "no word")
     assert len(profiler.asked) == 1
@@ -371,7 +373,7 @@ def test_a_word_found_to_be_no_word_is_still_known_when_spelt_as_a_stored_word(
     intake = Intake(vocabulary, profiler, chat)
 
     take(intake, "Essen")
-    (outcome,), _ = intake.take([Word("essen", "Wir essen.")], KEY, MODEL)
+    (outcome,), _ = intake.take([Word("essen", "Wir essen.")], CHAT, DECIDER)
 
     assert (outcome.status, outcome.entry) == ("known", stored)
 
@@ -382,12 +384,12 @@ def test_a_word_found_to_be_of_another_category_is_taken_in_as_one_of_that(
     class Chat(FakeChat):
         """Finds ging not to be an adjective, but a new verb."""
 
-        def __call__(self, body: dict[str, Any], api_key: str) -> dict[str, Any]:
+        def __call__(self, body: dict[str, Any], model: Model) -> dict[str, Any]:
             if 'category "adjective"' in body["messages"][0]["content"]:
                 self.judged("ging", "elsewhere", category="verb")
             else:
                 self.judged("ging", "new", "gehen")
-            return super().__call__(body, api_key)
+            return super().__call__(body, model)
 
     chat = Chat()
     chat.descriptions["gehen"] = verb()
@@ -428,7 +430,7 @@ def test_what_a_word_in_a_sentence_was_found_to_be_is_not_taken_to_hold_elsewher
     intake = Intake(vocabulary, FakeProfiler({"Essen": "noun", "laufen": "noun"}), chat)
 
     outcomes, _ = intake.take(
-        [Word("laufen", "Wir laufen."), Word("Essen")], KEY, MODEL
+        [Word("laufen", "Wir laufen."), Word("Essen")], CHAT, DECIDER
     )
 
     assert vocabulary.rejection("noun", "laufen") is None
@@ -471,7 +473,9 @@ def test_the_decision_model_is_given_the_sentence_a_word_was_used_in(
     chat.judged("Hund", "reject")
 
     intake.take(
-        [Word("Essen", "Das Essen ist gut."), Word("Hund")], KEY, MODEL, "some/decider"
+        [Word("Essen", "Das Essen ist gut."), Word("Hund")],
+        CHAT,
+        Model("some/decider", key=KEY),
     )
 
     assert sorted(profiler.asked, key=lambda asked: len(asked[0])) == [
@@ -513,11 +517,11 @@ def test_a_new_word_fails_without_a_key_or_a_model_but_a_known_one_does_not(
 ) -> None:
     vocabulary.save("verb", "gehen", {}, [])
 
-    without_key, _ = intake.take([Word("gehen"), Word("Hund")], "", MODEL)
-    without_model, _ = intake.take([Word("Hund")], KEY)
+    without_key, _ = intake.take([Word("gehen"), Word("Hund")], Model(MODEL), DECIDER)
+    without_model, _ = intake.take([Word("Hund")], Model(key=KEY), DECIDER)
 
     assert [outcome.status for outcome in without_key] == ["known", "failed"]
-    assert "no OpenRouter key or no model" in without_key[1].reason
+    assert "an OpenRouter key is needed" in without_key[1].reason
     assert without_model[0].status == "failed"
 
 
@@ -526,7 +530,9 @@ def test_the_model_named_when_the_intake_was_made_is_asked_if_a_request_names_no
 ) -> None:
     chat.judged("Hund", "reject")
 
-    Intake(vocabulary, profiler, chat, model="usual/model").take([Word("Hund")], KEY)
+    Intake(vocabulary, profiler, chat, model="usual/model").take(
+        [Word("Hund")], Model(key=KEY), DECIDER
+    )
 
     assert chat.bodies[0]["model"] == "usual/model"
 
@@ -553,12 +559,12 @@ def test_a_word_fails_when_the_decision_model_cannot_be_asked(
 ) -> None:
     class NoProfiler(FakeProfiler):
         def ask(self, *args: Any, **kwargs: Any) -> Profile:
-            raise ProfileError("there is no local model and no OpenRouter key")
+            raise ProfileError("an OpenRouter key is needed")
 
     (outcome,) = take(Intake(vocabulary, NoProfiler(), chat), "Hund")
 
     assert (outcome.status, outcome.category) == ("failed", "")
-    assert outcome.reason == "there is no local model and no OpenRouter key"
+    assert outcome.reason == "an OpenRouter key is needed"
 
 
 def test_every_request_that_is_paid_for_is_reported(
@@ -566,7 +572,7 @@ def test_every_request_that_is_paid_for_is_reported(
 ) -> None:
     chat.judged("ging", "new", "gehen")
 
-    _, used = intake.take([Word("ging")], KEY, MODEL)
+    _, used = intake.take([Word("ging")], CHAT, DECIDER)
 
     assert [(request.id, request.model) for request in used] == [
         ("decision-1", ""),
@@ -578,17 +584,6 @@ def test_every_request_that_is_paid_for_is_reported(
         90,
         0.003,
     )
-
-
-def test_what_the_model_on_this_machine_answered_is_not_reported(
-    intake: Intake, vocabulary: Vocabulary, profiler: FakeProfiler
-) -> None:
-    vocabulary.save("verb", "gehen", {}, [])
-    profiler.local = True
-
-    _, used = intake.take([Word("gehen")], KEY, MODEL)
-
-    assert used == []
 
 
 def test_every_category_and_what_is_not_stored_is_asked_about_at_once() -> None:
@@ -626,8 +621,8 @@ def test_a_word_on_its_own_in_small_letters_is_not_taken_for_a_noun_or_a_name(
 
     outcomes, _ = intake.take(
         [Word("macht"), Word("Macht"), Word("macht", "Die macht ist groß.")],
-        KEY,
-        MODEL,
+        CHAT,
+        DECIDER,
     )
 
     assert [outcome.category for outcome in outcomes] == ["verb", "noun", "noun"]
@@ -659,8 +654,8 @@ def test_words_that_came_on_their_own_are_noted_as_taken_in_unless_they_failed(
 
     intake.take(
         [Word("ging"), Word("Hundd"), Word("Katze"), Word("Essen", "Das Essen.")],
-        KEY,
-        MODEL,
+        CHAT,
+        DECIDER,
     )
 
     assert vocabulary.not_taken(["ging", "Hundd", "Katze", "Essen"]) == [
@@ -675,12 +670,12 @@ def test_a_language_model_that_cannot_be_reached_is_asked_a_second_time(
     chat.judged("Hund", "reject", reason="for the test")
     calls = 0
 
-    def once_out_of_reach(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def once_out_of_reach(body: dict[str, Any], model: Model) -> dict[str, Any]:
         nonlocal calls
         calls += 1
         if calls == 1:
             raise ProfileError("OpenRouter took longer than 90 seconds")
-        return chat(body, api_key)
+        return chat(body, model)
 
     (outcome,) = take(Intake(vocabulary, profiler, once_out_of_reach), "Hund")
 
@@ -690,7 +685,7 @@ def test_a_language_model_that_cannot_be_reached_is_asked_a_second_time(
 def test_a_word_fails_when_the_language_model_cannot_be_reached_twice_running(
     vocabulary: Vocabulary, profiler: FakeProfiler
 ) -> None:
-    def out_of_reach(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def out_of_reach(body: dict[str, Any], model: Model) -> dict[str, Any]:
         raise ProfileError("OpenRouter took longer than 90 seconds")
 
     (outcome,) = take(Intake(vocabulary, profiler, out_of_reach), "Hund")
@@ -706,7 +701,9 @@ def test_the_first_part_of_a_separated_verb_is_known_by_the_rest_of_its_sentence
     profiler = FakeProfiler({"fängt": "verb"})
     intake = Intake(vocabulary, profiler, chat)
 
-    outcomes, _ = intake.take([Word("fängt", "Der Film fängt abends an.")], KEY, MODEL)
+    outcomes, _ = intake.take(
+        [Word("fängt", "Der Film fängt abends an.")], CHAT, DECIDER
+    )
 
     assert (outcomes[0].status, outcomes[0].entry) == ("known", stored)
     assert chat.bodies == []
@@ -806,9 +803,9 @@ def test_words_stay_of_the_language_they_came_in_as_though_it_is_changed_meanwhi
     class Switching(FakeChat):
         """Has the language changed while the word is being judged."""
 
-        def __call__(self, body: dict[str, Any], api_key: str) -> dict[str, Any]:
+        def __call__(self, body: dict[str, Any], model: Model) -> dict[str, Any]:
             taking.language = "Arabic"
-            return super().__call__(body, api_key)
+            return super().__call__(body, model)
 
     chat = Switching()
     chat.judged("ging", "new", "gehen")
@@ -823,3 +820,45 @@ def test_words_stay_of_the_language_they_came_in_as_though_it_is_changed_meanwhi
     assert vocabularies.of("German").find("verb", "gegangen") is not None
     assert vocabularies.of("German").not_taken(["ging"]) == []
     assert not vocabularies.has("Arabic")
+
+
+# reasoning
+
+
+def test_a_chat_model_is_asked_to_answer_without_reasoning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent: list[dict[str, Any]] = []
+
+    def answering(url: str, body: dict[str, Any], *rest: Any) -> dict[str, Any]:
+        sent.append(body)
+        return {}
+
+    monkeypatch.setattr(intake_module, "post", answering)
+
+    send_chat({"messages": []}, CHAT)
+    send_chat({"messages": [], "reasoning": {"effort": "high"}}, CHAT)
+
+    assert [body["reasoning"] for body in sent] == [
+        {"enabled": False},
+        {"effort": "high"},
+    ]
+
+
+def test_a_model_that_cannot_but_reason_is_asked_again_as_the_request_was(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent: list[dict[str, Any]] = []
+
+    def refusing(url: str, body: dict[str, Any], *rest: Any) -> dict[str, Any]:
+        sent.append(body)
+        if "reasoning" in body:
+            raise ProfileError(
+                "OpenRouter refused the request (400): reasoning is mandatory"
+            )
+        return {"answered": True}
+
+    monkeypatch.setattr(intake_module, "post", refusing)
+
+    assert send_chat({"messages": []}, CHAT) == {"answered": True}
+    assert ["reasoning" in body for body in sent] == [True, False]

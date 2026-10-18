@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { type ModelChoice, modelRequest } from "./models";
 import { checkerFetch } from "./session";
 import type { BackgroundTask } from "./tasks";
 import { describeError } from "./translate";
@@ -46,22 +47,26 @@ export async function fetchTopics(): Promise<Topic[]> {
 export function createTopic(
     title: string,
     description: string,
-    imageModel: string,
+    imageModel: ModelChoice,
     apiKey: string,
 ): Promise<{ topic: Topic; task: BackgroundTask | null }> {
     return call(
         "/topics",
-        { method: "POST", body: JSON.stringify({ title, description, image_model: imageModel }) },
+        { method: "POST", body: JSON.stringify({ title, description, image_model: modelRequest(imageModel) }) },
         apiKey,
     );
 }
 
 /** Has the icon of a topic made again, in the background. */
-export function remakeIcon(id: string, imageModel: string, apiKey: string): Promise<{ task: BackgroundTask | null }> {
+export function remakeIcon(
+    id: string,
+    imageModel: ModelChoice,
+    apiKey: string,
+): Promise<{ task: BackgroundTask | null }> {
     icons.delete(id);
     return call(
         `/topics/${encodeURIComponent(id)}/icon`,
-        { method: "POST", body: JSON.stringify({ image_model: imageModel }) },
+        { method: "POST", body: JSON.stringify({ image_model: modelRequest(imageModel) }) },
         apiKey,
     );
 }
@@ -103,10 +108,14 @@ export function forgetIcon(id: string): void {
  */
 export function embedVocabulary(
     language: string,
-    model: string,
+    model: ModelChoice,
     apiKey: string,
 ): Promise<{ missing: number; task: BackgroundTask | null }> {
-    return call("/embeddings", { method: "POST", body: JSON.stringify({ language, model }) }, apiKey);
+    return call(
+        "/embeddings",
+        { method: "POST", body: JSON.stringify({ language, model: modelRequest(model) }) },
+        apiKey,
+    );
 }
 
 /** Whether a topic is one of those `query` looks for: its title or what it is about has each word of it. */

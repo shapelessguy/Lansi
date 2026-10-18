@@ -33,10 +33,10 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
+from models import Model
 from sentences import split_sentences
 from storage import UserStore
 
-ENDPOINT = "https://openrouter.ai/api/v1/audio/speech"
 TIMEOUT_SECS = 60
 # what Gemini's speech models produce when the reply does not say otherwise
 DEFAULT_SAMPLE_RATE = 24_000
@@ -124,19 +124,16 @@ def sentences_of_message(text: str, place: int) -> list[BookSentence]:
     ]
 
 
-# Sends a request body with an API key, and returns the audio, the kind of
+# Sends a request body to a speech model, and returns the audio, the kind of
 # file it is as the reply names it, and the id the request goes by.
-SendSpeech = Callable[[dict[str, Any], str], tuple[bytes, str, str]]
+SendSpeech = Callable[[dict[str, Any], Model], tuple[bytes, str, str]]
 
 
-def send_speech(body: dict[str, Any], api_key: str) -> tuple[bytes, str, str]:
+def send_speech(body: dict[str, Any], model: Model) -> tuple[bytes, str, str]:
     request = urllib.request.Request(
-        ENDPOINT,
+        model.endpoint("audio/speech"),
         data=json.dumps(body).encode(),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
+        headers={**model.headers(), "Content-Type": "application/json"},
         method="POST",
     )
     try:
@@ -152,10 +149,10 @@ def send_speech(body: dict[str, Any], api_key: str) -> tuple[bytes, str, str]:
         except (ValueError, KeyError, TypeError):
             message = error.reason
         raise SpeechError(
-            f"OpenRouter refused the request ({error.code}): {message}"
+            f"{model.where} refused the request ({error.code}): {message}"
         ) from None
     except OSError as error:
-        raise SpeechError(f"could not reach OpenRouter: {error}") from None
+        raise SpeechError(f"could not reach {model.where}: {error}") from None
 
 
 def playable(data: bytes, content_type: str) -> tuple[bytes, str]:
@@ -230,8 +227,7 @@ class Speaker:
         reading: str,
         book_id: str,
         sentences: list[BookSentence],
-        api_key: str,
-        model: str,
+        model: Model,
         voice: str,
         instructions: str = "",
         step: Callable[[], None] | None = None,
@@ -276,23 +272,29 @@ class Speaker:
                 with self._lock:
                     making = self._making.setdefault(key, threading.Lock())
                 with making:
-                    if self.kept(book_id, [sentence], model, voice) == [True]:
+                    if self.kept(book_id, [sentence], model.name, voice) == [True]:
                         # another reading has made it in the meantime
                         return outcome
                     body = {
-                        "model": model,
+                        "model": model.name,
                         "input": sentence.text,
                         "voice": voice,
                         "response_format": "pcm",
                     }
                     if instructions.strip():
                         body["instructions"] = instructions.strip()
-                    data, content_type, generation = self._send(body, api_key)
+                    data, content_type, generation = self._send(body, model)
                     if not data:
                         raise SpeechError("the speech model returned no audio")
                     audio, kind = playable(data, content_type)
                     self._store.save_speech(
-                        book_id, sentence.id, sentence.text, model, voice, audio, kind
+                        book_id,
+                        sentence.id,
+                        sentence.text,
+                        model.name,
+                        voice,
+                        audio,
+                        kind,
                     )
                     outcome["generation"] = generation
             except (SpeechError, ValueError) as error:

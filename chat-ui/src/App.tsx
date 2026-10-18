@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { orModel } from "./lib/models";
 
 import { BookList } from "./components/BookList";
 import { BookReader } from "./components/BookReader";
@@ -457,14 +458,15 @@ export function App({ user, initialSettings, initialChats }: Props) {
             // afterwards, by what each request for it goes by.
             const { apiKey, model } = latestVoice.current;
             for (const { generation } of task.result) {
-                if (generation && apiKey) {
+                // only OpenRouter keeps what a request used
+                if (generation && apiKey && !model.url) {
                     void fetchGenerationUsage(apiKey, generation).then((used) =>
                         addUsageEntry({
                             id: generation,
                             at: Date.now(),
                             category: "speech",
                             chatId: "speech",
-                            model: used?.model ?? model,
+                            model: used?.model ?? model.model,
                             promptTokens: used?.promptTokens ?? 0,
                             completionTokens: used?.completionTokens ?? 0,
                             cost: used?.cost ?? null,
@@ -535,7 +537,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
         [addUsageEntry],
     );
     const translating = useMemo<Asking>(
-        () => ({ ...asking, model: settings.translationModel || asking.model }),
+        () => ({ ...asking, model: orModel(settings.translationModel, asking.model) }),
         [asking, settings.translationModel],
     );
 

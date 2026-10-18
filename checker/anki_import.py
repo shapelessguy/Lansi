@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 
 from intake import DEFAULT_LANGUAGE, Intake, Outcome, Word
+from models import Model
 from profiling import Profile
 
 DECK_STATUS_URL = "http://127.0.0.1:8090"
@@ -120,9 +121,8 @@ class AnkiImporter:
         self._enabled = True
         # the language the Anki words are of
         self._language = DEFAULT_LANGUAGE
-        self._api_key = api_key
-        self._model: str | None = None
-        self._decision_model: str | None = None
+        self._model = Model(key=api_key)
+        self._decision_model = Model(key=api_key)
         self._status = ImportStatus()
         # the requests to the models that nobody has been told of yet
         self._unbilled: list[Profile] = []
@@ -133,21 +133,19 @@ class AnkiImporter:
     def configure(
         self,
         enabled: bool,
-        api_key: str,
-        model: str | None,
-        decision_model: str | None,
+        model: Model,
+        decision_model: Model,
         language: str | None = None,
     ) -> None:
-        """Switch the import on or off, and say which key and models it is
-        to use. A key that is empty leaves the one there is in place.
+        """Switch the import on or off, and say which models it is to use.
+        One on OpenRouter without a key keeps the key there was.
         `language` is the one the Anki words are of, if it is not the one
         that was given before."""
         with self._lock:
             self._language = language or self._language
             self._enabled = enabled
-            self._api_key = api_key or self._api_key
-            self._model = model
-            self._decision_model = decision_model
+            self._model = model.or_keyed(self._model.key)
+            self._decision_model = decision_model.or_keyed(self._decision_model.key)
             if not enabled:
                 self._status.state = "off"
             elif self._status.state == "off":
@@ -184,12 +182,12 @@ class AnkiImporter:
 
     def _look(self) -> bool:
         with self._lock:
-            enabled, api_key = self._enabled, self._api_key
+            enabled = self._enabled
             model, decision_model = self._model, self._decision_model
         if not enabled:
             self._update(state="off")
             return False
-        if not api_key:
+        if not (model.has_key and decision_model.has_key):
             self._update(state="no-key")
             return False
         try:
@@ -213,7 +211,6 @@ class AnkiImporter:
         self._update(state="importing", remaining=len(new))
         outcomes, used = self._intake.take(
             [Word(word) for word in batch],
-            api_key,
             model,
             decision_model,
             on_outcome=self._count,

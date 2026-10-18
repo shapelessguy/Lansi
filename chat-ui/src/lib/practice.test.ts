@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { onOpenRouter } from "./models";
 import {
     answeredOf,
     choosingOf,
@@ -55,7 +56,7 @@ describe("choosingOf", () => {
     const settings = {
         ...defaultSettings(),
         exerciseMixTopics: true,
-        embeddingModel: "some/embedder",
+        embeddingModel: onOpenRouter("some/embedder"),
     };
 
     it("sends the words of a set, with how the topics and words are chosen", () => {
@@ -71,6 +72,12 @@ describe("choosingOf", () => {
     it("leaves the words to the server for the whole vocabulary, or for none", () => {
         expect(choosingOf(settings, "all", null)).toMatchObject({ vocabulary: "all", words: [] });
         expect(choosingOf(settings, "none", null)).toMatchObject({ vocabulary: "none", words: [] });
+    });
+
+    it("names an embedding model at an address with the address", () => {
+        const atHome = { model: "bge", url: "http://127.0.0.1:8000/v1", key: "" };
+
+        expect(choosingOf({ ...settings, embeddingModel: atHome }, "all", null).embedding_model).toEqual(atHome);
     });
 
     it("takes a set that is gone for the whole vocabulary", () => {

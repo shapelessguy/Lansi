@@ -3,6 +3,7 @@
 
 import { expect, test } from "vitest";
 
+import { onOpenRouter } from "./models";
 import { askedOf, type Box, checkedBox, mirrorStyle, type Profiling, worthSending } from "./writing";
 
 /** An element called `tagName`, with its attributes, in `parent`. */
@@ -43,7 +44,7 @@ test("a text box outside every place marked for writing is not checked", () => {
     expect(checkedBox([])).toBeNull();
 });
 
-const profiling: Profiling = { apiKey: "key", model: "some/model", questions: {}, rateWords: false };
+const profiling: Profiling = { apiKey: "key", model: onOpenRouter("some/model"), questions: {}, rateWords: false };
 
 test("a text box is checked again when its text, its caret or what is asked about it changes", () => {
     const sent = { text: "Hallo", caret: 5, asked: askedOf("German", null) };

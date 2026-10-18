@@ -21,14 +21,13 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 import numpy as np
+from models import Model
 from numpy.typing import NDArray
 from PIL import Image, ImageDraw, ImageFilter
 from profiling import Profile, ProfileError, post
 from prompts import PROMPTS
 from storage import UserStore
 
-IMAGES_ENDPOINT = "https://openrouter.ai/api/v1/images"
-EMBEDDINGS_ENDPOINT = "https://openrouter.ai/api/v1/embeddings"
 DEFAULT_IMAGE_MODEL = "google/gemini-3.1-flash-lite-image"
 # one that knows many languages, as the words are of the one being learned
 DEFAULT_EMBEDDING_MODEL = "baai/bge-m3"
@@ -54,17 +53,17 @@ ICON_MARGIN = 0.04
 PICTURE_SIZE = 1024
 PICTURE_QUALITY = 82
 
-# Sends a request body to a URL of OpenRouter with a key, and returns the
-# decoded response. Raises ProfileError.
-Send = Callable[[str, dict[str, Any], str], dict[str, Any]]
+# Sends a request body of the kind a path names, such as "images", to a
+# model, and returns the decoded response. Raises ProfileError.
+Send = Callable[[str, dict[str, Any], Model], dict[str, Any]]
 
 
-def send_to_openrouter(url: str, body: dict[str, Any], api_key: str) -> dict[str, Any]:
+def send_to_model(path: str, body: dict[str, Any], model: Model) -> dict[str, Any]:
     return post(
-        url,
+        model.endpoint(path),
         body,
-        {"Authorization": f"Bearer {api_key}"},
-        "OpenRouter",
+        model.headers(),
+        model.where,
         TIMEOUT_SECS,
         WITHIN_SECS,
     )
@@ -95,20 +94,20 @@ def _usage(response: dict[str, Any], model: str) -> Profile:
 
 def draw(
     prompt: str,
-    api_key: str,
-    model: str,
+    model: Model,
     aspect_ratio: str = "1:1",
-    send: Send = send_to_openrouter,
+    send: Send = send_to_model,
 ) -> tuple[bytes, str, Profile]:
     """What the image `model` drew for `prompt`, as the bytes of an image
     with the kind of file it is, and what drawing it used. Raises
     ProfileError."""
-    if not api_key:
-        raise ProfileError("an OpenRouter key is needed")
+    problem = model.problem()
+    if problem:
+        raise ProfileError(problem)
     response = send(
-        IMAGES_ENDPOINT,
-        {"model": model, "prompt": prompt, "aspect_ratio": aspect_ratio, "n": 1},
-        api_key,
+        "images",
+        {"model": model.name, "prompt": prompt, "aspect_ratio": aspect_ratio, "n": 1},
+        model,
     )
     try:
         image = response["data"][0]
@@ -119,7 +118,7 @@ def draw(
     return (
         picture,
         kind if isinstance(kind, str) else "image/png",
-        _usage(response, model),
+        _usage(response, model.name),
     )
 
 
@@ -192,12 +191,12 @@ def as_picture(picture: bytes) -> str:
 
 
 def make_icon(
-    topic: dict[str, Any], api_key: str, model: str, send: Send = send_to_openrouter
+    topic: dict[str, Any], model: Model, send: Send = send_to_model
 ) -> tuple[bytes, str, Profile]:
     """An icon for `topic`, as the bytes of a PNG of the symbol alone with
     the kind of file it is, and what making it used. Raises ProfileError."""
     picture, _, used = draw(
-        PROMPTS("topics.icon", topic=topic_text(topic)), api_key, model, "1:1", send
+        PROMPTS("topics.icon", topic=topic_text(topic)), model, "1:1", send
     )
     return clear_background(picture), "image/png", used
 
@@ -206,7 +205,7 @@ class Embeddings:
     """The embeddings of texts, as each model made them: kept in the store,
     and held in memory once they are asked for."""
 
-    def __init__(self, store: UserStore, send: Send = send_to_openrouter) -> None:
+    def __init__(self, store: UserStore, send: Send = send_to_model) -> None:
         self._store = store
         self._send = send
         # by model, the vector of each text, as it is kept
@@ -227,33 +226,33 @@ class Embeddings:
     def embed(
         self,
         texts: Iterable[str],
-        api_key: str,
-        model: str,
+        model: Model,
         step: Callable[[], None] = lambda: None,
     ) -> list[Profile]:
-        """Have those of `texts` embedded that are not yet, in batches,
-        keeping each batch as it comes. `step` is called after each. Returns
-        what the requests used. Raises ProfileError."""
-        missing = self.missing(texts, model)
-        if missing and not api_key:
-            raise ProfileError("an OpenRouter key is needed")
+        """Have those of `texts` embedded by `model` that are not yet, in
+        batches, keeping each batch as it comes. `step` is called after
+        each. Returns what the requests used. Raises ProfileError."""
+        missing = self.missing(texts, model.name)
+        problem = model.problem()
+        if missing and problem:
+            raise ProfileError(problem)
         used = []
         for start in range(0, len(missing), EMBED_BATCH):
             batch = missing[start : start + EMBED_BATCH]
             response = self._send(
-                EMBEDDINGS_ENDPOINT,
-                {"model": model, "input": batch, "encoding_format": "float"},
-                api_key,
+                "embeddings",
+                {"model": model.name, "input": batch, "encoding_format": "float"},
+                model,
             )
             vectors = _read_vectors(response, len(batch))
             kept = {
                 text: np.asarray(vector, dtype=np.float16).tobytes()
                 for text, vector in zip(batch, vectors)
             }
-            self._store.save_embeddings(model, kept)
+            self._store.save_embeddings(model.name, kept)
             with self._lock:
-                self._held.setdefault(model, {}).update(kept)
-            used.append(_usage(response, model))
+                self._held.setdefault(model.name, {}).update(kept)
+            used.append(_usage(response, model.name))
             step()
         return used
 

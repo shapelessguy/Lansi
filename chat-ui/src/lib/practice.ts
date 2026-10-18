@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import type { ProfileUsage } from "./checker";
+import { type ModelChoice, modelRequest } from "./models";
 import { checkerFetch } from "./session";
 import type { Settings } from "./settings";
 import type { BackgroundTask } from "./tasks";
@@ -130,11 +131,11 @@ export interface PracticeSession {
 /** Who practises, and who is asked for them. */
 export interface Learner {
     apiKey: string;
-    model: string;
+    model: ModelChoice;
     /** What draws the pictures of an exercise. */
-    imageModel: string;
-    /** What looks at the pictures of an exercise, or blank for `model`. */
-    visionModel: string;
+    imageModel: ModelChoice;
+    /** What looks at the pictures of an exercise; naming none, it is `model`. */
+    visionModel: ModelChoice;
     /** The language the learner reads explanations in. */
     into: string;
     level: string;
@@ -173,9 +174,9 @@ export function posting(body: object, learner?: Learner): RequestInit {
             learner
                 ? {
                     ...body,
-                    model: learner.model,
-                    image_model: learner.imageModel,
-                    vision_model: learner.visionModel,
+                    model: modelRequest(learner.model),
+                    image_model: modelRequest(learner.imageModel),
+                    vision_model: modelRequest(learner.visionModel),
                     into: learner.into,
                     level: learner.level,
                 }
@@ -201,7 +202,7 @@ export interface Choosing {
     /** The words of the set, when the vocabulary is a set. */
     words: string[];
     topic_words: boolean;
-    embedding_model: string;
+    embedding_model: string | ModelChoice;
 }
 
 /**
@@ -216,7 +217,7 @@ export function choosingOf(settings: Settings, vocabulary: string, setWords: str
         vocabulary: chosen,
         words: chosen === "set" ? setWords ?? [] : [],
         topic_words: settings.exerciseTopicWords,
-        embedding_model: settings.embeddingModel,
+        embedding_model: modelRequest(settings.embeddingModel),
     };
 }
 

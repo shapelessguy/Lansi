@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { type CheckReply, fetchCheck } from "./checker";
+import { type ModelChoice, onOpenRouter } from "./models";
 import type { RequestQuestions } from "./questions";
 import { type Climbing, markedAncestor } from "./selection";
 
@@ -37,7 +38,7 @@ export function checkedBox<B extends Box>(path: readonly B[]): B | null {
 /** What a text box is checked for, beyond its spelling: its sentences are profiled, as they are in the chat. */
 export interface Profiling {
     apiKey: string;
-    model: string;
+    model: ModelChoice;
     questions: RequestQuestions;
     rateWords: boolean;
 }
@@ -86,7 +87,7 @@ export function checkText(
             profiling.rateWords,
             language,
         )
-        : fetchCheck(text, caret, "", "", {}, false, language, false);
+        : fetchCheck(text, caret, "", onOpenRouter(""), {}, false, language, false);
 }
 
 /** How a text box lays out its text, which the copy of it behind the box that carries the underlines must match. */

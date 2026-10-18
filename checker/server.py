@@ -18,6 +18,8 @@ import re
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -57,13 +59,12 @@ from intake import (
 from live import LiveChecker
 from logs import LogError
 from lookups import asked_anything, translation_log, write_question_logs
+from models import Model, read_model
 from processing import Processor, words_in
 from profiling import (
     DEFAULT_MODEL,
-    LOCAL_ENDPOINT,
-    LOCAL_POLL_SECS,
-    LocalModel,
     Profile,
+    ProfileError,
     Profiler,
     Questions,
     WordRating,
@@ -102,6 +103,10 @@ from vocabulary import Vocabularies, Vocabulary
 HOST = "127.0.0.1"
 # The request header the chat sends its OpenRouter key in.
 KEY_HEADER = "X-OpenRouter-Key"
+# how long a model at an address the chat passes a request on to may take
+RELAY_TIMEOUT_SECS = 120
+# how long a server is given to list its models
+LIST_TIMEOUT_SECS = 10
 DEFAULT_PORT = 8092
 # far more than anyone types into a chat box
 MAX_BODY_BYTES = 1_000_000
@@ -200,14 +205,6 @@ def print_ratings(
     if dropped:
         result += " (dropped: the sentence was changed or gone back to)"
     log(f"{datetime.now():%H:%M:%S} words: {sentence}\n       {result}")
-
-
-def print_local_model(model: str | None) -> None:
-    """Announces that a model on this machine has been found, or has gone."""
-    if model:
-        log(f"{datetime.now():%H:%M:%S} local model found: {model}. It is asked now.")
-    else:
-        log(f"{datetime.now():%H:%M:%S} local model gone. OpenRouter is asked now.")
 
 
 def in_background(
@@ -582,8 +579,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             and isinstance(text, str)
         ):
             raise ValueError('expected {"message": ..., "text": "..."}')
-        model, voice = body.get("model"), body.get("voice")
-        if not (isinstance(model, str) and model and isinstance(voice, str) and voice):
+        model, voice = read_model(body.get("model"), api_key), body.get("voice")
+        if not (model.name and isinstance(voice, str) and voice):
             raise ValueError("a model and a voice must be named")
         instructions = body.get("instructions")
         if not isinstance(instructions, str):
@@ -603,10 +600,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
             raise ValueError("there is no sentence in the selection")
         if len(sentences) > MAX_SENTENCES:
             raise ValueError(f"more than {MAX_SENTENCES} sentences are selected")
-        ready = speaker.kept(book_id, sentences, model, voice)
+        ready = speaker.kept(book_id, sentences, model.name, voice)
         missing = [number for number, kept in enumerate(ready) if not kept]
         task = None
-        if missing and not api_key:
+        if missing and not model.has_key:
             self._reply(
                 HTTPStatus.BAD_GATEWAY, {"error": "an OpenRouter key is needed"}
             )
@@ -620,7 +617,6 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     reading,
                     book_id,
                     to_make,
-                    api_key,
                     model,
                     voice,
                     instructions,
@@ -849,23 +845,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
             for name in ("into", "level")
             if isinstance(value := body.get(name), str)
         }
-        model = body.get("model")
-        ask = model_asker(
-            send_chat, api_key or "", model if isinstance(model, str) else ""
-        )
-        vision_model = body.get("vision_model")
-        look = (
-            model_asker(send_chat, api_key or "", vision_model)
-            if isinstance(vision_model, str) and vision_model
-            else ask
-        )
-        image_model = body.get("image_model")
-        draw = model_drawer(
-            api_key or "",
-            image_model
-            if isinstance(image_model, str) and image_model
-            else DEFAULT_IMAGE_MODEL,
-        )
+        ask = model_asker(send_chat, read_model(body.get("model"), api_key or ""))
+        vision_model = read_model(body.get("vision_model"), api_key or "")
+        look = model_asker(send_chat, vision_model) if vision_model.name else ask
+        image_model = read_model(body.get("image_model"), api_key or "")
+        draw = model_drawer(image_model.or_named(DEFAULT_IMAGE_MODEL))
         return learner, ask, draw, look
 
     def _evaluating(self, method: str, api_key: str | None = None) -> bool:
@@ -1048,13 +1032,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
         without a key to make it with."""
         store, practice = self.account.store, self.account.practice
         assert store and practice
-        model = body.get("image_model")
-        if not api_key:
+        image_model = read_model(body.get("image_model"), api_key or "").or_named(
+            DEFAULT_IMAGE_MODEL
+        )
+        if not image_model.has_key:
             return None
-        image_model = model if isinstance(model, str) and model else DEFAULT_IMAGE_MODEL
 
         def make(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
-            picture, kind, used = practice.make_icon(topic, api_key or "", image_model)
+            picture, kind, used = practice.make_icon(topic, image_model)
             store.save_icon(topic["id"], picture, kind)
             step()
             return [{"topic": topic["id"]}], [describe_usage(used)]
@@ -1065,28 +1050,27 @@ class CheckerHandler(BaseHTTPRequestHandler):
         """Has the words of a vocabulary that are not embedded yet embedded
         in the background, as a POST to /embeddings asks."""
         body = self._read_body()
-        language, model = body.get("language"), body.get("model")
-        if not isinstance(language, str) or (
-            model is not None and not isinstance(model, str)
-        ):
+        language = body.get("language")
+        if not isinstance(language, str):
             raise ValueError('expected {"language": "...", "model": "..."}')
-        model = model or DEFAULT_EMBEDDING_MODEL
-        missing = practice.vocabulary_to_embed(language.strip(), model)
-        if not missing or model in practice.embedding:
+        model = read_model(body.get("model"), api_key or "")
+        model = model.or_named(DEFAULT_EMBEDDING_MODEL)
+        missing = practice.vocabulary_to_embed(language.strip(), model.name)
+        if not missing or model.name in practice.embedding:
             self._reply(HTTPStatus.OK, {"missing": len(missing), "task": None})
             return
-        if not api_key:
+        if not model.has_key:
             raise ValueError("an OpenRouter key is needed")
-        practice.embedding.add(model)
+        practice.embedding.add(model.name)
 
         def embed(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
             try:
-                used = practice.embeddings.embed(missing, api_key or "", model, step)
+                used = practice.embeddings.embed(missing, model, step)
             finally:
-                practice.embedding.discard(model)
+                practice.embedding.discard(model.name)
             log(
                 f"{datetime.now():%H:%M:%S} embedded {len(missing)} words of"
-                f" {language} with {model}"
+                f" {language} with {model.name}"
             )
             return [], [describe_usage(profile) for profile in used]
 
@@ -1126,8 +1110,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             lesson,
             topics,
             chosen,
-            read_choosing(body),
-            api_key or "",
+            read_choosing(body, api_key or ""),
             options,
             minutes,
         )
@@ -1183,8 +1166,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         # The chat sends the key from its settings; one set where the server
-        # runs is used otherwise. Without either, only a model on this
-        # machine can be asked.
+        # runs is used otherwise. Without either, only the models at
+        # addresses of the learner's own can be asked.
         api_key = self.headers.get(KEY_HEADER) or os.environ.get("OPENROUTER_API_KEY")
         try:
             if self.path == "/login":
@@ -1195,7 +1178,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 pass
             elif self._practice("POST", api_key) or self._topics("POST", api_key):
                 pass
-            elif self._evaluating("POST", api_key):
+            elif self._evaluating("POST", api_key) or self._relay():
                 pass
             elif self.path == "/sentences":
                 self._check_sentences(api_key)
@@ -1215,6 +1198,62 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._reply(HTTPStatus.NOT_FOUND, {"error": "no such path"})
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+
+    def _relay(self) -> bool:
+        """Answers a request that the chat has passed on to a server of
+        the learner's own, which a page may not be let to reach itself,
+        and returns whether the request was one.
+
+            POST /models            the ids of the models the server at
+                                    `{"url": ..., "key": ...}` has
+            POST /models/chat       a chat request, with the reply as it
+                                    comes, streamed or not
+
+        The model of a chat request is named with its address, as a
+        request to the server names it, and the rest of the request goes
+        on as it is. Only one at an address is asked here: OpenRouter is
+        asked by the chat itself."""
+        path = urlsplit(self.path).path
+        if path not in ("/models", "/models/chat"):
+            return False
+        body = self._read_body()
+        if path == "/models":
+            body = {"model": {"model": "", **body}}
+        model = read_model(body.pop("model", None))
+        if model.on_openrouter:
+            raise ValueError("only a model at an address is asked here")
+        if path == "/models":
+            try:
+                self._reply(HTTPStatus.OK, {"models": list_models(model)})
+            except ProfileError as error:
+                self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
+            return True
+        request = urllib.request.Request(
+            model.endpoint("chat/completions"),
+            data=json.dumps({**body, "model": model.name}).encode(),
+            headers={**model.headers(), "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            response = urllib.request.urlopen(request, timeout=RELAY_TIMEOUT_SECS)
+        except urllib.error.HTTPError as error:
+            response = error
+        except OSError as error:
+            self._reply(
+                HTTPStatus.BAD_GATEWAY,
+                {"error": {"message": f"could not reach {model.where}: {error}"}},
+            )
+            return True
+        with response:
+            self.send_response(response.status)
+            kind = response.headers.get("Content-Type") or "application/octet-stream"
+            self.send_header("Content-Type", kind)
+            self.end_headers()
+            # passed on as it comes, for a reply that is streamed
+            while piece := response.read1(65536):
+                self.wfile.write(piece)
+                self.wfile.flush()
+        return True
 
     def _translate(self, translator: Translator, api_key: str | None) -> None:
         """Translates the `selection` of a `{"selection": ..., "before": ...,
@@ -1238,13 +1277,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if len(selection) > MAX_SELECTION_LENGTH:
             raise ValueError("the selection is too long")
         passage = passage_of(before, selection, after)
-        language, into, model = self._read_translating(body)
+        language, into, model = self._read_translating(body, api_key)
         where = self._read_where(body)
         started = time.monotonic()
         try:
-            translation, used = translator.translate(
-                passage, language, into, api_key or "", model
-            )
+            translation, used = translator.translate(passage, language, into, model)
         except TranslationError as error:
             self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
             return
@@ -1289,7 +1326,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if len(parts) != 3 or not isinstance(translation, str):
             raise ValueError('expected {"passage": {...}, "translation": "..."}')
         messages = read_messages(body.get("messages"), to_answer=False)
-        language, into, model = self._read_translating(body)
+        language, into, model = self._read_translating(body, api_key)
         where = self._read_where(body)
         translated = body.get("log")
         if translated is not None and not isinstance(translated, int):
@@ -1300,7 +1337,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         passage = Passage(*parts)
         source = {**where, "translation": translated} if translated else where
-        ask = translator.asker(api_key or "", model)
+        ask = translator.asker(model)
 
         def write(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
             try:
@@ -1350,7 +1387,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if len(parts) != 3 or not isinstance(translation, str):
             raise ValueError('expected {"passage": {...}, "translation": "..."}')
         messages = read_messages(body.get("messages"))
-        language, into, model = self._read_translating(body)
+        language, into, model = self._read_translating(body, api_key)
         try:
             reply, used = translator.answer(
                 Passage(*parts),
@@ -1358,7 +1395,6 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 messages,
                 language,
                 into,
-                api_key or "",
                 model,
             )
         except TranslationError as error:
@@ -1366,19 +1402,21 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         self._reply(HTTPStatus.OK, {"reply": reply, "usage": [describe_usage(used)]})
 
-    def _read_translating(self, body: dict[str, Any]) -> tuple[str, str, str | None]:
+    def _read_translating(
+        self, body: dict[str, Any], api_key: str | None
+    ) -> tuple[str, str, Model]:
         """The language being learned, the one to translate into and the
         model to ask, as a request about a selection names them. The first
         is the one the account goes by if the request names none."""
         named = []
-        for name in ("language", "into", "model"):
+        for name in ("language", "into"):
             value = body.get(name)
             if value is not None and not isinstance(value, str):
                 raise ValueError(f"{name} must be text or null")
             named.append((value or "").strip())
         language = named[0][:MAX_LANGUAGE_LENGTH] or self.account.language
         into = named[1][:MAX_LANGUAGE_LENGTH] or DEFAULT_INTO
-        return language, into, named[2] or None
+        return language, into, read_model(body.get("model"), api_key or "")
 
     def _import(self, importer: AnkiImporter, api_key: str | None) -> None:
         """Takes the `{"enabled": ..., "model": ..., "decision_model": ...,
@@ -1387,12 +1425,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
         Anki words is to go by, and replies with what the import is doing
         and the requests to the models it has made since it was last asked."""
         body = self._read_body()
-        models = []
-        for name in ("model", "decision_model"):
-            model = body.get(name)
-            if model is not None and not isinstance(model, str):
-                raise ValueError(f"{name} must be text or null")
-            models.append(model or None)
+        model = read_model(body.get("model"), api_key or "")
+        decision_model = read_model(body.get("decision_model"), api_key or "")
         self._take_language(body)
         # the language the Anki words are of, which need not be the one studied
         anki_language = body.get("anki_language")
@@ -1401,14 +1435,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
         importer.configure(
             # the Anki words of one user are not taken in for another
             self.account.anki and body.get("enabled") is not False,
-            api_key or "",
-            models[0],
-            models[1],
+            model,
+            decision_model,
             (anki_language or "").strip()[:MAX_LANGUAGE_LENGTH] or None,
         )
         if self.account.processor:
-            # the messages and the exercises are processed with the same key and models
-            self.account.processor.configure(api_key or "", models[0], models[1])
+            # the messages and the exercises are processed with the same models
+            self.account.processor.configure(model, decision_model)
         status, used = importer.status()
         self._reply(
             HTTPStatus.OK,
@@ -1434,13 +1467,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
         body = self._read_body()
         words: list[Word] = read_words(body.get("words"))
         self._take_language(body)
-        models = []
-        for name in ("model", "decision_model"):
-            model = body.get(name)
-            if model is not None and not isinstance(model, str):
-                raise ValueError(f"{name} must be text or null")
-            models.append(model or None)
-        outcomes, used = intake.take(words, api_key or "", models[0], models[1])
+        outcomes, used = intake.take(
+            words,
+            read_model(body.get("model"), api_key or ""),
+            read_model(body.get("decision_model"), api_key or ""),
+        )
         log(f"{datetime.now():%H:%M:%S} words taken in\n{describe_outcomes(outcomes)}")
         self._reply(
             HTTPStatus.OK,
@@ -1476,17 +1507,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
             raise ValueError("there are no words in the selection")
         if len(words) > MAX_WORDS:
             raise ValueError(f"more than {MAX_WORDS} words are selected")
-        language, _, model = self._read_translating(body)
-        decision_model = body.get("decision_model")
-        if decision_model is not None and not isinstance(decision_model, str):
-            raise ValueError("decision_model must be text or null")
+        language, _, model = self._read_translating(body, api_key)
+        decision_model = read_model(body.get("decision_model"), api_key or "")
 
         def take(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
             outcomes, used = intake.take(
                 words,
-                api_key or "",
                 model,
-                decision_model or None,
+                decision_model,
                 on_outcome=lambda outcome: step(),
                 language=language,
             )
@@ -1513,7 +1541,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         self._reply(HTTPStatus.OK, {"task": task})
 
     def _check_sentences(self, api_key: str | None) -> None:
-        text, caret, model, questions, rate_words, profile = self._read_request()
+        text, caret, model, questions, rate_words, profile = self._read_request(api_key)
         if not profile:
             # the spelling of a text box whose sentences are not profiled;
             # the requests to the model are left to be reported to the one
@@ -1525,12 +1553,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     "sentences": [asdict(sentence) for sentence in sentences],
                     "usage": [],
                     "pending": False,
-                    "local_model": self.account.checker.local_model(),
                 },
             )
             return
         sentences = self.account.checker.check(
-            text, caret, api_key or None, model, questions, rate_words
+            text, caret, model, questions, rate_words
         )
         log(f"{datetime.now():%H:%M:%S}\n{describe(sentences)}")
         used, pending = self.account.checker.billing()
@@ -1543,15 +1570,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 "usage": [describe_usage(profile) for profile in used],
                 # whether any are still out, and so worth asking again for
                 "pending": pending,
-                # the model on this machine that answers the questions at
-                # present, or null if OpenRouter does
-                "local_model": self.account.checker.local_model(),
             },
         )
 
     def _read_request(
-        self,
-    ) -> tuple[str, int | None, str | None, Questions | None, bool, bool]:
+        self, api_key: str | None
+    ) -> tuple[str, int | None, Model, Questions | None, bool, bool]:
         """The parts of a `{"text": ..., "caret": ..., "model": ...,
         "questions": ..., "words": ..., "profile": ...}` request body. The
         caret may be left out or null, for when the text box is not in use,
@@ -1569,16 +1593,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
             not isinstance(caret, int) or isinstance(caret, bool)
         ):
             raise ValueError("caret must be a whole number or null")
-        model = body.get("model")
-        if model is not None and not isinstance(model, str):
-            raise ValueError("model must be text or null")
+        model = read_model(body.get("model"), api_key or "")
         questions = body.get("questions")
         if questions is not None:
             questions = read_questions(questions)
         # whether to rate the words of each sentence once it is profiled
         rate_words = body.get("words") is True
         profile = body.get("profile") is not False
-        return text, caret, model or None, questions, rate_words, profile
+        return text, caret, model, questions, rate_words, profile
 
     def _read_body(self) -> dict[str, Any]:
         """The JSON object a request brought. Raises ValueError."""
@@ -1606,20 +1628,33 @@ class CheckerHandler(BaseHTTPRequestHandler):
         pass
 
 
-def read_choosing(body: dict[str, Any]) -> Choosing:
+def list_models(model: Model) -> list[str]:
+    """The ids of the models the server `model` is at has, as it lists
+    them. Raises ProfileError."""
+    request = urllib.request.Request(model.endpoint("models"), headers=model.headers())
+    try:
+        with urllib.request.urlopen(request, timeout=LIST_TIMEOUT_SECS) as response:
+            listed = json.load(response)["data"]
+        return [each["id"] for each in listed if isinstance(each.get("id"), str)]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        raise ProfileError(
+            f"could not list the models at {model.url}: {error}"
+        ) from None
+
+
+def read_choosing(body: dict[str, Any], api_key: str = "") -> Choosing:
     """How the topics and words of a session are to be chosen, as a request
-    to start one says. Raises ValueError."""
-    choosing = Choosing()
+    to start one says, `api_key` being the OpenRouter key the embedding
+    model is asked with there. Raises ValueError."""
     mix, topic_words = body.get("mix_topics", False), body.get("topic_words", True)
     vocabulary, words = body.get("vocabulary", "none"), body.get("words", [])
-    model = body.get("embedding_model") or choosing.embedding_model
+    model = read_model(body.get("embedding_model"), api_key)
     if not (
         isinstance(mix, bool)
         and isinstance(topic_words, bool)
         and vocabulary in ("none", "all", "set")
         and isinstance(words, list)
         and all(isinstance(word, str) for word in words)
-        and isinstance(model, str)
     ):
         raise ValueError("the way the words are chosen is not one there is")
     if len(words) > MAX_SET_WORDS:
@@ -1629,7 +1664,7 @@ def read_choosing(body: dict[str, Any]) -> Choosing:
         vocabulary=vocabulary,
         words=[word.strip() for word in words if word.strip()],
         topic_words=topic_words,
-        embedding_model=model,
+        embedding_model=model.or_named(DEFAULT_EMBEDDING_MODEL),
     )
 
 
@@ -1669,11 +1704,6 @@ if __name__ == "__main__":
     # the language being studied, by its English name, until the chat says
     language = os.environ.get("CHECKER_LANGUAGE", DEFAULT_LANGUAGE)
     model = os.environ.get("CHECKER_PROFILE_MODEL", DEFAULT_MODEL)
-    # set to nothing to leave a model on this machine alone
-    local_endpoint = os.environ.get("CHECKER_LOCAL_URL", LOCAL_ENDPOINT)
-    local = None
-    if local_endpoint:
-        local = LocalModel(local_endpoint, on_change=print_local_model)
     data_directory = Path(os.environ.get("CHECKER_DATA") or DATA_DIRECTORY)
     deck_status_url = os.environ.get("ANKI_STATUS_URL", DECK_STATUS_URL)
     anki_user = os.environ.get("CHECKER_ANKI_USER") or ANKI_USER
@@ -1681,7 +1711,7 @@ if __name__ == "__main__":
     def make_account(user: str) -> Account:
         """Everything a user has, with the vocabularies in a directory of
         the user's own."""
-        profiler = Profiler(model, local=local)
+        profiler = Profiler(model)
         speller = StudySpeller(language)
         intake = Intake(
             Vocabularies(user_directory(data_directory, user)),
@@ -1747,7 +1777,7 @@ if __name__ == "__main__":
         if account.anki:
             importer.watch()
         else:
-            importer.configure(False, "", None, None)
+            importer.configure(False, Model(), Model())
         return account
 
     users = Users(os.environ.get("CHECKER_USERS") or USERS_FILE, data_directory)
@@ -1776,9 +1806,6 @@ if __name__ == "__main__":
             flush=True,
         )
     print(f"Anki words are imported from {deck_status_url} for {anki_user}", flush=True)
-    if local:
-        print(f"Looking for a local model at {local.endpoint}", flush=True)
-        local.watch(float(os.environ.get("CHECKER_LOCAL_POLL_SECS", LOCAL_POLL_SECS)))
     try:
         server.serve_forever()
     except KeyboardInterrupt:

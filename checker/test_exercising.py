@@ -20,10 +20,14 @@ from exercising import (
     exercises,
     ui_file,
 )
+from models import Model
 from profiling import Profile
 from storage import UserStore
 from test_topics import KEY, FakeOpenRouter
+from topics import DEFAULT_EMBEDDING_MODEL
 from translating import TranslationError
+
+EMBEDDING = Model(DEFAULT_EMBEDDING_MODEL, key=KEY)
 
 LESSON = "trennbare-verben"
 
@@ -752,10 +756,14 @@ def test_the_words_nearest_the_topic_come_first_and_alone_when_there_are_enough(
 ) -> None:
     told = recording(with_topics, directory)
     others = [f"Wort {number}" for number in range(30)]
-    choosing = Choosing(vocabulary="set", words=["gehen", *others, "krank", "der Arzt"])
+    choosing = Choosing(
+        vocabulary="set",
+        words=["gehen", *others, "krank", "der Arzt"],
+        embedding_model=EMBEDDING,
+    )
 
     session, used = with_topics.start_session(
-        "German", LESSON, ["doctor"], {"echo": 1}, choosing, KEY
+        "German", LESSON, ["doctor"], {"echo": 1}, choosing
     )
     with_topics.step(session["id"], "echo", "start", None, LEARNER, answering())
 
@@ -771,7 +779,11 @@ def test_the_words_are_preferred_when_there_are_too_few_to_use_them_alone(
     with_topics: Practice,
 ) -> None:
     session, _ = with_topics.start_session(
-        "German", LESSON, ["doctor"], {"echo": 1}, Choosing(vocabulary="all"), KEY
+        "German",
+        LESSON,
+        ["doctor"],
+        {"echo": 1},
+        Choosing(vocabulary="all", embedding_model=EMBEDDING),
     )
 
     assert session["words"] == {
@@ -784,7 +796,7 @@ def test_without_topics_the_first_words_of_the_vocabulary_are_preferred(
     with_topics: Practice,
 ) -> None:
     session, used = with_topics.start_session(
-        "German", LESSON, [], {"echo": 1}, Choosing(vocabulary="all"), KEY
+        "German", LESSON, [], {"echo": 1}, Choosing(vocabulary="all")
     )
 
     assert session["words"] == {
@@ -806,13 +818,11 @@ def test_a_session_waits_for_a_vocabulary_that_is_mostly_not_embedded(
     with_topics: Practice, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(exercising, "MAX_EMBEDDED_AT_START", 2)
-    choosing = Choosing(vocabulary="all")
+    choosing = Choosing(vocabulary="all", embedding_model=EMBEDDING)
 
     with pytest.raises(ValueError, match="5 words of the vocabulary are not embedded"):
-        with_topics.start_session(
-            "German", LESSON, ["doctor"], {"echo": 1}, choosing, KEY
-        )
-    assert with_topics.vocabulary_to_embed("German", choosing.embedding_model) == [
+        with_topics.start_session("German", LESSON, ["doctor"], {"echo": 1}, choosing)
+    assert with_topics.vocabulary_to_embed("German", EMBEDDING.name) == [
         "gehen",
         "das Tor",
         "krank",

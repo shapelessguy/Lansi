@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from models import Model
 from profiling import ProfileError
 from translating import (
     Passage,
@@ -16,6 +17,7 @@ from translating import (
 )
 
 KEY = "sk-test"
+SOME_MODEL = Model("some/model", key=KEY)
 
 
 class FakeModel:
@@ -25,8 +27,8 @@ class FakeModel:
         self.says = says
         self.bodies: list[dict[str, Any]] = []
 
-    def __call__(self, body: dict[str, Any], api_key: str) -> dict[str, Any]:
-        assert api_key == KEY
+    def __call__(self, body: dict[str, Any], model: Model) -> dict[str, Any]:
+        assert model.key == KEY
         self.bodies.append(body)
         if isinstance(self.says, Exception):
             raise self.says
@@ -81,7 +83,7 @@ def test_translating_gives_the_model_the_passage_with_the_selection_marked() -> 
     translator = Translator(model)
 
     translation, used = translator.translate(
-        Passage("Der ", "Hund", " schläft."), "German", "English", KEY, "some/model"
+        Passage("Der ", "Hund", " schläft."), "German", "English", SOME_MODEL
     )
 
     assert translation == "the dog"
@@ -91,15 +93,13 @@ def test_translating_gives_the_model_the_passage_with_the_selection_marked() -> 
     assert "into English" in system["content"]
     assert user == {"role": "user", "content": "Der [[Hund]] schläft."}
     assert model.bodies[0]["model"] == "some/model"
-    # it is not to think a translation over
-    assert model.bodies[0]["reasoning"] == {"enabled": False}
 
 
 def test_translating_asks_the_usual_model_when_none_is_named() -> None:
     model = FakeModel()
 
     Translator(model, model="usual/model").translate(
-        Passage("", "Hund", ""), "German", "English", KEY
+        Passage("", "Hund", ""), "German", "English", Model(key=KEY)
     )
 
     assert model.bodies[0]["model"] == "usual/model"
@@ -107,16 +107,16 @@ def test_translating_asks_the_usual_model_when_none_is_named() -> None:
 
 @pytest.mark.parametrize(
     ("key", "named", "reason"),
-    [("", "some/model", "key is needed"), (KEY, None, "no model")],
+    [("", "some/model", "OpenRouter key is needed"), (KEY, "", "no model")],
 )
 def test_translating_without_a_key_or_a_model_fails_without_asking(
-    key: str, named: str | None, reason: str
+    key: str, named: str, reason: str
 ) -> None:
     model = FakeModel()
 
     with pytest.raises(TranslationError, match=reason):
         Translator(model).translate(
-            Passage("", "Hund", ""), "German", "English", key, named
+            Passage("", "Hund", ""), "German", "English", Model(named, key=key)
         )
 
     assert model.bodies == []
@@ -126,7 +126,7 @@ def test_translating_without_a_key_or_a_model_fails_without_asking(
 def test_translating_fails_when_the_model_does_not_answer(says: object) -> None:
     with pytest.raises(TranslationError):
         Translator(FakeModel(says)).translate(
-            Passage("", "Hund", ""), "German", "English", KEY, "some/model"
+            Passage("", "Hund", ""), "German", "English", SOME_MODEL
         )
 
 
@@ -140,8 +140,7 @@ def test_answering_gives_the_model_the_passage_the_translation_and_the_chat() ->
         messages,
         "German",
         "English",
-        KEY,
-        "some/model",
+        SOME_MODEL,
     )
 
     assert reply == "It is masculine."
@@ -182,23 +181,3 @@ def test_messages_that_are_not_a_chat_ending_with_the_user_are_refused(
 ) -> None:
     with pytest.raises(ValueError):
         read_messages(messages)
-
-
-def test_translating_asks_a_model_that_cannot_but_think_once_more_as_it_is() -> None:
-    class Refusing(FakeModel):
-        def __call__(self, body: dict[str, Any], api_key: str) -> dict[str, Any]:
-            if "reasoning" in body:
-                self.bodies.append(body)
-                raise ProfileError(
-                    "OpenRouter refused the request (400): reasoning is mandatory"
-                )
-            return super().__call__(body, api_key)
-
-    model = Refusing()
-
-    translation, _ = Translator(model).translate(
-        Passage("", "Hund", ""), "German", "English", KEY, "some/model"
-    )
-
-    assert translation == "the dog"
-    assert ["reasoning" in body for body in model.bodies] == [True, False]

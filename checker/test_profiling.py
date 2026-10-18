@@ -9,10 +9,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 import pytest
+from models import Model
 from profiling import (
     QUESTIONS,
     Answer,
-    LocalModel,
     Profile,
     ProfileError,
     Profiler,
@@ -111,14 +111,17 @@ def test_read_profile_refuses_a_response_that_does_not_answer_the_questions(
         read_profile(broken)
 
 
-def test_profile_sends_the_sentence_and_every_question_with_the_key() -> None:
-    sent: list[tuple[dict[str, Any], str]] = []
+KEYED = Model(key="the-key")
 
-    def send(body: dict[str, Any], api_key: str) -> dict[str, Any]:
-        sent.append((body, api_key))
+
+def test_profile_sends_the_sentence_and_every_question_to_the_model() -> None:
+    sent: list[tuple[dict[str, Any], Model]] = []
+
+    def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
+        sent.append((body, model))
         return response()
 
-    profile = Profiler("some/model", send).profile("Er ist gut.", "the-key")
+    profile = Profiler("some/model", send).profile("Er ist gut.", KEYED)
 
     assert sent == [
         (
@@ -127,7 +130,7 @@ def test_profile_sends_the_sentence_and_every_question_with_the_key() -> None:
                 "state": {"sentence": "Er ist gut."},
                 "questions": QUESTIONS,
             },
-            "the-key",
+            Model("some/model", key="the-key"),
         )
     ]
     assert profile.answers["grammar_errors"].choice == "one"
@@ -136,13 +139,13 @@ def test_profile_sends_the_sentence_and_every_question_with_the_key() -> None:
 def test_profile_asks_the_model_it_is_given_instead_of_the_usual_one() -> None:
     asked: list[str] = []
 
-    def send(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
         asked.append(body["model"])
         return response()
 
     profiler = Profiler("usual/model", send)
-    profiler.profile("Er ist gut.", "the-key", "other/model")
-    profiler.profile("Er ist gut.", "the-key", None)
+    profiler.profile("Er ist gut.", Model("other/model", key="the-key"))
+    profiler.profile("Er ist gut.", KEYED)
 
     assert asked == ["other/model", "usual/model"]
 
@@ -157,12 +160,12 @@ POLITE = {
 def test_profile_asks_the_questions_it_is_given_and_reads_their_answers() -> None:
     asked: list[Any] = []
 
-    def send(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
         asked.append(body["questions"])
         return {"answers": {"polite": {"type": "choice", "choice": "yes"}}}
 
     profile = Profiler(send=send).profile(
-        "Er ist gut.", "the-key", questions={"polite": POLITE}
+        "Er ist gut.", KEYED, questions={"polite": POLITE}
     )
 
     assert asked == [{"polite": POLITE}]
@@ -208,7 +211,7 @@ def test_read_questions_refuses_questions_that_cannot_be_asked(
 def test_rate_words_asks_of_every_word_whether_it_is_right_by_what_was_found() -> None:
     sent: list[dict[str, Any]] = []
 
-    def send(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
         sent.append(body)
         return {
             "id": "gen-dec-2",
@@ -223,7 +226,7 @@ def test_rate_words_asks_of_every_word_whether_it_is_right_by_what_was_found() -
     assessment = [{"question": "How many errors?", "answer": "one: One error."}]
 
     ratings, profile = Profiler("some/model", send).rate_words(
-        "Ich habe, Hund.", assessment, "the-key"
+        "Ich habe, Hund.", assessment, KEYED
     )
 
     (body,) = sent
@@ -242,16 +245,16 @@ def test_rate_words_asks_of_every_word_whether_it_is_right_by_what_was_found() -
 
 
 def test_rate_words_fails_when_a_word_is_not_given_a_value() -> None:
-    def send(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
         return {"answers": {"w1": {"type": "noul", "noul": "yes"}}}
 
     with pytest.raises(ProfileError, match="w1 is not a yes or a no"):
-        Profiler(send=send).rate_words("Hund.", [], "the-key")
+        Profiler(send=send).rate_words("Hund.", [], KEYED)
 
 
 def test_rate_words_fails_for_a_sentence_without_words() -> None:
     with pytest.raises(ProfileError):
-        Profiler(send=lambda body, key: {}).rate_words("...", [], "the-key")
+        Profiler(send=lambda body, model: {}).rate_words("...", [], KEYED)
 
 
 def test_an_assessment_gives_each_question_with_its_answer_in_words() -> None:
@@ -313,133 +316,58 @@ def test_a_word_counts_as_wrong_only_as_far_as_its_sentence_was_found_wrong() ->
     assert in_a_sentence_found_wrong == ratings
 
 
-# a model on this machine
+# a model at an address of the learner's own
+
+LOCAL = Model("local/clef", "http://127.0.0.1:10000/v1")
 
 
-class Sent:
-    """Stands in for both places a request can go, and notes what went where."""
+def test_a_model_at_an_address_is_asked_there_without_an_openrouter_key() -> None:
+    sent: list[Model] = []
 
-    def __init__(self) -> None:
-        self.to_openrouter: list[tuple[dict[str, Any], str]] = []
-        self.to_local: list[dict[str, Any]] = []
-        self.local_is_down = False
-
-    def openrouter(self, body: dict[str, Any], api_key: str) -> dict[str, Any]:
-        self.to_openrouter.append((body, api_key))
-        return response()
-
-    def local(self, body: dict[str, Any], _api_key: str) -> dict[str, Any]:
-        if self.local_is_down:
-            raise ProfileError("could not reach the local model: refused")
-        self.to_local.append(body)
-        # as the local server answers: no id and no cost
+    def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
+        sent.append(model)
+        # as a server of one's own may answer: no id and no cost
         return {
             "model": "local/clef",
             "answers": response()["answers"],
             "usage": {"input_tokens": 292, "output_tokens": 0},
         }
 
+    profile = Profiler("some/model", send).profile("Er ist gut.", LOCAL)
 
-def profiler_with_local(sent: Sent, found: str | None = "local/clef") -> Profiler:
-    local = LocalModel(probe=lambda _endpoint: found, send=sent.local)
-    local.look()
-    return Profiler("some/model", sent.openrouter, local)
-
-
-def test_a_local_model_is_asked_instead_of_openrouter_and_needs_no_key() -> None:
-    sent = Sent()
-
-    profile = profiler_with_local(sent).profile("Er ist gut.", "")
-
-    assert sent.to_local == [
-        {"state": {"sentence": "Er ist gut."}, "questions": QUESTIONS}
-    ]
-    assert sent.to_openrouter == []
-    assert (profile.local, profile.model, profile.cost) == (True, "local/clef", None)
+    assert sent == [LOCAL]
+    assert (profile.model, profile.cost) == ("local/clef", None)
     assert profile.answers["grammar_errors"].choice == "one"
 
 
-def test_openrouter_is_asked_while_no_local_model_is_found() -> None:
-    sent = Sent()
-    profiler = profiler_with_local(sent, found=None)
-
-    profile = profiler.profile("Er ist gut.", "the-key")
-
-    assert profiler.local_model() is None
-    assert sent.to_local == []
-    assert [key for _, key in sent.to_openrouter] == ["the-key"]
-    assert profile.local is False
+def test_a_model_on_openrouter_is_not_asked_without_a_key() -> None:
+    with pytest.raises(ProfileError, match="OpenRouter key is needed"):
+        Profiler(send=lambda body, model: response()).profile("Er ist gut.", Model())
 
 
-def test_openrouter_is_asked_when_the_local_model_has_gone_since_it_was_found() -> None:
-    sent = Sent()
-    profiler = profiler_with_local(sent)
-    sent.local_is_down = True
-
-    profile = profiler.profile("Er ist gut.", "the-key")
-
-    assert sent.to_openrouter[0][0]["model"] == "some/model"
-    assert profile.local is False
-    # and it is not tried again until it is found again
-    assert profiler.local_model() is None
-
-
-def test_a_profile_fails_when_the_local_model_has_gone_and_there_is_no_key() -> None:
-    sent = Sent()
-    profiler = profiler_with_local(sent)
-    sent.local_is_down = True
-
-    with pytest.raises(ProfileError, match="could not reach the local model"):
-        profiler.profile("Er ist gut.", "")
-
-
-def test_a_local_model_is_told_apart_by_looking_again() -> None:
-    found: list[str | None] = [None]
-    changes: list[str | None] = []
-    local = LocalModel(probe=lambda _endpoint: found[0], on_change=changes.append)
-
-    seen = [local.look()]
-    for name in ["local/clef", "local/clef", None]:
-        found[0] = name
-        seen.append(local.look())
-
-    assert seen == [None, "local/clef", "local/clef", None]
-    # told only when it comes or goes
-    assert changes == ["local/clef", None]
-
-
-def test_requests_to_a_local_model_are_sent_one_after_another() -> None:
+def test_requests_to_a_model_at_an_address_are_sent_one_after_another() -> None:
     sending = 0
     most_at_once = 0
 
-    def send(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
         nonlocal sending, most_at_once
         sending += 1
         most_at_once = max(most_at_once, sending)
         time.sleep(0.02)
         sending -= 1
-        return {}
+        return response()
 
-    local = LocalModel(probe=lambda endpoint: "a-model", send=send)
-    threads = [threading.Thread(target=local.send, args=({},)) for _ in range(5)]
+    profiler = Profiler(send=send)
+    threads = [
+        threading.Thread(target=profiler.profile, args=("Er ist gut.", LOCAL))
+        for _ in range(5)
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join()
 
     assert most_at_once == 1
-
-
-def test_a_local_model_is_looked_for_next_to_where_it_is_asked() -> None:
-    asked: list[str] = []
-
-    def probe(endpoint: str) -> str | None:
-        asked.append(endpoint)
-        return None
-
-    LocalModel("http://127.0.0.1:10000/clef/v1/systemone", probe=probe).look()
-
-    assert asked == ["http://127.0.0.1:10000/clef/v1/systemone"]
 
 
 def test_the_questions_offer_several_one_or_no_errors_and_a_clarity_scale() -> None:
@@ -499,7 +427,7 @@ def test_a_response_that_comes_in_pieces_within_its_time_is_read_whole(
 def test_the_model_is_told_the_language_being_studied_once_it_is_known() -> None:
     sent: list[dict[str, Any]] = []
 
-    def send(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
         sent.append(body)
         return {"answers": {"polite": {"type": "choice", "choice": "yes"}}}
 
@@ -512,9 +440,9 @@ def test_the_model_is_told_the_language_being_studied_once_it_is_known() -> None
     }
     profiler = Profiler(send=send)
 
-    profiler.profile("Wie geht es?", "the-key", questions=questions)
+    profiler.profile("Wie geht es?", KEYED, questions=questions)
     profiler.language = "German"
-    profiler.profile("Wie geht es?", "the-key", questions=questions)
+    profiler.profile("Wie geht es?", KEYED, questions=questions)
 
     assert [body["state"] for body in sent] == [
         {"sentence": "Wie geht es?"},

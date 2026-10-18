@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { type ModelChoice, onOpenRouter, readModelChoice } from "./models";
 import { defaultQuestions, isQuestion, type ProfileQuestion, upToDateQuestions } from "./questions";
 import { checkerFetch } from "./session";
 import type { WordLists } from "./sets";
@@ -24,13 +25,15 @@ export interface Settings {
     translateInto: string;
     /** The set of words `{{words}}` stands for, by its id, for each language. Without one it is every word. */
     activeSets: Record<string, string>;
-    model: string;
-    /** The model that translates what is selected. Left empty, it is the one of the chat. */
-    translationModel: string;
+    model: ModelChoice;
+    /** The model that translates what is selected. Naming none, it is the one of the chat. */
+    translationModel: ModelChoice;
+    /** The model that reasons before it answers, for what needs thinking over. Naming none, it is the one of the chat. */
+    reasoningModel: ModelChoice;
     contexts: ChatContext[];
     /** The context new chats start with. */
     defaultContextId: string;
-    speechModel: string;
+    speechModel: ModelChoice;
     speechVoice: string;
     /**
      * What the speech model is told about how to read, such as the language
@@ -38,7 +41,7 @@ export interface Settings {
      */
     speechDirection: string;
     /** The model that profiles each sentence typed in the chat. */
-    profileModel: string;
+    profileModel: ModelChoice;
     /** What the model is asked about each sentence. */
     questions: ProfileQuestion[];
     /** Whether Enter sends the message and Shift+Enter starts a new line, rather than the other way round. */
@@ -56,11 +59,11 @@ export interface Settings {
     /** How large the app is written. */
     textSize: keyof typeof TEXT_SIZES;
     /** The model that makes the icon of a topic, and the pictures of exercises. */
-    imageModel: string;
-    /** The model that looks at the pictures of exercises, or blank for the chat model. */
-    visionModel: string;
+    imageModel: ModelChoice;
+    /** The model that looks at the pictures of exercises; naming none, it is the chat model. */
+    visionModel: ModelChoice;
     /** The model that embeds the words of the vocabulary and the topics, to find the words of a topic. */
-    embeddingModel: string;
+    embeddingModel: ModelChoice;
     /** Whether the exercises bring all the topics chosen together, rather than one of them drawn for the session. */
     exerciseMixTopics: boolean;
     /** The words the exercises are given, for each language: "none", "all" of the vocabulary, or a set by its id. */
@@ -174,8 +177,9 @@ export function defaultSettings(): Settings {
         level: "B1",
         translateInto: "English",
         activeSets: {},
-        model: "openrouter/auto",
-        translationModel: "",
+        model: onOpenRouter("openrouter/auto"),
+        translationModel: onOpenRouter(""),
+        reasoningModel: onOpenRouter(""),
         contexts: [
             {
                 id: "tutor",
@@ -192,11 +196,11 @@ export function defaultSettings(): Settings {
             },
         ],
         defaultContextId: "tutor",
-        speechModel: "google/gemini-3.8-flash-tts",
+        speechModel: onOpenRouter("google/gemini-3.8-flash-tts"),
         speechVoice: "Kore",
         speechDirection:
             `${SPEAK_LANGUAGE} Read clearly and a little slowly, for a learner at level ${LEVEL_PLACEHOLDER}.`,
-        profileModel: "typesafe/jev-1.13",
+        profileModel: onOpenRouter("typesafe/jev-1.13"),
         questions: defaultQuestions(),
         enterSends: true,
         rateWords: true,
@@ -205,9 +209,9 @@ export function defaultSettings(): Settings {
         theme: "system",
         accent: "blue",
         textSize: "normal",
-        imageModel: "google/gemini-3.1-flash-lite-image",
-        visionModel: "",
-        embeddingModel: "baai/bge-m3",
+        imageModel: onOpenRouter("google/gemini-3.1-flash-lite-image"),
+        visionModel: onOpenRouter(""),
+        embeddingModel: onOpenRouter("baai/bge-m3"),
         exerciseMixTopics: false,
         exerciseVocabulary: {},
         exerciseTopicWords: true,
@@ -254,16 +258,15 @@ export function normalizeSettings(stored: unknown): Settings {
         ? candidate.defaultContextId!
         : contexts[0].id;
     // settings saved before a field existed, or left blank where a value is needed, get the default
-    const text = (
-        key:
-            | "model"
-            | "speechModel"
-            | "speechVoice"
-            | "profileModel"
-            | "translateInto"
-            | "imageModel"
-            | "embeddingModel",
-    ) => typeof candidate[key] === "string" && candidate[key].trim() ? candidate[key] : defaults[key];
+    const text = (key: "speechVoice" | "translateInto") =>
+        typeof candidate[key] === "string" && candidate[key].trim() ? candidate[key] : defaults[key];
+    // one that must name a model, which gets the usual one if it names none
+    const model = (
+        key: "model" | "speechModel" | "profileModel" | "imageModel" | "embeddingModel",
+    ) => {
+        const chosen = readModelChoice(candidate[key], defaults[key]);
+        return chosen.model ? chosen : defaults[key];
+    };
     return {
         apiKey: typeof candidate.apiKey === "string" ? candidate.apiKey : defaults.apiKey,
         language: LANGUAGES.find((language) => language === candidate.language) ?? defaults.language,
@@ -273,16 +276,16 @@ export function normalizeSettings(stored: unknown): Settings {
         activeSets: typeof candidate.activeSets === "object" && candidate.activeSets !== null
             ? candidate.activeSets
             : defaults.activeSets,
-        model: text("model"),
-        translationModel: typeof candidate.translationModel === "string"
-            ? candidate.translationModel
-            : defaults.translationModel,
+        model: model("model"),
+        // naming none on purpose, for the chat model
+        translationModel: readModelChoice(candidate.translationModel, defaults.translationModel),
+        reasoningModel: readModelChoice(candidate.reasoningModel, defaults.reasoningModel),
         contexts,
         defaultContextId,
-        speechModel: text("speechModel"),
+        speechModel: model("speechModel"),
         speechVoice: text("speechVoice"),
         speechDirection: speechDirectionOf(candidate, defaults.speechDirection),
-        profileModel: text("profileModel"),
+        profileModel: model("profileModel"),
         // every question may have been deleted on purpose, so an empty list is kept
         questions: Array.isArray(candidate.questions)
             ? upToDateQuestions(candidate.questions.filter(isQuestion))
@@ -294,10 +297,10 @@ export function normalizeSettings(stored: unknown): Settings {
         theme: Object.hasOwn(THEMES, candidate.theme ?? "") ? candidate.theme! : defaults.theme,
         accent: Object.hasOwn(ACCENTS, candidate.accent ?? "") ? candidate.accent! : defaults.accent,
         textSize: Object.hasOwn(TEXT_SIZES, candidate.textSize ?? "") ? candidate.textSize! : defaults.textSize,
-        imageModel: text("imageModel"),
-        // blank on purpose, for the chat model
-        visionModel: typeof candidate.visionModel === "string" ? candidate.visionModel.trim() : defaults.visionModel,
-        embeddingModel: text("embeddingModel"),
+        imageModel: model("imageModel"),
+        // naming none on purpose, for the chat model
+        visionModel: readModelChoice(candidate.visionModel, defaults.visionModel),
+        embeddingModel: model("embeddingModel"),
         exerciseMixTopics: typeof candidate.exerciseMixTopics === "boolean"
             ? candidate.exerciseMixTopics
             : defaults.exerciseMixTopics,

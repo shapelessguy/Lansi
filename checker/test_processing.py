@@ -10,7 +10,7 @@ import pytest
 from intake import Intake, Word
 from processing import MAX_TRIES, Processor, words_in, words_of
 from storage import UserStore
-from test_intake import KEY, MODEL, FakeChat, FakeProfiler, savable
+from test_intake import CHAT, DECIDER, FakeChat, FakeProfiler, savable
 from vocabulary import Form, Vocabularies
 
 
@@ -59,7 +59,7 @@ def processor(
     processor = Processor(
         store, Intake(vocabularies, profiler, chat), now=clock, settle_secs=5
     )
-    processor.configure(KEY, MODEL, None)
+    processor.configure(CHAT, DECIDER)
     return processor
 
 
@@ -209,7 +209,7 @@ def test_a_message_changed_while_it_was_processed_is_processed_again(
     processor = Processor(
         store, Intake(vocabularies, profiler, FakeChat()), now=clock, settle_secs=5
     )
-    processor.configure(KEY, MODEL, None)
+    processor.configure(CHAT, DECIDER)
     keep_chat(store, "Hund")
     clock.now += 6
 

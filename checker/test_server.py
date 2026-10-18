@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 from unittest.mock import ANY
@@ -20,6 +21,7 @@ from evaluating import Evaluations
 from exercising import Practice, Runner
 from intake import Intake
 from live import LiveChecker
+from models import Model
 from profiling import Answer, Profile, Profiler, Questions, WordRating
 from sentences import Sentence
 from server import Account, Accounts, describe, in_background, make_server
@@ -75,21 +77,20 @@ class KeyEchoingProfiler(Profiler):
     Jev, and says which model it was asked for."""
 
     def __init__(self) -> None:
-        super().__init__()
+        super().__init__("usual")
 
     def profile(
         self,
         sentence: str,
-        api_key: str,
-        model: str | None = None,
+        model: Model,
         questions: Questions | None = None,
     ) -> Profile:
-        answers = {name: Answer("choice", choice=api_key) for name in questions or {}}
+        answers = {name: Answer("choice", choice=model.key) for name in questions or {}}
         return Profile(
             answers,
             cost=0.002,
             id=f"request-{sentence}-{'-'.join(questions or {})}",
-            model=model or "usual",
+            model=model.name,
             input_tokens=50,
         )
 
@@ -97,8 +98,7 @@ class KeyEchoingProfiler(Profiler):
         self,
         sentence: str,
         assessment: list[dict[str, str]],
-        api_key: str,
-        model: str | None = None,
+        model: Model,
     ) -> tuple[list[WordRating], Profile]:
         return [WordRating("Wie", 0, 3, 0.25)], Profile({}, id="rating")
 
@@ -189,7 +189,6 @@ def test_sentences_request_returns_and_prints_the_checked_sentences(
     assert status == 200
     assert isinstance(reply, dict)
     assert (reply["usage"], reply["pending"]) == ([], False)
-    assert reply["local_model"] is None
     assert reply["sentences"] == [
         {
             "text": "Schön!",
@@ -1489,3 +1488,89 @@ def test_an_evaluation_of_a_level_with_no_exam_is_refused(with_users: str) -> No
 
     assert status == 400
     assert "no exam of German at C2" in json.loads(said)["error"]
+
+
+# a server of the learner's own, which the chat passes requests on to
+
+
+class OwnServer(BaseHTTPRequestHandler):
+    """Answers as a server that takes OpenAI's requests does, and keeps
+    what it was sent."""
+
+    received: list[tuple[str, str, object]] = []
+
+    def do_GET(self) -> None:
+        self.received.append((self.path, self.headers.get("Authorization", ""), None))
+        self._send("application/json", b'{"data": [{"id": "local/clef"}]}')
+
+    def do_POST(self) -> None:
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        self.received.append((self.path, self.headers.get("Authorization", ""), body))
+        self._send("text/event-stream", b'data: {"choices": []}\n\ndata: [DONE]\n\n')
+
+    def _send(self, kind: str, data: bytes) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+@pytest.fixture
+def own_server() -> Iterator[str]:
+    OwnServer.received = []
+    server = HTTPServer(("127.0.0.1", 0), OwnServer)
+    thread = threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+    )
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}/v1"
+    server.shutdown()
+    server.server_close()
+
+
+def relay(url: str, body: object) -> tuple[int, str, bytes]:
+    request = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status, response.headers["Content-Type"], response.read()
+    except urllib.error.HTTPError as error:
+        return error.code, error.headers["Content-Type"], error.read()
+
+
+def test_the_models_a_server_of_ones_own_has_are_listed(
+    url: str, own_server: str
+) -> None:
+    status, _, listed = relay(f"{url}/models", {"url": own_server, "key": "own-key"})
+
+    assert (status, json.loads(listed)) == (200, {"models": ["local/clef"]})
+    assert OwnServer.received == [("/v1/models", "Bearer own-key", None)]
+
+
+def test_a_chat_request_is_passed_on_to_the_model_at_its_address(
+    url: str, own_server: str
+) -> None:
+    model = {"model": "local/clef", "url": own_server}
+
+    status, kind, reply = relay(
+        f"{url}/models/chat", {"model": model, "messages": [], "stream": True}
+    )
+
+    assert (status, kind) == (200, "text/event-stream")
+    assert reply.endswith(b"data: [DONE]\n\n")
+    assert OwnServer.received == [
+        (
+            "/v1/chat/completions",
+            "",
+            {"messages": [], "stream": True, "model": "local/clef"},
+        )
+    ]
+
+
+def test_a_model_on_openrouter_is_not_passed_on(url: str) -> None:
+    status, _, _ = relay(f"{url}/models/chat", {"model": "some/model"})
+
+    assert status == 400

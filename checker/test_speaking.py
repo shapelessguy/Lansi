@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from models import Model
 from speaking import (
     BookSentence,
     Speaker,
@@ -38,8 +39,8 @@ class FakeVoice:
         self.bodies: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
-    def __call__(self, body: dict[str, Any], api_key: str) -> tuple[bytes, str, str]:
-        assert api_key == KEY
+    def __call__(self, body: dict[str, Any], model: Model) -> tuple[bytes, str, str]:
+        assert model.key == KEY
         with self._lock:
             self.bodies.append(body)
             number = len(self.bodies)
@@ -96,7 +97,9 @@ def test_the_audio_of_each_sentence_is_made_once_and_kept(store: UserStore) -> N
     wanted = sentences(1, 0, 1, 24)
 
     reading = speaker.start(BOOK, wanted)
-    made = speaker.make(reading, BOOK, wanted, KEY, "some/tts", "Kore", "Slowly.")
+    made = speaker.make(
+        reading, BOOK, wanted, Model("some/tts", key=KEY), "Kore", "Slowly."
+    )
 
     assert [(one["status"], one["generation"]) for one in made] == [
         ("made", "gen-1"),
@@ -123,7 +126,9 @@ def test_audio_is_not_taken_as_kept_for_another_voice_or_another_wording(
 ) -> None:
     speaker = Speaker(store, FakeVoice(), workers=1)
     wanted = sentences(2, 0, 2, 5)
-    speaker.make(speaker.start(BOOK, wanted), BOOK, wanted, KEY, "some/tts", "Kore")
+    speaker.make(
+        speaker.start(BOOK, wanted), BOOK, wanted, Model("some/tts", key=KEY), "Kore"
+    )
     reworded = [BookSentence("2.0", 2, 0, 6, "Schluss.")]
 
     assert speaker.kept(BOOK, wanted, "some/tts", "Kore") == [True]
@@ -142,7 +147,7 @@ def test_the_sentences_from_where_the_listener_is_are_made_first(
 
     # the listener has skipped to the fourth of the five sentences
     speaker.listen_at(reading, 3)
-    speaker.make(reading, BOOK, wanted, KEY, "some/tts", "Kore")
+    speaker.make(reading, BOOK, wanted, Model("some/tts", key=KEY), "Kore")
 
     assert voice.read() == [
         "Danach?",
@@ -159,7 +164,9 @@ def test_a_sentence_that_cannot_be_read_fails_by_itself_with_the_reason(
     speaker = Speaker(store, FakeVoice(fails_on="Katze"), workers=1)
     wanted = sentences(1, 0, 1, 24)
 
-    made = speaker.make(speaker.start(BOOK, wanted), BOOK, wanted, KEY, "m", "v")
+    made = speaker.make(
+        speaker.start(BOOK, wanted), BOOK, wanted, Model("m", key=KEY), "v"
+    )
 
     assert [(one["status"], one["reason"]) for one in made] == [
         ("made", ""),
@@ -176,7 +183,7 @@ def test_a_reading_that_is_stopped_leaves_the_rest_unread(store: UserStore) -> N
     reading = speaker.start(BOOK, wanted)
 
     speaker.stop(reading)
-    made = speaker.make(reading, BOOK, wanted, KEY, "m", "v")
+    made = speaker.make(reading, BOOK, wanted, Model("m", key=KEY), "v")
 
     assert [one["status"] for one in made] == ["stopped", "stopped"]
     assert voice.bodies == []
@@ -193,7 +200,7 @@ def test_audio_that_is_being_made_is_waited_for(store: UserStore) -> None:
         speaker.audio(BOOK, "2.0", wait_secs=0.01)
 
     threading.Timer(
-        0.05, lambda: speaker.make(reading, BOOK, wanted, KEY, "m", "v")
+        0.05, lambda: speaker.make(reading, BOOK, wanted, Model("m", key=KEY), "v")
     ).start()
 
     assert speaker.audio(BOOK, "2.0", wait_secs=5)[1] == "audio/wav"
@@ -224,8 +231,8 @@ def test_a_sentence_two_readings_want_is_read_once(store: UserStore) -> None:
     wanted = sentences(2, 0, 2, 5)
     first, second = speaker.start(BOOK, wanted), speaker.start(BOOK, wanted)
 
-    speaker.make(first, BOOK, wanted, KEY, "m", "v")
-    again = speaker.make(second, BOOK, wanted, KEY, "m", "v")
+    speaker.make(first, BOOK, wanted, Model("m", key=KEY), "v")
+    again = speaker.make(second, BOOK, wanted, Model("m", key=KEY), "v")
 
     assert voice.read() == ["Ende."]
     assert [one["status"] for one in again] == ["made"]

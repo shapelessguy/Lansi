@@ -367,11 +367,7 @@ export function WritingChecks({ language, children }: { language: string; childr
                     if (stopped || watch.sent !== current) {
                         return;
                     }
-                    watch.check = {
-                        text: current.text,
-                        sentences: reply.sentences,
-                        localModel: reply.local_model ?? null,
-                    };
+                    watch.check = { text: current.text, sentences: reply.sentences };
                     watch.owner?.onCheck({ check: watch.check, lastCaret: watch.lastCaret });
                     redraw();
                 },

@@ -20,6 +20,7 @@ import time
 from collections.abc import Callable
 
 from intake import Intake, Outcome, Word
+from models import Model
 from sentences import split_sentences
 from storage import Unprocessed, UserStore
 from vocabulary import fold
@@ -83,22 +84,18 @@ class Processor:
         self._now = now
         self._settle_secs = settle_secs
         self._on_processed = on_processed
-        self._api_key = ""
-        self._model: str | None = None
-        self._decision_model: str | None = None
+        self._model = Model()
+        self._decision_model = Model()
         # how often each thing that could not be processed whole was tried
         self._tries: dict[tuple[str, str, int, float], int] = {}
         self._lock = threading.Lock()
 
-    def configure(
-        self, api_key: str, model: str | None, decision_model: str | None
-    ) -> None:
-        """Say which key and models new words are looked into with. A key
-        that is empty leaves the one there is in place."""
+    def configure(self, model: Model, decision_model: Model) -> None:
+        """Say which models new words are looked into with. One on
+        OpenRouter without a key keeps the key there was."""
         with self._lock:
-            self._api_key = api_key or self._api_key
-            self._model = model
-            self._decision_model = decision_model
+            self._model = model.or_keyed(self._model.key)
+            self._decision_model = decision_model.or_keyed(self._decision_model.key)
 
     def watch(self, every_secs: float = LOOK_EVERY_SECS) -> None:
         """Look again and again, on a thread of its own."""
@@ -113,28 +110,27 @@ class Processor:
 
     def look(self) -> int:
         """Process what has been left alone long enough and is not processed
-        yet, and return how many things were. Nothing is done without a key,
-        as a new word cannot be looked into without one."""
+        yet, and return how many things were. Nothing is done while a model
+        on OpenRouter has no key, as a new word cannot be looked into
+        without one."""
         with self._lock:
-            api_key, model = self._api_key, self._model
-            decision_model = self._decision_model
-        if not api_key:
+            model, decision_model = self._model, self._decision_model
+        if not (model.has_key and decision_model.has_key):
             return 0
         done = 0
         for item in self._store.unprocessed(self._now() - self._settle_secs):
-            done += self._process(item, api_key, model, decision_model)
+            done += self._process(item, model, decision_model)
         return done
 
     def _process(
         self,
         item: Unprocessed,
-        api_key: str,
-        model: str | None,
-        decision_model: str | None,
+        model: Model,
+        decision_model: Model,
     ) -> bool:
         language = item.language or self._intake.language
         outcomes, _ = self._intake.take(
-            words_of(item.content), api_key, model, decision_model, language=language
+            words_of(item.content), model, decision_model, language=language
         )
         key = (item.kind, item.source_id, item.position, item.changed_at)
         if any(outcome.status == "failed" for outcome in outcomes):

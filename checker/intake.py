@@ -35,11 +35,11 @@ from categories import (
     shape,
     writes_nouns_with_capitals,
 )
+from models import Model
 from profiling import Profile, ProfileError, Profiler, Questions, post
 from prompts import PROMPTS
 from vocabulary import Entry, Form, Vocabularies, Vocabulary
 
-CHAT_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 # How long a language model is given to answer, all in all. Writing out every
 # form of a verb takes a while, but a model that is still at it after this
 # long holds up every word that waits behind it.
@@ -132,16 +132,33 @@ class Outcome:
     reason: str = ""
 
 
-# Sends a chat request body with an API key and returns the decoded response.
-Chat = Callable[[dict[str, Any], str], dict[str, Any]]
+# Sends a chat request body to a model and returns the decoded response.
+Chat = Callable[[dict[str, Any], Model], dict[str, Any]]
+# What a model is told so that it answers without reasoning first, as the
+# chat and text models do unless a request says otherwise.
+NO_REASONING = {"enabled": False}
 
 
-def send_chat(body: dict[str, Any], api_key: str) -> dict[str, Any]:
+def send_chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
+    """Send a chat request to `model`. One that does not say how the model
+    is to reason has it answer without reasoning, and a model that cannot
+    but reason is asked again as the request was. Raises ProfileError."""
+    if "reasoning" in body:
+        return _post_chat(body, model)
+    try:
+        return _post_chat({**body, "reasoning": NO_REASONING}, model)
+    except ProfileError as error:
+        if "(400)" not in str(error):
+            raise
+        return _post_chat(body, model)
+
+
+def _post_chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
     return post(
-        CHAT_ENDPOINT,
+        model.endpoint("chat/completions"),
         body,
-        {"Authorization": f"Bearer {api_key}"},
-        "OpenRouter",
+        model.headers(),
+        model.where,
         CHAT_TIMEOUT_SECS,
         CHAT_WITHIN_SECS,
     )
@@ -211,9 +228,8 @@ class Intake:
     def take(
         self,
         words: list[Word],
-        api_key: str = "",
-        model: str | None = None,
-        decision_model: str | None = None,
+        model: Model = Model(),
+        decision_model: Model = Model(),
         on_outcome: Callable[[Outcome], None] | None = None,
         language: str | None = None,
     ) -> tuple[list[Outcome], list[Profile]]:
@@ -236,12 +252,12 @@ class Intake:
         def take(word: Word) -> Outcome:
             outcome = Outcome(word.word, word.sentence, "known")
             try:
-                bound._take(word, outcome, api_key, model, decision_model, used)
+                bound._take(word, outcome, model, decision_model, used)
             except ProfileError as error:
                 # a model could not be asked, so there is nobody to ask again
                 outcome.status, outcome.reason = "failed", str(error)
             except IntakeError as error:
-                bound._fall_back(word, outcome, str(error), api_key, model, used)
+                bound._fall_back(word, outcome, str(error), model, used)
             # A word in a sentence may be another word in another sentence,
             # and one that failed is to be tried again.
             if not outcome.sentence and outcome.status != "failed":
@@ -264,9 +280,8 @@ class Intake:
         self,
         word: Word,
         outcome: Outcome,
-        api_key: str,
-        model: str | None,
-        decision_model: str | None,
+        model: Model,
+        decision_model: Model,
         used: list[Profile],
     ) -> None:
         """Take one word in, and fill in what became of it."""
@@ -275,22 +290,21 @@ class Intake:
         if discarded is not None:
             outcome.status, outcome.reason = "rejected", discarded
             return
-        name: str | None = self._classify(word, api_key, decision_model, used)
+        name: str | None = self._classify(word, decision_model, used)
         tried: set[str] = set()
         while name:
             if name in tried:
                 raise IntakeError(f"it was found to be a {name} and then not to be")
             tried.add(name)
             outcome.category = name
-            name = self._take_as(name, word, outcome, api_key, model, used)
+            name = self._take_as(name, word, outcome, model, used)
 
     def _take_as(
         self,
         name: str,
         word: Word,
         outcome: Outcome,
-        api_key: str,
-        model: str | None,
+        model: Model,
         used: list[Profile],
     ) -> str | None:
         """Take a word in as one of the category called `name`, and fill in
@@ -312,13 +326,13 @@ class Intake:
             outcome.status, outcome.reason = "rejected", rejection.reason
             return None
 
-        model = model or self._model
-        if not api_key or not model:
+        model = model.or_named(self._model)
+        problem = model.problem()
+        if problem:
             raise ProfileError(
-                f"a new {name} needs a language model to judge it, and there"
-                " is no OpenRouter key or no model was named"
+                f"a new {name} needs a language model to judge it, and {problem}"
             )
-        verdict, said = self._judge(word, category, api_key, model, used)
+        verdict, said = self._judge(word, category, model, used)
         if verdict == "elsewhere":
             # What a word is depends on the sentence it is in, so this is
             # remembered only for a word that came on its own.
@@ -330,7 +344,7 @@ class Intake:
             self.vocabulary.discard(word.word, said)
             outcome.status, outcome.reason = "rejected", said
             return None
-        self._store(said, verdict, category, word, outcome, api_key, model, used)
+        self._store(said, verdict, category, word, outcome, model, used)
         return None
 
     def _store(
@@ -340,8 +354,7 @@ class Intake:
         category: Category,
         word: Word,
         outcome: Outcome,
-        api_key: str,
-        model: str,
+        model: Model,
         used: list[Profile],
     ) -> None:
         """Put a word that was judged a form of `lemma`, or a new word with
@@ -365,7 +378,7 @@ class Intake:
                 raise IntakeError(
                     f"it was judged a form of {lemma}, which is not a stored {name}"
                 )
-            details, forms = self._describe(lemma, category, api_key, model, used)
+            details, forms = self._describe(lemma, category, model, used)
             if not any(form.form.lower() == word.word.lower() for form in forms):
                 forms.append(Form(word.word))
             outcome.entry, _ = self.vocabulary.save(name, lemma, details, forms)
@@ -376,8 +389,7 @@ class Intake:
         word: Word,
         outcome: Outcome,
         problem: str,
-        api_key: str,
-        model: str | None,
+        model: Model,
         used: list[Profile],
     ) -> None:
         """Have the language model look at a word that could not be placed,
@@ -385,7 +397,7 @@ class Intake:
         saved. What became of the word is filled in."""
         outcome.entry = None
         try:
-            self._rescue(word, outcome, problem, api_key, model or self._model, used)
+            self._rescue(word, outcome, problem, model.or_named(self._model), used)
         except (IntakeError, ProfileError) as error:
             outcome.status = "failed"
             outcome.reason = f"{problem}; and asked again: {error}"
@@ -395,8 +407,7 @@ class Intake:
         word: Word,
         outcome: Outcome,
         problem: str,
-        api_key: str,
-        model: str,
+        model: Model,
         used: list[Profile],
     ) -> None:
         given = {"word": word.word, "category": outcome.category, "problem": problem}
@@ -417,7 +428,6 @@ class Intake:
             given,
             "rescue",
             RESCUE_SCHEMA,
-            api_key,
             model,
             used,
         )
@@ -433,20 +443,17 @@ class Intake:
         if category is None or not 0 < len(lemma) <= MAX_WORD_LENGTH:
             raise IntakeError("no category or dictionary form was given for it")
         outcome.category = category.name
-        self._store(lemma, "new", category, word, outcome, api_key, model, used)
+        self._store(lemma, "new", category, word, outcome, model, used)
         # kept, to show where the first answers about a word go wrong
         outcome.reason = f"saved when asked again, after: {problem}"
 
-    def _classify(
-        self, word: Word, api_key: str, model: str | None, used: list[Profile]
-    ) -> str:
+    def _classify(self, word: Word, model: Model, used: list[Profile]) -> str:
         state = {"word": word.word}
         if word.sentence:
             state["sentence"] = word.sentence
         questions = category_questions(self.language)
-        profile = self._profiler.ask(state, questions, api_key, model)
-        if not profile.local:
-            used.append(profile)
+        profile = self._profiler.ask(state, questions, model)
+        used.append(profile)
         likely = {name: answer.yes or 0.0 for name, answer in profile.answers.items()}
         return max(self._possible(word), key=likely.__getitem__)
 
@@ -468,8 +475,7 @@ class Intake:
         self,
         word: Word,
         category: Category,
-        api_key: str,
-        model: str,
+        model: Model,
         used: list[Profile],
     ) -> tuple[str, str]:
         """Whether the word is a "form" of a stored word, a "new" one, one
@@ -496,7 +502,6 @@ class Intake:
             given,
             "verdict",
             VERDICT_SCHEMA,
-            api_key,
             model,
             used,
         )
@@ -516,8 +521,7 @@ class Intake:
         self,
         lemma: str,
         category: Category,
-        api_key: str,
-        model: str,
+        model: Model,
         used: list[Profile],
     ) -> tuple[dict[str, Any], list[Form]]:
         reply = self._ask(
@@ -530,7 +534,6 @@ class Intake:
             {"lemma": lemma},
             category.name,
             category.schema,
-            api_key,
             model,
             used,
         )
@@ -542,13 +545,12 @@ class Intake:
         given: dict[str, Any],
         schema_name: str,
         schema: Schema,
-        api_key: str,
-        model: str,
+        model: Model,
         used: list[Profile],
     ) -> dict[str, Any]:
         """Ask the language model for an answer of the shape of `schema`."""
         body = {
-            "model": model,
+            "model": model.name,
             "messages": [
                 {"role": "system", "content": instructions},
                 {"role": "user", "content": json.dumps(given, ensure_ascii=False)},
@@ -561,12 +563,12 @@ class Intake:
             "usage": {"include": True},
         }
         try:
-            response = self._chat(body, api_key)
+            response = self._chat(body, model)
         except ProfileError:
             # It may have been too slow or out of reach for once, so it is
             # asked a second time before the word is given up on.
-            response = self._chat(body, api_key)
-        used.append(read_usage(response, model))
+            response = self._chat(body, model)
+        used.append(read_usage(response, model.name))
         reply = read_reply(response)
         problem = mismatch(reply, schema)
         if problem:

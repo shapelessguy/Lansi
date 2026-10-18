@@ -6,9 +6,8 @@ questions about it.
 
 A decision model, such as Jev, is given a text and typed questions, and
 answers each with one of the options it was offered rather than with text of
-its own. One is called through OpenRouter's Decisions API, unless one that
-takes the same requests is running on this machine, which is then used
-instead: it answers sooner and costs nothing.
+its own. One is called through OpenRouter's Decisions API, or at the
+address of a server that takes the same requests, as models.py says.
 """
 
 from __future__ import annotations
@@ -24,15 +23,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
+from models import Model
+
 DEFAULT_MODEL = "typesafe/jev-1.13"
 TIMEOUT_SECS = 30
-# Where a decision model run on this machine takes its requests.
-LOCAL_ENDPOINT = "http://127.0.0.1:10000/clef/v1/systemone"
-# how often to look whether it is running
-LOCAL_POLL_SECS = 5.0
-# it is on this machine, so it either answers at once or is not there
-LOCAL_PROBE_TIMEOUT_SECS = 2
 
 # Questions by name. A "choice" question is answered with one of the named
 # options, and a "score" question with a place on the scale, counted from 0
@@ -116,8 +110,6 @@ class Profile:
     model: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
-    # Whether the model on this machine answered, which is not paid for.
-    local: bool = False
 
 
 @dataclass
@@ -136,8 +128,8 @@ class ProfileError(Exception):
     """A profile could not be made. The message says why."""
 
 
-# Sends a request body with an API key and returns the decoded response.
-Transport = Callable[[dict[str, Any], str], dict[str, Any]]
+# Sends a request body to a model and returns the decoded response.
+Transport = Callable[[dict[str, Any], Model], dict[str, Any]]
 
 
 def post(
@@ -186,8 +178,8 @@ def _read(response: Any, within: float | None, where: str) -> bytes:
     return b"".join(pieces)
 
 
-def send_to_openrouter(body: dict[str, Any], api_key: str) -> dict[str, Any]:
-    return post(ENDPOINT, body, {"Authorization": f"Bearer {api_key}"}, "OpenRouter")
+def send_decisions(body: dict[str, Any], model: Model) -> dict[str, Any]:
+    return post(model.endpoint("decisions"), body, model.headers(), model.where)
 
 
 def _error_message(error: urllib.error.HTTPError, where: str) -> str:
@@ -199,129 +191,40 @@ def _error_message(error: urllib.error.HTTPError, where: str) -> str:
     return f"{where} refused the request ({error.code}): {message}"
 
 
-def probe_models(endpoint: str) -> str | None:
-    """The name of the model a local server at `endpoint` has loaded, or None
-    if no such server answers. The models are listed next to the endpoint."""
-    url = endpoint.rsplit("/", 1)[0] + "/models"
-    try:
-        with urllib.request.urlopen(url, timeout=LOCAL_PROBE_TIMEOUT_SECS) as response:
-            models = json.load(response)["data"]
-        name = models[0]["id"]
-    except (OSError, ValueError, KeyError, IndexError, TypeError):
-        return None
-    return name if isinstance(name, str) and name else None
-
-
-class LocalModel:
-    """A decision model run on this machine, which may come and go.
-
-    Whether it is there is looked up every few seconds rather than before
-    each request, so that asking it, or passing it by, takes no extra time.
-    """
-
-    def __init__(
-        self,
-        endpoint: str = LOCAL_ENDPOINT,
-        probe: Callable[[str], str | None] = probe_models,
-        send: Transport | None = None,
-        on_change: Callable[[str | None], None] | None = None,
-    ) -> None:
-        self.endpoint = endpoint
-        self._probe = probe
-        self._send = send or self._post
-        self._on_change = on_change
-        # the name of the model that is loaded, or None while there is none
-        self._model: str | None = None
-        self._lock = threading.Lock()
-        # The model answers one request at a time, and keeps some of those
-        # that come in together waiting until all the others are done, long
-        # enough for them to time out. So they are sent one after another.
-        self._sending = threading.Lock()
-
-    @property
-    def model(self) -> str | None:
-        """The model that was there when last looked, if any."""
-        return self._model
-
-    def look(self) -> str | None:
-        """Look whether the model is there right now, and remember it."""
-        self._found(self._probe(self.endpoint))
-        return self._model
-
-    def watch(self, every_secs: float = LOCAL_POLL_SECS) -> None:
-        """Look now, and then again and again on a thread of its own."""
-        self.look()
-
-        def keep_looking() -> None:
-            # never set, so this only waits; a thread that sleeps would do too
-            pause = threading.Event()
-            while not pause.wait(every_secs):
-                self.look()
-
-        threading.Thread(target=keep_looking, name="local-model", daemon=True).start()
-
-    def send(self, body: dict[str, Any]) -> dict[str, Any]:
-        """Ask the model. Raises ProfileError, and takes the model as gone,
-        if it does not answer."""
-        try:
-            with self._sending:
-                return self._send(body, "")
-        except ProfileError:
-            self._found(None)
-            raise
-
-    def _post(self, body: dict[str, Any], _api_key: str) -> dict[str, Any]:
-        return post(self.endpoint, body, {}, "the local model")
-
-    def _found(self, model: str | None) -> None:
-        with self._lock:
-            changed = model != self._model
-            self._model = model
-        if changed and self._on_change:
-            self._on_change(model)
-
-
 class Profiler:
     def __init__(
-        self,
-        model: str = DEFAULT_MODEL,
-        send: Transport = send_to_openrouter,
-        local: LocalModel | None = None,
+        self, model: str = DEFAULT_MODEL, send: Transport = send_decisions
     ) -> None:
+        # the model asked when a request names none
         self._model = model
         self._send = send
-        self._local = local
         # The language being studied, by its English name, if it is known.
         # The model is told, so that it does not judge a sentence by the
         # rules of whatever other language it may be written in.
         self.language: str | None = None
+        # A server of the learner's own may answer one request at a time,
+        # and keep some of those that come in together waiting until all
+        # the others are done, long enough for them to time out. So those
+        # to each such address are sent one after another.
+        self._sending: dict[str, threading.Lock] = {}
+        self._lock = threading.Lock()
 
-    def local_model(self) -> str | None:
-        """The name of the model on this machine that questions go to at
-        present, or None if they go to OpenRouter."""
-        return self._local.model if self._local else None
+    def named(self, model: Model) -> Model:
+        """`model`, as the usual one if it names none."""
+        return model.or_named(self._model)
 
     def profile(
-        self,
-        sentence: str,
-        api_key: str,
-        model: str | None = None,
-        questions: Questions | None = None,
+        self, sentence: str, model: Model, questions: Questions | None = None
     ) -> Profile:
-        """Ask `questions` about `sentence`. They go to the model on this
-        machine if there is one, and else to `model` on OpenRouter, which
-        needs `api_key`. The usual questions and model are used where none
-        are given. Raises ProfileError."""
+        """Ask `questions` about `sentence` of `model`. The usual questions,
+        and the usual model where it names none, are used where none are
+        given. Raises ProfileError."""
         if questions is None:
             questions = QUESTIONS
-        return self._ask({"sentence": sentence}, questions, api_key, model)
+        return self._ask({"sentence": sentence}, questions, model)
 
     def rate_words(
-        self,
-        sentence: str,
-        assessment: list[dict[str, str]],
-        api_key: str,
-        model: str | None = None,
+        self, sentence: str, assessment: list[dict[str, str]], model: Model
     ) -> tuple[list[WordRating], Profile]:
         """Ask of every word of `sentence` whether it is right where it
         stands, in one request, and return how right each is with what the
@@ -336,7 +239,7 @@ class Profiler:
             for number, word in enumerate(words, start=1)
         }
         state = {"sentence": sentence, "assessment": assessment}
-        profile = self._ask(state, questions, api_key, model)
+        profile = self._ask(state, questions, model)
         ratings = [
             WordRating(
                 word.group(),
@@ -348,42 +251,31 @@ class Profiler:
         ]
         return ratings, profile
 
-    def ask(
-        self,
-        state: dict[str, Any],
-        questions: Questions,
-        api_key: str,
-        model: str | None = None,
-    ) -> Profile:
-        """Ask `questions` about whatever `state` holds, of the model on
-        this machine if there is one, and else of `model` on OpenRouter.
-        Raises ProfileError."""
-        return self._ask(state, questions, api_key, model)
+    def ask(self, state: dict[str, Any], questions: Questions, model: Model) -> Profile:
+        """Ask `questions` about whatever `state` holds of `model`. Raises
+        ProfileError."""
+        return self._ask(state, questions, model)
 
     def _ask(
-        self,
-        state: dict[str, Any],
-        questions: Questions,
-        api_key: str,
-        model: str | None,
+        self, state: dict[str, Any], questions: Questions, model: Model
     ) -> Profile:
+        model = self.named(model)
+        problem = model.problem()
+        if problem:
+            raise ProfileError(problem)
         if self.language and "language" not in state:
             state = {**state, "language": self.language}
-        body: dict[str, Any] = {"state": state, "questions": questions}
-        if self._local and self._local.model:
-            try:
-                profile = read_profile(self._local.send(body), questions)
-            except ProfileError:
-                # it has gone since it was last looked for
-                if not api_key:
-                    raise
-            else:
-                profile.local = True
-                return profile
-        if not api_key:
-            raise ProfileError("there is no local model and no OpenRouter key")
-        body["model"] = model or self._model
-        return read_profile(self._send(body, api_key), questions)
+        body: dict[str, Any] = {
+            "model": model.name,
+            "state": state,
+            "questions": questions,
+        }
+        if model.on_openrouter:
+            return read_profile(self._send(body, model), questions)
+        with self._lock:
+            sending = self._sending.setdefault(model.url, threading.Lock())
+        with sending:
+            return read_profile(self._send(body, model), questions)
 
 
 def has_words(sentence: str) -> bool:

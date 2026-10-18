@@ -10,13 +10,12 @@ from typing import Any
 
 import pytest
 import topics
+from models import Model
 from PIL import Image, ImageDraw
 from profiling import ProfileError
 from storage import UserStore
 from topics import (
-    EMBEDDINGS_ENDPOINT,
     ICON_SIZE,
-    IMAGES_ENDPOINT,
     Embeddings,
     as_picture,
     choose_words,
@@ -27,6 +26,8 @@ from topics import (
 )
 
 KEY = "sk-test"
+IMAGE_MODEL = Model("some/image-model", key=KEY)
+EMBEDDING_MODEL = Model("m", key=KEY)
 # Where each text is, as the fake embedding model sees it: the doctor's
 # words point one way, the football words another.
 VECTORS = {
@@ -68,10 +69,10 @@ class FakeOpenRouter:
         self.image = image
         self.asked: list[tuple[str, dict[str, Any]]] = []
 
-    def __call__(self, url: str, body: dict[str, Any], api_key: str) -> dict[str, Any]:
-        assert api_key == KEY
-        self.asked.append((url, body))
-        if url == IMAGES_ENDPOINT:
+    def __call__(self, path: str, body: dict[str, Any], model: Model) -> dict[str, Any]:
+        assert model.key == KEY
+        self.asked.append((path, body))
+        if path == "images":
             if not isinstance(self.image, bytes):
                 return {"data": []}
             encoded = base64.b64encode(self.image).decode()
@@ -79,7 +80,7 @@ class FakeOpenRouter:
                 "data": [{"b64_json": encoded, "media_type": "image/webp"}],
                 "usage": {"prompt_tokens": 20, "completion_tokens": 0, "cost": 0.004},
             }
-        assert url == EMBEDDINGS_ENDPOINT
+        assert path == "embeddings"
         # sent back the wrong way round, as only the index tells them apart
         data = [
             {"index": index, "embedding": VECTORS.get(text, [0.0, 0.0, 1.0])}
@@ -88,7 +89,7 @@ class FakeOpenRouter:
         return {"id": "gen-e", "data": data[::-1], "usage": {"prompt_tokens": 9}}
 
     def embedded(self) -> list[list[str]]:
-        return [body["input"] for url, body in self.asked if url == EMBEDDINGS_ENDPOINT]
+        return [body["input"] for path, body in self.asked if path == "embeddings"]
 
 
 DOCTOR = {"title": "Beim Arzt", "description": "symptoms"}
@@ -102,11 +103,11 @@ def test_a_topic_is_embedded_and_described_by_its_title_and_what_it_is_about() -
 def test_an_icon_is_made_by_the_image_model_for_the_topic() -> None:
     send = FakeOpenRouter()
 
-    icon, kind, used = make_icon(DOCTOR, KEY, "some/image-model", send)
+    icon, kind, used = make_icon(DOCTOR, IMAGE_MODEL, send)
 
     assert icon.startswith(b"\x89PNG")
     assert (kind, used.cost, used.model) == ("image/png", 0.004, "some/image-model")
-    ((url, body),) = send.asked
+    ((path, body),) = send.asked
     assert body["model"] == "some/image-model"
     assert body["aspect_ratio"] == "1:1"
     assert "Beim Arzt: symptoms" in body["prompt"]
@@ -142,12 +143,12 @@ def test_a_picture_for_an_exercise_is_a_jpeg_no_bigger_than_it_need_be() -> None
 
 def test_an_image_model_that_sends_no_image_is_a_failure() -> None:
     with pytest.raises(ProfileError, match="no image"):
-        make_icon(DOCTOR, KEY, "some/image-model", FakeOpenRouter(image=None))
+        make_icon(DOCTOR, IMAGE_MODEL, FakeOpenRouter(image=None))
 
 
 def test_no_icon_is_made_without_a_key() -> None:
     with pytest.raises(ProfileError, match="key"):
-        make_icon(DOCTOR, "", "some/image-model", FakeOpenRouter())
+        make_icon(DOCTOR, Model("some/image-model"), FakeOpenRouter())
 
 
 def test_each_text_is_embedded_once_in_batches_and_kept(
@@ -159,7 +160,9 @@ def test_each_text_is_embedded_once_in_batches_and_kept(
     steps: list[None] = []
 
     used = Embeddings(store, send).embed(
-        ["der Arzt", "krank", "das Tor", "krank"], KEY, "m", lambda: steps.append(None)
+        ["der Arzt", "krank", "das Tor", "krank"],
+        EMBEDDING_MODEL,
+        lambda: steps.append(None),
     )
     again = Embeddings(UserStore(tmp_path / "ada"), send)
 
@@ -167,29 +170,31 @@ def test_each_text_is_embedded_once_in_batches_and_kept(
     assert (len(used), len(steps)) == (2, 2)
     assert again.missing(["der Arzt", "der Ball"], "m") == ["der Ball"]
     assert again.missing(["der Arzt"], "another/model") == ["der Arzt"]
-    assert again.embed(["krank"], KEY, "m") == []
+    assert again.embed(["krank"], EMBEDDING_MODEL) == []
 
 
 def test_texts_that_are_embedded_already_need_no_key(tmp_path: Path) -> None:
     embeddings = Embeddings(UserStore(tmp_path / "ada"), FakeOpenRouter())
-    embeddings.embed(["krank"], KEY, "m")
+    embeddings.embed(["krank"], EMBEDDING_MODEL)
 
-    assert embeddings.embed(["krank"], "", "m") == []
+    assert embeddings.embed(["krank"], Model("m")) == []
     with pytest.raises(ProfileError, match="key"):
-        embeddings.embed(["gehen"], "", "m")
+        embeddings.embed(["gehen"], Model("m"))
 
 
 def test_an_embedding_model_that_leaves_a_text_out_is_a_failure(tmp_path: Path) -> None:
-    def short(url: str, body: dict[str, Any], api_key: str) -> dict[str, Any]:
+    def short(path: str, body: dict[str, Any], model: Model) -> dict[str, Any]:
         return {"data": [{"embedding": [1.0]}]}
 
     with pytest.raises(ProfileError, match="every text"):
-        Embeddings(UserStore(tmp_path / "ada"), short).embed(["a", "b"], KEY, "m")
+        Embeddings(UserStore(tmp_path / "ada"), short).embed(
+            ["a", "b"], EMBEDDING_MODEL
+        )
 
 
 def embedded(tmp_path: Path, texts: list[str]) -> Embeddings:
     embeddings = Embeddings(UserStore(tmp_path / "ada"), FakeOpenRouter())
-    embeddings.embed(texts, KEY, "m")
+    embeddings.embed(texts, EMBEDDING_MODEL)
     return embeddings
 
 
