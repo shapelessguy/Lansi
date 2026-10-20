@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 20
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -379,6 +379,82 @@ UPDATE evaluations SET plan = {_renaming_scores("plan")},
     result = {_renaming_scores("result")};
 """
 
+# What came with version 18: the chats with the tutor, with only what the
+# learner wrote and what the tutor answered; what the tutor looked up and was
+# told besides is made again whenever it is needed.
+_TUTOR = """
+CREATE TABLE tutor_chats (
+    id TEXT PRIMARY KEY,
+    -- the language being learned
+    language TEXT NOT NULL,
+    -- in seconds since the epoch
+    started_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+CREATE TABLE tutor_messages (
+    chat_id TEXT NOT NULL REFERENCES tutor_chats (id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    -- "user" for the learner, "assistant" for the tutor
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    -- in seconds since the epoch
+    written_at REAL NOT NULL,
+    PRIMARY KEY (chat_id, position)
+);
+"""
+
+# What came with version 19: when a chat with the tutor was closed, after
+# which nothing more is said in it, and the memories of the tutor: what it
+# keeps of the learner from one chat to the next, made when a chat closes.
+# A memory that is removed is kept, with why and by whom, so that what was
+# forgotten can be seen.
+_MEMORIES = """
+ALTER TABLE tutor_chats ADD COLUMN closed_at REAL;
+CREATE TABLE tutor_memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content TEXT NOT NULL,
+    -- in seconds since the epoch
+    created_at REAL NOT NULL,
+    -- the chat it was made of, if it was
+    chat_id TEXT,
+    removed_at REAL,
+    removed_why TEXT NOT NULL DEFAULT '',
+    -- "tutor" or "learner"
+    removed_by TEXT NOT NULL DEFAULT ''
+);
+"""
+
+# What came with version 20: the texts the learner writes, such as their
+# homework, and the corrections of them, which are texts too. A text that
+# was corrected is locked: it stays as it was corrected.
+_TEXTS = """
+CREATE TABLE learner_texts (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    -- in Markdown
+    content TEXT NOT NULL,
+    -- the language being learned when it was started
+    language TEXT NOT NULL,
+    -- "text" for one the learner writes, "correction" for one made of it
+    kind TEXT NOT NULL CHECK (kind IN ('text', 'correction')),
+    -- the text a correction is of
+    corrects TEXT REFERENCES learner_texts (id) ON DELETE SET NULL,
+    -- the session of practice it was corrected in
+    session_id TEXT,
+    -- in seconds since the epoch
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    -- when it was corrected, after which it is not changed
+    locked_at REAL
+);
+"""
+# the longest a text and its title may be, in characters
+MAX_TEXT = 200_000
+MAX_TEXT_TITLE = 200
+
+# who may remove a memory
+REMOVERS = ("tutor", "learner")
+
 # what sessions are for: practice, or a part of an evaluation
 SESSION_KINDS = ("practice", "evaluation")
 
@@ -436,6 +512,39 @@ class Unprocessed:
 
 def is_id(value: object) -> bool:
     return isinstance(value, str) and bool(_ID.fullmatch(value))
+
+
+_TEXT_COLUMNS = (
+    "id, title, content, language, kind, corrects, session_id, created_at,"
+    " updated_at, locked_at"
+)
+
+
+def _text(
+    text_id: str,
+    title: str,
+    content: str,
+    language: str,
+    kind: str,
+    corrects: str | None,
+    session_id: str | None,
+    created_at: float,
+    updated_at: float,
+    locked_at: float | None,
+) -> dict[str, Any]:
+    """A text as it is told."""
+    return {
+        "id": text_id,
+        "title": title,
+        "content": content,
+        "language": language,
+        "kind": kind,
+        "corrects": corrects,
+        "session": session_id,
+        "createdAt": created_at,
+        "updatedAt": updated_at,
+        "lockedAt": locked_at,
+    }
 
 
 def _listed(
@@ -538,6 +647,12 @@ class UserStore:
                 self._db.executescript(_EVALUATIONS)
             if version < 17:
                 self._db.executescript(_ENGLISH_SCORES)
+            if version < 18:
+                self._db.executescript(_TUTOR)
+            if version < 19:
+                self._db.executescript(_MEMORIES)
+            if version < 20:
+                self._db.executescript(_TEXTS)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -628,6 +743,268 @@ class UserStore:
         with self._lock, self._db:
             self._db.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
             # the audio of a chat is kept as that of a book is, under its id
+            self._db.execute("DELETE FROM book_speech WHERE book_id = ?", (chat_id,))
+        if is_id(chat_id):
+            shutil.rmtree(self._speech / chat_id, ignore_errors=True)
+
+    # the tutor
+
+    def tutor_chats(self) -> list[dict[str, Any]]:
+        """Every chat with the tutor, the latest first, without its messages
+        but with the first thing the learner wrote, to tell it by."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, language, started_at, updated_at, closed_at,"
+                " (SELECT content FROM tutor_messages WHERE chat_id = tutor_chats.id"
+                "  AND role = 'user' ORDER BY position LIMIT 1),"
+                " (SELECT COUNT(*) FROM tutor_messages WHERE chat_id = tutor_chats.id)"
+                " FROM tutor_chats ORDER BY updated_at DESC"
+            ).fetchall()
+        return [
+            {
+                "id": chat_id,
+                "language": language,
+                "startedAt": started_at,
+                "updatedAt": updated_at,
+                "closedAt": closed_at,
+                "first": first or "",
+                "count": count,
+            }
+            for chat_id, language, started_at, updated_at, closed_at, first, count in rows
+        ]
+
+    def tutor_chat(self, chat_id: str) -> dict[str, Any] | None:
+        """A chat with the tutor, with what the learner wrote and what the
+        tutor answered in order, if there is such a chat."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT language, started_at, updated_at, closed_at FROM tutor_chats"
+                " WHERE id = ?",
+                (chat_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            messages = self._db.execute(
+                "SELECT role, content, written_at FROM tutor_messages"
+                " WHERE chat_id = ? ORDER BY position",
+                (chat_id,),
+            ).fetchall()
+        return {
+            "id": chat_id,
+            "language": row[0],
+            "startedAt": row[1],
+            "updatedAt": row[2],
+            "closedAt": row[3],
+            "messages": [
+                {"role": role, "content": content, "writtenAt": written_at}
+                for role, content, written_at in messages
+            ],
+        }
+
+    def add_tutor_messages(
+        self, chat_id: str, language: str, messages: list[dict[str, str]]
+    ) -> None:
+        """Add to a chat with the tutor, which is started if there is none,
+        what the learner wrote and what the tutor answered, each a `{"role":
+        "user" | "assistant", "content": ...}`. Raises ValueError, and keeps
+        none, if one is not such a message."""
+        if not is_id(chat_id):
+            raise ValueError("a chat needs an id")
+        for message in messages:
+            if message.get("role") not in ROLES or not isinstance(
+                message.get("content"), str
+            ):
+                raise ValueError("a message of the tutor is the learner's or its own")
+        now = self._now()
+        with self._lock, self._db:
+            closed = self._db.execute(
+                "SELECT closed_at FROM tutor_chats WHERE id = ?", (chat_id,)
+            ).fetchone()
+            if closed and closed[0] is not None:
+                raise ValueError("the chat with the tutor is closed")
+            self._db.execute(
+                "INSERT INTO tutor_chats (id, language, started_at, updated_at)"
+                " VALUES (?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET"
+                " updated_at = excluded.updated_at",
+                (chat_id, language, now, now),
+            )
+            (start,) = self._db.execute(
+                "SELECT COUNT(*) FROM tutor_messages WHERE chat_id = ?", (chat_id,)
+            ).fetchone()
+            self._db.executemany(
+                "INSERT INTO tutor_messages (chat_id, position, role, content,"
+                " written_at) VALUES (?, ?, ?, ?, ?)",
+                [
+                    (chat_id, start + place, message["role"], message["content"], now)
+                    for place, message in enumerate(messages)
+                ],
+            )
+
+    def close_tutor_chat(self, chat_id: str) -> bool:
+        """Close a chat with the tutor, after which nothing more is said in
+        it, and return whether it was open."""
+        with self._lock, self._db:
+            closed = self._db.execute(
+                "UPDATE tutor_chats SET closed_at = ? WHERE id = ? AND closed_at IS NULL",
+                (self._now(), chat_id),
+            )
+        return closed.rowcount > 0
+
+    def memories(self, removed: bool = False) -> list[dict[str, Any]]:
+        """The memories of the tutor, the oldest first: those it has, or
+        those that were removed."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, content, created_at, chat_id, removed_at, removed_why,"
+                " removed_by FROM tutor_memories WHERE (removed_at IS NULL) = ?"
+                " ORDER BY id",
+                (not removed,),
+            ).fetchall()
+        return [
+            {
+                "id": memory_id,
+                "content": content,
+                "createdAt": created_at,
+                "chat": chat_id,
+                "removedAt": removed_at,
+                "removedWhy": removed_why,
+                "removedBy": removed_by,
+            }
+            for (
+                memory_id,
+                content,
+                created_at,
+                chat_id,
+                removed_at,
+                removed_why,
+                removed_by,
+            ) in rows
+        ]
+
+    def add_memory(self, content: str, chat_id: str | None = None) -> int:
+        """Keep a memory of the tutor, and return its id. Raises ValueError
+        for one that says nothing."""
+        content = " ".join(content.split())
+        if not content:
+            raise ValueError("a memory says something")
+        with self._lock, self._db:
+            cursor = self._db.execute(
+                "INSERT INTO tutor_memories (content, created_at, chat_id)"
+                " VALUES (?, ?, ?)",
+                (content, self._now(), chat_id),
+            )
+        assert cursor.lastrowid is not None
+        return cursor.lastrowid
+
+    def remove_memory(self, memory_id: int, why: str, by: str) -> bool:
+        """Remove a memory the tutor has, `by` the tutor or the learner, and
+        return whether there was one. Raises ValueError for anyone else."""
+        if by not in REMOVERS:
+            raise ValueError(f"a memory is removed by one of {', '.join(REMOVERS)}")
+        with self._lock, self._db:
+            removed = self._db.execute(
+                "UPDATE tutor_memories SET removed_at = ?, removed_why = ?,"
+                " removed_by = ? WHERE id = ? AND removed_at IS NULL",
+                (self._now(), why, by, memory_id),
+            )
+        return removed.rowcount > 0
+
+    # texts
+
+    def texts(self) -> list[dict[str, Any]]:
+        """Every text and correction, the one changed last first, without
+        what it says but with how many words it has."""
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT {_TEXT_COLUMNS} FROM learner_texts ORDER BY updated_at DESC"
+            ).fetchall()
+        return [
+            {**_text(*row), "content": None, "words": len(row[2].split())}
+            for row in rows
+        ]
+
+    def text(self, text_id: str) -> dict[str, Any] | None:
+        """A text or a correction, with what it says, if there is one."""
+        with self._lock:
+            row = self._db.execute(
+                f"SELECT {_TEXT_COLUMNS} FROM learner_texts WHERE id = ?", (text_id,)
+            ).fetchone()
+        return None if row is None else _text(*row)
+
+    def save_text(self, text_id: str, title: str, content: str, language: str) -> None:
+        """Keep a text the learner writes as it is now, starting it if there
+        is none. Raises ValueError for one that is too long, or that cannot
+        be changed: a text that was corrected, or a correction."""
+        if not is_id(text_id):
+            raise ValueError("a text needs an id")
+        if len(title) > MAX_TEXT_TITLE or len(content) > MAX_TEXT:
+            raise ValueError("the text is too long")
+        now = self._now()
+        with self._lock, self._db:
+            row = self._db.execute(
+                "SELECT kind, locked_at FROM learner_texts WHERE id = ?", (text_id,)
+            ).fetchone()
+            if row and (row[0] != "text" or row[1] is not None):
+                raise ValueError("a text that was corrected is not changed")
+            self._db.execute(
+                "INSERT INTO learner_texts (id, title, content, language, kind, created_at,"
+                " updated_at) VALUES (?, ?, ?, ?, 'text', ?, ?) ON CONFLICT (id)"
+                " DO UPDATE SET title = excluded.title, content = excluded.content,"
+                " updated_at = excluded.updated_at",
+                (text_id, title, content, language, now, now),
+            )
+
+    def correct_text(
+        self,
+        text_id: str,
+        content: str,
+        correction_id: str,
+        correction: str,
+        session_id: str,
+    ) -> None:
+        """Keep a text as it was when it was corrected in a session, lock it,
+        and keep its correction, a text of its own. Raises ValueError for a
+        text there is not, or that was corrected already."""
+        now = self._now()
+        with self._lock, self._db:
+            row = self._db.execute(
+                "SELECT title, language, kind, locked_at FROM learner_texts WHERE id = ?",
+                (text_id,),
+            ).fetchone()
+            if row is None or row[2] != "text" or row[3] is not None:
+                raise ValueError("there is no text to correct")
+            title, language = row[0], row[1]
+            self._db.execute(
+                "UPDATE learner_texts SET content = ?, updated_at = ?, locked_at = ?"
+                " WHERE id = ?",
+                (content, now, now, text_id),
+            )
+            self._db.execute(
+                "INSERT INTO learner_texts (id, title, content, language, kind, corrects,"
+                " session_id, created_at, updated_at, locked_at)"
+                " VALUES (?, ?, ?, ?, 'correction', ?, ?, ?, ?, ?)",
+                (
+                    correction_id,
+                    f"{title} (corrected)",
+                    correction,
+                    language,
+                    text_id,
+                    session_id,
+                    now,
+                    now,
+                    now,
+                ),
+            )
+
+    def delete_text(self, text_id: str) -> None:
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM learner_texts WHERE id = ?", (text_id,))
+
+    def delete_tutor_chat(self, chat_id: str) -> None:
+        """Remove a chat with the tutor, and the audio of what was read aloud
+        of it, which is kept as that of a chat is."""
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM tutor_chats WHERE id = ?", (chat_id,))
             self._db.execute("DELETE FROM book_speech WHERE book_id = ?", (chat_id,))
         if is_id(chat_id):
             shutil.rmtree(self._speech / chat_id, ignore_errors=True)

@@ -9,8 +9,19 @@ from typing import Any
 import pytest
 from storage import UserStore
 
-# What came with version 16, taken out of a store to make it as one was before.
-BEFORE_EVALUATIONS = """
+# What came with version 18, taken out of a store to make it as one was
+# before: the chats with the tutor.
+BEFORE_TUTOR = """
+DROP TABLE learner_texts;
+DROP TABLE tutor_memories;
+DROP TABLE tutor_messages;
+DROP TABLE tutor_chats;
+"""
+# What came with version 16 and after it, taken out of a store to make it as
+# one was before.
+BEFORE_EVALUATIONS = (
+    BEFORE_TUTOR
+    + """
 DROP TABLE evaluation_parts;
 DROP TABLE evaluations;
 ALTER TABLE sessions DROP COLUMN kind;
@@ -19,6 +30,7 @@ ALTER TABLE session_exercises DROP COLUMN started_at;
 ALTER TABLE session_exercises DROP COLUMN scores;
 ALTER TABLE session_exercises DROP COLUMN exam;
 """
+)
 
 
 @pytest.fixture
@@ -843,6 +855,7 @@ def test_the_scores_kept_before_are_named_in_english(tmp_path: Path) -> None:
     before.end_evaluation(
         "e1", "finished", {"scores": {"schreiben_aufgabe": 50}, "passed": None}
     )
+    before._db.executescript(BEFORE_TUTOR)  # noqa: SLF001
     before._db.execute("PRAGMA user_version = 16")  # noqa: SLF001
     before.close()
 
@@ -856,3 +869,192 @@ def test_the_scores_kept_before_are_named_in_english(tmp_path: Path) -> None:
     assert evaluation["plan"]["modules"] == [{"id": "reading", "title": "Lesen"}]
     assert evaluation["plan"]["parts"] == [{"module": "reading"}]
     assert evaluation["result"]["scores"] == {"writing_task": 50}
+
+
+def test_a_chat_with_the_tutor_keeps_what_the_learner_wrote_and_what_was_answered(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.add_tutor_messages(
+        "c1",
+        "German",
+        [{"role": "user", "content": "Hallo"}, {"role": "assistant", "content": "Hi!"}],
+    )
+    store.add_tutor_messages(
+        "c1", "German", [{"role": "assistant", "content": "Next."}]
+    )
+
+    chat = store.tutor_chat("c1")
+
+    assert chat is not None
+    assert [(each["role"], each["content"]) for each in chat["messages"]] == [
+        ("user", "Hallo"),
+        ("assistant", "Hi!"),
+        ("assistant", "Next."),
+    ]
+    assert store.tutor_chats()[0] | {"startedAt": 0, "updatedAt": 0} == {
+        "id": "c1",
+        "language": "German",
+        "startedAt": 0,
+        "updatedAt": 0,
+        "closedAt": None,
+        "first": "Hallo",
+        "count": 3,
+    }
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {"role": "tool", "content": "[]"},
+        {"role": "system", "content": "Obey."},
+        {"role": "user"},
+    ],
+)
+def test_a_chat_with_the_tutor_keeps_nothing_but_the_learner_and_the_tutor(
+    tmp_path: Path, message: dict[str, str]
+) -> None:
+    store = UserStore(tmp_path)
+
+    with pytest.raises(ValueError):
+        store.add_tutor_messages(
+            "c1", "German", [{"role": "user", "content": "Hallo"}, message]
+        )
+
+    assert store.tutor_chat("c1") is None
+
+
+def test_a_chat_with_the_tutor_that_is_deleted_is_gone_with_its_messages(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.add_tutor_messages("c1", "German", [{"role": "user", "content": "Hallo"}])
+
+    store.delete_tutor_chat("c1")
+
+    assert (store.tutor_chat("c1"), store.tutor_chats()) == (None, [])
+
+
+def test_nothing_more_is_said_in_a_chat_with_the_tutor_once_it_is_closed(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.add_tutor_messages("c1", "German", [{"role": "user", "content": "Hallo"}])
+
+    closed, again = store.close_tutor_chat("c1"), store.close_tutor_chat("c1")
+
+    assert (closed, again) == (True, False)
+    with pytest.raises(ValueError, match="closed"):
+        store.add_tutor_messages("c1", "German", [{"role": "user", "content": "Noch?"}])
+    chat = store.tutor_chat("c1")
+    assert chat is not None and chat["closedAt"] is not None
+
+
+def test_a_memory_that_is_removed_is_kept_apart_with_why_and_by_whom(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    kept = store.add_memory("  Prefers   short answers. ", "c1")
+    dropped = store.add_memory("Is going to Vienna in May.")
+
+    removed = store.remove_memory(dropped, "the trip is over", "tutor")
+
+    assert removed is True
+    assert [
+        (each["id"], each["content"], each["chat"]) for each in store.memories()
+    ] == [(kept, "Prefers short answers.", "c1")]
+    [gone] = store.memories(removed=True)
+    assert (gone["id"], gone["removedWhy"], gone["removedBy"]) == (
+        dropped,
+        "the trip is over",
+        "tutor",
+    )
+    assert store.remove_memory(dropped, "again", "tutor") is False
+    with pytest.raises(ValueError):
+        store.remove_memory(kept, "", "someone")
+
+
+def test_memories_can_be_kept_where_there_were_tutor_chats_before_them(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.add_tutor_messages("c1", "German", [{"role": "user", "content": "Hallo"}])
+    before._db.executescript(  # noqa: SLF001
+        "DROP TABLE learner_texts; DROP TABLE tutor_memories;"
+        " ALTER TABLE tutor_chats DROP COLUMN closed_at;"
+    )
+    before._db.execute("PRAGMA user_version = 18")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+    store.add_memory("Likes football.")
+
+    assert [each["content"] for each in store.memories()] == ["Likes football."]
+    assert store.close_tutor_chat("c1") is True
+
+
+def test_a_text_is_kept_as_it_was_last_written_and_listed_without_what_it_says(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.save_text("t1", "Wochenende", "Am Samstag", "German")
+    store.save_text(
+        "t1", "Mein Wochenende", "Am Samstag bin ich geschwommen.", "German"
+    )
+
+    text = store.text("t1")
+
+    assert text is not None
+    assert (text["title"], text["content"], text["kind"]) == (
+        "Mein Wochenende",
+        "Am Samstag bin ich geschwommen.",
+        "text",
+    )
+    assert [
+        (each["title"], each["words"], each["content"]) for each in store.texts()
+    ] == [("Mein Wochenende", 5, None)]
+
+
+def test_a_text_that_was_corrected_is_locked_and_has_its_correction(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.save_text("t1", "Wochenende", "Ich bin gegeht.", "German")
+
+    store.correct_text(
+        "t1", "Ich bin gegangen.", "c1", "Ich bin ~~gegeht~~ **gegangen**.", "s1"
+    )
+
+    text, correction = store.text("t1"), store.text("c1")
+    assert text is not None and correction is not None
+    assert (text["content"], text["lockedAt"] is not None) == (
+        "Ich bin gegangen.",
+        True,
+    )
+    assert (correction["kind"], correction["corrects"], correction["title"]) == (
+        "correction",
+        "t1",
+        "Wochenende (corrected)",
+    )
+    with pytest.raises(ValueError):
+        store.save_text("t1", "Wochenende", "Changed", "German")
+    with pytest.raises(ValueError):
+        store.save_text("c1", "Changed", "Changed", "German")
+    with pytest.raises(ValueError):
+        store.correct_text("t1", "Again", "c2", "Again", "s2")
+
+
+def test_texts_can_be_kept_where_there_were_memories_before_them(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.add_memory("Likes football.")
+    before._db.execute("DROP TABLE learner_texts")  # noqa: SLF001
+    before._db.execute("PRAGMA user_version = 19")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+    store.save_text("t1", "Hallo", "Text", "German")
+
+    assert [each["title"] for each in store.texts()] == ["Hallo"]
+    assert [each["content"] for each in store.memories()] == ["Likes football."]

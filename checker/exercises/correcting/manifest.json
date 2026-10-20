@@ -1,0 +1,12 @@
+{
+    "title": "Correct my text",
+    "description": "Correct one of your texts, such as your homework, at once: each mistake is marked with its correction and why, the text is shown with its corrections from then on, and it is locked. Nothing is asked of the learner; the log is written as for any exercise.",
+    "lesson": false,
+    "once": true,
+    "options": {
+        "text": {
+            "label": "Text",
+            "texts": true
+        }
+    }
+}

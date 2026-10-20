@@ -13,11 +13,13 @@ sentence practises decides. A word the learner could only guess, whatever \
 they know of the rule, is no gap. If more than one answer is right, list \
 them in the gap separated by |.
 
-Give a hint for each gap: what the learner starts from to find the word, \
-such as the form a dictionary lists it under. Leave the hint empty where \
-it would be the word itself, or give it away. Give each sentence a \
-translation into $into.
+Leave the hints empty: the sentence, its translation and the rule are \
+what the learner finds the word by. Give a hint only where a gap cannot \
+be worked out without one, such as a word the learner could not know, \
+and then only what they start from to find it, such as the form a \
+dictionary lists it under; never the word itself, and no more than one \
+hint in all the sentences. Give each sentence a translation into $into.
 
-Reply with JSON alone, an item for each sentence in the order asked, and a \
-hint for each gap of it, in order: {"items": [{"text": "...", "hints": \
+Reply with JSON alone, an item for each sentence in the order asked, with \
+a hint for each gap of it in order, most of them empty: {"items": [{"text": "...", "hints": \
 ["..."], "translation": "..."}]}"""

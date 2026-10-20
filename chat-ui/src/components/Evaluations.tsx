@@ -1,7 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canAsk } from "../lib/models";
 
 import type { ProfileUsage } from "../lib/checker";
@@ -41,6 +41,8 @@ interface Props {
     onReadAloud: (sessionId: string, exercise: string, number: number, text: string) => void;
     /** An evaluation ended, and its log is being written. */
     onEnded: () => void;
+    /** An evaluation started elsewhere, such as one the tutor offered, to be taken up here, with a number that tells it from the one before. */
+    opening?: { evaluation: Evaluation; nonce: number } | null;
 }
 
 function day(seconds: number): string {
@@ -84,7 +86,7 @@ type Loaded<T> = { status: "loading" } | { status: "error"; message: string } | 
  * server has its log written, with the scores.
  */
 export function Evaluations(
-    { settings, learner, onUsage, onTask, onChangeSettings, onOpenSettings, onReadAloud, onEnded }: Props,
+    { settings, learner, onUsage, onTask, onChangeSettings, onOpenSettings, onReadAloud, onEnded, opening }: Props,
 ) {
     const language = settings.language;
     const level = settings.level;
@@ -149,6 +151,15 @@ export function Evaluations(
             openPart(left, at);
         }
     }
+
+    // one started elsewhere, such as one the tutor offered, is taken up here
+    const take = useRef(resume);
+    take.current = resume;
+    useEffect(() => {
+        if (opening) {
+            take.current(opening.evaluation);
+        }
+    }, [opening]);
 
     function openPart(of: Evaluation, position: number) {
         setBusy(true);

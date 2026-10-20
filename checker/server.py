@@ -86,7 +86,7 @@ from speaking import (
 )
 from spelling import StudySpeller
 from starter_topics import STARTER_TOPICS
-from storage import UserStore
+from storage import UserStore, is_id
 from tasks import Tasks
 from topics import (
     DEFAULT_EMBEDDING_MODEL,
@@ -102,6 +102,18 @@ from translating import (
     passage_of,
     read_messages,
 )
+from tutor import (
+    TutorError,
+    converse,
+    data_tools,
+    evaluation_tool,
+    exercise_tools,
+    instructions,
+    practised,
+    remember,
+    wait_for,
+)
+from tutor import read_messages as read_tutor_messages
 from users import Users, take_vocabulary, user_directory
 from vocabulary import Vocabularies, Vocabulary
 
@@ -291,6 +303,10 @@ class Account:
     practice: Practice | None = None
     # the evaluations, mock exams made of the exercises of practice
     evaluations: Evaluations | None = None
+    # held while what the tutor is to remember of a chat is decided, so that
+    # chats closed together are remembered one after another, each with the
+    # memories that came of those before it
+    remembering: threading.Lock = field(default_factory=threading.Lock)
 
     def study(self, language: str) -> None:
         """Have every part go by `language`, given by its English name."""
@@ -366,7 +382,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         try:
             if self._anki("PUT"):
                 return
-            if self._books("PUT") or self._speech("PUT"):
+            if self._books("PUT") or self._speech("PUT") or self._texts("PUT"):
                 return
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
@@ -375,6 +391,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         if not self._find_account() or self._kept("DELETE") or self._sets("DELETE"):
+            return
+        if self._tutor_chats("DELETE") or self._texts("DELETE"):
             return
         if self._books("DELETE") or self._speech("DELETE") or self._topics("DELETE"):
             return
@@ -742,6 +760,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                          such as writing the log of an
                                          exercise that is over
 
+        A POST that starts a session may bring `"guidance": {ID: ...}`, what
+        each exercise is to aim at, such as the tutor steers it to, which it
+        is told first among what it is to heed.
+
         A POST to a session brings the `model` an exercise asks, the
         `image_model` that draws its pictures, the `vision_model` that looks
         at them (the `model` if there is none), and the `into` and `level`
@@ -1083,6 +1105,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         topics, chosen = body.get("topics", []), body.get("exercises")
         options = body.get("options") or {}
         minutes = body.get("minutes") or {}
+        steering = body.get("guidance") or {}
         if not (
             isinstance(language, str)
             and isinstance(lesson, str)
@@ -1091,6 +1114,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             and isinstance(chosen, dict)
             and isinstance(options, dict)
             and isinstance(minutes, dict)
+            and isinstance(steering, dict)
         ):
             raise ValueError(
                 'expected {"language": ..., "lesson": ..., "exercises": {...}}'
@@ -1103,6 +1127,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             read_choosing(body, api_key or ""),
             options,
             minutes,
+            steering=steering,
         )
         usage = [describe_usage(profile) for profile in used]
         self._reply(HTTPStatus.OK, {**session, "usage": usage})
@@ -1190,6 +1215,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         if not self._find_account() or self._kept("GET") or self._sets("GET"):
             return
+        if self._tutor_chats("GET") or self._texts("GET"):
+            return
         if self._practice("GET") or self._topics("GET") or self._evaluating("GET"):
             return
         if self._books("GET") or self._speech("GET"):
@@ -1264,6 +1291,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._answer(self.account.translator, api_key)
             elif self.path == "/translate/chat/end" and self.account.translator:
                 self._log_questions(self.account.translator, api_key)
+            elif self.path == "/tutor/chat" and self.account.practice:
+                self._tutor(self.account.practice, api_key)
+            elif self._tutor_chats("POST", api_key):
+                pass
             elif self.path == "/vocabulary/words" and self.account.intake:
                 self._take_words(self.account.intake, api_key)
             elif self.path == "/vocabulary/selection" and self.account.intake:
@@ -1477,6 +1508,257 @@ class CheckerHandler(BaseHTTPRequestHandler):
             self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
             return
         self._reply(HTTPStatus.OK, {"reply": reply, "usage": [describe_usage(used)]})
+
+    def _tutor_chats(self, method: str, api_key: str | None = None) -> bool:
+        """Answers a request about the chats with the tutor and its memories,
+        and returns whether the request was one.
+
+            GET /tutor/chats          the chats, the latest first, each with
+                                      the first thing the learner wrote
+            GET /tutor/chats/ID       a chat, with what the learner wrote and
+                                      what the tutor answered
+            DELETE /tutor/chats/ID    forget a chat
+            POST /tutor/chats/ID/close
+                                      close a chat, after which nothing more
+                                      is said in it, with `{"model": ...}`,
+                                      which then decides in the background
+                                      what the tutor is to remember of it;
+                                      the reply has the `tasks` it started
+            GET /tutor/memories       the memories the tutor has, the oldest
+                                      first, and those it `removed`
+            DELETE /tutor/memories/N  have the tutor forget a memory, as the
+                                      learner wants
+        """
+        store = self.account.store
+        path = urlsplit(self.path).path
+        one = re.fullmatch(r"/tutor/chats/([^/]+)", path)
+        close = re.fullmatch(r"/tutor/chats/([^/]+)/close", path)
+        memory = re.fullmatch(r"/tutor/memories/(\d+)", path)
+        if store is None or not (
+            one or close or memory or path in ("/tutor/chats", "/tutor/memories")
+        ):
+            return False
+        if method == "POST" and close:
+            self._close_tutor_chat(store, close.group(1), api_key)
+        elif method == "GET" and path == "/tutor/memories":
+            self._reply(
+                HTTPStatus.OK,
+                {"memories": store.memories(), "removed": store.memories(removed=True)},
+            )
+        elif method == "DELETE" and memory:
+            store.remove_memory(int(memory.group(1)), "", "learner")
+            self._reply(HTTPStatus.OK, {})
+        elif method == "GET" and path == "/tutor/chats":
+            self._reply(HTTPStatus.OK, {"chats": store.tutor_chats()})
+        elif method == "GET" and one:
+            chat = store.tutor_chat(one.group(1))
+            if chat is None:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such chat"})
+            else:
+                self._reply(HTTPStatus.OK, chat)
+        elif method == "DELETE" and one:
+            store.delete_tutor_chat(one.group(1))
+            self._reply(HTTPStatus.OK, {})
+        else:
+            return False
+        return True
+
+    def _texts(self, method: str) -> bool:
+        """Answers a request about the learner's texts, such as their
+        homework, and the corrections of them, and returns whether the
+        request was one.
+
+            GET /texts            the texts and corrections, the one changed
+                                  last first, without what they say
+            GET /texts/ID         a text or a correction, with what it says
+            PUT /texts/ID         keep a text as `{"title": ..., "content":
+                                  ..., "language": ...}`, starting it if
+                                  there is none; one that was corrected,
+                                  or a correction, is not changed
+            DELETE /texts/ID      delete a text or a correction
+        """
+        store = self.account.store
+        path = urlsplit(self.path).path
+        one = re.fullmatch(r"/texts/([^/]+)", path)
+        if store is None or not (one or path == "/texts"):
+            return False
+        if method == "GET" and not one:
+            self._reply(HTTPStatus.OK, {"texts": store.texts()})
+        elif method == "GET" and one:
+            text = store.text(one.group(1))
+            if text is None:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such text"})
+            else:
+                self._reply(HTTPStatus.OK, text)
+        elif method == "PUT" and one:
+            body = self._read_body()
+            title, content = body.get("title", ""), body.get("content", "")
+            if not isinstance(title, str) or not isinstance(content, str):
+                raise ValueError('a text is {"title": ..., "content": ...}')
+            language = body.get("language")
+            store.save_text(
+                one.group(1),
+                title,
+                content,
+                language if isinstance(language, str) else self.account.language,
+            )
+            self._reply(HTTPStatus.OK, {})
+        elif method == "DELETE" and one:
+            store.delete_text(one.group(1))
+            self._reply(HTTPStatus.OK, {})
+        else:
+            return False
+        return True
+
+    def _close_tutor_chat(
+        self, store: UserStore, chat_id: str, api_key: str | None
+    ) -> None:
+        """Close a chat with the tutor, and start what decides what the
+        tutor is to remember of it, if it was open and anything was said."""
+        model = read_model(self._read_body().get("model"), api_key or "")
+        chat = store.tutor_chat(chat_id)
+        if chat is None:
+            self._reply(HTTPStatus.NOT_FOUND, {"error": "no such chat"})
+            return
+        started = []
+        if store.close_tutor_chat(chat_id) and chat["messages"]:
+            ask = model_asker(send_chat, model)
+
+            remembering = self.account.remembering
+
+            def job(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+                with remembering:
+                    remembered, used = remember(
+                        chat["messages"], store.memories(), chat["language"], ask
+                    )
+                    for content in remembered.add:
+                        store.add_memory(content, chat_id)
+                    for memory_id, why in remembered.remove:
+                        store.remove_memory(memory_id, why, "tutor")
+                step()
+                return [asdict(remembered)], [describe_usage(used)]
+
+            started.append(
+                self.account.tasks.start("memories", "Memories of the chat", 1, job)
+            )
+        self._reply(HTTPStatus.OK, {"tasks": started})
+
+    def _tutor(self, practice: Practice, api_key: str | None) -> None:
+        """Has the tutor answer the last of the `messages` of a `{"messages":
+        [...], "model": ..., "language": ..., "into": ..., "level": ...}`
+        request: the chat so far as the tutor was told it, which the reply
+        adds to. Nothing of the chat is kept here.
+
+        The reply is streamed, an event of the tutor to a line, as tutor.py
+        says, as they come; the last is `{"type": "done", "messages": [...],
+        "usage": [...]}`, with the messages that were added, or `{"type":
+        "error", "error": ...}`.
+
+        With a `"chat": ID`, what the learner wrote and what the tutor
+        answered in the end are kept in that chat with the tutor, which is
+        started if there is none; nothing else of the chat is, as it is
+        made again whenever it is needed.
+
+        A request that has `"practised": {"session": ..., "exercise": ...,
+        "tasks": [...]}` in place of something the learner wrote tells the
+        tutor how an exercise it offered went, once the `tasks` that write
+        its log are done: what it is told is the first of the messages
+        added."""
+        store = self.account.store
+        assert store is not None
+        body = self._read_body()
+        chat_id = body.get("chat")
+        if chat_id is not None and not is_id(chat_id):
+            raise ValueError("chat is the id of a chat with the tutor")
+        kept = store.tutor_chat(chat_id) if chat_id is not None else None
+        if kept is not None and kept["closedAt"] is not None:
+            raise ValueError("the chat with the tutor is closed")
+        done = body.get("practised")
+        if done is not None and not (
+            isinstance(done, dict)
+            and isinstance(done.get("session"), str)
+            and isinstance(done.get("exercise"), str)
+            and isinstance(done.get("tasks", []), list)
+        ):
+            raise ValueError(
+                'practised is {"session": ..., "exercise": ..., "tasks": [...]}'
+            )
+        messages = read_tutor_messages(body.get("messages"), to_answer=done is None)
+        language, into, model = self._read_translating(body, api_key)
+        titles = {each["id"]: each["title"] for each in practice.exercises()}
+        level = body.get("level")
+        try:
+            lessons = practice.lessons(language)
+        except GrammarError:
+            lessons = []
+        evaluations = self.account.evaluations
+        try:
+            levels = evaluations.levels(language) if evaluations else []
+        except EvaluationError:
+            levels = []
+        tools = [
+            *data_tools(store, lambda: lessons, language, evaluations),
+            *exercise_tools(practice.exercises(), lessons, store.topics()),
+            *evaluation_tool(levels),
+        ]
+        told = instructions(
+            language, into, level if isinstance(level, str) else "", store.memories()
+        )
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        # for nginx, which would otherwise hold the events back until the end
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        def emit(event: dict[str, Any]) -> None:
+            self.wfile.write(json.dumps(event, ensure_ascii=False).encode() + b"\n")
+            self.wfile.flush()
+
+        said: list[dict[str, Any]] = []
+        if done is not None:
+            emit({"type": "tool", "id": "log", "name": "", "doing": "Writing the log"})
+            wait_for(self.account.tasks.listing, [str(each) for each in done["tasks"]])
+            emit({"type": "tool_done", "id": "log", "failed": False, "shown": None})
+            try:
+                said = [
+                    practised(
+                        store,
+                        done["session"],
+                        done["exercise"],
+                        titles.get(done["exercise"]) or str(done["exercise"]),
+                    )
+                ]
+            except ValueError as error:
+                emit({"type": "error", "error": str(error)})
+                return
+        try:
+            added, used = converse([*messages, *said], tools, model, told, emit)
+        except TutorError as error:
+            emit({"type": "error", "error": str(error)})
+            return
+        added = [*said, *added]
+        if chat_id is not None:
+            answer = "\n\n".join(
+                message["content"]
+                for message in added
+                if message["role"] == "assistant" and message.get("content")
+            )
+            store.add_tutor_messages(
+                chat_id,
+                language,
+                [
+                    *([messages[-1]] if done is None else []),
+                    *([{"role": "assistant", "content": answer}] if answer else []),
+                ],
+            )
+        emit(
+            {
+                "type": "done",
+                "messages": added,
+                "usage": [describe_usage(profile) for profile in used],
+            }
+        )
 
     def _read_translating(
         self, body: dict[str, Any], api_key: str | None

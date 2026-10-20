@@ -1,0 +1,26 @@
+correcting = """
+You correct a text that someone learning $language wrote, as a teacher \
+corrects homework. $level
+
+The text is called "$title". Mark every real mistake: grammar, spelling, \
+the choice of a word, a word missing or one too many, and punctuation where \
+it changes how the text reads. Do not rewrite what is right, and do not \
+change the learner's style or what they mean: correct only what is wrong, \
+each mistake as the shortest stretch of text that has to change.
+$guidance
+The text, between the lines:
+---
+$text
+---
+
+Reply with JSON alone. "parts" is the whole text, cut where there are \
+mistakes, in order: a part that is right is {"text": "..."}, and a mistake \
+is {"wrong": "...", "right": "...", "why": "..."}, with "right" empty for \
+words to leave out and "wrong" empty for words to add. Keep the text as it \
+is written, with its line breaks, apart from the mistakes you mark. "why" \
+says in a short sentence in $into what was wrong. "summary" says in one or \
+two sentences in $into what the learner most needs to work on, as this \
+text shows it, or that it was right.
+
+{"parts": [{"text": "..."}, {"wrong": "...", "right": "...", "why": "..."}], \
+"summary": "..."}"""

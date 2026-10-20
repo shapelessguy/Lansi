@@ -180,13 +180,15 @@ def test_a_set_has_as_many_sentences_as_the_learner_chose() -> None:
     assert "3 different sentences" in model.asked[0][0]["content"]
 
 
-def test_each_gap_has_its_own_hint_but_none_that_gives_the_answer_away() -> None:
+def test_a_set_has_one_hint_at_most_and_none_that_gives_the_answer_away() -> None:
     model = FakeModel(ITEMS)
 
     step = start(CONTEXT, model)
 
-    assert step.show["items"][0]["hints"] == ["stehen", ""]
-    assert step.show["items"][1]["hints"] == ["kaufen", ""]
+    assert [item["hints"] for item in step.show["items"]] == [
+        ["stehen", ""],
+        *[["", ""]] * 4,
+    ]
     assert hints_of("Er gibt [mir] das [Buch].", ["MIR", 3]) == ["", ""]
     assert hints_of("Ich [möchte] das.", ["moechte"], LETTERS) == [""]
 
@@ -235,9 +237,9 @@ def test_a_set_is_graded_once_on_what_went_into_the_gaps_apart_from_the_task() -
     assert step.graded == [
         {
             "result": "partial",
-            "task": "1. Ich ___ (stehen) um 6 Uhr ___.\n2. Er ___ (kaufen) heute ___."
-            "\n3. Wir ___ dich ___.\n4. Du ___ (machen) die Tür ___."
-            "\n5. Sie ___ (kommen) ___.",
+            "task": "1. Ich ___ (stehen) um 6 Uhr ___.\n2. Er ___ heute ___."
+            "\n3. Wir ___ dich ___.\n4. Du ___ die Tür ___."
+            "\n5. Sie ___ ___.",
             "answer": "1. aufstehe; (empty)\n2. kauft; ein\n3. rufen; an"
             "\n4. machst; zu\n5. kommt; mit",
             "correction": "1. stehe; auf\n2. (right)\n3. (right)\n4. (right)"

@@ -1346,10 +1346,11 @@ div.book-cover {
     }
 }
 
+/* opening to the right, as the sign is at the left of the bar */
 .task-list {
     position: absolute;
     top: calc(100% + 6px);
-    right: 0;
+    left: 0;
     z-index: 25;
     display: grid;
     width: min(380px, calc(100vw - 16px));
@@ -3222,4 +3223,544 @@ div.book-cover {
 
 .evaluation-history .practice-title {
     flex: 1;
+}
+
+/* The tutor: what it is doing while it answers, the steps it took and
+   what it thought, folded away, and the exercises it offers. */
+.tutor-title {
+    margin: 0 auto 0 0;
+    font-size: 1rem;
+}
+
+/* the button that reads it aloud, as in the chat, then the answer with the
+   exercises it offers under it */
+.tutor-turn-body {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.tutor-exercise {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+}
+
+.tutor-exercise-body {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.tutor-doing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--muted);
+}
+
+.tutor-doing-what {
+    flex: none;
+    color: var(--text);
+}
+
+/* the last line of what is being thought, cut to one line */
+.tutor-doing-about {
+    min-width: 0;
+    overflow: hidden;
+    font-style: italic;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tutor-pulse {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    50% {
+        opacity: 0.25;
+    }
+}
+
+.tutor-trace {
+    color: var(--muted);
+    font-size: 0.87rem;
+}
+
+.tutor-trace summary {
+    cursor: pointer;
+}
+
+.tutor-steps {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tutor-steps .failed {
+    color: var(--danger);
+}
+
+.tutor-thinking {
+    max-height: 16em;
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    border-left: 2px solid var(--border);
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
+.tutor-offer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+
+.tutor-offer-about {
+    min-width: 0;
+}
+
+.tutor-offer-what {
+    color: var(--muted);
+    font-size: 0.87rem;
+}
+
+.tutor-offer-focus {
+    margin-top: 4px;
+    font-size: 0.87rem;
+    font-style: italic;
+}
+
+.tutor-offer-state {
+    flex: none;
+    color: var(--muted);
+}
+
+/* The inspector: the requests of the tutor in a list on the left, and the
+   one chosen, all of it, on the right. */
+.inspector {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.inspector-header {
+    flex-wrap: wrap;
+}
+
+.inspector-totals,
+.inspector-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 0;
+}
+
+.inspector-totals dt,
+.inspector-facts dt {
+    color: var(--muted);
+    font-size: 0.78rem;
+}
+
+.inspector-totals dd,
+.inspector-facts dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.inspector-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.inspector-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+}
+
+.inspector-list {
+    flex: none;
+    width: 280px;
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    padding: 14px;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+}
+
+.inspector-exchange {
+    display: grid;
+    gap: 4px;
+}
+
+.inspector-exchange-label {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.82rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inspector-call {
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px;
+    text-align: left;
+}
+
+.inspector-call[aria-pressed="true"] {
+    border-color: var(--accent);
+}
+
+.inspector-call-numbers,
+.inspector-call-tools {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.inspector-call-view {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    align-content: start;
+    gap: 22px;
+    padding: 16px 20px 28px;
+    overflow-y: auto;
+}
+
+.inspector-call-view h3 {
+    margin: 0 0 10px;
+    font-size: 0.95rem;
+}
+
+.inspector-note {
+    margin: 0 0 10px;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.inspector-window,
+.inspector-bar {
+    display: flex;
+    height: 10px;
+    margin-top: 12px;
+    overflow: hidden;
+    border-radius: 5px;
+    background: var(--border);
+}
+
+.inspector-window span {
+    background: var(--accent);
+}
+
+.inspector-bar span {
+    min-width: 2px;
+}
+
+.inspector-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    margin: 10px 0;
+    padding: 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    list-style: none;
+}
+
+.inspector-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 4px;
+    border-radius: 2px;
+}
+
+.part-system {
+    background: var(--level-c1);
+}
+
+.part-tools {
+    background: var(--level-b2);
+}
+
+.part-user {
+    background: var(--level-b1);
+}
+
+.part-assistant {
+    background: var(--level-a2);
+}
+
+.part-reasoning {
+    background: var(--level-c2);
+}
+
+.part-tool {
+    background: var(--level-a1);
+}
+
+.inspector-parts {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.87rem;
+}
+
+.inspector-parts th,
+.inspector-parts td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    vertical-align: top;
+}
+
+.inspector-parts th:first-child,
+.inspector-parts td:first-child {
+    text-align: left;
+}
+
+.inspector-parts th {
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.inspector-part {
+    cursor: pointer;
+}
+
+.inspector-part:hover {
+    background: var(--panel);
+}
+
+.inspector-text {
+    max-height: 32em;
+    margin: 6px 0 0;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--panel);
+    font-size: 0.82rem;
+    text-align: left;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow-y: auto;
+}
+
+.inspector-tool summary,
+.inspector-call-view details summary {
+    cursor: pointer;
+}
+
+.inspector-tool {
+    margin-top: 6px;
+}
+
+/* What the tutor remembers of the learner, in the library. */
+.memories {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+}
+
+.memory-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.memory {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+}
+
+.memory p {
+    margin: 0 0 6px;
+}
+
+.memory-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.memory.removed {
+    color: var(--muted);
+}
+
+.memory.removed p {
+    text-decoration: line-through;
+}
+
+.memory-removed summary {
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.memory-removed .memory-list {
+    margin-top: 8px;
+}
+
+/* The learner's texts: the list in the library, and one open to be
+   written in, or a correction, in the main area. */
+.text-list {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0 14px 14px;
+    list-style: none;
+}
+
+/* a text, with its button to delete it beside it */
+.text-list li {
+    display: flex;
+    gap: 6px;
+    align-items: stretch;
+}
+
+.text-choice {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px;
+    text-align: left;
+}
+
+.text-choice[aria-pressed="true"] {
+    border-color: var(--accent);
+}
+
+.text-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.text-meta {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.text-editor {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px max(16px, calc((100% - 820px) / 2));
+    overflow-y: auto;
+}
+
+.text-title-input {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+/* the box and the copy of its text with the underlines, laid behind it */
+.text-body {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    border-radius: var(--radius);
+    background: var(--bg);
+}
+
+.text-body textarea {
+    flex: 1;
+    min-height: 24em;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    font-size: 1.02rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    resize: none;
+}
+
+.text-status {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.text-correction {
+    line-height: 1.8;
+}
+
+.text-correction h2 {
+    margin: 0 0 12px;
+    font-size: 1.25rem;
+}
+
+.text-correction h3 {
+    margin: 20px 0 8px;
+    font-size: 1rem;
+}
+
+.text-correction p {
+    margin: 0 0 8px;
+}
+
+.text-correction-number {
+    color: var(--muted);
+}
+
+.text-correction del {
+    color: var(--danger);
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+}
+
+.text-corrected-title {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+/* why a mistake was one, beside its correction */
+.text-correction .text-comment {
+    margin: 0 2px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 0.85em;
+    font-style: italic;
+}
+
+.text-correction ins {
+    color: var(--level-a1);
+    font-weight: 600;
+    text-decoration: none;
 }

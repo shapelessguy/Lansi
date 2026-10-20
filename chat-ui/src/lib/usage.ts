@@ -13,6 +13,7 @@ export const USAGE_CATEGORIES = {
     translation: "Translations",
     vocabulary: "Vocabulary",
     practice: "Practice",
+    tutor: "Tutor",
 } as const;
 
 export type UsageCategory = keyof typeof USAGE_CATEGORIES;

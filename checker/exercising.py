@@ -36,7 +36,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -81,6 +81,9 @@ MAX_EMBEDDED_AT_START = 1000
 # it was answered with, and how long what it is told of them may be.
 GUIDANCE_SESSIONS = 20
 MAX_GUIDANCE = 3000
+# the most an exercise is told of what to aim at when a session starts, as
+# the tutor steers it
+MAX_STEERING = 1500
 # how many of the words nearest the topics are printed when a session starts
 SHOWN_WORDS = 15
 # how many of the lessons practised last a session without a lesson reviews
@@ -165,9 +168,19 @@ class Manifest:
     theory: bool = False
     # What the learner chooses besides how many times it is done, by name:
     # each `{"label": ..., "choices": {value: label}}`, the first choice the
-    # one taken unless another is, or `{"label": ..., "min": ..., "max": ...,
+    # one taken unless another is; `{"label": ..., "texts": True}`, one of
+    # the learner's texts that are not corrected yet, which are its choices
+    # by their ids once they are filled in; or `{"label": ..., "min": ..., "max": ...,
     # "default": ...}`, a whole number.
     options: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Whether it practises a lesson; one that does not, such as correcting
+    # a text of the learner's, needs none, and a session of such exercises
+    # alone has no lesson and reviews none.
+    lesson: bool = True
+    # Whether it is done once, with no time limit, such as correcting a
+    # text: how many times it is done, and how long it may take, are not
+    # for the learner to choose.
+    once: bool = False
 
 
 def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
@@ -195,6 +208,8 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
                     str(data.get("description") or ""),
                     data.get("theory") is True,
                     _read_options(data.get("options")),
+                    data.get("lesson") is not False,
+                    data.get("once") is True,
                 )
             )
     return sorted(found, key=lambda manifest: (not manifest.theory, manifest.title))
@@ -212,6 +227,9 @@ def _read_options(value: object) -> dict[str, dict[str, Any]]:
         if not (_ID.fullmatch(name) and isinstance(option, dict)):
             continue
         label = str(option.get("label") or name)
+        if option.get("texts") is True:
+            options[name] = {"label": label, "texts": True, "choices": {}}
+            continue
         choices = option.get("choices")
         if (
             isinstance(choices, dict)
@@ -236,9 +254,21 @@ def _read_options(value: object) -> dict[str, dict[str, Any]]:
     return options
 
 
+def _steering_of(steering: dict[str, str] | None, exercise: str) -> str:
+    """What `steering` says an exercise is to aim at, cut to `MAX_STEERING`
+    characters. Raises ValueError for one that is not text."""
+    said = (steering or {}).get(exercise, "")
+    if not isinstance(said, str):
+        raise ValueError("what an exercise is steered with is text")
+    return " ".join(said.split())[:MAX_STEERING]
+
+
 def default_of(option: dict[str, Any]) -> Any:
-    """The value of an option taken unless another is chosen."""
-    return next(iter(option["choices"])) if "choices" in option else option["default"]
+    """The value of an option taken unless another is chosen: none, for
+    one that has no choices, as a text where the learner has none."""
+    if "choices" in option:
+        return next(iter(option["choices"]), "")
+    return option["default"]
 
 
 def chosen_options(manifest: Manifest, given: object) -> dict[str, Any]:
@@ -251,6 +281,10 @@ def chosen_options(manifest: Manifest, given: object) -> dict[str, Any]:
     values = {}
     for name, option in manifest.options.items():
         value = given.get(name, default_of(option))
+        if option.get("texts") and value not in option["choices"]:
+            raise ValueError(
+                f"{manifest.title} needs one of your texts that is not corrected yet"
+            )
         if "choices" in option:
             if value not in option["choices"]:
                 raise ValueError(
@@ -604,8 +638,29 @@ class Practice:
         # one step at a time, so that two never start from the same state
         self._lock = threading.Lock()
 
-    def exercises(self) -> list[dict[str, str]]:
-        return [asdict(manifest) for manifest in exercises(self._directory)]
+    def exercises(self) -> list[dict[str, Any]]:
+        return [asdict(manifest) for manifest in self._manifests()]
+
+    def _manifests(self) -> list[Manifest]:
+        """The exercises there are, with the learner's texts that are not
+        corrected yet as the choices of an option of texts, by their ids."""
+        texts = {
+            text["id"]: text["title"] or "Untitled"
+            for text in self._store.texts()
+            if text["kind"] == "text" and text["lockedAt"] is None
+        }
+        return [
+            replace(
+                manifest,
+                options={
+                    name: {**option, "choices": texts}
+                    if option.get("texts")
+                    else option
+                    for name, option in manifest.options.items()
+                },
+            )
+            for manifest in exercises(self._directory)
+        ]
 
     def lessons(self, language: str) -> list[dict[str, Any]]:
         """The lessons of `language`. Raises GrammarError."""
@@ -622,6 +677,7 @@ class Practice:
         minutes: dict[str, int] | None = None,
         exam: str = "",
         reviewing: list[str] | None = None,
+        steering: dict[str, str] | None = None,
     ) -> tuple[dict[str, Any], list[Profile]]:
         """Start a session of `lesson`, with the exercises `chosen`, each
         with how many instances of it there are to be, the `options` it
@@ -630,6 +686,8 @@ class Practice:
         theory comes first, with no instances and no time limit, as it is
         not answered. Without a lesson, the session reviews the lessons
         practised last, or those `reviewing` names, and has no theory.
+        What `steering` says of an exercise, such as what the tutor wants
+        it to aim at, is told to it first, among what it is to heed.
 
         A session with an `exam` is a part of an evaluation: what the exam
         says the part is like is told to every exercise of it, and what is
@@ -638,9 +696,15 @@ class Practice:
         ProfileError if the words could not be embedded."""
         choosing = choosing or Choosing()
         minutes = minutes or {}
-        known = {manifest.id: manifest for manifest in exercises(self._directory)}
+        known = {manifest.id: manifest for manifest in self._manifests()}
         reviewed: list[str] = []
-        if not lesson:
+        # exercises that practise no lesson need none, and review none
+        lessonless = bool(chosen) and all(
+            exercise in known and not known[exercise].lesson for exercise in chosen
+        )
+        if not lesson and lessonless:
+            pass
+        elif not lesson:
             if any(exercise in known and known[exercise].theory for exercise in chosen):
                 raise ValueError("theory is that of a lesson: choose one")
             reviewed = self.practised(language) if reviewing is None else reviewing
@@ -658,7 +722,7 @@ class Practice:
         for exercise, instances in chosen.items():
             if exercise not in known:
                 raise ValueError(f"there is no exercise {exercise}")
-            if known[exercise].theory:
+            if known[exercise].theory or known[exercise].once:
                 continue
             if not isinstance(instances, int) or not 0 < instances <= MAX_INSTANCES:
                 raise ValueError(f"an exercise has 1 to {MAX_INSTANCES} instances")
@@ -666,7 +730,11 @@ class Practice:
             if not _whole(limit) or not 0 <= limit <= MAX_MINUTES:
                 raise ValueError(f"an exercise takes 0 to {MAX_MINUTES} minutes")
         chosen = {
-            exercise: 0 if known[exercise].theory else instances
+            exercise: 0
+            if known[exercise].theory
+            else 1
+            if known[exercise].once
+            else instances
             for exercise, instances in sorted(
                 chosen.items(), key=lambda each: not known[each[0]].theory
             )
@@ -695,11 +763,23 @@ class Practice:
             chosen,
             words,
             choosing.mix_topics and len(topics) > 1,
-            {exercise: self.guidance(exercise) for exercise in chosen},
+            {
+                exercise: "\n\n".join(
+                    each
+                    for each in (
+                        _steering_of(steering, exercise),
+                        self.guidance(exercise),
+                    )
+                    if each
+                )
+                for exercise in chosen
+            },
             reviewed,
             values,
             {
-                exercise: 0 if known[exercise].theory else minutes.get(exercise, 0)
+                exercise: 0
+                if known[exercise].theory or known[exercise].once
+                else minutes.get(exercise, 0)
                 for exercise in chosen
             },
             {exercise: exam for exercise in chosen} if exam else {},
@@ -847,8 +927,36 @@ class Practice:
             self._store.finish_exercise(
                 session_id, exercise, reply.get("results"), reply.get("scores")
             )
+            self._take_texts(session, exercise, reply.get("results"))
         self._log_later(session, exercise, request["context"], ask)
         return None, used
+
+    def _take_texts(
+        self, session: dict[str, Any], exercise: str, results: object
+    ) -> None:
+        """Keep what an exercise did with the texts of its options, as its
+        `results` say under `texts`, by the name of each option: the text
+        as it was corrected, which is then locked, and its correction."""
+        done = results.get("texts") if isinstance(results, dict) else None
+        chosen = session["options"].get(exercise, {})
+        for name, text in done.items() if isinstance(done, dict) else []:
+            if not (
+                isinstance(text, dict)
+                and isinstance(text.get("content"), str)
+                and isinstance(text.get("correction"), str)
+                and isinstance(chosen.get(name), str)
+            ):
+                continue
+            try:
+                self._store.correct_text(
+                    chosen[name],
+                    text["content"],
+                    uuid.uuid4().hex,
+                    text["correction"],
+                    session["id"],
+                )
+            except ValueError as error:
+                raise ExerciseError(str(error)) from None
 
     def _time_is_up(self, session: dict[str, Any], exercise: str) -> bool:
         """Whether the time an exercise had is up, with a little more for
@@ -869,7 +977,7 @@ class Practice:
         """Have the log of an exercise that is over written in the
         background, if the learner did anything in it."""
         manifest = next(
-            (each for each in exercises(self._directory) if each.id == exercise), None
+            (each for each in self._manifests() if each.id == exercise), None
         )
         grades = self._store.grades(session["id"], exercise)
         written = self._store.written(session["id"], exercise)
@@ -961,6 +1069,9 @@ class Practice:
             lesson = self._grammar.lesson(session["language"], session["lesson"])
         else:
             lesson = self._grammar.review(session["language"], session["lessons"])
+        if lesson is None and not session["lesson"] and not session["lessons"]:
+            # a session of exercises that practise no lesson
+            lesson = {"id": "", "level": "", "title": "", "points": [], "more_info": ""}
         if lesson is None and exam:
             # a level that has no lessons yet is examined all the same
             level = context.get("level") or ""
@@ -977,6 +1088,15 @@ class Practice:
             )
         topics = [self._store.topic(topic) for topic in session["topics"]]
         language = language_of(session["language"])
+        manifest = next(
+            (each for each in exercises(self._directory) if each.id == exercise), None
+        )
+        chosen = session["options"].get(exercise, {})
+        texts = {
+            name: self._store.text(chosen[name])
+            for name, option in (manifest.options if manifest else {}).items()
+            if option.get("texts") and isinstance(chosen.get(name), str)
+        }
         return {
             "language": session["language"],
             "letters": dict(language.equivalents),
@@ -997,4 +1117,14 @@ class Practice:
             "guidance": session["guidance"].get(exercise, ""),
             "minutes": session["minutes"].get(exercise, 0),
             "exam": exam,
+            # the learner's texts the options chose, by the name of each
+            "texts": {
+                name: {
+                    "id": text["id"],
+                    "title": text["title"],
+                    "content": text["content"],
+                }
+                for name, text in texts.items()
+                if text
+            },
         }

@@ -25,7 +25,7 @@ What the learner did, in the order they did it:
 $record
 
 Write, in English:
-- "summary": at most $lines short lines, in this order: how much of the exercise was done; what the learner got right, as the rules and forms they used correctly; what they got wrong, as the rules and forms they used wrongly, the words they did not know and the kinds of mistakes they made. Name the rules of the lesson where they apply. Leave out what was not tested.
+- "summary": at most $lines lines, each a whole sentence, in this order: how much of the exercise was done; what the learner got right, as the rules and forms they used correctly; what they got wrong, as the rules and forms they used wrongly, the words they did not know and the kinds of mistakes they made. Name the rules of the lesson where they apply. Leave out what was not tested.
 - "worked": at most $worked examples of what the learner wrote that was right, with the rule or form it shows. None if nothing was right.
 - "failed": at most $failed examples of what the learner wrote that was wrong, with the correction and what was wrong. None if nothing was wrong.
 In each example, "text" is only the learner's own words, quoted exactly as they wrote them, such as what they put into a gap, and never words the exercise gave; "given" is, if it helps, the part of the exercise they answered, such as the sentence with its gaps.

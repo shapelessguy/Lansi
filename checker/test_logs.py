@@ -67,7 +67,7 @@ def test_a_log_is_asked_with_the_task_the_grades_and_the_lines_it_may_have() -> 
         "  Written by the learner:\n    aufstehe\n"
         "  Correct:\n    stehe; auf"
     ) in prompt
-    assert "at most 4 short lines" in prompt
+    assert "at most 7 lines" in prompt
     assert (log, used.id) == ("0 of 5 done right.", "gen-1")
 
 
@@ -82,7 +82,7 @@ def test_a_log_may_be_longer_the_more_the_learner_wrote() -> None:
         lines_for([], conversation),
     ]
 
-    assert found == [4, 8, 14]
+    assert found == [7, 11, 16]
 
 
 def test_without_grades_the_record_is_what_was_written() -> None:

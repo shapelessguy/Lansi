@@ -159,7 +159,7 @@ def post(
             decoded: dict[str, Any] = json.loads(_read(response, within, where))
             return decoded
     except urllib.error.HTTPError as error:
-        raise ProfileError(_error_message(error, where)) from None
+        raise ProfileError(error_message(error, where)) from None
     except (OSError, ValueError) as error:
         raise ProfileError(f"could not reach {where}: {error}") from None
 
@@ -182,7 +182,7 @@ def send_decisions(body: dict[str, Any], model: Model) -> dict[str, Any]:
     return post(model.endpoint("decisions"), body, model.headers(), model.where)
 
 
-def _error_message(error: urllib.error.HTTPError, where: str) -> str:
+def error_message(error: urllib.error.HTTPError, where: str) -> str:
     """The reason that was given for refusing, or the status if none was."""
     try:
         message = json.load(error)["error"]["message"]

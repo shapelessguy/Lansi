@@ -4,16 +4,24 @@
 /** The panels that share the right-hand side, one at a time. */
 export type Panel = "checks" | "usage" | "settings";
 
-/** Which panels are shown at the sides. */
+/** What the main area shows, as the tabs at the top choose it. */
+export type Activity = "tutor" | "inspector" | "chat" | "books" | "texts" | "practice" | "evaluations";
+
+/** Which panels are shown at the sides, and what the main area shows. */
 export interface Layout {
     /** Whether the panel on the left, with the words, the chats and the texts, is shown. */
     libraryOpen: boolean;
     /** The panel shown on the right, or null if none is. */
     panel: Panel | null;
+    /** What was shown last, which the app opens on. */
+    activity: Activity;
+    /** The text open last, by its id, if any. */
+    text: string | null;
 }
 
 const STORAGE_KEY = "chat-ui.layout";
 const PANELS: readonly unknown[] = ["checks", "usage", "settings"];
+const ACTIVITIES: readonly unknown[] = ["tutor", "inspector", "chat", "books", "texts", "practice", "evaluations"];
 
 /**
  * The layout for a window that wide, in pixels, when none has been chosen
@@ -21,7 +29,7 @@ const PANELS: readonly unknown[] = ["checks", "usage", "settings"];
  * closed there.
  */
 export function defaultLayout(windowWidth: number): Layout {
-    return { libraryOpen: windowWidth > 720, panel: windowWidth > 1300 ? "usage" : null };
+    return { libraryOpen: windowWidth > 720, panel: windowWidth > 1300 ? "usage" : null, activity: "chat", text: null };
 }
 
 /** Fills in anything missing or unusable in a stored layout with the defaults. */
@@ -37,6 +45,8 @@ export function normalizeLayout(stored: unknown, windowWidth: number): Layout {
         panel: candidate.panel === null || PANELS.includes(candidate.panel)
             ? candidate.panel as Panel | null
             : defaults.panel,
+        activity: ACTIVITIES.includes(candidate.activity) ? candidate.activity as Activity : defaults.activity,
+        text: typeof candidate.text === "string" ? candidate.text : null,
     };
 }
 

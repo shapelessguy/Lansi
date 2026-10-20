@@ -1698,3 +1698,306 @@ def test_a_model_on_openrouter_is_not_passed_on(url: str) -> None:
     status, _, _ = relay(f"{url}/models/chat", {"model": "some/model"})
 
     assert status == 400
+
+
+def test_the_tutor_streams_what_it_does_a_line_at_a_time_and_ends_with_what_was_added(
+    with_users: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    replies: list[list[dict[str, Any]]] = [
+        [
+            {"choices": [{"delta": {"reasoning": "Which lessons are there?"}}]},
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call-1",
+                                    "function": {"name": "lessons", "arguments": "{}"},
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+        ],
+        [{"choices": [{"delta": {"content": "Read the first lesson."}}]}],
+    ]
+    asked: list[dict[str, Any]] = []
+
+    def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+        asked.append(body)
+        yield from replies.pop(0)
+
+    monkeypatch.setattr("tutor.stream_chat", stream)
+    ada = log_in(with_users, "ada", "a password")
+    body = {
+        "messages": [{"role": "user", "content": "Hallo"}],
+        # one at an address of its own, which needs no key
+        "model": {"model": "thinker", "url": "http://127.0.0.1:1"},
+        "language": "German",
+        "into": "English",
+        "level": "A1",
+    }
+
+    status, sent, kind = send(
+        f"{with_users}/tutor/chat", "POST", ada, json.dumps(body).encode()
+    )
+
+    every = [json.loads(line) for line in sent.decode().splitlines()]
+    events = [each for each in every if each["type"] not in ("call", "call_done")]
+    assert (status, kind) == (200, "application/x-ndjson; charset=utf-8")
+    assert [event["type"] for event in events] == [
+        "thinking",
+        "tool",
+        "tool_done",
+        "text",
+        "done",
+    ]
+    assert events[1]["doing"] == "Looking at the lessons"
+    assert [message["role"] for message in events[-1]["messages"]] == [
+        "assistant",
+        "tool",
+        "assistant",
+    ]
+    assert "exercise_cloze" in [tool["function"]["name"] for tool in asked[0]["tools"]]
+    assert "They are at level A1" in asked[0]["messages"][0]["content"]
+
+
+def test_the_tutor_is_told_how_an_exercise_went_before_it_goes_on(
+    with_users: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[dict[str, Any]] = []
+
+    def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+        asked.append(body)
+        yield {"choices": [{"delta": {"content": "Well done."}}]}
+
+    monkeypatch.setattr("tutor.stream_chat", stream)
+    ada = log_in(with_users, "ada", "a password")
+    _, listed, _ = send(f"{with_users}/lessons?language=German", "GET", ada)
+    lesson = json.loads(listed)["lessons"][0]["id"]
+    _, made, _ = send(
+        f"{with_users}/sessions",
+        "POST",
+        ada,
+        json.dumps(
+            {"language": "German", "lesson": lesson, "exercises": {"cloze": 1}}
+        ).encode(),
+    )
+    session = json.loads(made)
+    body = {
+        "messages": [
+            {"role": "user", "content": "What next?"},
+            {"role": "assistant", "content": "Fill the gaps."},
+        ],
+        "model": {"model": "thinker", "url": "http://127.0.0.1:1"},
+        "practised": {"session": session["id"], "exercise": "cloze", "tasks": []},
+    }
+
+    _, sent, _ = send(
+        f"{with_users}/tutor/chat", "POST", ada, json.dumps(body).encode()
+    )
+
+    events = [json.loads(line) for line in sent.decode().splitlines()]
+    told = events[-1]["messages"][0]
+    assert told["role"] == "user"
+    assert "Fill the gaps" in told["content"]
+    assert asked[0]["messages"][-1] == told
+    assert events[-1]["messages"][-1] == {"role": "assistant", "content": "Well done."}
+
+
+def test_the_tutor_keeps_only_what_the_learner_wrote_and_what_it_answered(
+    with_users: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    replies: list[list[dict[str, Any]]] = [
+        [
+            {"choices": [{"delta": {"content": "Let me look. "}}]},
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call-1",
+                                    "function": {"name": "lessons", "arguments": "{}"},
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+        ],
+        [{"choices": [{"delta": {"content": "Read the first lesson."}}]}],
+    ]
+
+    def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+        yield from replies.pop(0)
+
+    monkeypatch.setattr("tutor.stream_chat", stream)
+    ada = log_in(with_users, "ada", "a password")
+    body = {
+        "chat": "chat-1",
+        "messages": [{"role": "user", "content": "Hallo"}],
+        "model": {"model": "thinker", "url": "http://127.0.0.1:1"},
+        "language": "German",
+    }
+
+    send(f"{with_users}/tutor/chat", "POST", ada, json.dumps(body).encode())
+    _, listed, _ = send(f"{with_users}/tutor/chats", "GET", ada)
+    _, kept, _ = send(f"{with_users}/tutor/chats/chat-1", "GET", ada)
+    deleted, _, _ = send(f"{with_users}/tutor/chats/chat-1", "DELETE", ada)
+    gone, _, _ = send(f"{with_users}/tutor/chats/chat-1", "GET", ada)
+
+    assert [chat["first"] for chat in json.loads(listed)["chats"]] == ["Hallo"]
+    assert [
+        (each["role"], each["content"]) for each in json.loads(kept)["messages"]
+    ] == [("user", "Hallo"), ("assistant", "Let me look. \n\nRead the first lesson.")]
+    assert (deleted, gone) == (200, 404)
+
+
+def test_a_closed_chat_with_the_tutor_takes_nothing_more_and_leaves_memories(
+    with_users: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+        yield {"choices": [{"delta": {"content": "Good luck in the exam!"}}]}
+
+    asked: list[dict[str, Any]] = []
+
+    def chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
+        asked.append(body)
+        said = {"add": ["Has the B1 exam on 2026-12-05."], "remove": [{"id": 99}]}
+        return {"choices": [{"message": {"content": json.dumps(said)}}]}
+
+    monkeypatch.setattr("tutor.stream_chat", stream)
+    monkeypatch.setattr("server.send_chat", chat)
+    ada = log_in(with_users, "ada", "a password")
+    model = {"model": "thinker", "url": "http://127.0.0.1:1"}
+    body = {
+        "chat": "chat-1",
+        "messages": [{"role": "user", "content": "My exam is on 5 December."}],
+        "model": model,
+    }
+    send(f"{with_users}/tutor/chat", "POST", ada, json.dumps(body).encode())
+
+    _, closed, _ = send(
+        f"{with_users}/tutor/chats/chat-1/close",
+        "POST",
+        ada,
+        json.dumps({"model": model}).encode(),
+    )
+    refused, _, _ = send(
+        f"{with_users}/tutor/chat", "POST", ada, json.dumps(body).encode()
+    )
+    _, memories, _ = send(f"{with_users}/tutor/memories", "GET", ada)
+
+    assert [task["kind"] for task in json.loads(closed)["tasks"]] == ["memories"]
+    assert refused == 400
+    assert "Learner: My exam is on 5 December." in asked[0]["messages"][0]["content"]
+    assert [each["content"] for each in json.loads(memories)["memories"]] == [
+        "Has the B1 exam on 2026-12-05."
+    ]
+
+
+def test_the_tutor_is_told_its_memories_and_forgets_one_the_learner_deletes(
+    with_users: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[dict[str, Any]] = []
+
+    def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+        asked.append(body)
+        yield {"choices": [{"delta": {"content": "Hi."}}]}
+
+    def chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
+        said = {"add": ["Likes football."], "remove": []}
+        return {"choices": [{"message": {"content": json.dumps(said)}}]}
+
+    monkeypatch.setattr("tutor.stream_chat", stream)
+    monkeypatch.setattr("server.send_chat", chat)
+    ada = log_in(with_users, "ada", "a password")
+    model = {"model": "thinker", "url": "http://127.0.0.1:1"}
+
+    def talk(chat_id: str) -> None:
+        body = {
+            "chat": chat_id,
+            "messages": [{"role": "user", "content": "Hallo"}],
+            "model": model,
+        }
+        send(f"{with_users}/tutor/chat", "POST", ada, json.dumps(body).encode())
+
+    talk("chat-1")
+    send(
+        f"{with_users}/tutor/chats/chat-1/close",
+        "POST",
+        ada,
+        json.dumps({"model": model}).encode(),
+    )
+    talk("chat-2")
+    _, listed, _ = send(f"{with_users}/tutor/memories", "GET", ada)
+    [memory] = json.loads(listed)["memories"]
+    deleted, _, _ = send(f"{with_users}/tutor/memories/{memory['id']}", "DELETE", ada)
+    _, after, _ = send(f"{with_users}/tutor/memories", "GET", ada)
+
+    assert "do not remember anything" in asked[0]["messages"][0]["content"]
+    assert "Likes football." in asked[1]["messages"][0]["content"]
+    assert deleted == 200
+    assert json.loads(after)["memories"] == []
+    assert [each["removedBy"] for each in json.loads(after)["removed"]] == ["learner"]
+
+
+def test_chats_closed_one_after_another_do_not_leave_the_same_memory_twice(
+    with_users: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+        yield {"choices": [{"delta": {"content": "Hi."}}]}
+
+    def chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
+        said = {"add": ["Likes football."], "remove": []}
+        return {"choices": [{"message": {"content": json.dumps(said)}}]}
+
+    monkeypatch.setattr("tutor.stream_chat", stream)
+    monkeypatch.setattr("server.send_chat", chat)
+    ada = log_in(with_users, "ada", "a password")
+    model = {"model": "thinker", "url": "http://127.0.0.1:1"}
+    for chat_id in ("chat-1", "chat-2"):
+        body = {
+            "chat": chat_id,
+            "messages": [{"role": "user", "content": "I play football."}],
+            "model": model,
+        }
+        send(f"{with_users}/tutor/chat", "POST", ada, json.dumps(body).encode())
+    for chat_id in ("chat-1", "chat-2"):
+        send(
+            f"{with_users}/tutor/chats/{chat_id}/close",
+            "POST",
+            ada,
+            json.dumps({"model": model}).encode(),
+        )
+
+    _, listed, _ = send(f"{with_users}/tutor/memories", "GET", ada)
+
+    assert [each["content"] for each in json.loads(listed)["memories"]] == [
+        "Likes football."
+    ]
+
+
+def test_a_text_is_kept_listed_and_deleted_and_one_corrected_is_not_changed(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    text = {"title": "Wochenende", "content": "Ich bin gegeht.", "language": "German"}
+
+    kept, _, _ = send(f"{with_users}/texts/t1", "PUT", ada, json.dumps(text).encode())
+    _, listed, _ = send(f"{with_users}/texts", "GET", ada)
+    _, one, _ = send(f"{with_users}/texts/t1", "GET", ada)
+    deleted, _, _ = send(f"{with_users}/texts/t1", "DELETE", ada)
+    gone, _, _ = send(f"{with_users}/texts/t1", "GET", ada)
+
+    assert kept == 200
+    assert [(each["title"], each["words"]) for each in json.loads(listed)["texts"]] == [
+        ("Wochenende", 3)
+    ]
+    assert json.loads(one)["content"] == "Ich bin gegeht."
+    assert (deleted, gone) == (200, 404)

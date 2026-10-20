@@ -29,10 +29,10 @@ Asker = Callable[[list[dict[str, Any]]], tuple[str, Profile]]
 
 # How many lines the account may have, by how many words the learner wrote
 # at most: the last is for any more.
-LINES_BY_WORDS = ((80, 4), (400, 8), (None, 14))
+LINES_BY_WORDS = ((80, 7), (400, 11), (None, 16))
 # how many examples there may be of what worked, and of what did not
-MAX_WORKED = 2
-MAX_FAILED = 3
+MAX_WORKED = 3
+MAX_FAILED = 5
 # how much of what was written the model is shown, in characters
 MAX_WRITTEN = 20_000
 

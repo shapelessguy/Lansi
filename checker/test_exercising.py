@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from pathlib import Path
@@ -962,3 +963,96 @@ def test_a_session_of_an_exam_tells_its_exercises_the_exam_and_is_kept_from_prac
     assert shown == {"minutes": 0, "exam": "Exam: Goethe A1, Lesen, Teil 1."}
     assert session["kind"] == "evaluation"
     assert practice._store.sessions() == []  # noqa: SLF001
+
+
+def test_a_text_of_the_learner_is_corrected_in_a_session_of_no_lesson_and_locked(
+    directory: Path, tmp_path: Path
+) -> None:
+    shutil.copytree(EXERCISES_DIRECTORY / "correcting", directory / "correcting")
+    # the prompts the kit shares with the server, found beside the exercises
+    shutil.copytree(
+        EXERCISES_DIRECTORY.parent / "prompts", directory.parent / "prompts"
+    )
+    store = UserStore(tmp_path / "user")
+    store.save_text("t1", "Wochenende", "Ich bin gegeht.", "German")
+    store.save_text("t2", "Done before", "Schon korrigiert.", "German")
+    store.correct_text("t2", "Schon korrigiert.", "c2", "", "s0")
+    practice = Practice(store, directory=directory)
+    [correcting] = [each for each in practice.exercises() if each["id"] == "correcting"]
+    marked = json.dumps(
+        {
+            "parts": [
+                {"text": "Ich bin "},
+                {"wrong": "gegeht", "right": "gegangen", "why": "irregular"},
+                {"text": "."},
+            ],
+            "summary": "Participles.",
+        }
+    )
+
+    session, _ = practice.start_session(
+        "German", "", [], {"correcting": 1}, options={"correcting": {"text": "t1"}}
+    )
+    # it is corrected as it starts, with nothing asked of the learner
+    shown, _ = practice.step(
+        session["id"], "correcting", "start", None, LEARNER, answering(marked)
+    )
+    practice.step(
+        session["id"], "correcting", "finish", None, LEARNER, answering(LOG_REPLY)
+    )
+
+    # only the texts not corrected yet may be chosen
+    assert correcting["options"]["text"]["choices"] == {"t1": "Wochenende"}
+    assert shown["title"] == "Wochenende" and len(shown["parts"]) == 3
+    text = store.text("t1")
+    assert text is not None and text["lockedAt"] is not None
+    [correction] = [
+        each
+        for each in store.texts()
+        if each["kind"] == "correction" and each["corrects"] == "t1"
+    ]
+    kept = store.text(correction["id"])
+    assert kept is not None and "~~gegeht~~ **gegangen**" in kept["content"]
+    with pytest.raises(ValueError, match="not corrected yet"):
+        practice.start_session(
+            "German", "", [], {"correcting": 1}, options={"correcting": {"text": "t1"}}
+        )
+
+
+def test_what_an_exercise_is_steered_with_is_told_first_among_what_it_heeds(
+    practice: Practice,
+) -> None:
+    session, _ = practice.start_session(
+        "German",
+        LESSON,
+        [],
+        {"echo": 1},
+        steering={"echo": "  Every sentence needs   seit with the dative. "},
+    )
+
+    assert session["guidance"]["echo"] == "Every sentence needs seit with the dative."
+    with pytest.raises(ValueError):
+        practice.start_session("German", LESSON, [], {"echo": 1}, steering={"echo": 3})  # type: ignore[dict-item]
+
+
+def test_an_exercise_done_once_has_one_instance_and_no_time_limit(
+    directory: Path, tmp_path: Path
+) -> None:
+    shutil.copytree(EXERCISES_DIRECTORY / "correcting", directory / "correcting")
+    store = UserStore(tmp_path / "user")
+    store.save_text("t1", "Wochenende", "Ich bin gegeht.", "German")
+    practice = Practice(store, directory=directory)
+
+    session, _ = practice.start_session(
+        "German",
+        "",
+        [],
+        {"correcting": 5},
+        options={"correcting": {"text": "t1"}},
+        minutes={"correcting": 10},
+    )
+
+    assert (session["exercises"]["correcting"], session["minutes"]["correcting"]) == (
+        1,
+        0,
+    )

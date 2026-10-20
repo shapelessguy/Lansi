@@ -28,7 +28,7 @@ $record
 The scores, from 0 to 100, as the exam marks it: $scores. $passed
 
 Write, in English:
-- "summary": at most $lines short lines: which modules and parts were done and how they went; for each skill, what the learner managed and what they did not, as the kinds of task they did right and wrong, such as following numbers and times in a dialogue, finding a detail in an advert, dealing with every point of a message; the rules, forms and words they used rightly and wrongly in what they wrote and said; and what stands most between them and passing at this level.
+- "summary": at most $lines lines, each a whole sentence: which modules and parts were done and how they went; for each skill, what the learner managed and what they did not, as the kinds of task they did right and wrong, such as following numbers and times in a dialogue, finding a detail in an advert, dealing with every point of a message; the rules, forms and words they used rightly and wrongly in what they wrote and said; and what stands most between them and passing at this level.
 - "worked": at most $worked examples of what the learner answered that was right, with what it shows.
 - "failed": at most $failed examples of what the learner answered that was wrong, with the correction and what was wrong.
 In each example, "text" is only the learner's own words, or the answer they chose, quoted exactly; "given" is, if it helps, what the exam asked.

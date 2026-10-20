@@ -15,9 +15,9 @@ import {
 import { SidePanel } from "./SidePanel";
 
 interface Props {
-    /** The chat or text whose totals are shown first, and what to call it. */
+    /** The chat or text whose totals are shown first, and what to call it; none where nothing is open that is counted on its own, such as a book. */
     chatId: string;
-    currentLabel: string;
+    currentLabel: string | null;
     /** Changes whenever usage is recorded, so that the totals are asked for again. */
     revision: number;
     onClose: () => void;
@@ -124,7 +124,7 @@ export function UsagePanel({ chatId, currentLabel, revision, onClose }: Props) {
                 {error && <p className="usage-note">The usage could not be loaded: {error}</p>}
                 {summary && (
                     <>
-                        <Totals title={currentLabel} totals={summary.chat} />
+                        {currentLabel !== null && <Totals title={currentLabel} totals={summary.chat} />}
                         <Totals title="Today" totals={summary.since} />
                         <Totals title="Everything" totals={summary.everything} />
                         <ByModel rows={summary.byModel} />

@@ -51,6 +51,8 @@ from kit import (
 )
 
 _GAP = re.compile(r"\[([^\[\]]+)\]")
+# how many hints there may be in all the sentences of a set
+MAX_HINTS = 1
 # how many sentences an instance is
 SENTENCES = 5
 # what the answers for the gaps of a sentence are joined with in its grade
@@ -164,7 +166,21 @@ def read_items(
         )
     if not items:
         raise ModelError("the model made no sentence with a gap")
-    return items[:count]
+    return fewer_hints(items[:count])
+
+
+def fewer_hints(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The sentences of a set with no more than `MAX_HINTS` hints in all,
+    the first ones given, as a learner finds a word from the sentence and
+    the rule rather than from a hint."""
+    left = MAX_HINTS
+    for item in items:
+        kept = []
+        for hint in item["hints"]:
+            kept.append(hint if hint and left > 0 else "")
+            left -= 1 if hint else 0
+        item["hints"] = kept
+    return items
 
 
 def sentences_of(context: dict[str, Any]) -> int:

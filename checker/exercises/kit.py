@@ -26,7 +26,25 @@ taken unless another is chosen:
                 "questions": {"label": "Questions", "min": 1, "max": 8,
                               "default": 3}}
 
+An option may also be `{"label": "Text", "texts": true}`: one of the
+learner's own texts that are not corrected yet, such as their homework, by
+its id, which the app fills in as its choices. The exercise is told the
+text it chose under `texts` in the context, by the name of the option, and
+may say what came of it in its `results` under `texts`, by the same name:
+`{"content": ..., "correction": ...}`, the text as it was when it was
+corrected, which the app keeps and locks, and a copy of it with the
+corrections and their comments worked in, in Markdown, which the app shows
+in place of the text from then on.
+
 The app remembers what the learner chose of each, for the next time.
+
+An exercise whose manifest has `"once": true` is done once, with no time
+limit, such as one that corrects a text: how many instances it has, and how
+long it may take, are not for the learner to choose.
+
+An exercise whose manifest has `"lesson": false` practises no lesson, such
+as one that corrects a text: a session of such exercises alone has none,
+and its `lesson` in the context is empty.
 
 An exercise whose manifest has `"theory": true` teaches rather than asks:
 it is listed first and done first in a session, is not done a number of
@@ -59,7 +77,8 @@ The context is the same for every call:
      "options": {"then": "questions"},
      "guidance": "...",
      "minutes": 0,
-     "exam": ""}
+     "exam": "",
+     "texts": {"text": {"id": ..., "title": ..., "content": ...}}}
 
 A session of no lesson reviews the lessons practised last, and its
 `lesson` is made of them: its id is empty, it has every point of them once,

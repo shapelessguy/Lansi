@@ -53,6 +53,8 @@ export interface ExerciseInfo {
     description: string;
     /** Whether it teaches rather than asks: it comes first, is done once, and is graded on nothing. */
     theory: boolean;
+    /** Whether it is done once, with no time limit, such as correcting a text. */
+    once?: boolean;
     /** Its options, by their names. */
     options: Record<string, ExerciseOption>;
 }
@@ -236,6 +238,7 @@ export function startSession(
     apiKey: string,
     options: Record<string, Record<string, OptionValue>> = {},
     minutes: Record<string, number> = {},
+    guidance: Record<string, string> = {},
 ): Promise<PracticeSession & { usage: ProfileUsage[] }> {
     const chosenOptions = Object.fromEntries(Object.entries(options).filter(([id]) => id in exercises));
     const chosenMinutes = Object.fromEntries(Object.entries(minutes).filter(([id]) => id in exercises));
@@ -246,6 +249,8 @@ export function startSession(
         exercises,
         options: chosenOptions,
         minutes: chosenMinutes,
+        // what each exercise is to aim at, as the tutor steers it
+        guidance,
         ...choosing,
     });
     return call("/sessions", { ...init, headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {} });

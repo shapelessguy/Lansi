@@ -1,0 +1,35 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+   License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+h3 {
+    margin: 0 0 4px;
+    font-size: 1.05em;
+}
+
+.corrected {
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
+
+del {
+    color: #d93025;
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+}
+
+ins {
+    margin-left: 3px;
+    color: #1e8e3e;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.why {
+    margin: 0 3px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: rgba(128, 128, 128, 0.15);
+    color: #9a9a9a;
+    font-size: 0.85em;
+    font-style: italic;
+}
