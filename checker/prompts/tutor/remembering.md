@@ -18,6 +18,7 @@ Write down only what will still be true and still matter months from now, and th
 - who they are, as they said it: their name, their work or studies, where they live, their family, their interests;
 - why they learn and by when: a goal, an exam with its date, a move or a trip;
 - how they want to be taught, if they said it as something lasting, such as "always correct my mistakes at once" or "I never want to do translations";
+- how they want you to talk with them, if they said it as something lasting: more or less formal, shorter or longer answers, more or fewer jokes, in which language, such as "Wants the tutor to be blunt and to keep answers short.";
 - how far they have come on the whole, when the lesson shows a step that lasts, such as "Has done all the A2 lessons and moved on to B1." or "Now reads novels in $language without much help.": a stage reached, not a single result.
 
 Never write down:

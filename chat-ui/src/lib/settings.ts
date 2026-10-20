@@ -23,6 +23,8 @@ export interface Settings {
     level: string;
     /** The language what is selected is translated into, by its English name. */
     translateInto: string;
+    /** How the tutor is to talk with the learner, in their own words; what they ask it in a chat, once remembered, goes first. */
+    tutorTone: string;
     /** The set of words `{{words}}` stands for, by its id, for each language. Without one it is every word. */
     activeSets: Record<string, string>;
     model: ModelChoice;
@@ -177,6 +179,7 @@ export function defaultSettings(): Settings {
         ankiLanguage: "German",
         level: "B1",
         translateInto: "English",
+        tutorTone: "",
         activeSets: {},
         model: onOpenRouter("openrouter/auto"),
         translationModel: onOpenRouter(""),
@@ -274,6 +277,8 @@ export function normalizeSettings(stored: unknown): Settings {
         ankiLanguage: LANGUAGES.find((language) => language === candidate.ankiLanguage) ?? defaults.ankiLanguage,
         level: LEVELS.find((level) => level === candidate.level) ?? defaults.level,
         translateInto: text("translateInto"),
+        // left empty on purpose, for the tutor's own way of talking
+        tutorTone: typeof candidate.tutorTone === "string" ? candidate.tutorTone : defaults.tutorTone,
         activeSets: typeof candidate.activeSets === "object" && candidate.activeSets !== null
             ? candidate.activeSets
             : defaults.activeSets,

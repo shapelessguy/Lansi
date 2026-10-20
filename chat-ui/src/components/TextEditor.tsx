@@ -1,16 +1,12 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Fragment, useEffect, useRef, useState } from "react";
 
-import { type ProfileUsage, sentenceAtCaret } from "../lib/checker";
-import { requestQuestions } from "../lib/questions";
 import type { Settings } from "../lib/settings";
 import { blocksOf, fetchText, type Inline, saveText, type Text } from "../lib/texts";
 import type { UsageEntry } from "../lib/usage";
-import { ChecksPanel } from "./ChecksPanel";
-import { useWritingCheck } from "./WritingChecks";
+import { CheckedTextarea } from "./CheckedTextarea";
 
 interface Props {
     id: string;
@@ -157,14 +153,19 @@ export function TextEditor(
                     {new Date((text.lockedAt as number) * 1000).toLocaleDateString()}: it stays as it was handed in.
                 </p>
             )}
-            <TextBox
-                id={id}
-                content={text.content ?? ""}
-                locked={locked}
+            {/* made only once the text is there, as the box is registered for its sentences when it is made */}
+            <CheckedTextarea
+                className="text-body"
+                value={text.content ?? ""}
+                placeholder="Write here"
+                aria-label="Text"
+                readOnly={locked}
                 onChange={(content) => change(text.title, content)}
                 settings={settings}
                 onSettingsChange={onSettingsChange}
                 onUsage={onUsage}
+                // counted under the text, as what the chat asks is under the chat
+                usageId={`text:${id}`}
                 checksSlot={checksSlot}
                 onCloseChecks={onCloseChecks}
                 onEditQuestions={onEditQuestions}
@@ -175,101 +176,6 @@ export function TextEditor(
                 {error && <span className="error">· {error}</span>}
             </div>
         </section>
-    );
-}
-
-/**
- * The box a text is written in, its spelling checked and its sentences
- * profiled as the chat's are, with the checks of the sentence under the caret
- * in the panel on the right. It is made only once the text is there, as the
- * box is registered for its sentences when it is made.
- */
-function TextBox(
-    {
-        id,
-        content,
-        locked,
-        onChange,
-        settings,
-        onSettingsChange,
-        onUsage,
-        checksSlot,
-        onCloseChecks,
-        onEditQuestions,
-    }:
-        & Pick<
-            Props,
-            "id" | "settings" | "onSettingsChange" | "onUsage" | "checksSlot" | "onCloseChecks" | "onEditQuestions"
-        >
-        & {
-            content: string;
-            locked: boolean;
-            onChange: (content: string) => void;
-        },
-) {
-    const box = useRef<HTMLTextAreaElement>(null);
-    const questions = useMemo(() => requestQuestions(settings.questions), [settings.questions]);
-    // what profiling the sentences asks is counted under the text, as that of the chat under the chat
-    const countProfiling = useCallback(
-        (used: ProfileUsage) =>
-            onUsage({
-                id: used.id,
-                at: Date.now(),
-                category: "checking",
-                chatId: `text:${id}`,
-                model: used.model,
-                promptTokens: used.input_tokens,
-                completionTokens: used.output_tokens,
-                cost: used.cost,
-            }),
-        [id, onUsage],
-    );
-    const { check, lastCaret } = useWritingCheck(
-        box,
-        {
-            apiKey: settings.apiKey,
-            model: settings.profileModel,
-            questions,
-            rateWords: settings.rateWords,
-        },
-        countProfiling,
-    );
-    return (
-        <>
-            <div className="text-body" data-writing>
-                <textarea
-                    ref={box}
-                    value={content}
-                    placeholder="Write here"
-                    aria-label="Text"
-                    spellCheck={false}
-                    readOnly={locked}
-                    onChange={(event) => onChange(event.target.value)}
-                />
-            </div>
-            {checksSlot && createPortal(
-                <ChecksPanel
-                    questions={settings.questions}
-                    onToggle={(question) =>
-                        onSettingsChange({
-                            ...settings,
-                            questions: settings.questions.map((each) =>
-                                each.id === question ? { ...each, enabled: !each.enabled } : each
-                            ),
-                        })}
-                    rateWords={settings.rateWords}
-                    onRateWords={(rateWords) => onSettingsChange({ ...settings, rateWords })}
-                    sentence={content ? sentenceAtCaret(check, lastCaret) : null}
-                    hasText={content.trim() !== ""}
-                    checkerRunning={check !== null}
-                    hasKey={settings.apiKey !== ""}
-                    model={settings.profileModel}
-                    onEditQuestions={onEditQuestions}
-                    onClose={onCloseChecks}
-                />,
-                checksSlot,
-            )}
-        </>
     );
 }
 

@@ -51,6 +51,13 @@ interface Watch {
     owner: Owner | null;
     /** The background and position the box had, which are changed to lay the copy behind it. */
     restore: { background: string; position: string };
+    /**
+     * The element the box is in, made the one the copy is placed in, so that
+     * the copy scrolls with the box, and the position it had. Otherwise the
+     * copy may be placed in an element outside what the box scrolls in, and
+     * be left behind, over whatever comes under it, as the box scrolls away.
+     */
+    parent: { element: HTMLElement; position: string } | null;
     background: string;
     sent: Sent;
     awaiting: boolean;
@@ -58,7 +65,7 @@ interface Watch {
     text: string;
     caret: number | null;
     lastCaret: number | null;
-    /** Where the box was last, to tell when the copy must follow it. */
+    /** How large the box was last, and where, to tell when the copy must be styled again. */
     place: string;
     detach: () => void;
 }
@@ -231,9 +238,12 @@ export function WritingChecks({ language, children }: { language: string; childr
                 width: `${element.offsetWidth}px`,
                 height: `${element.offsetHeight}px`,
             });
-            // laid where the box is, whatever it is placed by
-            const at = element.getBoundingClientRect();
-            const from = mirror.getBoundingClientRect();
+        }
+        // laid where the box is, whatever it is placed by, and laid there
+        // again should it be left behind as the box moves
+        const at = element.getBoundingClientRect();
+        const from = mirror.getBoundingClientRect();
+        if (Math.abs(at.left - from.left) > 0.5 || Math.abs(at.top - from.top) > 0.5) {
             mirror.style.left = `${parseFloat(mirror.style.left) + at.left - from.left}px`;
             mirror.style.top = `${parseFloat(mirror.style.top) + at.top - from.top}px`;
         }
@@ -262,6 +272,13 @@ export function WritingChecks({ language, children }: { language: string; childr
         const mirror = document.createElement("div");
         mirror.setAttribute("aria-hidden", "true");
         Object.assign(mirror.style, { position: "absolute", left: "0px", top: "0px" });
+        const container = element.parentElement;
+        const parent = container && getComputedStyle(container).position === "static"
+            ? { element: container, position: container.style.position }
+            : null;
+        if (parent) {
+            parent.element.style.position = "relative";
+        }
         element.before(mirror);
         const restore = { background: element.style.background, position: element.style.position };
         const watch: Watch = {
@@ -270,6 +287,7 @@ export function WritingChecks({ language, children }: { language: string; childr
             mirror,
             owner,
             restore,
+            parent,
             background: style.backgroundColor,
             sent: { text: "", caret: null, asked: "" },
             // Requests to the model may be left from before, such as from
@@ -305,6 +323,9 @@ export function WritingChecks({ language, children }: { language: string; childr
             element.removeEventListener("mouseleave", closeHintSoon);
             mirror.remove();
             Object.assign(element.style, restore);
+            if (parent) {
+                parent.element.style.position = parent.position;
+            }
         };
         watches.current.set(element, watch);
         follow(watch);
@@ -382,6 +403,25 @@ export function WritingChecks({ language, children }: { language: string; childr
             clearInterval(timer);
         };
     }, [detach, follow, redraw]);
+
+    // What was found in one language does not hold in another: once the
+    // language changes, every box is shown unchecked, an answer still to come
+    // is let go of, and the box is sent again, its finished sentences with it.
+    const checkedLanguage = useRef(language);
+    useEffect(() => {
+        if (checkedLanguage.current === language) {
+            return;
+        }
+        checkedLanguage.current = language;
+        watches.current.forEach((watch) => {
+            watch.check = null;
+            watch.sent = { ...watch.sent, asked: "" };
+            watch.awaiting = true;
+            watch.owner?.onCheck({ check: null, lastCaret: watch.lastCaret });
+        });
+        setHint(null);
+        redraw();
+    }, [language, redraw]);
 
     // the boxes are given back as they were when this goes
     useEffect(() => () => watches.current.forEach((watch) => watch.detach()), []);

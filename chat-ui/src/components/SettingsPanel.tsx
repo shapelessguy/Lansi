@@ -39,7 +39,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
     { id: "general", label: "General" },
     { id: "models", label: "Models" },
     { id: "content", label: "Prompts" },
-    { id: "questions", label: "Questions" },
+    { id: "questions", label: "Spelling" },
     { id: "exercises", label: "Exercises" },
     { id: "look", label: "Look" },
 ];
@@ -252,6 +252,19 @@ function GeneralTab(
                     onChange={(translateInto) => onChange({ ...settings, translateInto })}
                 />
                 <small>The language text you select is translated into, and exercises explain in.</small>
+            </label>
+            <h3>Tutor</h3>
+            <label className="field">
+                <span>Tutor's tone</span>
+                <textarea
+                    rows={3}
+                    placeholder="Such as: friendly but direct, short answers, correct every mistake"
+                    value={settings.tutorTone}
+                    onChange={(event) => onChange({ ...settings, tutorTone: event.target.value })}
+                />
+                <small>
+                    How the tutor talks with you. What you ask it in a lesson, once it remembers it, goes first.
+                </small>
             </label>
             <h3>Anki</h3>
             <AnkiAccount anki={anki} onAnki={onAnki} onDecks={onDecks} />

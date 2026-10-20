@@ -9,6 +9,9 @@ from typing import Any
 import pytest
 from storage import UserStore
 
+# What came with version 22, taken out of a store to make it as one was
+# before, along with what came before it: what else a tutor message holds.
+BEFORE_TURNS = " ALTER TABLE tutor_messages DROP COLUMN turn;"
 # What came with version 18, taken out of a store to make it as one was
 # before: the chats with the tutor.
 BEFORE_TUTOR = """
@@ -924,6 +927,48 @@ def test_a_chat_with_the_tutor_keeps_nothing_but_the_learner_and_the_tutor(
     assert store.tutor_chat("c1") is None
 
 
+def test_an_answer_of_the_tutor_keeps_what_was_shown_and_how_far_its_exercises_got(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    offer = {"kind": "exercise", "exercise": "cloze", "title": "Fill the gaps"}
+    turn = {"messages": [{"role": "assistant", "content": "Here."}], "offers": [offer]}
+    store.add_tutor_messages(
+        "c1",
+        "German",
+        [
+            {"role": "user", "content": "Hallo"},
+            {"role": "assistant", "content": "Here.", "turn": turn},
+        ],
+    )
+
+    store.set_tutor_offer("c1", 1, 0, "s1", "running")
+    store.set_tutor_offer("c1", 1, 0, "s1", "done")
+
+    chat = store.tutor_chat("c1")
+    assert chat is not None
+    learner, answer = chat["messages"]
+    assert learner["turn"] == {}
+    assert answer["turn"]["messages"] == turn["messages"]
+    assert answer["turn"]["offers"] == [{**offer, "session": "s1", "status": "done"}]
+    for position, place, status in [(0, 0, "done"), (1, 1, "done"), (1, 0, "won")]:
+        with pytest.raises(ValueError):
+            store.set_tutor_offer("c1", position, place, "s1", status)
+
+
+def test_tutor_messages_kept_before_turns_were_have_none(tmp_path: Path) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.add_tutor_messages("c1", "German", [{"role": "user", "content": "Hallo"}])
+    before._db.executescript(BEFORE_TURNS)  # noqa: SLF001
+    before._db.execute("PRAGMA user_version = 21")  # noqa: SLF001
+    before.close()
+
+    chat = UserStore(tmp_path / "ada").tutor_chat("c1")
+
+    assert chat is not None
+    assert chat["messages"][0]["turn"] == {}
+
+
 def test_a_chat_with_the_tutor_that_is_deleted_is_gone_with_its_messages(
     tmp_path: Path,
 ) -> None:
@@ -981,7 +1026,7 @@ def test_memories_can_be_kept_where_there_were_tutor_chats_before_them(
     before.add_tutor_messages("c1", "German", [{"role": "user", "content": "Hallo"}])
     before._db.executescript(  # noqa: SLF001
         "DROP TABLE learner_texts; DROP TABLE tutor_memories;"
-        " ALTER TABLE tutor_chats DROP COLUMN closed_at;"
+        " ALTER TABLE tutor_chats DROP COLUMN closed_at;" + BEFORE_TURNS
     )
     before._db.execute("PRAGMA user_version = 18")  # noqa: SLF001
     before.close()
@@ -991,6 +1036,39 @@ def test_memories_can_be_kept_where_there_were_tutor_chats_before_them(
 
     assert [each["content"] for each in store.memories()] == ["Likes football."]
     assert store.close_tutor_chat("c1") is True
+
+
+def test_a_recap_is_kept_line_by_line_apart_from_the_facts(tmp_path: Path) -> None:
+    store = UserStore(tmp_path)
+    fact = store.add_memory("Likes\nfootball.")
+    recapped = store.add_memory(
+        "  Talked   about Vienna.\n\nAgreed on more. ", "c1", "recap"
+    )
+
+    assert [each["id"] for each in store.memories(kind="fact")] == [fact]
+    [kept] = store.memories(kind="recap")
+    assert (kept["id"], kept["content"], kept["chat"]) == (
+        recapped,
+        "Talked about Vienna.\nAgreed on more.",
+        "c1",
+    )
+    assert store.memories(kind="fact")[0]["content"] == "Likes football."
+    with pytest.raises(ValueError):
+        store.add_memory("Something.", kind="dream")
+
+
+def test_memories_kept_before_there_were_recaps_are_facts(tmp_path: Path) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.add_memory("Likes football.")
+    before._db.executescript(  # noqa: SLF001
+        "ALTER TABLE tutor_memories DROP COLUMN kind;" + BEFORE_TURNS
+    )
+    before._db.execute("PRAGMA user_version = 20")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+
+    assert [each["kind"] for each in store.memories()] == ["fact"]
 
 
 def test_a_text_is_kept_as_it_was_last_written_and_listed_without_what_it_says(
@@ -1049,7 +1127,10 @@ def test_texts_can_be_kept_where_there_were_memories_before_them(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.add_memory("Likes football.")
-    before._db.execute("DROP TABLE learner_texts")  # noqa: SLF001
+    before._db.executescript(  # noqa: SLF001
+        "DROP TABLE learner_texts; ALTER TABLE tutor_memories DROP COLUMN kind;"
+        + BEFORE_TURNS
+    )
     before._db.execute("PRAGMA user_version = 19")  # noqa: SLF001
     before.close()
 

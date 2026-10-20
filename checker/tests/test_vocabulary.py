@@ -341,3 +341,52 @@ def test_an_entry_respelt_as_another_is_merged_into_it_with_its_uses_and_sets(
     assert vocabulary.find("noun", "verbs") == vocabulary.get(capital.id)
     assert vocabulary.uses_of(capital.id) == [("verbs", "user", 1.0)]
     assert vocabulary.sets()[0]["added"] == [capital.id]
+
+
+def test_the_listing_says_when_the_learner_and_a_model_last_used_each_word(
+    vocabulary: Vocabulary,
+) -> None:
+    hund, _ = vocabulary.save("noun", "Hund", {}, [])
+    vocabulary.record_uses("message", "chat", 0, "user", 1.0, [(hund.id, "hund")])
+    vocabulary.record_uses("message", "chat", 1, "assistant", 5.0, [(hund.id, "hund")])
+    vocabulary.record_uses("message", "chat", 2, "user", 3.0, [(hund.id, "hund")])
+
+    (listed,) = vocabulary.listing()
+
+    assert (listed.last_used_by_user, listed.last_used_by_assistant) == (3.0, 5.0)
+    assert (listed.first_used, listed.last_used) == (1.0, 5.0)
+
+
+def test_the_entries_having_a_word_as_a_form_are_found_whatever_its_capitals(
+    vocabulary: Vocabulary,
+) -> None:
+    hund, _ = vocabulary.save("noun", "Hund", {}, [Form("Hunde")])
+    gehen, _ = vocabulary.save("verb", "gehen", {}, [Form("ging")])
+    vocabulary.save("verb", "sehen", {}, [])
+
+    assert vocabulary.having_forms(["hunde", "GING", "Katze"]) == {hund.id, gehen.id}
+
+
+def test_words_spelt_alike_share_their_uses_whatever_their_category(
+    vocabulary: Vocabulary,
+) -> None:
+    article, _ = vocabulary.save("article", "der", {}, [])
+    pronoun, _ = vocabulary.save("pronoun", "der", {}, [Form("dessen")])
+    vocabulary.save("noun", "Hund", {}, [])
+    vocabulary.record_uses("message", "c", 0, "user", 1.0, [(article.id, "der")])
+    vocabulary.record_uses(
+        "message", "c", 1, "assistant", 5.0, [(pronoun.id, "dessen")]
+    )
+
+    listed = {word.category: word for word in vocabulary.listing()}
+
+    for category in ("article", "pronoun"):
+        word = listed[category]
+        assert (word.used, word.seen, word.first_used, word.last_used) == (
+            1,
+            1,
+            1.0,
+            5.0,
+        )
+        assert (word.last_used_by_user, word.last_used_by_assistant) == (1.0, 5.0)
+    assert (listed["noun"].used, listed["noun"].last_used) == (0, None)

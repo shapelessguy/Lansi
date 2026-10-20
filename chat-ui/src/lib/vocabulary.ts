@@ -27,6 +27,15 @@ export function describeUses(word: Pick<ListedWord, "used" | "seen">): string {
     return [word.used > 0 && `used ${word.used}×`, word.seen > 0 && `seen ${word.seen}×`].filter(Boolean).join(" · ");
 }
 
+/**
+ * How many words there are, with those spelt alike, whatever their capitals,
+ * counted once: the server stores a word once for each category it is of,
+ * such as "der" as an article and as a pronoun, but it is one word.
+ */
+export function countWords(words: Pick<ListedWord, "lemma">[]): number {
+    return new Set(words.map((word) => word.lemma.toLowerCase())).size;
+}
+
 /** Every word the checker server has stored. */
 export interface Vocabulary {
     /** The categories, in the order they are to be shown in. */

@@ -426,9 +426,14 @@ def test_words_request_takes_each_word_in_and_says_what_became_of_it(url: str) -
     assert [form["form"] for form in known["entry"]["forms"]] == ["Hunde", "Hund"]
     assert (skipped["status"], skipped["category"]) == ("skipped", "name")
     assert (rejected["status"], rejected["reason"]) == ("rejected", "misspelt")
-    # the requests that were paid for: three to sort the words, one to judge
-    assert [used["id"] for used in reply["usage"]][-1] == "chat-1"
-    assert len(reply["usage"]) == 4
+    # The requests that were paid for: three to sort the words, one to judge.
+    # The words are worked on together, so they come in no set order.
+    assert sorted(used["id"] for used in reply["usage"]) == [
+        "chat-1",
+        "decision-1",
+        "decision-2",
+        "decision-3",
+    ]
 
 
 def test_words_request_without_a_key_fails_only_the_words_that_need_one(
@@ -481,6 +486,8 @@ def test_the_vocabulary_is_listed_without_what_is_known_about_each_word(
         "seen": 0,
         "first_used": None,
         "last_used": None,
+        "last_used_by_user": None,
+        "last_used_by_assistant": None,
     }
 
 
@@ -1808,7 +1815,7 @@ def test_the_tutor_is_told_how_an_exercise_went_before_it_goes_on(
     assert events[-1]["messages"][-1] == {"role": "assistant", "content": "Well done."}
 
 
-def test_the_tutor_keeps_only_what_the_learner_wrote_and_what_it_answered(
+def test_the_tutor_keeps_its_answers_with_all_the_model_was_told_and_was_shown(
     with_users: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     replies: list[list[dict[str, Any]]] = [
@@ -1852,10 +1859,35 @@ def test_the_tutor_keeps_only_what_the_learner_wrote_and_what_it_answered(
     gone, _, _ = send(f"{with_users}/tutor/chats/chat-1", "GET", ada)
 
     assert [chat["first"] for chat in json.loads(listed)["chats"]] == ["Hallo"]
-    assert [
-        (each["role"], each["content"]) for each in json.loads(kept)["messages"]
-    ] == [("user", "Hallo"), ("assistant", "Let me look. \n\nRead the first lesson.")]
+    learner, answer = json.loads(kept)["messages"]
+    assert (learner["role"], learner["content"]) == ("user", "Hallo")
+    assert (answer["role"], answer["content"]) == (
+        "assistant",
+        "Let me look. \n\nRead the first lesson.",
+    )
+    # the tool it called, and what it came to, for the chat to be taken up again
+    assert [each["role"] for each in answer["turn"]["messages"]] == [
+        "assistant",
+        "tool",
+        "assistant",
+    ]
+    assert answer["turn"]["messages"][0]["tool_calls"][0]["id"] == "call-1"
+    assert [(step["doing"], step["status"]) for step in answer["turn"]["steps"]] == [
+        ("Looking at the lessons", "done")
+    ]
+    assert (answer["turn"]["offers"], answer["turn"]["exams"]) == ([], [])
     assert (deleted, gone) == (200, 404)
+
+
+RECAP = "Talked about the exam.\nAgreed to practise the dative."
+
+
+def recapping(body: dict[str, Any]) -> dict[str, Any] | None:
+    """What a model answers when it is asked for the recap of a chat, and
+    None when it is asked something else."""
+    if "Write a recap" not in body["messages"][0]["content"]:
+        return None
+    return {"choices": [{"message": {"content": RECAP}}]}
 
 
 def test_a_closed_chat_with_the_tutor_takes_nothing_more_and_leaves_memories(
@@ -1867,6 +1899,8 @@ def test_a_closed_chat_with_the_tutor_takes_nothing_more_and_leaves_memories(
     asked: list[dict[str, Any]] = []
 
     def chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
+        if recapped := recapping(body):
+            return recapped
         asked.append(body)
         said = {"add": ["Has the B1 exam on 2026-12-05."], "remove": [{"id": 99}]}
         return {"choices": [{"message": {"content": json.dumps(said)}}]}
@@ -1893,12 +1927,15 @@ def test_a_closed_chat_with_the_tutor_takes_nothing_more_and_leaves_memories(
     )
     _, memories, _ = send(f"{with_users}/tutor/memories", "GET", ada)
 
-    assert [task["kind"] for task in json.loads(closed)["tasks"]] == ["memories"]
+    assert [task["title"] for task in json.loads(closed)["tasks"]] == [
+        "Memories of the chat",
+        "Recap of the chat",
+    ]
     assert refused == 400
     assert "Learner: My exam is on 5 December." in asked[0]["messages"][0]["content"]
-    assert [each["content"] for each in json.loads(memories)["memories"]] == [
-        "Has the B1 exam on 2026-12-05."
-    ]
+    assert sorted(
+        (each["kind"], each["content"]) for each in json.loads(memories)["memories"]
+    ) == [("fact", "Has the B1 exam on 2026-12-05."), ("recap", RECAP)]
 
 
 def test_the_tutor_is_told_its_memories_and_forgets_one_the_learner_deletes(
@@ -1911,6 +1948,8 @@ def test_the_tutor_is_told_its_memories_and_forgets_one_the_learner_deletes(
         yield {"choices": [{"delta": {"content": "Hi."}}]}
 
     def chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
+        if recapped := recapping(body):
+            return recapped
         said = {"add": ["Likes football."], "remove": []}
         return {"choices": [{"message": {"content": json.dumps(said)}}]}
 
@@ -1936,14 +1975,17 @@ def test_the_tutor_is_told_its_memories_and_forgets_one_the_learner_deletes(
     )
     talk("chat-2")
     _, listed, _ = send(f"{with_users}/tutor/memories", "GET", ada)
-    [memory] = json.loads(listed)["memories"]
+    [memory] = [
+        each for each in json.loads(listed)["memories"] if each["kind"] == "fact"
+    ]
     deleted, _, _ = send(f"{with_users}/tutor/memories/{memory['id']}", "DELETE", ada)
     _, after, _ = send(f"{with_users}/tutor/memories", "GET", ada)
 
     assert "do not remember anything" in asked[0]["messages"][0]["content"]
     assert "Likes football." in asked[1]["messages"][0]["content"]
+    assert "  Agreed to practise the dative." in asked[1]["messages"][0]["content"]
     assert deleted == 200
-    assert json.loads(after)["memories"] == []
+    assert [each["kind"] for each in json.loads(after)["memories"]] == ["recap"]
     assert [each["removedBy"] for each in json.loads(after)["removed"]] == ["learner"]
 
 
@@ -1954,6 +1996,8 @@ def test_chats_closed_one_after_another_do_not_leave_the_same_memory_twice(
         yield {"choices": [{"delta": {"content": "Hi."}}]}
 
     def chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
+        if recapped := recapping(body):
+            return recapped
         said = {"add": ["Likes football."], "remove": []}
         return {"choices": [{"message": {"content": json.dumps(said)}}]}
 
@@ -1979,7 +2023,9 @@ def test_chats_closed_one_after_another_do_not_leave_the_same_memory_twice(
     _, listed, _ = send(f"{with_users}/tutor/memories", "GET", ada)
 
     assert [each["content"] for each in json.loads(listed)["memories"]] == [
-        "Likes football."
+        "Likes football.",
+        RECAP,
+        RECAP,
     ]
 
 
@@ -2001,3 +2047,104 @@ def test_a_text_is_kept_listed_and_deleted_and_one_corrected_is_not_changed(
     ]
     assert json.loads(one)["content"] == "Ich bin gegeht."
     assert (deleted, gone) == (200, 404)
+
+
+class NotesAnki(FakeAnki):
+    """An Anki account whose decks hold the notes given."""
+
+    def __init__(self, notes: list[str]) -> None:
+        super().__init__()
+        self.held = notes
+
+    def notes(self, skipped: list[int] | None = None) -> list[str]:
+        return self.held
+
+
+def known_words_account(anki: AnkiLink | None = None) -> Account:
+    """An account whose vocabulary has a noun used by the learner, a noun
+    seen in a reply, a verb never used, and a set of the nouns."""
+    vocabulary = Vocabulary()
+    hund, _ = vocabulary.save("noun", "Hund", {}, [Form("Hunde")])
+    katze, _ = vocabulary.save("noun", "Katze", {}, [])
+    vocabulary.save("verb", "gehen", {}, [])
+    vocabulary.record_uses("message", "c", 0, "user", 10.0, [(hund.id, "hund")])
+    vocabulary.record_uses("message", "c", 1, "assistant", 20.0, [(katze.id, "katze")])
+    vocabulary.save_set(
+        "nouns",
+        {"id": "nouns", "name": "Nouns", "rules": {"verb": {"included": False}}},
+    )
+    intake = Intake(vocabulary, FakeProfiler(), FakeChat())
+    importer = AnkiImporter(intake, lambda: [])
+    return Account(LiveChecker(Speller(language=None)), intake, importer, anki=anki)
+
+
+def known(url: str, query: str = "") -> tuple[int, Any]:
+    return ask(f"{url}/vocabulary/known?{query}", "GET")
+
+
+def test_the_known_words_are_given_most_recently_used_first_by_default() -> None:
+    with server_of(known_words_account()) as url:
+        status, reply = known(url)
+
+    assert status == 200
+    assert [word["lemma"] for word in reply["words"]] == ["Katze", "Hund", "gehen"]
+    assert reply["total"] == 3
+
+
+def test_the_known_words_are_picked_by_category_order_and_limit() -> None:
+    with server_of(known_words_account()) as url:
+        _, by_user = known(
+            url, "category=noun,verb&sorted_by=last_used_by_user&limit=2"
+        )
+        _, verbs = known(url, "category=verb")
+        _, both = known(url, "category=verb&category=noun&sorted_by=alphabetical")
+
+    assert [word["lemma"] for word in by_user["words"]] == ["Hund", "gehen"]
+    assert by_user["total"] == 3
+    assert [word["lemma"] for word in verbs["words"]] == ["gehen"]
+    assert [word["lemma"] for word in both["words"]] == ["gehen", "Hund", "Katze"]
+
+
+def test_the_known_words_of_a_set_are_those_its_rules_let_in() -> None:
+    with server_of(known_words_account()) as url:
+        _, nouns = known(url, "set=nouns&sorted_by=alphabetical")
+        missing = known(url, "set=elsewhere")
+
+    assert [word["lemma"] for word in nouns["words"]] == ["Hund", "Katze"]
+    assert missing == (404, {"error": "no such set"})
+
+
+def test_the_known_words_from_anki_are_those_a_note_holds_a_form_of() -> None:
+    account = known_words_account(NotesAnki(["die Hunde", "gehen, laufen"]))
+
+    with server_of(account) as url:
+        _, reply = known(url, "anki_only=true&sorted_by=alphabetical")
+
+    assert [word["lemma"] for word in reply["words"]] == ["gehen", "Hund"]
+
+
+def test_the_known_words_from_anki_are_none_when_anki_is_of_another_language() -> None:
+    account = known_words_account(NotesAnki(["Hund"]))
+
+    with server_of(account) as url:
+        _, reply = known(url, "anki_only=true&language=English")
+
+    assert reply == {"words": [], "total": 0}
+
+
+def test_the_known_words_from_anki_are_refused_without_anki() -> None:
+    with server_of(known_words_account()) as url:
+        status, _ = known(url, "anki_only=true")
+
+    assert status == 404
+
+
+def test_a_request_for_known_words_that_asks_what_there_is_not_is_refused() -> None:
+    with server_of(known_words_account()) as url:
+        category = known(url, "category=noun,colour")
+        order = known(url, "sorted_by=loudest")
+        limit = known(url, "limit=-1")
+        flag = known(url, "reverse=perhaps")
+
+    assert category == (400, {"error": "there is no category colour"})
+    assert order[0] == limit[0] == flag[0] == 400

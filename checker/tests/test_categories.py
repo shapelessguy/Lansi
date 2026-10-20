@@ -10,6 +10,7 @@ from categories import (
     Schema,
     categories_of,
     dictionary_form,
+    practised_categories,
 )
 from vocabulary import Form
 
@@ -68,3 +69,17 @@ def test_what_a_language_without_rules_is_told_names_no_language() -> None:
         told = category.criterion + category.judging + category.describing
         assert "German" not in told
         assert not any(letter in told for letter in "äöüß")
+
+
+@pytest.mark.parametrize("language", ["German", "Esperanto"])
+def test_practice_is_built_on_the_words_of_the_categories_learnt_one_by_one(
+    language: str,
+) -> None:
+    assert practised_categories(language) == [
+        "noun",
+        "verb",
+        "adjective",
+        "adverb",
+        "conjunction",
+        "particle",
+    ]

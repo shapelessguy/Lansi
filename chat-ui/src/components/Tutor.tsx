@@ -9,6 +9,7 @@ import type { ProfileUsage } from "../lib/checker";
 import { newId } from "../lib/ids";
 import { canAsk } from "../lib/models";
 import { endSession, type Learner, type PracticeSession, stepExercise } from "../lib/practice";
+import type { Settings } from "../lib/settings";
 import { allowPlaying, speakMark } from "../lib/speaking";
 import type { BackgroundTask } from "../lib/tasks";
 import {
@@ -20,6 +21,8 @@ import {
     type EvaluationOffer,
     fetchTutorChat,
     fetchTutorChats,
+    keepOffer,
+    keptMessages,
     keptTurn,
     type ListedTutorChat,
     type Offer,
@@ -31,6 +34,8 @@ import {
     type TutorTurn,
     withEvent,
 } from "../lib/tutor";
+import type { UsageEntry } from "../lib/usage";
+import { CheckedTextarea } from "./CheckedTextarea";
 import { ExerciseView } from "./ExerciseView";
 
 interface Props {
@@ -60,6 +65,15 @@ interface Props {
     onTrace: (event: TutorEvent) => void;
     /** Told when a new chat is started. */
     onNewChat: () => void;
+    /** What the sentences written to the tutor are checked by, as in the chat, and what changes it. */
+    settings: Settings;
+    onSettingsChange: (settings: Settings) => void;
+    /** Where the checks of the sentence being written are shown, if they are open. */
+    checksSlot: HTMLElement | null;
+    onCloseChecks: () => void;
+    onEditQuestions: () => void;
+    /** Counts what checking the sentences used. */
+    onCheckingUsage: (entry: UsageEntry) => void;
 }
 
 /** What the chat shows: what the learner wrote, and each turn of the tutor as it grows. */
@@ -68,9 +82,9 @@ type Shown = { role: "user"; text: string } | { role: "tutor"; turn: TutorTurn }
 /** Where an exercise the tutor offered has got to, by the turn and the place of the offer in it. */
 type Doing =
     | { status: "starting" }
-    | { status: "running"; session: PracticeSession }
+    | { status: "running"; sessionId: string }
     | { status: "finishing" }
-    | { status: "done" };
+    | { status: "done"; abandoned?: boolean };
 
 /**
  * The tutor: a chat with a model that reasons, and that looks up what the
@@ -100,6 +114,12 @@ export function Tutor(
         onExchange,
         onTrace,
         onNewChat,
+        settings,
+        onSettingsChange,
+        checksSlot,
+        onCloseChecks,
+        onEditQuestions,
+        onCheckingUsage,
     }: Props,
 ) {
     // the chat as the model was told it, which is sent back as a whole
@@ -148,13 +168,27 @@ export function Tutor(
         request.current?.abort();
         setChatId(chat.id);
         setClosed(chat.closedAt !== null);
-        setMessages(chat.messages.map(({ role, content }) => ({ role, content })));
+        setMessages(keptMessages(chat.messages));
         setShown(
-            chat.messages.map(({ role, content }) =>
-                role === "user" ? { role: "user", text: content } : { role: "tutor", turn: keptTurn(content) }
+            chat.messages.map(({ role, content, turn }) =>
+                role === "user" ? { role: "user", text: content } : { role: "tutor", turn: keptTurn(content, turn) }
             ),
         );
-        setDoing({});
+        // the exercises offered are where they were left, one still running taken up again
+        setDoing(Object.fromEntries(
+            chat.messages.flatMap(({ turn }, index) =>
+                (turn?.offers ?? []).flatMap((offer, place): [string, Doing][] =>
+                    offer.session && offer.status
+                        ? [[
+                            offerKey(index, place),
+                            offer.status === "running"
+                                ? { status: "running", sessionId: offer.session }
+                                : { status: "done", abandoned: offer.status === "abandoned" },
+                        ]]
+                        : []
+                )
+            ),
+        ));
         setError(null);
         onNewChat();
     }
@@ -279,13 +313,17 @@ export function Tutor(
         }
     }
 
-    function start(key: string, offer: Offer) {
+    /** Starts the exercise the tutor offered at `place` in its answer at `index` of the chat. */
+    function start(index: number, place: number, offer: Offer) {
+        const key = offerKey(index, place);
         setDoing((current) => ({ ...current, [key]: { status: "starting" } }));
         setError(null);
         startOffer(offer).then(
-            ({ usage, ...session }) => {
+            ({ usage, id: sessionId }) => {
                 onPracticeUsage(usage);
-                setDoing((current) => ({ ...current, [key]: { status: "running", session } }));
+                setDoing((current) => ({ ...current, [key]: { status: "running", sessionId } }));
+                // so that the chat, taken up again, takes up the exercise too
+                keepOffer(chatId, index, place, sessionId, "running").catch(() => undefined);
             },
             (failed: Error) => {
                 setDoing(({ [key]: _, ...rest }) => rest);
@@ -294,14 +332,20 @@ export function Tutor(
         );
     }
 
-    /** Finishes the exercise and its session, and tells the tutor how it went once its log is written. */
-    async function finish(key: string, session: PracticeSession, offer: Offer) {
+    /**
+     * Finishes the exercise and its session, and tells the tutor how it went
+     * once its log is written. One the learner `abandoned` before its end is
+     * ended as it is, with what was done of it kept.
+     */
+    async function finish(index: number, place: number, sessionId: string, offer: Offer, abandoned = false) {
+        const key = offerKey(index, place);
         setDoing((current) => ({ ...current, [key]: { status: "finishing" } }));
         const tasks: string[] = [];
         try {
-            const finished = await stepExercise(session.id, offer.exercise, "finish", null, learner);
-            const ended = await endSession(session.id, "finished", learner);
-            for (const { usage, tasks: started } of [finished, ended]) {
+            // ending a session finishes what was started of it
+            const finished = abandoned ? null : await stepExercise(sessionId, offer.exercise, "finish", null, learner);
+            const ended = await endSession(sessionId, abandoned ? "abandoned" : "finished", learner);
+            for (const { usage, tasks: started } of finished ? [finished, ended] : [ended]) {
                 onPracticeUsage(usage);
                 started?.forEach((task) => {
                     onTask(task);
@@ -309,13 +353,14 @@ export function Tutor(
                 });
             }
         } catch (failed) {
-            setDoing((current) => ({ ...current, [key]: { status: "running", session } }));
+            setDoing((current) => ({ ...current, [key]: { status: "running", sessionId } }));
             setError(failed instanceof Error ? failed.message : String(failed));
             return;
         }
-        setDoing((current) => ({ ...current, [key]: { status: "done" } }));
+        setDoing((current) => ({ ...current, [key]: { status: "done", abandoned } }));
+        keepOffer(chatId, index, place, sessionId, abandoned ? "abandoned" : "done").catch(() => undefined);
         if (!offer.theory) {
-            await ask(messages, null, { session: session.id, exercise: offer.exercise, tasks });
+            await ask(messages, null, { session: sessionId, exercise: offer.exercise, tasks });
         }
     }
 
@@ -455,19 +500,30 @@ export function Tutor(
                                                 offer={offer}
                                                 state={state}
                                                 disabled={occupied || !usable || closed}
-                                                onStart={() => start(key, offer)}
+                                                onStart={() => start(index, place, offer)}
+                                                onEnd={() => {
+                                                    if (
+                                                        state?.status === "running"
+                                                        && window.confirm(
+                                                            "End this exercise now? What you did of it is kept.",
+                                                        )
+                                                    ) {
+                                                        void finish(index, place, state.sessionId, offer, true);
+                                                    }
+                                                }}
                                             />
                                             {state?.status === "running" && (
                                                 <div className="tutor-exercise-body">
                                                     <ExerciseView
-                                                        sessionId={state.session.id}
+                                                        sessionId={state.sessionId}
                                                         exercise={offer.exercise}
                                                         theory={offer.theory}
                                                         learner={learner}
                                                         onUsage={onPracticeUsage}
-                                                        onFinish={() => void finish(key, state.session, offer)}
+                                                        onFinish={() =>
+                                                            void finish(index, place, state.sessionId, offer)}
                                                         onReadAloud={(text, number) =>
-                                                            onReadAloud(state.session.id, offer.exercise, number, text)}
+                                                            onReadAloud(state.sessionId, offer.exercise, number, text)}
                                                         // once what it made is shown, after the
                                                         // page has taken it in
                                                         onStarted={() => setTimeout(keepInView, 0)}
@@ -510,20 +566,27 @@ export function Tutor(
                     void send();
                 }}
             >
-                <div className="composer-input">
-                    <textarea
-                        rows={2}
-                        placeholder={closed ? "This chat is over" : "Ask your tutor"}
-                        disabled={closed}
-                        aria-label="Message to the tutor"
-                        title={enterSends
-                            ? "Enter sends the message, and Shift+Enter starts a new line"
-                            : "Enter starts a new line, and Shift+Enter sends the message"}
-                        value={draft}
-                        onChange={(event) => setDraft(event.target.value)}
-                        onKeyDown={onKeyDown}
-                    />
-                </div>
+                <CheckedTextarea
+                    className="composer-input"
+                    rows={2}
+                    placeholder={closed ? "This chat is over" : "Ask your tutor"}
+                    disabled={closed}
+                    aria-label="Message to the tutor"
+                    title={enterSends
+                        ? "Enter sends the message, and Shift+Enter starts a new line"
+                        : "Enter starts a new line, and Shift+Enter sends the message"}
+                    value={draft}
+                    onChange={setDraft}
+                    onKeyDown={onKeyDown}
+                    settings={settings}
+                    onSettingsChange={onSettingsChange}
+                    onUsage={onCheckingUsage}
+                    // counted under the chat with the tutor
+                    usageId={`tutor:${chatId}`}
+                    checksSlot={checksSlot}
+                    onCloseChecks={onCloseChecks}
+                    onEditQuestions={onEditQuestions}
+                />
                 <div className="composer-send">
                     {busy
                         ? <button type="button" onClick={() => request.current?.abort()}>Stop</button>
@@ -623,13 +686,18 @@ function TurnView(
     );
 }
 
-/** An exercise the tutor offered, with what it was chosen with, and a button that starts it here. */
+/**
+ * An exercise the tutor offered, with what it was chosen with, and a button
+ * that starts it here; once it is under way, one that ends it before it is
+ * done.
+ */
 function OfferCard(
-    { offer, state, disabled, onStart }: {
+    { offer, state, disabled, onStart, onEnd }: {
         offer: Offer;
         state: Doing | undefined;
         disabled: boolean;
         onStart: () => void;
+        onEnd: () => void;
     },
 ) {
     const said = [
@@ -654,8 +722,15 @@ function OfferCard(
             </div>
             {state === undefined && <button className="primary" disabled={disabled} onClick={onStart}>Start</button>}
             {state?.status === "starting" && <span className="tutor-offer-state">Preparing…</span>}
+            {state?.status === "running" && (
+                <button onClick={onEnd} title="End the exercise here, without doing the rest of it">
+                    End exercise
+                </button>
+            )}
             {state?.status === "finishing" && <span className="tutor-offer-state">Finishing…</span>}
-            {state?.status === "done" && <span className="tutor-offer-state">Done ✓</span>}
+            {state?.status === "done" && (
+                <span className="tutor-offer-state">{state.abandoned ? "Ended early" : "Done ✓"}</span>
+            )}
         </div>
     );
 }

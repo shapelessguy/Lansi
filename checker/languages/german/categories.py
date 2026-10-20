@@ -14,6 +14,7 @@ from typing import Any
 from categories import (
     FLAG,
     MEANINGS,
+    PRACTISED,
     TEXT,
     Category,
     Description,
@@ -57,6 +58,7 @@ def _german(
         _told(f"describing.{told}"),
         schema,
         read,
+        practised=name in PRACTISED,
     )
 
 

@@ -3,7 +3,17 @@
 
 import { expect, test } from "vitest";
 
-import { doingNow, emptyTurn, type Offer, thinkingAbout, type TutorEvent, type TutorTurn, withEvent } from "./tutor";
+import {
+    doingNow,
+    emptyTurn,
+    keptMessages,
+    keptTurn,
+    type Offer,
+    thinkingAbout,
+    type TutorEvent,
+    type TutorTurn,
+    withEvent,
+} from "./tutor";
 
 const OFFER: Offer = {
     kind: "exercise",
@@ -57,7 +67,59 @@ test("a turn is done once the last event comes, and says nothing of what it is d
     expect(doingNow(turn)).toBeNull();
 });
 
-test("what the tutor is thinking about is the last line it has reasoned", () => {
-    expect(thinkingAbout("First the logs.\n\nThen the dative mistakes  \n")).toBe("Then the dative mistakes");
+test("what the tutor thinks about is nothing before it has reasoned a sentence", () => {
     expect(thinkingAbout("")).toBe("");
+    expect(thinkingAbout("First the logs.\n\nThen the dative mistakes  \n")).toBe("First the logs.");
+});
+
+test("what the tutor thinks about is the latest heading of its steps, when it gives them", () => {
+    const thinking = "**Looking at the logs**\n\nThe learner mixes up the cases. A **cloze** would";
+
+    expect(thinkingAbout(thinking)).toBe("Looking at the logs");
+    expect(thinkingAbout(`${thinking}\n\n## Picking the words\nSome`)).toBe("Picking the words");
+});
+
+test("what the tutor thinks about is the latest sentence finished, and not the one still coming", () => {
+    expect(thinkingAbout("The learner wants to translate. They are at B1. I should pick")).toBe(
+        "They are at B1.",
+    );
+});
+
+test("what the tutor thinks about is cut short at a word when it is long", () => {
+    const long = `${"The learner keeps confusing the dative and the accusative ".repeat(3)}.`;
+
+    const about = thinkingAbout(long);
+
+    expect(about.length).toBeLessThanOrEqual(81);
+    expect(about.endsWith("…")).toBe(true);
+    expect(about).not.toMatch(/\s…$/);
+});
+
+test("a kept chat is told to the model again with the tools its answers called", () => {
+    const called = [
+        { role: "assistant" as const, content: null, tool_calls: [{ id: "call-1" }] },
+        { role: "tool" as const, content: "[]", tool_call_id: "call-1" },
+        { role: "assistant" as const, content: "Read the first lesson." },
+    ];
+
+    const told = keptMessages([
+        { role: "user", content: "Hallo", writtenAt: 1 },
+        { role: "assistant", content: "Read the first lesson.", writtenAt: 2, turn: { messages: called } },
+        // one kept before turns were kept has only what it said
+        { role: "assistant", content: "Old.", writtenAt: 3 },
+    ]);
+
+    expect(told).toEqual([{ role: "user", content: "Hallo" }, ...called, { role: "assistant", content: "Old." }]);
+});
+
+test("a kept answer is shown with its steps and the exercises it offered", () => {
+    const turn = keptTurn("Here.", {
+        steps: [{ id: "call-1", doing: "Looking at the lessons", status: "done" }],
+        offers: [{ ...OFFER, session: "s1", status: "done" }],
+    });
+
+    expect(turn.steps.map((step) => step.doing)).toEqual(["Looking at the lessons"]);
+    expect(turn.offers.map((offer) => offer.exercise)).toEqual(["cloze"]);
+    expect(turn.busy).toBe(false);
+    expect(keptTurn("Old.")).toEqual({ thinking: "", steps: [], offers: [], exams: [], text: "Old.", busy: false });
 });

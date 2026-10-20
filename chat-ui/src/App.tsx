@@ -76,7 +76,7 @@ import {
     type UsageCategory,
     type UsageEntry,
 } from "./lib/usage";
-import { fetchVocabulary, type Vocabulary } from "./lib/vocabulary";
+import { countWords, fetchVocabulary, type Vocabulary } from "./lib/vocabulary";
 import type { Word } from "./lib/words";
 
 export type WordsState =
@@ -96,6 +96,9 @@ interface Props {
     initialSettings: Settings;
     initialChats: StoredChat[];
 }
+
+/** The activities written in with a box whose sentences are checked, which have the panel of the checks. */
+const CHECKED_ACTIVITIES: readonly Activity[] = ["chat", "tutor", "texts"];
 
 /** What the usage of each kind of background task is counted under. */
 const TASK_CATEGORIES: Record<string, UsageCategory> = {
@@ -505,8 +508,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
     }, [tasksRunning, followTasks]);
 
     // the sentence checks belong to the chat, and the floating chat to a selection
-    // the checks are of what is written in the chat or in a text
-    const panel = (openPanel === "checks" && activity !== "chat" && activity !== "texts")
+    // the checks are of what is written in the chat, to the tutor or in a text
+    const panel = (openPanel === "checks" && !CHECKED_ACTIVITIES.includes(activity))
             || (openPanel === "subchat" && !asked)
         ? null
         : openPanel;
@@ -555,6 +558,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
             language: settings.language,
             into: settings.translateInto,
             level: settings.level,
+            tone: settings.tutorTone,
         }),
         [
             settings.apiKey,
@@ -563,6 +567,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
             settings.language,
             settings.translateInto,
             settings.level,
+            settings.tutorTone,
         ],
     );
     // an exercise the tutor offered is started as a session of its own, with no time limit
@@ -652,7 +657,9 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     onClick={() => setSidebarTab("vocabulary")}
                                 >
                                     Words
-                                    <span className="count">{vocabularyCount ?? vocabulary?.words.length}</span>
+                                    <span className="count">
+                                        {vocabularyCount ?? (vocabulary && countWords(vocabulary.words))}
+                                    </span>
                                 </button>
                                 {ankiWords && (
                                     <button
@@ -863,7 +870,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         </div>
                         <div className="topbar-side end">
                             <div className="switch" role="group" aria-label="Panel on the right">
-                                {(activity === "chat" || activity === "texts") && (
+                                {CHECKED_ACTIVITIES.includes(activity) && (
                                     <button
                                         className="icon-only"
                                         aria-pressed={panel === "checks"}
@@ -926,6 +933,12 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             onExchange={(label) => setTrace((current) => begun(current, label, Date.now()))}
                             onTrace={(event) => setTrace((current) => traced(current, event))}
                             onNewChat={() => setTrace(EMPTY_TRACE)}
+                            settings={settings}
+                            onSettingsChange={updateSettings}
+                            checksSlot={panel === "checks" && activity === "tutor" ? panelSlot : null}
+                            onCloseChecks={() => setOpenPanel(null)}
+                            onEditQuestions={() => openSettings("questions")}
+                            onCheckingUsage={addUsageEntry}
                         />
                     </div>
                     <div className="pane" hidden={activity !== "inspector"}>

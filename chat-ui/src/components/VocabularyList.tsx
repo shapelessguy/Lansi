@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ImportStatus } from "../lib/ankiImport";
 import type { WordSet } from "../lib/sets";
 import {
+    countWords,
     describeUses,
     detailRows,
     fetchEntry,
@@ -97,7 +98,7 @@ export function VocabularyList(
         fetchVocabulary(language).then(
             (vocabulary) => {
                 setState({ status: "ready", vocabulary });
-                onCount(vocabulary.words.length);
+                onCount(countWords(vocabulary.words));
             },
             (error: Error) => setState({ status: "error", message: error.message }),
         );

@@ -20,7 +20,9 @@ type Loaded =
  * What the tutor remembers of the learner from one chat to the next, the
  * newest first, as it is told it in every chat: made when a chat is
  * closed, and removed by the tutor when it is no longer true, or by the
- * learner here. What was removed is listed apart, with why and by whom.
+ * learner here. Every chat also leaves a recap of a few lines, listed apart,
+ * of which the tutor is told the latest. What was removed is listed apart
+ * too, with why and by whom.
  */
 export function MemoryList({ revision, onCount }: Props) {
     const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
@@ -28,7 +30,7 @@ export function MemoryList({ revision, onCount }: Props) {
         fetchMemories().then(
             ({ memories, removed }) => {
                 setLoaded({ status: "ready", memories, removed });
-                onCount(memories.length);
+                onCount(memories.filter((memory) => memory.kind !== "recap").length);
             },
             (failed: Error) => setLoaded({ status: "error", message: failed.message }),
         );
@@ -47,34 +49,44 @@ export function MemoryList({ revision, onCount }: Props) {
     if (loaded.status === "error") {
         return <p className="sidebar-note error">{loaded.message}</p>;
     }
+    const facts = loaded.memories.filter((memory) => memory.kind !== "recap");
+    const recaps = loaded.memories.filter((memory) => memory.kind === "recap");
+    const listed = (memories: Memory[]) => (
+        <ul className="memory-list">
+            {[...memories].reverse().map((memory) => (
+                <li key={memory.id} className={memory.kind === "recap" ? "memory recap" : "memory"}>
+                    <p>{memory.content}</p>
+                    <div className="memory-meta">
+                        <span>{day(memory.createdAt)}</span>
+                        <button
+                            className="link"
+                            onClick={() =>
+                                forget(memory)}
+                            title="Have the tutor forget this"
+                        >
+                            Forget
+                        </button>
+                    </div>
+                </li>
+            ))}
+        </ul>
+    );
     return (
         <div className="panel-body memories">
-            {loaded.memories.length === 0
+            {facts.length === 0
                 ? (
                     <p className="sidebar-note">
                         The tutor remembers nothing yet. When you start a new chat with the tutor, the one before is
                         closed, and what matters of it for the next lessons is kept here.
                     </p>
                 )
-                : (
-                    <ul className="memory-list">
-                        {[...loaded.memories].reverse().map((memory) => (
-                            <li key={memory.id} className="memory">
-                                <p>{memory.content}</p>
-                                <div className="memory-meta">
-                                    <span>{day(memory.createdAt)}</span>
-                                    <button
-                                        className="link"
-                                        onClick={() => forget(memory)}
-                                        title="Have the tutor forget this"
-                                    >
-                                        Forget
-                                    </button>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                )}
+                : listed(facts)}
+            {recaps.length > 0 && (
+                <details className="memory-recaps">
+                    <summary>Recaps of the lessons, {recaps.length}</summary>
+                    {listed(recaps)}
+                </details>
+            )}
             {loaded.removed.length > 0 && (
                 <details className="memory-removed">
                     <summary>Forgotten, {loaded.removed.length}</summary>

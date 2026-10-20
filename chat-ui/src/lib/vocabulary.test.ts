@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    countWords,
     describeUses,
     detailRows,
     type FormTables,
@@ -265,5 +266,13 @@ describe("listWords", () => {
 
     it("keeps to the words that match the filter", () => {
         expect(listWords(vocabulary, " E ").map((word) => word.lemma)).toEqual(["Apfel", "gehen"]);
+    });
+});
+
+describe("countWords", () => {
+    it("counts the words spelt alike once, whatever their categories and capitals", () => {
+        const words = [{ lemma: "der" }, { lemma: "der" }, { lemma: "Essen" }, { lemma: "essen" }, { lemma: "Hund" }];
+
+        expect(countWords(words)).toBe(3);
     });
 });

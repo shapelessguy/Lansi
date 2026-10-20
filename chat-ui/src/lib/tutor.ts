@@ -125,6 +125,8 @@ export interface TutorAsking {
     language: string;
     into: string;
     level: string;
+    /** How the tutor is to talk with the learner, as they set it; empty for its own way. */
+    tone: string;
 }
 
 /** An exercise the tutor offered that was done, which the tutor is told how it went, once its log is written. */
@@ -180,10 +182,29 @@ export function doingNow(turn: TutorTurn): string | null {
     return turn.text ? "Writing" : "Thinking";
 }
 
-/** The last line of what was reasoned, as it is being reasoned, to show what it is about. */
+/** How long what the tutor is thinking about may be, in characters, before it is cut short. */
+const ABOUT_LENGTH = 80;
+
+/**
+ * What the tutor is thinking about, in a short sentence, from what it has
+ * reasoned so far: the latest of the headings it gives its steps, as many
+ * models do, or else the latest sentence it finished, so that it does not
+ * change with every piece of the reasoning that comes. Cut short if long.
+ */
 export function thinkingAbout(thinking: string): string {
-    const lines = thinking.trim().split("\n").map((line) => line.trim()).filter(Boolean);
-    return lines.at(-1) ?? "";
+    const headings = [...thinking.matchAll(/^\s*(?:#+\s*(.+?)\s*#*|\*\*(.+?)\*\*)\s*$/gm)];
+    const heading = headings.at(-1);
+    let about = heading ? heading[1] ?? heading[2] : "";
+    if (!about) {
+        const finished = thinking.match(/[^.!?\n]+[.!?]+(?=\s|$)/g) ?? [];
+        about = finished.at(-1) ?? "";
+    }
+    about = about.replace(/[*_`]/g, "").replace(/\s+/g, " ").trim();
+    if (about.length <= ABOUT_LENGTH) {
+        return about;
+    }
+    const cut = about.slice(0, ABOUT_LENGTH);
+    return `${cut.slice(0, cut.lastIndexOf(" ") > 0 ? cut.lastIndexOf(" ") : ABOUT_LENGTH)}…`;
 }
 
 /**
@@ -212,6 +233,7 @@ export async function askTutor(
                 language: asking.language,
                 into: asking.into,
                 level: asking.level,
+                tone: asking.tone,
                 ...(practised ? { practised } : {}),
                 // where what the learner wrote and what the tutor answered are kept
                 ...(chat ? { chat } : {}),
@@ -256,7 +278,23 @@ export interface KeptTutorChat {
     updatedAt: number;
     /** When it was closed, after which nothing more is said in it; null while it is open. */
     closedAt: number | null;
-    messages: { role: "user" | "assistant"; content: string; writtenAt: number }[];
+    messages: { role: "user" | "assistant"; content: string; writtenAt: number; turn?: KeptTurn }[];
+}
+
+/** An exercise the tutor offered, as a kept chat has it, with the session it was started as and how far it got. */
+export type KeptOffer = Offer & { session?: string; status?: "running" | "done" | "abandoned" };
+
+/**
+ * What a kept answer of the tutor holds besides what it says: what the
+ * model was told and added on the way, with the tools it called, and what
+ * was shown of it. Answers kept before there was this have none of it.
+ */
+export interface KeptTurn {
+    messages?: TutorMessage[];
+    thinking?: string;
+    steps?: Step[];
+    offers?: KeptOffer[];
+    exams?: EvaluationOffer[];
 }
 
 /** A chat with the tutor as it is listed, with the first thing the learner wrote. */
@@ -291,9 +329,37 @@ export async function deleteTutorChat(id: string): Promise<void> {
     await checkerFetch(`/tutor/chats/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-/** A turn of the tutor that is over, as a kept chat has it: only what it answered. */
-export function keptTurn(text: string): TutorTurn {
-    return { thinking: "", steps: [], offers: [], exams: [], text, busy: false };
+/** A turn of the tutor that is over, as a kept chat has it, shown as it was. */
+export function keptTurn(text: string, kept: KeptTurn = {}): TutorTurn {
+    return {
+        thinking: kept.thinking ?? "",
+        steps: kept.steps ?? [],
+        offers: kept.offers ?? [],
+        exams: kept.exams ?? [],
+        text,
+        busy: false,
+    };
+}
+
+/** The messages of a kept chat as the model was told them, its tools and what they came to among them. */
+export function keptMessages(messages: KeptTutorChat["messages"]): TutorMessage[] {
+    return messages.flatMap(({ role, content, turn }) =>
+        role === "assistant" && turn?.messages?.length ? turn.messages : [{ role, content }]
+    );
+}
+
+/** Notes how far an exercise the tutor offered got, by the position of its answer in the chat and its place there. */
+export async function keepOffer(
+    chatId: string,
+    position: number,
+    place: number,
+    session: string,
+    status: "running" | "done" | "abandoned",
+): Promise<void> {
+    await checkerFetch(`/tutor/chats/${encodeURIComponent(chatId)}/offers`, {
+        method: "POST",
+        body: JSON.stringify({ position, place, session, status }),
+    });
 }
 
 /**
@@ -324,6 +390,8 @@ export interface Memory {
     removedAt: number | null;
     removedWhy: string;
     removedBy: "tutor" | "learner" | "";
+    /** Something of the learner that lasts, or the recap of a chat, a few lines long. */
+    kind: "fact" | "recap";
 }
 
 /** The memories the tutor has, the oldest first, and those that were removed. */

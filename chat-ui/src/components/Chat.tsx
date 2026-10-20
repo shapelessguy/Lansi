@@ -1,22 +1,18 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { canAsk } from "../lib/models";
 
 import { isAtEnd, type StoredChat } from "../lib/chats";
-import { type ProfileUsage, sentenceAtCaret } from "../lib/checker";
 import type { Where } from "../lib/logs";
 import { type ChatMessage, streamChat } from "../lib/openrouter";
-import { requestQuestions } from "../lib/questions";
 import type { WordLists } from "../lib/sets";
 import { expandPrompt, type Settings } from "../lib/settings";
 import { allowPlaying, speakMark } from "../lib/speaking";
 import type { UsageEntry } from "../lib/usage";
-import { ChecksPanel } from "./ChecksPanel";
-import { useWritingCheck } from "./WritingChecks";
+import { CheckedTextarea } from "./CheckedTextarea";
 
 interface Props {
     settings: Settings;
@@ -100,38 +96,6 @@ export function Chat(
         return () => observer.disconnect();
     }, [keepAtEnd]);
 
-    const questions = useMemo(() => requestQuestions(settings.questions), [settings.questions]);
-    // Every request that profiling the sentences makes is counted, under the
-    // chat it was made in.
-    const countProfiling = useCallback(
-        (used: ProfileUsage) =>
-            onUsage({
-                id: used.id,
-                at: Date.now(),
-                category: "checking",
-                chatId,
-                model: used.model,
-                promptTokens: used.input_tokens,
-                completionTokens: used.output_tokens,
-                cost: used.cost,
-            }),
-        [chatId, onUsage],
-    );
-    // the spelling is checked as in every text box, and the sentences profiled as well
-    const { check, lastCaret } = useWritingCheck(
-        inputRef,
-        {
-            apiKey: settings.apiKey,
-            model: settings.profileModel,
-            questions,
-            rateWords: settings.rateWords,
-        },
-        countProfiling,
-    );
-    // The checks panel goes on showing the sentence the caret was on after a
-    // click in the panel has taken the caret out of the box.
-    const sentenceShown = draft ? sentenceAtCaret(check, lastCaret) : null;
-
     useEffect(() => {
         if (picked) {
             setDraft((current) => (current && !/\s$/.test(current) ? `${current} ` : current) + picked.word);
@@ -211,15 +175,6 @@ export function Chat(
             event.preventDefault();
             void send();
         }
-    }
-
-    function toggleQuestion(id: string) {
-        onSettingsChange({
-            ...settings,
-            questions: settings.questions.map((question) =>
-                question.id === id ? { ...question, enabled: !question.enabled } : question
-            ),
-        });
     }
 
     return (
@@ -316,19 +271,24 @@ export function Chat(
                         void send();
                     }}
                 >
-                    <div className="composer-input" data-writing>
-                        <textarea
-                            ref={inputRef}
-                            rows={2}
-                            placeholder="Write a message"
-                            aria-label="Message"
-                            // the browser's own checker would underline the same words a second time
-                            spellCheck={false}
-                            value={draft}
-                            onChange={(event) => setDraft(event.target.value)}
-                            onKeyDown={onKeyDown}
-                        />
-                    </div>
+                    <CheckedTextarea
+                        className="composer-input"
+                        inputRef={inputRef}
+                        rows={2}
+                        placeholder="Write a message"
+                        aria-label="Message"
+                        value={draft}
+                        onChange={setDraft}
+                        onKeyDown={onKeyDown}
+                        settings={settings}
+                        onSettingsChange={onSettingsChange}
+                        onUsage={onUsage}
+                        // what profiling the sentences asks is counted under the chat it was made in
+                        usageId={chatId}
+                        checksSlot={checksSlot}
+                        onCloseChecks={onCloseChecks}
+                        onEditQuestions={onEditQuestions}
+                    />
                     <div className="composer-send">
                         <label
                             className="check"
@@ -358,22 +318,6 @@ export function Chat(
                     </div>
                 </form>
             </section>
-            {checksSlot && createPortal(
-                <ChecksPanel
-                    questions={settings.questions}
-                    onToggle={toggleQuestion}
-                    rateWords={settings.rateWords}
-                    onRateWords={(rateWords) => onSettingsChange({ ...settings, rateWords })}
-                    sentence={sentenceShown}
-                    hasText={draft.trim() !== ""}
-                    checkerRunning={check !== null}
-                    hasKey={settings.apiKey !== ""}
-                    model={settings.profileModel}
-                    onEditQuestions={onEditQuestions}
-                    onClose={onCloseChecks}
-                />,
-                checksSlot,
-            )}
         </>
     );
 }

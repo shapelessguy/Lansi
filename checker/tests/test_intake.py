@@ -611,21 +611,24 @@ def test_a_word_in_the_dictionary_is_not_taken_for_no_word(
 
 
 def test_a_word_on_its_own_in_small_letters_is_not_taken_for_a_noun_or_a_name(
-    vocabulary: Vocabulary, chat: FakeChat
+    chat: FakeChat,
 ) -> None:
     profiler = FakeProfiler({"macht": "noun", "Macht": "noun"})
     profiler.also = {"name": 0.6, "verb": 0.4}
-    intake = Intake(vocabulary, profiler, chat)
     for word in ("macht", "Macht"):
         chat.judged(word, "reject")
 
-    outcomes, _ = intake.take(
-        [Word("macht"), Word("Macht"), Word("macht", "Die macht ist groß.")],
-        CHAT,
-        DECIDER,
-    )
+    def category(word: Word) -> str:
+        # A word that is rejected is no word in any spelling, so each is
+        # taken into a vocabulary of its own, as not to be rejected for
+        # another that was.
+        intake = Intake(Vocabulary(), profiler, chat)
+        (outcome,), _ = intake.take([word], CHAT, DECIDER)
+        return outcome.category
 
-    assert [outcome.category for outcome in outcomes] == ["verb", "noun", "noun"]
+    words = [Word("macht"), Word("Macht"), Word("macht", "Die macht ist groß.")]
+
+    assert [category(word) for word in words] == ["verb", "noun", "noun"]
 
 
 def test_words_come_in_as_text_or_with_the_sentence_they_were_used_in() -> None:

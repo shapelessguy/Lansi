@@ -114,7 +114,7 @@ export function ChecksPanel(
         <SidePanel title="Sentence checks" onClose={onClose}>
             <div className="usage checks">
                 <section>
-                    <h3>Questions</h3>
+                    <h3>Spelling</h3>
                     {questions.length === 0 && <p className="checks-note">There are no questions.</p>}
                     {questions.map((question) => (
                         <label key={question.id} className="toggle">

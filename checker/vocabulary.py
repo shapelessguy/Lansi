@@ -124,6 +124,28 @@ def _escaped(text: str) -> str:
     return re.sub(r"([!%_])", r"!\1", text)
 
 
+def _together(counted: list[list[Any]]) -> tuple[Any, ...]:
+    """The uses of several entries, each as how often the learner and a
+    model used it, when it was first and last used, and when last by each,
+    taken together as the uses of one word."""
+
+    def least(values: list[float | None]) -> float | None:
+        return min((value for value in values if value is not None), default=None)
+
+    def most(values: list[float | None]) -> float | None:
+        return max((value for value in values if value is not None), default=None)
+
+    used, seen, first, last, by_user, by_assistant = zip(*counted, strict=True)
+    return (
+        sum(used),
+        sum(seen),
+        least(list(first)),
+        most(list(last)),
+        most(list(by_user)),
+        most(list(by_assistant)),
+    )
+
+
 def fold(word: str) -> str:
     """A word as it is looked up: in small letters. Not casefold(), which
     would take "Maße" and "Masse" for the same word."""
@@ -151,7 +173,9 @@ class Entry:
 
 @dataclass
 class Listed:
-    """A stored word as it is listed: without what is known about it."""
+    """A stored word as it is listed: without what is known about it. Its
+    uses are those of every stored word spelt as it is, whatever the
+    capitals and the category, as to whoever uses it they are one word."""
 
     id: int
     category: str
@@ -166,6 +190,9 @@ class Listed:
     # when it was first and last used by either, in seconds since the epoch
     first_used: float | None = None
     last_used: float | None = None
+    # when the learner last used it, and when a model last did
+    last_used_by_user: float | None = None
+    last_used_by_assistant: float | None = None
 
 
 @dataclass
@@ -250,7 +277,8 @@ class Vocabulary:
             return self._entry(row[0]) if row else None
 
     def listing(self) -> list[Listed]:
-        """Every stored word, by category and then by the alphabet."""
+        """Every stored word, by category and then by the alphabet, each with
+        the uses of all the words spelt as it is."""
         with self._lock:
             rows = self._db.execute(
                 "SELECT entries.id, category, lemma, entries.created_at,"
@@ -262,11 +290,34 @@ class Vocabulary:
                 entry_id: counted
                 for entry_id, *counted in self._db.execute(
                     "SELECT entry_id, SUM(role = 'user'), SUM(role <> 'user'),"
-                    " MIN(used_at), MAX(used_at) FROM uses GROUP BY entry_id"
+                    " MIN(used_at), MAX(used_at),"
+                    " MAX(CASE WHEN role = 'user' THEN used_at END),"
+                    " MAX(CASE WHEN role <> 'user' THEN used_at END)"
+                    " FROM uses GROUP BY entry_id"
                 )
             }
-        listed = [Listed(*row, *uses.get(row[0], ())) for row in rows]
+        # Words spelt alike are one word to whoever uses them, whatever
+        # their categories, so they share what is known of their uses.
+        spelt: dict[str, list[list[Any]]] = {}
+        for entry_id, _, lemma, *_ in rows:
+            if entry_id in uses:
+                spelt.setdefault(fold(lemma), []).append(uses[entry_id])
+        shared = {spelling: _together(counted) for spelling, counted in spelt.items()}
+        listed = [Listed(*row, *shared.get(fold(row[2]), ())) for row in rows]
         return sorted(listed, key=lambda word: (word.category, fold(word.lemma)))
+
+    def having_forms(self, words: list[str]) -> set[int]:
+        """The entries that any of `words` is a form of, whatever the
+        capitals, by their numbers."""
+        folded = {fold(word) for word in words}
+        with self._lock:
+            return {
+                entry_id
+                for entry_id, form in self._db.execute(
+                    "SELECT entry_id, folded FROM forms"
+                )
+                if form in folded
+            }
 
     def record_uses(
         self,

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from prompts import PROMPTS, PromptError, Prompts, read_prompts, variables_of
 
-DIRECTORY = Path(__file__).resolve().parent / "prompts"
+DIRECTORY = Path(__file__).resolve().parent.parent / "prompts"
 # the prompts of the server, and those of each language that has any
 FILES = sorted(
     [

@@ -70,6 +70,8 @@ class Category:
     schema: Schema
     # turns a description of that shape into what is stored
     read: Callable[[dict[str, Any]], Description]
+    # whether its words are the ones to build practice on, as PRACTISED says
+    practised: bool = False
 
 
 MEANINGS = several(TEXT)
@@ -89,6 +91,20 @@ CATEGORIES = (
     "numeral",
     "interjection",
 )
+
+# The categories whose words practice is best built on, unless a language
+# says otherwise: those a learner has to learn one by one. The words of the
+# others are few, and come up in every sentence anyway.
+PRACTISED = ("noun", "verb", "adjective", "adverb", "conjunction", "particle")
+
+
+def practised_categories(language: str) -> list[str]:
+    """The names of the categories of `language` whose words practice is
+    best built on, in the order they are shown in."""
+    categories = categories_of(language)
+    return [
+        name for name in CATEGORIES if name in categories and categories[name].practised
+    ]
 
 
 def _told(name: str) -> str:
@@ -119,6 +135,7 @@ GENERIC: dict[str, Category] = {
         _told("describing"),
         GENERIC_SCHEMA,
         read_generic,
+        practised=name in PRACTISED,
     )
     for name in CATEGORIES
 }

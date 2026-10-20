@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 22
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -448,6 +448,28 @@ CREATE TABLE learner_texts (
     locked_at REAL
 );
 """
+# What came with version 21: the kinds of memories of the tutor. Besides
+# what it keeps of the learner for good, every chat that is closed leaves a
+# recap of it, a few lines on what was done in it.
+_RECAPS = """
+ALTER TABLE tutor_memories ADD COLUMN kind TEXT NOT NULL DEFAULT 'fact';
+"""
+# What came with version 22: what else a message of a chat with the tutor
+# holds besides what it says, as JSON: for an answer of the tutor, the
+# messages the model was told and added on the way, with the tools it called
+# and what they came to, the steps and the reasoning shown of it, and the
+# exercises and mock exams it offered, each exercise with the session it was
+# started as and how far it got. A chat taken up again is made of it whole.
+_TUTOR_TURNS = """
+ALTER TABLE tutor_messages ADD COLUMN turn TEXT NOT NULL DEFAULT '{}';
+"""
+# how far an exercise the tutor offered got
+OFFER_STATUSES = ("running", "done", "abandoned")
+
+# The kinds of memories: a "fact" of the learner that lasts, or the "recap"
+# of a chat. Each line of a recap is kept, as there are a few.
+MEMORY_KINDS = ("fact", "recap")
+
 # the longest a text and its title may be, in characters
 MAX_TEXT = 200_000
 MAX_TEXT_TITLE = 200
@@ -653,6 +675,10 @@ class UserStore:
                 self._db.executescript(_MEMORIES)
             if version < 20:
                 self._db.executescript(_TEXTS)
+            if version < 21:
+                self._db.executescript(_RECAPS)
+            if version < 22:
+                self._db.executescript(_TUTOR_TURNS)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -785,7 +811,7 @@ class UserStore:
             if row is None:
                 return None
             messages = self._db.execute(
-                "SELECT role, content, written_at FROM tutor_messages"
+                "SELECT role, content, written_at, turn FROM tutor_messages"
                 " WHERE chat_id = ? ORDER BY position",
                 (chat_id,),
             ).fetchall()
@@ -796,18 +822,24 @@ class UserStore:
             "updatedAt": row[2],
             "closedAt": row[3],
             "messages": [
-                {"role": role, "content": content, "writtenAt": written_at}
-                for role, content, written_at in messages
+                {
+                    "role": role,
+                    "content": content,
+                    "writtenAt": written_at,
+                    "turn": json.loads(turn),
+                }
+                for role, content, written_at, turn in messages
             ],
         }
 
     def add_tutor_messages(
-        self, chat_id: str, language: str, messages: list[dict[str, str]]
+        self, chat_id: str, language: str, messages: list[dict[str, Any]]
     ) -> None:
         """Add to a chat with the tutor, which is started if there is none,
         what the learner wrote and what the tutor answered, each a `{"role":
-        "user" | "assistant", "content": ...}`. Raises ValueError, and keeps
-        none, if one is not such a message."""
+        "user" | "assistant", "content": ..., "turn": {...}}`, `turn` being
+        what else it holds, as _TUTOR_TURNS says, if anything. Raises
+        ValueError, and keeps none, if one is not such a message."""
         if not is_id(chat_id):
             raise ValueError("a chat needs an id")
         for message in messages:
@@ -815,6 +847,8 @@ class UserStore:
                 message.get("content"), str
             ):
                 raise ValueError("a message of the tutor is the learner's or its own")
+            if not isinstance(message.get("turn", {}), dict):
+                raise ValueError("what else a message of the tutor holds is an object")
         now = self._now()
         with self._lock, self._db:
             closed = self._db.execute(
@@ -833,11 +867,47 @@ class UserStore:
             ).fetchone()
             self._db.executemany(
                 "INSERT INTO tutor_messages (chat_id, position, role, content,"
-                " written_at) VALUES (?, ?, ?, ?, ?)",
+                " written_at, turn) VALUES (?, ?, ?, ?, ?, ?)",
                 [
-                    (chat_id, start + place, message["role"], message["content"], now)
+                    (
+                        chat_id,
+                        start + place,
+                        message["role"],
+                        message["content"],
+                        now,
+                        json.dumps(message.get("turn", {}), ensure_ascii=False),
+                    )
                     for place, message in enumerate(messages)
                 ],
+            )
+
+    def set_tutor_offer(
+        self, chat_id: str, position: int, place: int, session: str, status: str
+    ) -> None:
+        """Note that the exercise the tutor offered at `place` among those of
+        its answer at `position` in a chat was started as `session`, and got
+        as far as `status`, one of OFFER_STATUSES. Raises ValueError if there
+        is no such exercise, or no such status."""
+        if status not in OFFER_STATUSES:
+            raise ValueError(
+                f"an exercise offered is one of {', '.join(OFFER_STATUSES)}"
+            )
+        if not is_id(session):
+            raise ValueError("an exercise offered is started as a session")
+        with self._lock, self._db:
+            row = self._db.execute(
+                "SELECT turn FROM tutor_messages WHERE chat_id = ? AND position = ?"
+                " AND role = 'assistant'",
+                (chat_id, position),
+            ).fetchone()
+            turn = json.loads(row[0]) if row else {}
+            offers = turn.get("offers")
+            if not isinstance(offers, list) or not 0 <= place < len(offers):
+                raise ValueError("the tutor offered no such exercise")
+            offers[place] = {**offers[place], "session": session, "status": status}
+            self._db.execute(
+                "UPDATE tutor_messages SET turn = ? WHERE chat_id = ? AND position = ?",
+                (json.dumps(turn, ensure_ascii=False), chat_id, position),
             )
 
     def close_tutor_chat(self, chat_id: str) -> bool:
@@ -850,15 +920,18 @@ class UserStore:
             )
         return closed.rowcount > 0
 
-    def memories(self, removed: bool = False) -> list[dict[str, Any]]:
+    def memories(
+        self, removed: bool = False, kind: str | None = None
+    ) -> list[dict[str, Any]]:
         """The memories of the tutor, the oldest first: those it has, or
-        those that were removed."""
+        those that were removed; of one of MEMORY_KINDS, or of every kind."""
         with self._lock:
             rows = self._db.execute(
                 "SELECT id, content, created_at, chat_id, removed_at, removed_why,"
-                " removed_by FROM tutor_memories WHERE (removed_at IS NULL) = ?"
+                " removed_by, kind FROM tutor_memories"
+                " WHERE (removed_at IS NULL) = ? AND kind = coalesce(?, kind)"
                 " ORDER BY id",
-                (not removed,),
+                (not removed, kind),
             ).fetchall()
         return [
             {
@@ -869,6 +942,7 @@ class UserStore:
                 "removedAt": removed_at,
                 "removedWhy": removed_why,
                 "removedBy": removed_by,
+                "kind": kind,
             }
             for (
                 memory_id,
@@ -878,20 +952,28 @@ class UserStore:
                 removed_at,
                 removed_why,
                 removed_by,
+                kind,
             ) in rows
         ]
 
-    def add_memory(self, content: str, chat_id: str | None = None) -> int:
-        """Keep a memory of the tutor, and return its id. Raises ValueError
-        for one that says nothing."""
-        content = " ".join(content.split())
+    def add_memory(
+        self, content: str, chat_id: str | None = None, kind: str = "fact"
+    ) -> int:
+        """Keep a memory of the tutor of one of MEMORY_KINDS, and return its
+        id. Raises ValueError for one that says nothing, or of another kind."""
+        if kind not in MEMORY_KINDS:
+            raise ValueError(f"a memory is one of {', '.join(MEMORY_KINDS)}")
+        lines = [" ".join(line.split()) for line in content.splitlines()]
+        content = "\n".join(line for line in lines if line)
+        if kind == "fact":
+            content = " ".join(content.split())
         if not content:
             raise ValueError("a memory says something")
         with self._lock, self._db:
             cursor = self._db.execute(
-                "INSERT INTO tutor_memories (content, created_at, chat_id)"
-                " VALUES (?, ?, ?)",
-                (content, self._now(), chat_id),
+                "INSERT INTO tutor_memories (content, created_at, chat_id, kind)"
+                " VALUES (?, ?, ?, ?)",
+                (content, self._now(), chat_id, kind),
             )
         assert cursor.lastrowid is not None
         return cursor.lastrowid

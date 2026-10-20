@@ -1,6 +1,6 @@
 # The tutor's tools
 
-What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done; `exercise` is said of each exercise of practice, which offers it to the learner, and `offered` is what the tutor is told once it has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `length` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, `lesson`, `instances` and `topics` of an exercise, and `theory_lesson` in place of `lesson` for one that teaches the lesson rather than asks.
+What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, and `words_known` the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `exercise` is said of each exercise of practice, which offers it to the learner, and `offered` is what the tutor is told once it has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `length` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, `lesson`, `instances` and `topics` of an exercise, and `theory_lesson` in place of `lesson` for one that teaches the lesson rather than asks.
 
 Variables:
 - `$title`: the title of the exercise
@@ -9,6 +9,8 @@ Variables:
 - `$kinds`: the kinds of logs there are, joined by commas
 - `$offered`: the exercise or the mock exam offered, with what it was called with, as JSON
 - `$levels`: the levels there are mock exams of, joined by commas
+- `$usual`: how many words the tool gives when it is not told how many
+- `$practised`: the categories whose words practice is best built on, joined by commas, as the categories of the language say
 
 ## Prompt: lessons
 
@@ -25,6 +27,30 @@ The learner's latest logs, the latest first, each with its id, its kind, when it
 ## Prompt: evaluations
 
 The mock exams there are, by level, each with its modules and how long it takes in full; and those the learner took, the latest first: when, the level, how long and whether timed, its status, the score of each module and criterion, and whether it was passed. The log of each, with what was answered, is among the logs of the kind evaluation.
+
+## Prompt: words_known
+
+The words the learner knows, as their vocabulary has them: every word they met in the chats, the exercises and what they read, and those of their Anki cards. With each, its categories, as a word spelt alike in several categories is one word, how often the learner used it in what they wrote ("used") and how often it came up in what a model wrote to them ("seen"), and the day each last did; and how many words there are in all of those asked for. Use it to pick the words an exercise is to build on: those they have not used for long, those they see but never write, or those of a set or of Anki. Build on words of these categories, asking for them by name: $practised. The words of the others are few and come up in every sentence anyway. Ask for $usual words, which is what you are given if you do not say, unless what you and your student agreed on needs more or fewer.
+
+## Prompt: categories
+
+Only the words of these categories; leave it out for words of every category.
+
+## Prompt: set
+
+Only the words of this set, one the learner made of their words for a purpose.
+
+## Prompt: anki_only
+
+Only the words that have a card in review in the learner's Anki, which they study there.
+
+## Prompt: sorted_by
+
+Which words come first: last_used, last_used_by_user and last_used_by_assistant, those used most lately by either, by the learner or by a model, and the ones never used last; first_used, those met most lately; most_used, most_used_by_user and most_used_by_assistant, those used most often; added, those stored most lately; alphabetical; random, a different choice every time. last_used if left out.
+
+## Prompt: reverse
+
+Whether to turn the order round, such as to have the words the learner has not used for longest first, with those never used before all others.
 
 ## Prompt: evaluation
 

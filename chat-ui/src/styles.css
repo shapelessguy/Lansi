@@ -3625,6 +3625,24 @@ div.book-cover {
     margin-top: 8px;
 }
 
+/* the recaps of the chats, one point to a line */
+.memory.recap p {
+    white-space: pre-line;
+}
+
+.memory-recaps {
+    margin-bottom: 12px;
+}
+
+.memory-recaps summary {
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.memory-recaps .memory-list {
+    margin-top: 8px;
+}
+
 /* The learner's texts: the list in the library, and one open to be
    written in, or a correction, in the main area. */
 .text-list {

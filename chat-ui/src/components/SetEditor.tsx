@@ -17,7 +17,7 @@ import {
     withWord,
     type WordSet,
 } from "../lib/sets";
-import type { ListedWord, Vocabulary } from "../lib/vocabulary";
+import { countWords, type ListedWord, type Vocabulary } from "../lib/vocabulary";
 
 interface Props {
     /** The set as it is when the editor is opened. */
@@ -122,7 +122,7 @@ export function SetEditor({ set: initial, kept, vocabulary, onSave, onDelete, on
                     onChange={(event) => setSet({ ...set, name: event.target.value })}
                 />
                 <span className="set-total">
-                    <b>{members.length}</b> of {vocabulary.words.length} words
+                    <b>{countWords(members)}</b> of {countWords(vocabulary.words)} words
                 </span>
                 {kept && (
                     <button onClick={() => window.confirm(`Delete the set “${initial.name}”?`) && onDelete()}>

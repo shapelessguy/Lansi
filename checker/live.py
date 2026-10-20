@@ -39,7 +39,8 @@ OnProfiled = Callable[[str, "Profile | None", "str | None", bool], None]
 # Told when the words of a sentence have been rated: the sentence, the
 # ratings or else why there are none, and whether they were dropped.
 OnRated = Callable[[str, "list[WordRating] | None", "str | None", bool], None]
-# A sentence's wording, the model asked, and a question's name and content.
+# A sentence's wording, the model asked with the language the sentence is
+# judged by, and a question's name and content.
 _Key = tuple[str, str, str, str]
 # The name, in a key, of the rating of a sentence's words. No question can
 # have it, as it is not a name that can be sent.
@@ -148,7 +149,10 @@ class LiveChecker:
             questions = QUESTIONS
         if self._profiler and model:
             model = self._profiler.named(model)
-        asked_model = f"{model.url} {model.name}" if model else ""
+        # A sentence is judged by the rules of the language studied, so what
+        # was answered in one language is not taken to hold in another.
+        language = (self._profiler.language if self._profiler else None) or ""
+        asked_model = f"{model.url} {model.name} {language}" if model else ""
         can_ask = bool(self._profiler and model and model.problem() is None)
         # one at an address of the learner's own is asked all at once
         together = bool(model and not model.on_openrouter)

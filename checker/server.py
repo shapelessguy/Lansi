@@ -37,9 +37,10 @@ from anki_import import (
     AnkiLink,
     AnkiRefused,
     AnkiUnavailable,
+    vocabulary_words,
 )
 from books import BookError, read_epub
-from categories import CATEGORIES
+from categories import CATEGORIES, practised_categories
 from evaluating import EvaluationError, Evaluations
 from exercising import (
     Asker,
@@ -60,6 +61,7 @@ from intake import (
     read_words,
     send_chat,
 )
+from known import Asked, known_words
 from languages import DEFAULT_LANGUAGE, language_of
 from live import LiveChecker
 from logs import LogError
@@ -110,8 +112,10 @@ from tutor import (
     exercise_tools,
     instructions,
     practised,
+    recap,
     remember,
     wait_for,
+    words_tool,
 )
 from tutor import read_messages as read_tutor_messages
 from users import Users, take_vocabulary, user_directory
@@ -141,6 +145,8 @@ MAX_TITLE_LENGTH = 80
 SPEECH_WAIT_SECS = 50.0
 # a language is named in a word or two
 MAX_LANGUAGE_LENGTH = 40
+# the longest the tone of the tutor the learner sets may be, in characters
+MAX_TONE_LENGTH = 2000
 # a topic is told by a title and a sentence or two
 MAX_TOPIC_LENGTH = 500
 # more words than any set of them has
@@ -433,6 +439,104 @@ class CheckerHandler(BaseHTTPRequestHandler):
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
         return True
+
+    def _known(self) -> bool:
+        """Answers a request for the words the learner knows, and returns
+        whether the request was one.
+
+            GET /vocabulary/known   the stored words picked by what is
+                                    asked, those spelt alike as one word
+                                    with all their `categories` and the
+                                    `ids` of their entries
+
+        What is asked is in the query, and all of it may be left out:
+
+            language=L      the vocabulary of L, or of the language studied
+            category=C      the words of C alone; named several times, or as
+                            C1,C2, the words of any of them; all if none is
+            set=S           the words of the set with that id or name alone
+            anki_only=true  the words that have a card in review in the
+                            chosen decks of Anki, if the Anki words are of L
+            sorted_by=O     put in the order of ORDERS named, last_used if
+                            none is
+            reverse=true    in that order the other way round
+            limit=N         the first N words only; all if 0 or left out
+
+        The reply has the `words`, and how many there were before they
+        were cut down to the limit, as `total`.
+        """
+        intake = self.account.intake
+        url = urlsplit(self.path)
+        if intake is None or url.path != "/vocabulary/known":
+            return False
+        query = parse_qs(url.query)
+
+        def one(name: str, otherwise: str = "") -> str:
+            return query.get(name, [otherwise])[-1].strip()
+
+        def flag(name: str) -> bool:
+            value = one(name, "false").lower()
+            if value not in ("true", "false", "1", "0"):
+                raise ValueError(f"{name} must be true or false")
+            return value in ("true", "1")
+
+        try:
+            language = one("language")[:MAX_LANGUAGE_LENGTH] or intake.language
+            limit = one("limit", "0")
+            if not limit.isdigit():
+                raise ValueError("limit must be a whole number")
+            asked = Asked(
+                categories=frozenset(
+                    name.strip()
+                    for given in query.get("category", [])
+                    for name in given.split(",")
+                    if name.strip()
+                ),
+                set=one("set"),
+                anki_only=flag("anki_only"),
+                order=one("sorted_by", "last_used"),
+                reverse=flag("reverse"),
+                limit=int(limit),
+            )
+        except ValueError as error:
+            self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            return True
+        # asking after a language does not make a vocabulary of it
+        vocabulary = (
+            intake.vocabulary_of(language) if intake.has_vocabulary(language) else None
+        )
+        try:
+            words, total = known_words(vocabulary, asked, self._anki_words(language))
+        except LookupError as error:
+            self._reply(HTTPStatus.NOT_FOUND, {"error": str(error)})
+        except AnkiRefused as error:
+            self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+        except AnkiUnavailable as error:
+            self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
+        else:
+            words_listed = [asdict(word) for word in words]
+            self._reply(HTTPStatus.OK, {"words": words_listed, "total": total})
+        return True
+
+    def _anki_words(self, language: str) -> Callable[[], list[str]] | None:
+        """What gives the words of the notes of the chosen decks of Anki
+        that have a card in review, if they are of `language`, and none if
+        they are of another; None if the user has no Anki."""
+        anki, store = self.account.anki, self.account.store
+        if anki is None:
+            return None
+        importer = self.account.importer
+        anki_language = importer.language if importer else self.account.language
+
+        def words() -> list[str]:
+            if anki_language.strip().lower() != language.strip().lower():
+                return []
+            notes = anki.notes(store.skipped_anki_decks() if store else [])
+            return [
+                word for note in notes for word in vocabulary_words(note, anki_language)
+            ]
+
+        return words
 
     def _books(self, method: str) -> bool:
         """Answers a request about the books the user reads, and returns
@@ -1215,6 +1319,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         if not self._find_account() or self._kept("GET") or self._sets("GET"):
             return
+        if self._known():
+            return
         if self._tutor_chats("GET") or self._texts("GET"):
             return
         if self._practice("GET") or self._topics("GET") or self._evaluating("GET"):
@@ -1518,12 +1624,21 @@ class CheckerHandler(BaseHTTPRequestHandler):
             GET /tutor/chats/ID       a chat, with what the learner wrote and
                                       what the tutor answered
             DELETE /tutor/chats/ID    forget a chat
+            POST /tutor/chats/ID/offers
+                                      note how far an exercise the tutor
+                                      offered got: `{"position": ..., "place":
+                                      ..., "session": ..., "status": "running"
+                                      | "done" | "abandoned"}`, the position
+                                      of the answer in the chat and the place
+                                      of the exercise among its offers
             POST /tutor/chats/ID/close
                                       close a chat, after which nothing more
                                       is said in it, with `{"model": ...}`,
                                       which then decides in the background
-                                      what the tutor is to remember of it;
-                                      the reply has the `tasks` it started
+                                      what the tutor is to remember of it,
+                                      and writes a recap of it, kept as a
+                                      memory of the kind "recap"; the reply
+                                      has the `tasks` it started
             GET /tutor/memories       the memories the tutor has, the oldest
                                       first, and those it `removed`
             DELETE /tutor/memories/N  have the tutor forget a memory, as the
@@ -1533,13 +1648,33 @@ class CheckerHandler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         one = re.fullmatch(r"/tutor/chats/([^/]+)", path)
         close = re.fullmatch(r"/tutor/chats/([^/]+)/close", path)
+        offer = re.fullmatch(r"/tutor/chats/([^/]+)/offers", path)
         memory = re.fullmatch(r"/tutor/memories/(\d+)", path)
         if store is None or not (
-            one or close or memory or path in ("/tutor/chats", "/tutor/memories")
+            one
+            or close
+            or offer
+            or memory
+            or path in ("/tutor/chats", "/tutor/memories")
         ):
             return False
         if method == "POST" and close:
             self._close_tutor_chat(store, close.group(1), api_key)
+        elif method == "POST" and offer:
+            body = self._read_body()
+            position, place = body.get("position"), body.get("place")
+            if type(position) is not int or type(place) is not int:
+                raise ValueError(
+                    "an exercise offered is told by its position and place"
+                )
+            store.set_tutor_offer(
+                offer.group(1),
+                position,
+                place,
+                str(body.get("session") or ""),
+                str(body.get("status") or ""),
+            )
+            self._reply(HTTPStatus.OK, {})
         elif method == "GET" and path == "/tutor/memories":
             self._reply(
                 HTTPStatus.OK,
@@ -1628,8 +1763,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
             def job(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
                 with remembering:
+                    # the recaps of the chats are not for this to decide on
                     remembered, used = remember(
-                        chat["messages"], store.memories(), chat["language"], ask
+                        chat["messages"],
+                        store.memories(kind="fact"),
+                        chat["language"],
+                        ask,
                     )
                     for content in remembered.add:
                         store.add_memory(content, chat_id)
@@ -1638,15 +1777,26 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 step()
                 return [asdict(remembered)], [describe_usage(used)]
 
+            def recap_job(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+                written, used = recap(chat["messages"], chat["language"], ask)
+                store.add_memory(written, chat_id, kind="recap")
+                step()
+                return [written], [describe_usage(used)]
+
+            # the two are asked of the model at the same time
             started.append(
                 self.account.tasks.start("memories", "Memories of the chat", 1, job)
+            )
+            started.append(
+                self.account.tasks.start("memories", "Recap of the chat", 1, recap_job)
             )
         self._reply(HTTPStatus.OK, {"tasks": started})
 
     def _tutor(self, practice: Practice, api_key: str | None) -> None:
         """Has the tutor answer the last of the `messages` of a `{"messages":
-        [...], "model": ..., "language": ..., "into": ..., "level": ...}`
-        request: the chat so far as the tutor was told it, which the reply
+        [...], "model": ..., "language": ..., "into": ..., "level": ...,
+        "tone": ...}` request, `tone` being how the tutor is to talk, as the
+        learner set it: the chat so far as the tutor was told it, which the reply
         adds to. Nothing of the chat is kept here.
 
         The reply is streamed, an event of the tutor to a line, as tutor.py
@@ -1655,9 +1805,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
         "error", "error": ...}`.
 
         With a `"chat": ID`, what the learner wrote and what the tutor
-        answered in the end are kept in that chat with the tutor, which is
-        started if there is none; nothing else of the chat is, as it is
-        made again whenever it is needed.
+        answered are kept in that chat with the tutor, which is started if
+        there is none: the answer with all the model was told and added on
+        the way, and what was shown of it, so that the chat can be taken up
+        again as it was.
 
         A request that has `"practised": {"session": ..., "exercise": ...,
         "tasks": [...]}` in place of something the learner wrote tells the
@@ -1687,6 +1838,9 @@ class CheckerHandler(BaseHTTPRequestHandler):
         language, into, model = self._read_translating(body, api_key)
         titles = {each["id"]: each["title"] for each in practice.exercises()}
         level = body.get("level")
+        # how the tutor is to talk, as the learner set it
+        tone = body.get("tone")
+        tone = tone[:MAX_TONE_LENGTH] if isinstance(tone, str) else ""
         try:
             lessons = practice.lessons(language)
         except GrammarError:
@@ -1696,13 +1850,32 @@ class CheckerHandler(BaseHTTPRequestHandler):
             levels = evaluations.levels(language) if evaluations else []
         except EvaluationError:
             levels = []
+        intake = self.account.intake
+        # asking after a language does not make a vocabulary of it
+        vocabulary = (
+            intake.vocabulary_of(language)
+            if intake and intake.has_vocabulary(language)
+            else None
+        )
+        anki_words = self._anki_words(language)
+        sets = [str(kept["name"]) for kept in vocabulary.sets()] if vocabulary else []
         tools = [
             *data_tools(store, lambda: lessons, language, evaluations),
+            words_tool(
+                partial(known_words, vocabulary, anki_words=anki_words),
+                sets,
+                anki=anki_words is not None,
+                practised=practised_categories(language),
+            ),
             *exercise_tools(practice.exercises(), lessons, store.topics()),
             *evaluation_tool(levels),
         ]
         told = instructions(
-            language, into, level if isinstance(level, str) else "", store.memories()
+            language,
+            into,
+            level if isinstance(level, str) else "",
+            store.memories(),
+            tone,
         )
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
@@ -1711,7 +1884,26 @@ class CheckerHandler(BaseHTTPRequestHandler):
         self.send_header("X-Accel-Buffering", "no")
         self.end_headers()
 
+        # what is shown of the turn, kept with the answer to be shown again
+        turn: dict[str, Any] = {"thinking": "", "steps": [], "offers": [], "exams": []}
+
         def emit(event: dict[str, Any]) -> None:
+            kind = event.get("type")
+            if kind == "thinking":
+                turn["thinking"] += event["text"]
+            elif kind == "tool":
+                turn["steps"].append(
+                    {"id": event["id"], "doing": event["doing"], "status": "running"}
+                )
+            elif kind == "tool_done":
+                for step in turn["steps"]:
+                    if step["id"] == event["id"]:
+                        step["status"] = "failed" if event["failed"] else "done"
+                shown = event.get("shown") or {}
+                if shown.get("kind") == "exercise":
+                    turn["offers"].append(shown)
+                elif shown.get("kind") == "evaluation":
+                    turn["exams"].append(shown)
             self.wfile.write(json.dumps(event, ensure_ascii=False).encode() + b"\n")
             self.wfile.flush()
 
@@ -1744,13 +1936,17 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 for message in added
                 if message["role"] == "assistant" and message.get("content")
             )
+            # Everything the model was told and added on the way is kept with
+            # the answer, so that a chat taken up again is told it whole.
+            kept = {
+                "role": "assistant",
+                "content": answer,
+                "turn": {**turn, "messages": added},
+            }
             store.add_tutor_messages(
                 chat_id,
                 language,
-                [
-                    *([messages[-1]] if done is None else []),
-                    *([{"role": "assistant", "content": answer}] if answer else []),
-                ],
+                [*([messages[-1]] if done is None else []), kept],
             )
         emit(
             {

@@ -6,22 +6,28 @@ from __future__ import annotations
 import json
 import threading
 from collections.abc import Iterator
+from functools import partial
 from pathlib import Path
 from typing import Any
 from unittest.mock import ANY
 
 import pytest
+from anki_import import AnkiUnavailable
+from known import known_words
 from models import Model
 from profiling import Profile, ProfileError
 from storage import UserStore
 from tutor import (
     MAX_FOCUS,
+    MAX_RECAPS,
     MAX_TURNS,
+    USUAL_KNOWN_WORDS,
     Done,
     Remembered,
     Tool,
     ToolError,
     TutorError,
+    _date,
     converse,
     data_tools,
     evaluation_tool,
@@ -29,9 +35,12 @@ from tutor import (
     instructions,
     practised,
     read_messages,
+    recap,
     remember,
     wait_for,
+    words_tool,
 )
+from vocabulary import Vocabulary
 
 MODEL = Model("thinker", key="key")
 ASKED = [{"role": "user", "content": "What should I practise?"}]
@@ -558,6 +567,85 @@ def test_the_tutor_is_told_the_memories_it_has() -> None:
     assert "do not remember anything" in instructions("German", "English", "B1", [])
 
 
+def test_a_recap_of_a_chat_is_what_the_model_wrote_however_long() -> None:
+    told: list[list[dict[str, Any]]] = []
+
+    def ask(messages: list[dict[str, Any]]) -> tuple[str, Profile]:
+        told.append(messages)
+        lines = [f"- Point {number}." for number in range(8)]
+        return "\n\n".join(lines), Profile({}, id="gen-2")
+
+    chat = [{"role": "user", "content": "Can we do the dative?"}]
+
+    written, used = recap(chat, "German", ask)
+
+    assert written.splitlines() == [f"Point {number}." for number in range(8)]
+    assert used.id == "gen-2"
+    assert "Learner: Can we do the dative?" in told[0][0]["content"]
+
+
+def test_a_recap_that_says_nothing_is_an_error() -> None:
+    with pytest.raises(TutorError):
+        recap([], "German", lambda _: ("  \n", Profile({})))
+
+
+def test_the_tutor_is_told_the_earlier_recaps_then_its_memories_then_the_last_recap() -> (
+    None
+):
+    recaps = [
+        {
+            "id": 10 + number,
+            "content": f"Chat {number}.\nAgreed on more.",
+            "createdAt": MADE_AT,
+            "kind": "recap",
+        }
+        for number in range(MAX_RECAPS + 1)
+    ]
+
+    told = instructions("German", "English", "B1", [*MEMORIES, *recaps])
+
+    # the oldest is one too many
+    assert "Chat 0." not in told
+    places = [
+        told.index(said)
+        for said in (
+            "Recap of the lesson of 1971-01-01:\n  Chat 1.\n  Agreed on more.",
+            f"Chat {MAX_RECAPS - 1}.",
+            "- [1971-01-01] Likes football.",
+            f"Recap of the lesson of 1971-01-01:\n  Chat {MAX_RECAPS}.",
+        )
+    ]
+    assert places == sorted(places)
+
+
+def test_the_tutor_with_one_recap_is_told_it_after_its_memories() -> None:
+    [only] = [{"id": 9, "content": "Chat.", "createdAt": MADE_AT, "kind": "recap"}]
+
+    told = instructions("German", "English", "B1", [only])
+
+    assert told.index("do not remember anything") < told.index("Recap of the lesson")
+    assert "earlier lessons with your student" not in told
+
+
+def test_the_tutor_is_told_the_tone_set_last_with_its_memories_going_first() -> None:
+    told = instructions(
+        "German", "English", "B1", MEMORIES, "  Friendly,\n but   direct. "
+    )
+
+    assert told.index("Likes football.") < told.index("Friendly, but direct.")
+    assert "how much to write, in every message" in told
+    assert "Only what your memories say your student asked you for" in told
+    # the last word on how to talk
+    assert told.rstrip().endswith("as it is what they want now.")
+
+
+def test_the_tutor_is_told_no_tone_when_none_is_set() -> None:
+    told = instructions("German", "English", "B1", MEMORIES, " ")
+
+    assert "Your student set how you are to talk" not in told
+    assert "\n\n\n" not in told
+
+
 CORRECTING = {
     "id": "correcting",
     "title": "Correct my text",
@@ -708,3 +796,111 @@ def test_a_mock_exam_is_offered_of_a_level_there_is_an_exam_of() -> None:
     assert evaluation_tool([]) == []
     with pytest.raises(ToolError):
         offer.run({"level": "C2", "length": 3})
+
+
+PRACTISED = ["noun", "verb"]
+
+
+def known_vocabulary() -> Vocabulary:
+    """A vocabulary with a noun the learner used, a noun a model wrote, a
+    verb nobody used, and a set of the nouns."""
+    vocabulary = Vocabulary()
+    hund, _ = vocabulary.save("noun", "Hund", {}, [])
+    katze, _ = vocabulary.save("noun", "Katze", {}, [])
+    vocabulary.save("verb", "gehen", {}, [])
+    vocabulary.record_uses("message", "c", 0, "user", 10.0, [(hund.id, "hund")])
+    vocabulary.record_uses("message", "c", 1, "assistant", 20.0, [(katze.id, "katze")])
+    vocabulary.save_set(
+        "s1", {"id": "s1", "name": "Nouns", "rules": {"verb": {"included": False}}}
+    )
+    return vocabulary
+
+
+def test_the_words_tool_gives_the_words_known_as_they_are_asked_for() -> None:
+    vocabulary = known_vocabulary()
+    words = words_tool(
+        partial(known_words, vocabulary), ["Nouns"], anki=False, practised=PRACTISED
+    )
+
+    first = json.loads(words.run({}).content)
+    least = json.loads(words.run({"reverse": True, "count": 2}).content)
+    of_set = json.loads(
+        words.run({"set": "Nouns", "sorted_by": "alphabetical"}).content
+    )
+    verbs = json.loads(words.run({"categories": ["verb"]}).content)
+
+    assert [word["word"] for word in first["words"]] == ["Katze", "Hund", "gehen"]
+    assert first["words"][1] == {
+        "word": "Hund",
+        "categories": ["noun"],
+        "used": 1,
+        "seen": 0,
+        "last_used_by_user": _date(10.0),
+        "last_used_by_assistant": None,
+    }
+    assert ([word["word"] for word in least["words"]], least["total"]) == (
+        ["gehen", "Hund"],
+        3,
+    )
+    assert [word["word"] for word in of_set["words"]] == ["Hund", "Katze"]
+    assert [word["word"] for word in verbs["words"]] == ["gehen"]
+
+
+def test_the_words_tool_offers_the_sets_and_anki_only_where_there_are_any() -> None:
+    bare = words_tool(partial(known_words, None), [], anki=False, practised=PRACTISED)
+    full = words_tool(
+        partial(known_words, None), ["Nouns"], anki=True, practised=PRACTISED
+    )
+
+    assert {"set", "anki_only"}.isdisjoint(bare.parameters["properties"])
+    assert full.parameters["properties"]["set"]["enum"] == ["Nouns"]
+    assert "anki_only" in full.parameters["properties"]
+    assert full.doing({"anki_only": True}) == "Looking at the words you know from Anki"
+
+
+def test_the_words_tool_gives_only_the_anki_words_when_asked() -> None:
+    known = partial(known_words, known_vocabulary(), anki_words=lambda: ["Katze"])
+    words = words_tool(known, [], anki=True, practised=PRACTISED)
+
+    found = json.loads(words.run({"anki_only": True}).content)
+
+    assert [word["word"] for word in found["words"]] == ["Katze"]
+
+
+def test_the_words_tool_tells_the_model_what_it_cannot_give() -> None:
+    def unreachable() -> list[str]:
+        raise AnkiUnavailable("the deck-status server cannot be reached")
+
+    known = partial(known_words, known_vocabulary(), anki_words=unreachable)
+    words = words_tool(known, [], anki=True, practised=PRACTISED)
+
+    refused: list[tuple[dict[str, Any], str]] = [
+        ({"categories": ["colour"]}, "there is no category colour"),
+        ({"sorted_by": "loudest"}, "sorted_by must be one of"),
+        ({"set": "Verbs"}, "no such set"),
+        ({"anki_only": True}, "the deck-status server cannot be reached"),
+        ({"count": 0}, "count is a whole number"),
+    ]
+    for arguments, said in refused:
+        with pytest.raises(ToolError, match=said):
+            words.run(arguments)
+
+
+def test_the_words_tool_gives_the_usual_number_of_words_unless_told_otherwise() -> None:
+    vocabulary = Vocabulary()
+    for number in range(USUAL_KNOWN_WORDS + 5):
+        vocabulary.save("noun", f"Wort{number}", {}, [])
+    words = words_tool(partial(known_words, vocabulary), [], False, PRACTISED)
+
+    usual = json.loads(words.run({}).content)
+    more = json.loads(words.run({"count": USUAL_KNOWN_WORDS + 5}).content)
+
+    assert len(usual["words"]) == USUAL_KNOWN_WORDS
+    assert len(more["words"]) == USUAL_KNOWN_WORDS + 5
+
+
+def test_the_words_tool_tells_the_model_which_categories_to_build_on() -> None:
+    words = words_tool(partial(known_words, None), [], False, ["noun", "particle"])
+
+    assert "noun, particle" in words.description
+    assert str(USUAL_KNOWN_WORDS) in words.description

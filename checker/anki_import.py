@@ -278,6 +278,12 @@ class AnkiImporter:
                 # until the next look says more
                 self._status.state = "waiting"
 
+    @property
+    def language(self) -> str:
+        """The language the Anki words are of."""
+        with self._lock:
+            return self._language
+
     def status(self) -> tuple[ImportStatus, list[Profile]]:
         """What the import is doing, and the requests to the models it has
         made since this was last asked."""

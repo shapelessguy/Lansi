@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import re
 import threading
 import time
 import urllib.error
@@ -59,7 +60,10 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
+from anki_import import AnkiUnavailable
+from categories import CATEGORIES
 from intake import CHAT_TIMEOUT_SECS, read_usage
+from known import ORDERS, Asked, Known
 from logs import describe_record, read_json
 from models import Model
 from profiling import Profile, ProfileError, error_message
@@ -91,6 +95,12 @@ MAX_HALF_HOURS = 8
 # the most of each that a tool that lists them gives
 MAX_SESSIONS = 20
 MAX_LOGS = 50
+# how many words the tool that looks them up gives at most, and how many
+# when it is not told
+MAX_KNOWN_WORDS = 200
+USUAL_KNOWN_WORDS = 50
+# the recaps of how many of the latest chats the tutor is told
+MAX_RECAPS = 10
 # how many instances of an exercise may be offered, as practice allows
 MAX_INSTANCES = 50
 # how long the log of an exercise done in the chat is waited for, and how
@@ -146,23 +156,93 @@ class Tool:
 
 
 def instructions(
-    language: str, into: str, level: str, memories: list[dict[str, Any]]
+    language: str,
+    into: str,
+    level: str,
+    memories: list[dict[str, Any]],
+    tone: str = "",
 ) -> str:
-    """What the tutor is told before the chat, with the `memories` it has
-    of the learner."""
+    """What the tutor is told before the chat: how to talk with the learner,
+    the `tone` they set, if they set one, and the `memories` it has of them,
+    of every kind, which go before the tone where they say otherwise: the recaps of the chats before the latest,
+    of as many as MAX_RECAPS in all, the oldest first; then the memories
+    that last; then the recap of the latest chat, last of all, as it is what
+    the next lesson most often picks up from."""
+    facts = [memory for memory in memories if memory.get("kind", "fact") == "fact"]
+    recaps = [memory for memory in memories if memory.get("kind") == "recap"]
+    shown = recaps[-MAX_RECAPS:]
+    earlier, latest = shown[:-1], shown[-1] if shown else None
     listed = "\n".join(
-        f"- [{_day(memory['createdAt'])}] {memory['content']}" for memory in memories
+        f"- [{_day(memory['createdAt'])}] {memory['content']}" for memory in facts
     )
-    return PROMPTS(
+    told = []
+    if earlier:
+        told.append(
+            PROMPTS(
+                "tutor.memories.earlier",
+                recaps="\n\n".join(_recapped(memory) for memory in earlier),
+            )
+        )
+    told.append(
+        PROMPTS("tutor.memories.listed", memories=listed)
+        if facts
+        else PROMPTS("tutor.memories.none")
+    )
+    if latest is not None:
+        told.append(PROMPTS("tutor.memories.latest", recap=_recapped(latest)))
+    told_all = PROMPTS(
         "tutor.system",
         language=language,
         into=into,
         level=level or "unknown",
         today=time.strftime("%Y-%m-%d"),
-        memories=PROMPTS("tutor.memories.listed", memories=listed)
-        if memories
-        else PROMPTS("tutor.memories.none"),
+        tone=PROMPTS("tutor.tone", tone=" ".join(tone.split())) if tone.strip() else "",
+        memories="\n\n".join(told),
     )
+    # a part that was left out leaves no gap
+    return re.sub(r"\n{3,}", "\n\n", told_all)
+
+
+def _recapped(memory: dict[str, Any]) -> str:
+    """The recap of a chat as the tutor is told it, marked as one, with the
+    day of the chat."""
+    return f"Recap of the lesson of {_day(memory['createdAt'])}:\n" + "\n".join(
+        f"  {line}" for line in memory["content"].splitlines()
+    )
+
+
+def _said(chat: list[dict[str, str]]) -> str:
+    """A chat with the tutor as a model reading it is told it."""
+    return "\n\n".join(
+        f"{'Learner' if message['role'] == 'user' else 'Tutor'}: {message['content']}"
+        for message in chat
+    )
+
+
+def recap(
+    chat: list[dict[str, str]],
+    language: str,
+    ask: Callable[[list[dict[str, Any]]], tuple[str, Profile]],
+) -> tuple[str, Profile]:
+    """A recap of a `chat` that is over, as long as what was done in it
+    needs, as the model `ask` asks writes it, and what asking it used.
+    Raises TutorError."""
+    prompt = PROMPTS(
+        "tutor.recap",
+        language=language,
+        today=time.strftime("%Y-%m-%d"),
+        chat=_said(chat),
+    )
+    try:
+        reply, used = ask([{"role": "user", "content": prompt}])
+    except TranslationError as error:
+        raise TutorError(str(error)) from None
+    # bullets are left off, should the model have put them in all the same
+    lines = [line.strip().lstrip("-*• ").strip() for line in reply.splitlines()]
+    lines = [line for line in lines if line]
+    if not lines:
+        raise TutorError("the model wrote no recap")
+    return "\n".join(lines), used
 
 
 @dataclass
@@ -184,10 +264,7 @@ def remember(
     learner wrote and what it answered, with the `memories` it has, as the
     model `ask` asks decides, and what asking it used. A memory to forget
     that the tutor does not have is left out. Raises TutorError."""
-    said = "\n\n".join(
-        f"{'Learner' if message['role'] == 'user' else 'Tutor'}: {message['content']}"
-        for message in chat
-    )
+    said = _said(chat)
     listed = "\n".join(
         f"- [id {memory['id']}, {_day(memory['createdAt'])}] {memory['content']}"
         for memory in memories
@@ -705,6 +782,106 @@ def data_tools(
         ),
         *([] if evaluations is None else [_evaluations_tool(evaluations, language)]),
     ]
+
+
+def words_tool(
+    known: Callable[[Asked], tuple[list[Known], int]],
+    sets: list[str],
+    anki: bool,
+    practised: list[str],
+) -> Tool:
+    """The tool that looks up the words the learner knows, which `known`
+    gives as they are asked for, with how many there are in all. `sets`
+    are the names of the learner's sets of words, `anki` is whether they
+    have Anki, whose words can be asked for alone, and `practised` are the
+    categories whose words practice is best built on."""
+
+    def list_words(arguments: dict[str, Any]) -> Done:
+        categories = arguments.get("categories") or []
+        if not isinstance(categories, list) or not all(
+            isinstance(each, str) for each in categories
+        ):
+            raise ToolError("categories is a list of the names of categories")
+        word_set = arguments.get("set") or ""
+        if not isinstance(word_set, str):
+            raise ToolError("set is the name of a set")
+        flags = {name: arguments.get(name, False) for name in ("anki_only", "reverse")}
+        for name, value in flags.items():
+            if not isinstance(value, bool):
+                raise ToolError(f"{name} is true or false")
+        try:
+            words, total = known(
+                Asked(
+                    categories=frozenset(categories),
+                    set=word_set,
+                    anki_only=flags["anki_only"],
+                    order=arguments.get("sorted_by") or "last_used",
+                    reverse=flags["reverse"],
+                    limit=_count(arguments, MAX_KNOWN_WORDS)
+                    if arguments.get("count") is not None
+                    else USUAL_KNOWN_WORDS,
+                )
+            )
+        except (ValueError, LookupError, AnkiUnavailable) as error:
+            raise ToolError(str(error)) from None
+        listed = [
+            {
+                "word": word.lemma,
+                "categories": word.categories,
+                "used": word.used,
+                "seen": word.seen,
+                "last_used_by_user": _date(word.last_used_by_user),
+                "last_used_by_assistant": _date(word.last_used_by_assistant),
+            }
+            for word in words
+        ]
+        return Done(json.dumps({"total": total, "words": listed}, ensure_ascii=False))
+
+    properties: dict[str, Any] = {
+        "categories": {
+            "type": "array",
+            "items": {"type": "string", "enum": list(CATEGORIES)},
+            "description": PROMPTS("tutor.tools.categories"),
+        },
+        "sorted_by": {
+            "type": "string",
+            "enum": list(ORDERS),
+            "description": PROMPTS("tutor.tools.sorted_by"),
+        },
+        "reverse": {"type": "boolean", "description": PROMPTS("tutor.tools.reverse")},
+        "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": MAX_KNOWN_WORDS,
+            "description": PROMPTS("tutor.tools.count", most=MAX_KNOWN_WORDS),
+        },
+    }
+    if sets:
+        properties["set"] = {
+            "type": "string",
+            "enum": sets,
+            "description": PROMPTS("tutor.tools.set"),
+        }
+    if anki:
+        properties["anki_only"] = {
+            "type": "boolean",
+            "description": PROMPTS("tutor.tools.anki_only"),
+        }
+    return Tool(
+        "words",
+        PROMPTS(
+            "tutor.tools.words_known",
+            practised=", ".join(practised),
+            usual=USUAL_KNOWN_WORDS,
+        ),
+        {"type": "object", "properties": properties},
+        list_words,
+        lambda arguments: (
+            "Looking at the words you know from Anki"
+            if arguments.get("anki_only") is True
+            else "Looking at the words you know"
+        ),
+    )
 
 
 def _evaluations_tool(evaluations: Any, language: str) -> Tool:
