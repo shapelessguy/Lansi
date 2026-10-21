@@ -19,10 +19,15 @@ An instance is a task, graded once. The tasks are made one at a time, as
 the stories are. The score of writing is the mean of those of the tasks,
 the ratings of each made into a share of the most, and the score of each
 criterion that of its ratings.
+
+Each task is an instance, reported as made in the step it is made in; when
+the exercise is done again, the tasks it made are taken in order from
+`replay` in place of being made.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from kit import (
@@ -114,12 +119,19 @@ def describe_made(tasks: list[dict[str, Any]]) -> str:
     return f"\n{PROMPTS('made', listed=listed)}\n"
 
 
-def make_task(context: dict[str, Any], state: dict[str, Any], model: Model) -> None:
+def make_task(
+    context: dict[str, Any], state: dict[str, Any], model: Model
+) -> list[dict[str, Any]]:
     """Has the model make the next task, unless it was made already or every
-    task was."""
+    task was; or takes it from those done again. Returns what was made, as
+    the instances to report."""
     tasks = state["tasks"]
     if len(tasks) > len(state["done"]) or len(tasks) >= context["instances"]:
-        return
+        return []
+    replay = context.get("replay")
+    if replay:
+        tasks.append(json.loads(json.dumps(replay[len(tasks)])))
+        return []
     kind = kind_of(context)
     exam = context.get("exam")
     values = {
@@ -144,6 +156,7 @@ def make_task(context: dict[str, Any], state: dict[str, Any], model: Model) -> N
     tasks.append(
         read_task(ask_json(model, [{"role": "user", "content": prompt}]), kind)
     )
+    return [json.loads(json.dumps(tasks[-1]))]
 
 
 def rate(
@@ -276,9 +289,12 @@ def _told(state: dict[str, Any]) -> list[str]:
 
 def start(context: dict[str, Any], model: Model) -> Step:
     state: dict[str, Any] = {"tasks": [], "done": [], "reviewing": False, "told": 0}
-    make_task(context, state, model)
+    made = make_task(context, state, model)
     return Step(
-        state=state, show=_show(context, state), written=written([], _told(state))
+        state=state,
+        show=_show(context, state),
+        written=written([], _told(state)),
+        made=made,
     )
 
 
@@ -345,14 +361,18 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     message = message if isinstance(message, dict) else {}
     more = len(state["done"]) < context["instances"]
     if message.get("prepare") and state["reviewing"] and more:
-        make_task(context, state, model)
-    elif message.get("next") and state["reviewing"] and more:
-        make_task(context, state, model)
+        made = make_task(context, state, model)
+        return Step(state=state, show=_show(context, state), made=made)
+    if message.get("next") and state["reviewing"] and more:
+        made = make_task(context, state, model)
         state["reviewing"] = False
         return Step(
-            state=state, show=_show(context, state), written=written([], _told(state))
+            state=state,
+            show=_show(context, state),
+            written=written([], _told(state)),
+            made=made,
         )
-    elif not state["reviewing"]:
+    if not state["reviewing"]:
         answered = _answered(context, state, message, model)
         if answered:
             return answered

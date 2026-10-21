@@ -54,6 +54,13 @@ class Sentence:
     words: list[WordRating] = field(default_factory=list)
     # True while the words are being rated.
     rating_words: bool = False
+    # The sentence as it should be, once a model has written it, which is
+    # asked alongside the profile when correcting is asked for.
+    correction: str | None = None
+    # True while the correction is being written.
+    correcting: bool = False
+    # Why the correction could not be had, if it could not.
+    correction_error: str | None = None
 
 
 def split_sentences(text: str, caret: int | None = None) -> list[Sentence]:

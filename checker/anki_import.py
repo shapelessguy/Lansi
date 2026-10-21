@@ -75,10 +75,13 @@ class AnkiRefused(AnkiUnavailable):
     Anki account with the wrong password. The message says why."""
 
 
-# how long logging in to an Anki account may take
+# how long logging in to an Anki account may take, and a sync asked for
 LINK_TIMEOUT_SECS = 60
+SYNC_TIMEOUT_SECS = 130
 # no more of what the deck-status server says of a refusal is passed on
 MAX_REASON_LENGTH = 300
+# far more than a picture or a sound of a card needs
+MAX_MEDIA_BYTES = 50_000_000
 
 
 class AnkiLink:
@@ -121,6 +124,56 @@ class AnkiLink:
         Raises AnkiUnavailable, or AnkiRefused before the first sync."""
         decks = self._ask("/decks").get("decks", [])
         return [deck for deck in decks if isinstance(deck, dict)]
+
+    def next_card(self, deck_id: int) -> dict[str, Any]:
+        """The next card to study of the deck `deck_id` and its subdecks,
+        rendered, with what is left of them today, as the deck-status server
+        shows it, and which makes it the current deck of the collection.
+        Raises AnkiUnavailable, or AnkiRefused for a deck there is not."""
+        reply = self._ask("/review/next", {"deck_id": deck_id})
+        return reply if isinstance(reply, dict) else {}
+
+    def answer_card(
+        self, deck_id: int, card_id: int, rating: int, millis: int
+    ) -> dict[str, Any]:
+        """Answer the card `card_id` of the deck `deck_id`, 1 to 4 for
+        Again, Hard, Good and Easy, after `millis` of looking at it, as a
+        review in Anki that is synced soon, and return whether it was
+        `answered` with the next card. Raises AnkiUnavailable."""
+        body = {
+            "deck_id": deck_id,
+            "card_id": card_id,
+            "rating": rating,
+            "millis": millis,
+        }
+        reply = self._ask("/review/answer", body)
+        return reply if isinstance(reply, dict) else {}
+
+    def sync(self) -> None:
+        """Sync the collection now, as before it is studied. Raises
+        AnkiUnavailable, or AnkiRefused if the sync failed."""
+        self._ask("/sync", {}, timeout=SYNC_TIMEOUT_SECS)
+
+    def media(self, name: str) -> tuple[bytes, str]:
+        """A file of the media folder of the collection, such as a picture
+        or a sound of a card, with its type. Raises AnkiUnavailable, or
+        AnkiRefused if there is no such file."""
+        request = urllib.request.Request(
+            f"{self._base}/media/{urllib.parse.quote(name, safe='')}"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT_SECS) as response:
+                kind = response.headers.get_content_type()
+                data = response.read(MAX_MEDIA_BYTES + 1)
+        except urllib.error.HTTPError as error:
+            raise AnkiRefused(
+                f"there is no file {name} in Anki ({error.code})"
+            ) from None
+        except OSError:
+            raise AnkiUnavailable("the deck-status server cannot be reached") from None
+        if len(data) > MAX_MEDIA_BYTES:
+            raise AnkiRefused(f"{name} is too large to be shown")
+        return data, kind
 
     @staticmethod
     def _without_decks(skipped: list[int]) -> str:

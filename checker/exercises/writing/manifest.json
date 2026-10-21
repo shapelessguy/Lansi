@@ -17,5 +17,55 @@
             "max": 250,
             "default": 40
         }
+    },
+    "instance": {
+        "type": "object",
+        "description": "a task of writing: a situation with the points to write about, or a text with the fields of a form to fill in from it",
+        "properties": {
+            "kind": {
+                "type": "string",
+                "enum": [
+                    "message",
+                    "email",
+                    "opinion",
+                    "form"
+                ]
+            },
+            "situation": {
+                "type": "string"
+            },
+            "points": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "text": {
+                "type": "string",
+                "description": "what a form is filled in from"
+            },
+            "fields": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "label": {
+                            "type": "string"
+                        },
+                        "answer": {
+                            "type": "string",
+                            "description": "what the text says goes in it"
+                        }
+                    },
+                    "required": [
+                        "label",
+                        "answer"
+                    ]
+                }
+            }
+        },
+        "required": [
+            "kind"
+        ]
     }
 }

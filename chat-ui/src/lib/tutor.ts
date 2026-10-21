@@ -186,19 +186,15 @@ export function doingNow(turn: TutorTurn): string | null {
 const ABOUT_LENGTH = 80;
 
 /**
- * What the tutor is thinking about, in a short sentence, from what it has
+ * What the tutor is thinking about, in a few words, from what it has
  * reasoned so far: the latest of the headings it gives its steps, as many
- * models do, or else the latest sentence it finished, so that it does not
- * change with every piece of the reasoning that comes. Cut short if long.
+ * models do, which changes slowly enough to be read; nothing for reasoning
+ * without them, whose sentences go by too fast. Cut short if long.
  */
 export function thinkingAbout(thinking: string): string {
     const headings = [...thinking.matchAll(/^\s*(?:#+\s*(.+?)\s*#*|\*\*(.+?)\*\*)\s*$/gm)];
     const heading = headings.at(-1);
-    let about = heading ? heading[1] ?? heading[2] : "";
-    if (!about) {
-        const finished = thinking.match(/[^.!?\n]+[.!?]+(?=\s|$)/g) ?? [];
-        about = finished.at(-1) ?? "";
-    }
+    let about = heading ? heading[1] ?? heading[2] ?? "" : "";
     about = about.replace(/[*_`]/g, "").replace(/\s+/g, " ").trim();
     if (about.length <= ABOUT_LENGTH) {
         return about;
@@ -390,8 +386,14 @@ export interface Memory {
     removedAt: number | null;
     removedWhy: string;
     removedBy: "tutor" | "learner" | "";
-    /** Something of the learner that lasts, or the recap of a chat, a few lines long. */
-    kind: "fact" | "recap";
+    /**
+     * Something of the learner that lasts, a way of holding the lessons the
+     * tutor and the learner agreed on, something they planned to do on a day,
+     * or the recap of a chat, a few lines long.
+     */
+    kind: "fact" | "strategy" | "calendar" | "recap";
+    /** The day an entry of the calendar is for, as YYYY-MM-DD; null, or missing from a server before it, for the others. */
+    day?: string | null;
 }
 
 /** The memories the tutor has, the oldest first, and those that were removed. */

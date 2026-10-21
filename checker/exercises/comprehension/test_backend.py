@@ -158,3 +158,28 @@ def test_in_an_exam_the_part_it_is_is_followed_in_place_of_the_lesson() -> None:
 
     assert "Goethe A1, Lesen, Teil 1" in model.asked[0]
     assert "The prefix goes to the end." not in model.asked[0]
+
+
+def test_each_text_is_reported_as_made_in_the_step_it_is_written_in() -> None:
+    model = FakeModel(TEXT, TEXT)
+    started = start(CONTEXT, model)
+    answered = act(CONTEXT, started.state, {"answers": [1, 1]}, model)
+
+    prepared = act(CONTEXT, answered.state, {"prepare": True}, model)
+
+    assert started.made == [TEXT]
+    assert (answered.made, prepared.made) == ([], [TEXT])
+
+
+def test_a_text_done_again_is_taken_from_those_written_before_and_no_model_asked() -> (
+    None
+):
+    again = {**CONTEXT, "instances": 1, "replay": [TEXT]}
+    model = FakeModel()
+
+    started = start(again, model)
+    step = act(again, started.state, {"answers": [1, 0]}, model)
+
+    assert (model.asked, started.made) == ([], [])
+    assert started.show["text"]["text"] == TEXT["text"]
+    assert [each["result"] for each in step.show["feedback"]] == ["right", "wrong"]

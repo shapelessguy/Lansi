@@ -282,6 +282,7 @@ export function Chat(
                         onKeyDown={onKeyDown}
                         settings={settings}
                         onSettingsChange={onSettingsChange}
+                        words={words}
                         onUsage={onUsage}
                         // what profiling the sentences asks is counted under the chat it was made in
                         usageId={chatId}

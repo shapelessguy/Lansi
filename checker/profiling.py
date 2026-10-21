@@ -47,15 +47,25 @@ QUESTIONS: Questions = {
         "instructions": (
             "How many grammar errors does the sentence have? Judge it by the"
             " rules of the `language`, if one is given, and else of the"
-            " language it is written in. Count mistakes in"
-            " grammar only, such as word order, agreement, case, tense and"
-            " missing or extra words. Do not count spelling or punctuation."
+            " language it is written in. For each noun phrase, find its role"
+            " in the sentence (subject, direct object, indirect object, object"
+            " of a preposition) and check that its articles, adjectives and"
+            " pronouns have the case, gender and number that the role and the"
+            " noun need. Also check the form of each verb and its agreement"
+            " with its subject, word order, tense, and missing or extra words."
+            " Do not count spelling or punctuation."
         ),
         # from the worst to the best, as the options of every question are
         "criteria": {
             "several": "The sentence has two or more grammar errors.",
-            "one": "The sentence has exactly one grammar error.",
-            "none": "The sentence has no grammar errors.",
+            "one": (
+                "Exactly one word has the wrong form, such as an article in"
+                " the wrong case, or is missing, extra or out of place."
+            ),
+            "none": (
+                "Every word has the right form for its role, and the word"
+                " order is right."
+            ),
         },
     },
     "clarity": {
@@ -224,13 +234,18 @@ class Profiler:
         return self._ask({"sentence": sentence}, questions, model)
 
     def rate_words(
-        self, sentence: str, assessment: list[dict[str, str]], model: Model
+        self,
+        sentence: str,
+        assessment: list[dict[str, str]],
+        model: Model,
+        correction: str | None = None,
     ) -> tuple[list[WordRating], Profile]:
         """Ask of every word of `sentence` whether it is right where it
         stands, in one request, and return how right each is with what the
         request used. `assessment` is what was found out about the sentence
         before, as questions and their answers, which the model is given to
-        go by. Raises ProfileError."""
+        go by, with the `correction` of the sentence, if there is one.
+        Raises ProfileError."""
         words = list(_WORD.finditer(sentence))
         if not words or len(words) > MAX_RATED_WORDS:
             raise ProfileError("the sentence has no words, or too many, to rate")
@@ -238,7 +253,9 @@ class Profiler:
             f"w{number}": word_question(number, word.group())
             for number, word in enumerate(words, start=1)
         }
-        state = {"sentence": sentence, "assessment": assessment}
+        state: dict[str, Any] = {"sentence": sentence, "assessment": assessment}
+        if correction is not None:
+            state["correction"] = correction
         profile = self._ask(state, questions, model)
         ratings = [
             WordRating(
@@ -293,7 +310,9 @@ def word_question(number: int, word: str) -> dict[str, Any]:
             f" (word {number} of the sentence) correct where it stands in the"
             " sentence? Answer yes if the word is right in spelling, form and"
             " place. Answer no if it is the word, or one of the words, that"
-            " an error is in."
+            " an error is in. If a `correction` is given, it is the sentence"
+            " as a language model corrected it: a word it changed may be"
+            " wrong, though the correction can be wrong too."
         ),
     }
 

@@ -50,6 +50,8 @@ export interface Settings {
     enterSends: boolean;
     /** Whether the words of each sentence are rated once the questions about it are answered. */
     rateWords: boolean;
+    /** Whether each sentence is written as it should be by the translation model, alongside the questions. */
+    correctSentences: boolean;
     /** Whether each reply in the chat is read aloud once it has arrived. */
     speakReplies: boolean;
     /** Whether the Anki words the vocabulary lacks are taken into it as the app runs. */
@@ -208,6 +210,7 @@ export function defaultSettings(): Settings {
         questions: defaultQuestions(),
         enterSends: true,
         rateWords: true,
+        correctSentences: false,
         speakReplies: false,
         importAnki: true,
         theme: "system",
@@ -298,6 +301,9 @@ export function normalizeSettings(stored: unknown): Settings {
             : defaults.questions,
         enterSends: typeof candidate.enterSends === "boolean" ? candidate.enterSends : defaults.enterSends,
         rateWords: typeof candidate.rateWords === "boolean" ? candidate.rateWords : defaults.rateWords,
+        correctSentences: typeof candidate.correctSentences === "boolean"
+            ? candidate.correctSentences
+            : defaults.correctSentences,
         speakReplies: typeof candidate.speakReplies === "boolean" ? candidate.speakReplies : defaults.speakReplies,
         importAnki: typeof candidate.importAnki === "boolean" ? candidate.importAnki : defaults.importAnki,
         theme: Object.hasOwn(THEMES, candidate.theme ?? "") ? candidate.theme! : defaults.theme,
@@ -419,9 +425,11 @@ export function saveSettings(settings: Settings): void {
 }
 
 /**
- * The text a chat is started with: the prompt with the words of the sets it
- * asks for, the language being learned and the learner's level filled in.
- * A set that there is not gives no words.
+ * A prompt with every keyword filled in: the words of the sets it asks for,
+ * the language being learned and the learner's level. Every prompt the
+ * learner writes is filled in by this, whether it starts a chat, directs the
+ * speech model or is a question about each sentence. A set that there is
+ * not gives no words.
  */
 export function expandPrompt(prompt: string, words: WordLists, language: string, level: string): string {
     return prompt

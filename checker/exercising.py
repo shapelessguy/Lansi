@@ -19,6 +19,11 @@ once the exercise is over. Then a model writes the log of the exercise from
 them, as logs.py describes, in the background, so that the learner can go on
 meanwhile.
 
+An exercise may study the user's Anki collection, as the reviewer of Anki
+does: it asks the server for the next card of a deck, and answers it, and
+the answers are reviews of the collection, synced to the user's other
+devices. The deck-status server is reached only through the server here.
+
 An exercise may have a time limit, in minutes, from when it is first shown.
 The app keeps the time and finishes the exercise once it is up; what the
 learner sends after that, and a little more for the way there, is refused.
@@ -41,7 +46,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from anki_import import AnkiLink, AnkiUnavailable
 from grammar import Grammar
+from instances import instance_problem, schema_problem
 from intake import read_usage
 from languages import language_of
 from logs import LogError, Task, has_anything, write_log
@@ -69,6 +76,10 @@ STEP_TIMEOUT_SECS = 300.0
 # how often a step may ask a model, and have a picture drawn, which costs most
 MAX_ASKS = 10
 MAX_DRAWS = 1
+# how often a step may ask of the Anki collection
+MAX_ANKI_REQUESTS = 10
+# what an exercise may ask of the Anki collection, as kit.py describes
+ANKI_OPS = ("sync", "next", "answer")
 # far more than an exercise needs to say
 MAX_REPLY_BYTES = 2_000_000
 # no exercise is done more often than this in a session
@@ -133,6 +144,9 @@ Drawer = Callable[[str, str], tuple[str, Profile]]
 # Has a job done in the background, named in a few words. The job returns
 # what the models it asked used, and raises ExerciseError if it fails.
 Later = Callable[[str, Callable[[], list[Profile]]], None]
+# Answers what an exercise asks of the user's Anki collection, as kit.py
+# describes. Raises ValueError for what cannot be asked, and AnkiUnavailable.
+AnkiAsker = Callable[[dict[str, Any]], Any]
 # the aspect ratios a picture may be drawn in
 ASPECT_RATIOS = ("1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3")
 
@@ -170,8 +184,10 @@ class Manifest:
     # each `{"label": ..., "choices": {value: label}}`, the first choice the
     # one taken unless another is; `{"label": ..., "texts": True}`, one of
     # the learner's texts that are not corrected yet, which are its choices
-    # by their ids once they are filled in; or `{"label": ..., "min": ..., "max": ...,
-    # "default": ...}`, a whole number.
+    # by their ids once they are filled in; `{"label": ..., "anki_decks":
+    # True}`, a deck of the learner's Anki collection, which are its choices
+    # by their ids, as text, once they are filled in; or `{"label": ...,
+    # "min": ..., "max": ..., "default": ...}`, a whole number.
     options: dict[str, dict[str, Any]] = field(default_factory=dict)
     # Whether it practises a lesson; one that does not, such as correcting
     # a text of the learner's, needs none, and a session of such exercises
@@ -181,11 +197,30 @@ class Manifest:
     # text: how many times it is done, and how long it may take, are not
     # for the learner to choose.
     once: bool = False
+    # Whether it is about the topics of the session; one that is about
+    # neither them nor a lesson, such as reviewing the learner's Anki cards,
+    # is chosen only when neither is.
+    topics: bool = True
+    # Whether it is listed before every other, such as reviewing the
+    # learner's Anki cards, which comes before what is made for them.
+    first: bool = False
+    # Whether the tutor offers it with a tool of its own, apart from the one
+    # that offers the exercises made for the learner, such as reviewing
+    # their Anki cards, which makes nothing.
+    own_tool: bool = False
+    # Whether its interface has an icon, ui/icon.svg, which the app shows it
+    # with in place of its description
+    icon: bool = False
+    # The shape of one instance of what it makes, as instances.py says, so
+    # that what it made is kept and can be done again; None for one that
+    # makes nothing, such as reviewing the Anki cards.
+    instance: dict[str, Any] | None = None
 
 
 def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
-    """The exercises there are, those of theory first and then by their
-    titles: each directory with a manifest, a backend and an interface."""
+    """The exercises there are, those listed first, then those of theory,
+    then the others by their titles: each directory with a manifest, a
+    backend and an interface."""
     found = []
     for path in sorted(directory.iterdir()) if directory.is_dir() else []:
         manifest = path / "manifest.json"
@@ -200,6 +235,10 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
             data = json.loads(manifest.read_text(encoding="utf-8"))
         except ValueError:
             continue
+        instance = data.get("instance") if isinstance(data, dict) else None
+        if instance is not None and schema_problem(instance):
+            # an exercise whose instances could not be kept is not offered
+            continue
         if isinstance(data, dict) and isinstance(data.get("title"), str):
             found.append(
                 Manifest(
@@ -210,9 +249,25 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
                     _read_options(data.get("options")),
                     data.get("lesson") is not False,
                     data.get("once") is True,
+                    data.get("topics") is not False,
+                    data.get("first") is True,
+                    data.get("own_tool") is True,
+                    (path / "ui" / "icon.svg").is_file(),
+                    instance,
                 )
             )
-    return sorted(found, key=lambda manifest: (not manifest.theory, manifest.title))
+    return sorted(
+        found,
+        key=lambda manifest: (not manifest.first, not manifest.theory, manifest.title),
+    )
+
+
+# The options whose choices the app fills in, by what marks them, each with
+# what is said when there is none to choose.
+FILLED_OPTIONS = {
+    "texts": "one of your texts that is not corrected yet",
+    "anki_decks": "a deck of your Anki collection: link one first",
+}
 
 
 def _whole(value: object) -> bool:
@@ -227,8 +282,11 @@ def _read_options(value: object) -> dict[str, dict[str, Any]]:
         if not (_ID.fullmatch(name) and isinstance(option, dict)):
             continue
         label = str(option.get("label") or name)
-        if option.get("texts") is True:
-            options[name] = {"label": label, "texts": True, "choices": {}}
+        filled = next(
+            (kind for kind in FILLED_OPTIONS if option.get(kind) is True), None
+        )
+        if filled:
+            options[name] = {"label": label, filled: True, "choices": {}}
             continue
         choices = option.get("choices")
         if (
@@ -281,10 +339,9 @@ def chosen_options(manifest: Manifest, given: object) -> dict[str, Any]:
     values = {}
     for name, option in manifest.options.items():
         value = given.get(name, default_of(option))
-        if option.get("texts") and value not in option["choices"]:
-            raise ValueError(
-                f"{manifest.title} needs one of your texts that is not corrected yet"
-            )
+        for kind, needed in FILLED_OPTIONS.items():
+            if option.get(kind) and value not in option["choices"]:
+                raise ValueError(f"{manifest.title} needs {needed}")
         if "choices" in option:
             if value not in option["choices"]:
                 raise ValueError(
@@ -388,9 +445,11 @@ class Runner:
         ask: Asker,
         draw: Drawer = cannot_draw,
         look: Asker | None = None,
+        anki: AnkiAsker | None = None,
     ) -> tuple[dict[str, Any], list[Profile]]:
         """What the backend of `exercise` replied to `request`, with what
-        the models it had asked used. Raises ExerciseError."""
+        the models it had asked used, and `anki` what it asked of the Anki
+        collection. Raises ExerciseError."""
         backend = self._directory / exercise / "backend.py"
         if not _ID.fullmatch(exercise) or not backend.exists():
             raise ExerciseError(f"there is no exercise {exercise}")
@@ -432,7 +491,7 @@ class Runner:
         try:
             process.stdin.write(json.dumps(request) + "\n")
             process.stdin.flush()
-            reply = self._converse(process, ask, draw, look or ask, used)
+            reply = self._converse(process, ask, draw, look or ask, anki, used)
         except (OSError, ValueError) as error:
             raise ExerciseError(f"the exercise failed: {error}") from None
         finally:
@@ -457,23 +516,34 @@ class Runner:
         ask: Asker,
         draw: Drawer,
         look: Asker,
+        anki: AnkiAsker | None,
         used: list[Profile],
     ) -> dict[str, Any] | None:
-        """Answers what the backend asks of the models until it replies.
-        None if it stops first."""
+        """Answers what the backend asks of the models and of the Anki
+        collection until it replies. None if it stops first."""
         assert process.stdin and process.stdout
-        asked = drawn = 0
+        asked = drawn = studied = 0
         while line := process.stdout.readline():
             if len(line) > MAX_REPLY_BYTES:
                 raise ExerciseError("the exercise said too much")
             said = json.loads(line)
             if not isinstance(said, dict):
                 raise ExerciseError("the exercise said what is not an object")
-            if not {"ask", "look", "draw"} & said.keys():
+            if not {"ask", "look", "draw", "anki"} & said.keys():
                 return said
-            answer: dict[str, str]
+            answer: dict[str, Any]
             try:
-                if "ask" in said or "look" in said:
+                if "anki" in said:
+                    studied += 1
+                    if studied > MAX_ANKI_REQUESTS:
+                        raise ValueError(
+                            f"an exercise asks of Anki at most {MAX_ANKI_REQUESTS} times"
+                        )
+                    if anki is None:
+                        raise ValueError("there is no Anki collection here")
+                    request = said["anki"] if isinstance(said["anki"], dict) else {}
+                    answer = {"answer": anki(request)}
+                elif "ask" in said or "look" in said:
                     asked += 1
                     if asked > MAX_ASKS:
                         raise TranslationError(
@@ -484,6 +554,8 @@ class Runner:
                     request = said[kind] if isinstance(said[kind], dict) else {}
                     asker = ask if kind == "ask" else look
                     text, profile = asker(_read_messages(request.get("messages")))
+                    used.append(profile)
+                    answer = {"answer": text}
                 else:
                     drawn += 1
                     if drawn > MAX_DRAWS:
@@ -492,13 +564,42 @@ class Runner:
                         )
                     request = said["draw"] if isinstance(said["draw"], dict) else {}
                     text, profile = draw(*_read_drawing(request))
-                used.append(profile)
-                answer = {"answer": text}
-            except (TranslationError, ValueError) as error:
+                    used.append(profile)
+                    answer = {"answer": text}
+            except (TranslationError, ValueError, AnkiUnavailable) as error:
                 answer = {"error": str(error)}
             process.stdin.write(json.dumps(answer) + "\n")
             process.stdin.flush()
         return None
+
+
+def anki_asker(anki: AnkiLink) -> AnkiAsker:
+    """What answers an exercise that asks of the Anki collection of `anki`:
+    `{"op": "sync"}` to sync it, `{"op": "next", "deck": ID}` for the next
+    card of a deck, or `{"op": "answer", "deck": ID, "card": ID, "rating":
+    1 to 4, "millis": ...}` to answer the card at the top of its queue."""
+
+    def ask(request: dict[str, Any]) -> Any:
+        op = request.get("op")
+        if op == "sync":
+            anki.sync()
+            return {"synced": True}
+        if op not in ANKI_OPS:
+            raise ValueError(f"Anki is asked one of {', '.join(ANKI_OPS)}")
+        deck = request.get("deck")
+        if not isinstance(deck, int) or isinstance(deck, bool):
+            raise ValueError("a deck of Anki is asked for by its id")
+        if op == "next":
+            return anki.next_card(deck)
+        card, rating, millis = (
+            request.get(each) for each in ("card", "rating", "millis")
+        )
+        if not (_whole(card) and _whole(rating) and 1 <= rating <= 4):  # type: ignore[operator]
+            raise ValueError("a card of Anki is answered by its id, with 1 to 4")
+        millis = millis if _whole(millis) and millis >= 0 else 0  # type: ignore[operator]
+        return anki.answer_card(deck, card, rating, millis)  # type: ignore[arg-type]
+
+    return ask
 
 
 def _bare_environment() -> dict[str, str]:
@@ -568,11 +669,19 @@ def _read_reply(reply: object) -> dict[str, Any]:
     written = reply.get("written") or {}
     if not isinstance(written, dict):
         raise ExerciseError("what an exercise wrote must be an object of lists")
+    log = reply.get("log")
+    if log is not None and not isinstance(log, str):
+        raise ExerciseError("the log of an exercise must be text")
+    made = reply.get("made") or []
+    if not isinstance(made, list):
+        raise ExerciseError("what an exercise made must be a list of instances")
     return {
         **reply,
         "graded": graded,
         "written": written,
         "scores": _read_scores(reply.get("scores")),
+        "log": log.strip() if log else None,
+        "made": made,
     }
 
 
@@ -617,8 +726,11 @@ class Practice:
         send: Send = send_to_model,
         later: Later = do_now,
         now: Callable[[], float] = time.time,
+        anki: AnkiLink | None = None,
     ) -> None:
         self._now = now
+        # the user's Anki collection, which exercises may study
+        self._anki = anki
         self._store = store
         self._grammar = grammar or Grammar()
         self._runner = runner or Runner(directory)
@@ -643,24 +755,55 @@ class Practice:
 
     def _manifests(self) -> list[Manifest]:
         """The exercises there are, with the learner's texts that are not
-        corrected yet as the choices of an option of texts, by their ids."""
-        texts = {
-            text["id"]: text["title"] or "Untitled"
-            for text in self._store.texts()
-            if text["kind"] == "text" and text["lockedAt"] is None
+        corrected yet as the choices of an option of texts, by their ids,
+        and the decks of their Anki collection as those of an option of
+        decks."""
+        filled = {
+            "texts": {
+                text["id"]: text["title"] or "Untitled"
+                for text in self._store.texts()
+                if text["kind"] == "text" and text["lockedAt"] is None
+            },
+            "anki_decks": self._anki_decks(),
         }
         return [
             replace(
                 manifest,
                 options={
-                    name: {**option, "choices": texts}
-                    if option.get("texts")
+                    name: {
+                        **option,
+                        "choices": next(
+                            (
+                                choices
+                                for kind, choices in filled.items()
+                                if option.get(kind)
+                            ),
+                            option.get("choices"),
+                        ),
+                    }
+                    if "choices" in option
                     else option
                     for name, option in manifest.options.items()
                 },
             )
             for manifest in exercises(self._directory)
         ]
+
+    def _anki_decks(self) -> dict[str, str]:
+        """The decks of the Anki collection by their ids, as text, with
+        their full names; none if there is no collection, or it cannot be
+        reached."""
+        if self._anki is None:
+            return {}
+        try:
+            decks = self._anki.decks()
+        except AnkiUnavailable:
+            return {}
+        return {
+            str(deck["id"]): str(deck.get("name") or deck["id"])
+            for deck in decks
+            if _whole(deck.get("id"))
+        }
 
     def lessons(self, language: str) -> list[dict[str, Any]]:
         """The lessons of `language`. Raises GrammarError."""
@@ -755,6 +898,12 @@ class Practice:
         words, used = self._words(
             language, [topic_text(each) for each in about if each], choosing
         )
+        if not exam:
+            # the session of practice left running, which this one ends, is
+            # not kept if nothing was done in it
+            for left in self._store.sessions():
+                if left["status"] == "running" and self._left_untouched(left):
+                    self._drop(left)
         session = self._store.start_session(
             uuid.uuid4().hex,
             language,
@@ -793,7 +942,9 @@ class Practice:
         latest_first = dict.fromkeys(
             session["lesson"]
             for session in self._store.sessions()
-            if session["language"] == language and session["lesson"]
+            if session["language"] == language
+            and session["lesson"]
+            and not session["hidden"]
         )
         last = set(list(latest_first)[:REVIEWED_LESSONS])
         return [
@@ -910,7 +1061,8 @@ class Practice:
                 "state": state,
                 "message": message,
             }
-            reply, used = self._runner.run(exercise, request, ask, draw, look)
+            anki = anki_asker(self._anki) if self._anki else None
+            reply, used = self._runner.run(exercise, request, ask, draw, look, anki)
             # the grades are kept first, as they are what matters most
             try:
                 self._store.add_grades(session_id, exercise, reply["graded"])
@@ -919,6 +1071,7 @@ class Practice:
                 )
             except ValueError as error:
                 raise ExerciseError(str(error)) from None
+            self._keep_made(session, exercise, reply.get("made") or [])
             if op != "finish":
                 self._store.save_exercise_state(
                     session_id, exercise, reply.get("state"), reply.get("show")
@@ -928,8 +1081,89 @@ class Practice:
                 session_id, exercise, reply.get("results"), reply.get("scores")
             )
             self._take_texts(session, exercise, reply.get("results"))
+            if reply.get("log"):
+                # the exercise wrote its log itself
+                manifest = next(
+                    (each for each in self._manifests() if each.id == exercise), None
+                )
+                self._store.set_log(
+                    session_id,
+                    exercise,
+                    reply["log"],
+                    manifest.title if manifest else exercise,
+                )
+                return None, used
         self._log_later(session, exercise, request["context"], ask)
         return None, used
+
+    def _keep_made(
+        self, session: dict[str, Any], exercise: str, made: list[Any]
+    ) -> None:
+        """Keep what an exercise made in a step, each instance checked to be
+        of the shape its manifest declares; one that does again what was
+        made before makes nothing new. Raises ExerciseError."""
+        if not made or session["progress"][exercise]["replays"]:
+            return
+        manifest = next(
+            (each for each in exercises(self._directory) if each.id == exercise), None
+        )
+        if manifest is None or manifest.instance is None:
+            raise ExerciseError(f"{exercise} made what its manifest has no instance of")
+        for each in made:
+            problem = instance_problem(each, manifest.instance)
+            if problem:
+                raise ExerciseError(
+                    f"{exercise} made an instance unlike its own: {problem}"
+                )
+        try:
+            self._store.add_instances(session["id"], exercise, made)
+        except ValueError as error:
+            raise ExerciseError(str(error)) from None
+
+    def replay(
+        self, session_id: str, exercise: str, fresh: bool = False
+    ) -> dict[str, Any]:
+        """Start a session that does again an exercise of a session exactly
+        as it was: the same instances, in the same order, with the same
+        lesson, topics, words and options; or, if `fresh`, with all of
+        those but instances made anew, as many as it had. Only an exercise
+        that makes what it does, as its manifest says, is done again. Raises
+        ValueError for any other, and for one that kept nothing to do again
+        exactly."""
+        session = self._store.session(session_id)
+        if session is None or exercise not in session["exercises"]:
+            raise ValueError("there is no such exercise in the session")
+        manifest = next(
+            (each for each in exercises(self._directory) if each.id == exercise), None
+        )
+        if manifest is None or manifest.instance is None:
+            # one that makes nothing, such as reviewing the Anki cards or
+            # correcting a text, goes one way only
+            raise ValueError("this exercise is not one to do again")
+        ids = [] if fresh else self._store.instance_ids(session_id, exercise)
+        if not ids and not fresh:
+            raise ValueError("nothing of that exercise was kept to do again")
+        for left in self._store.sessions():
+            if left["status"] == "running" and self._left_untouched(left):
+                self._drop(left)
+        again = self._store.start_session(
+            uuid.uuid4().hex,
+            session["language"],
+            session["lesson"],
+            session["topics"],
+            {exercise: len(ids) or session["exercises"][exercise]},
+            session["words"],
+            session["mix_topics"],
+            {exercise: session["guidance"].get(exercise, "")},
+            session["lessons"],
+            {exercise: session["options"].get(exercise, {})},
+            {exercise: session["minutes"].get(exercise, 0)},
+        )
+        if ids:
+            self._store.set_replay(again["id"], exercise, ids)
+        replayed = self._store.session(again["id"])
+        assert replayed
+        return replayed
 
     def _take_texts(
         self, session: dict[str, Any], exercise: str, results: object
@@ -1057,7 +1291,37 @@ class Practice:
             self._store.end_session(session_id, status)
         ended = self._store.session(session_id)
         assert ended
+        if self._left_untouched(ended):
+            # ended, or left, before anything was done in it, it is not kept
+            self._drop(ended)
+            ended = {**ended, "hidden": True}
         return ended, used
+
+    def _drop(self, session: dict[str, Any]) -> None:
+        """Forget a session left before anything was done in it; or, if its
+        exercises made something, which can be done again, hide it, so that
+        it is kept for that alone."""
+        if any(progress["kept"] for progress in session["progress"].values()):
+            self._store.hide_session(session["id"])
+        else:
+            self._store.delete_session(session["id"])
+
+    def _left_untouched(self, session: dict[str, Any]) -> bool:
+        """Whether nothing was done in a session of practice: nothing graded,
+        nothing written by the learner, and no theory read."""
+        if (
+            session.get("kind") != "practice"
+            or session.get("hidden")
+            or self._store.grades(session["id"])
+        ):
+            return False
+        theory = {each.id for each in self._manifests() if each.theory}
+        return not any(
+            self._store.written(session["id"], exercise)["user"]
+            or exercise in theory
+            and session["progress"][exercise]["status"] != "pending"
+            for exercise in session["exercises"]
+        )
 
     def _context(
         self, session: dict[str, Any], exercise: str, context: dict[str, str]
@@ -1092,11 +1356,17 @@ class Practice:
             (each for each in exercises(self._directory) if each.id == exercise), None
         )
         chosen = session["options"].get(exercise, {})
+        options = manifest.options if manifest else {}
         texts = {
             name: self._store.text(chosen[name])
-            for name, option in (manifest.options if manifest else {}).items()
+            for name, option in options.items()
             if option.get("texts") and isinstance(chosen.get(name), str)
         }
+        deck_names = (
+            self._anki_decks()
+            if any(option.get("anki_decks") for option in options.values())
+            else {}
+        )
         return {
             "language": session["language"],
             "letters": dict(language.equivalents),
@@ -1117,6 +1387,12 @@ class Practice:
             "guidance": session["guidance"].get(exercise, ""),
             "minutes": session["minutes"].get(exercise, 0),
             "exam": exam,
+            # what it made before, which it does again, or None
+            "replay": self._store.instances(
+                exercise, self._store.instance_ids(session["id"], exercise)
+            )
+            if session["progress"][exercise]["replays"]
+            else None,
             # the learner's texts the options chose, by the name of each
             "texts": {
                 name: {
@@ -1126,5 +1402,16 @@ class Practice:
                 }
                 for name, text in texts.items()
                 if text
+            },
+            # the decks of Anki the options chose, by the name of each
+            "anki_decks": {
+                name: {
+                    "id": int(chosen[name]),
+                    "name": deck_names.get(chosen[name], ""),
+                }
+                for name, option in options.items()
+                if option.get("anki_decks")
+                and isinstance(chosen.get(name), str)
+                and chosen[name].isdigit()
             },
         }

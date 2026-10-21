@@ -8,6 +8,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
+use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
@@ -34,6 +35,18 @@ use crate::status::Status;
 
 /// Empty until the first sync attempt has finished.
 pub(crate) type SharedStatus = Arc<RwLock<Option<Status>>>;
+
+/// How long a mirror waits after a change was made here before it syncs,
+/// so that the answers to a few cards in a row are synced together.
+pub(crate) const SYNC_AFTER_CHANGE: Duration = Duration::from_secs(30);
+
+/// What a mirror is asked between its syncs.
+pub(crate) enum Wake {
+    /// The collection was changed here: sync within [SYNC_AFTER_CHANGE].
+    Soon,
+    /// Sync now, and say on the sender how it went.
+    Now(mpsc::Sender<Result<(), String>>),
+}
 
 /// Starts a backend with the collection at `collection_path` open, creating
 /// the collection if it does not exist. Media goes in a folder next to it.
@@ -83,24 +96,29 @@ impl Mirror {
         }
     }
 
-    /// Syncs and publishes the deck status every `interval`, until `stop`
-    /// is dropped or sent to.
+    /// Syncs and publishes the deck status every `interval`, and sooner
+    /// when woken, until `wake` is dropped.
     pub(crate) fn run(
         mut self,
         interval: Duration,
         shared: SharedStatus,
-        stop: mpsc::Receiver<()>,
+        wake: mpsc::Receiver<Wake>,
     ) {
+        let mut waiting: Vec<mpsc::Sender<Result<(), String>>> = vec![];
         loop {
-            match self.sync() {
+            let synced = self.sync();
+            match &synced {
                 Ok(()) => {
                     self.last_sync = Some(now());
                     self.last_sync_error = None;
                 }
                 Err(message) => {
                     eprintln!("sync failed: {message}");
-                    self.last_sync_error = Some(message);
+                    self.last_sync_error = Some(message.clone());
                 }
+            }
+            for waiter in waiting.drain(..) {
+                let _ = waiter.send(synced.clone());
             }
             // counted even when the sync failed, as the due counts change with
             // the time of day
@@ -108,11 +126,17 @@ impl Mirror {
                 Ok(status) => *shared.write().unwrap() = Some(status),
                 Err(message) => eprintln!("reading decks failed: {message}"),
             }
-            if !matches!(
-                stop.recv_timeout(interval),
-                Err(mpsc::RecvTimeoutError::Timeout)
-            ) {
-                return;
+            let mut due = Instant::now() + interval;
+            loop {
+                match wake.recv_timeout(due.saturating_duration_since(Instant::now())) {
+                    Ok(Wake::Soon) => due = due.min(Instant::now() + SYNC_AFTER_CHANGE),
+                    Ok(Wake::Now(waiter)) => {
+                        waiting.push(waiter);
+                        break;
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => break,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                }
             }
         }
     }

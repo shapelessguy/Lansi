@@ -2,16 +2,21 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 """The topics every user starts with, besides those they add: a title and
-what it is about. They are given no icon, as an icon is drawn by an image
-model, which is paid for: one is made when the learner asks for it."""
+what it is about, each with the icon of it in starter_icons/, a PNG named
+by its title, as `starter_icon` gives it, so that no image model, which is
+paid for, has to draw them again for each user."""
 
 from __future__ import annotations
+
+import re
+from pathlib import Path
+
+STARTER_ICONS = Path(__file__).parent / "starter_icons"
 
 STARTER_TOPICS: list[tuple[str, str]] = [
     ("Family", "parents, brothers and sisters, relatives and family life"),
     ("Friends", "meeting friends, making plans and doing each other favours"),
     ("At home", "rooms, furniture and the housework"),
-    ("Daily routine", "getting up, the working day and the evening"),
     ("Food and cooking", "ingredients, recipes and meals"),
     ("At the restaurant", "ordering, paying the bill and complaining"),
     ("At the supermarket", "groceries, quantities and prices"),
@@ -47,3 +52,10 @@ STARTER_TOPICS: list[tuple[str, str]] = [
     ("Art and museums", "paintings, exhibitions and artists"),
     ("Childhood memories", "growing up, games and school days"),
 ]
+
+
+def starter_icon(title: str) -> bytes | None:
+    """The icon of a starter topic, by its title, as a PNG, if it has one."""
+    name = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    file = STARTER_ICONS / f"{name}.png"
+    return file.read_bytes() if file.is_file() else None

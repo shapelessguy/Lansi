@@ -18,10 +18,15 @@ learner reads how it went, or else when it goes on to the `next`.
 A story is reported as written by the model in the step it is first shown
 in, with its questions; once it is answered, what the learner wrote is
 reported as written by them, and the corrections as written by the model.
+
+Each story, with its questions, is an instance, reported as made in the
+step it is written in; when the exercise is done again, the stories it
+wrote are taken in order from `replay` in place of being written.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from kit import (
@@ -131,12 +136,19 @@ def read_verdicts(reply: Any, count: int) -> list[tuple[str, str, str]]:
     return [read_verdict(each) for each in listed]
 
 
-def make_story(context: dict[str, Any], state: dict[str, Any], model: Model) -> None:
+def make_story(
+    context: dict[str, Any], state: dict[str, Any], model: Model
+) -> list[dict[str, Any]]:
     """Has the model write the next story, other than those before, unless
-    it was written already or every story was."""
+    it was written already or every story was; or takes it from those done
+    again. Returns what was written, as the instances to report."""
     stories = state["stories"]
     if len(stories) > len(state["done"]) or len(stories) >= context["instances"]:
-        return
+        return []
+    replay = context.get("replay")
+    if replay:
+        stories.append(json.loads(json.dumps(replay[len(stories)])))
+        return []
     mode = mode_of(context)
     prompt = PROMPTS(
         "making",
@@ -157,6 +169,7 @@ def make_story(context: dict[str, Any], state: dict[str, Any], model: Model) -> 
     )
     reply = ask_json(model, [{"role": "user", "content": prompt}])
     stories.append(read_story(reply, mode, questions_of(context)))
+    return [json.loads(json.dumps(stories[-1]))]
 
 
 def judge_answers(
@@ -280,9 +293,12 @@ def start(context: dict[str, Any], model: Model) -> Step:
         # how many of the stories were reported as written
         "told": 0,
     }
-    make_story(context, state, model)
+    made = make_story(context, state, model)
     return Step(
-        state=state, show=_show(context, state), written=written([], _told(state))
+        state=state,
+        show=_show(context, state),
+        written=written([], _told(state)),
+        made=made,
     )
 
 
@@ -357,14 +373,18 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     message = message if isinstance(message, dict) else {}
     more = len(state["done"]) < context["instances"]
     if message.get("prepare") and state["reviewing"] and more:
-        make_story(context, state, model)
-    elif message.get("next") and state["reviewing"] and more:
-        make_story(context, state, model)
+        made = make_story(context, state, model)
+        return Step(state=state, show=_show(context, state), made=made)
+    if message.get("next") and state["reviewing"] and more:
+        made = make_story(context, state, model)
         state["reviewing"] = False
         return Step(
-            state=state, show=_show(context, state), written=written([], _told(state))
+            state=state,
+            show=_show(context, state),
+            written=written([], _told(state)),
+            made=made,
         )
-    elif not state["reviewing"]:
+    if not state["reviewing"]:
         answered = _answered(context, state, message, model)
         if answered:
             return answered

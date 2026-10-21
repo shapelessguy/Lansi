@@ -1926,6 +1926,15 @@ div.book-cover {
     color: var(--danger);
 }
 
+.checks .answer dd.correction {
+    display: block;
+}
+
+.checks-correction {
+    border-left-color: rgb(46 160 67);
+    background: var(--done-bg);
+}
+
 .checks .answers {
     display: grid;
     grid-template-columns: 1fr;
@@ -1938,8 +1947,7 @@ div.book-cover {
 
 .checks .answer dd {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
+    align-items: center;
     gap: 8px;
     text-align: left;
 }
@@ -1954,9 +1962,15 @@ div.book-cover {
     font-size: 0.87rem;
 }
 
+/* the stars or the bar stand on the right, after the answer and how sure the model is */
+.answer-stars,
 .answer-scale {
-    height: 6px;
-    margin-top: 4px;
+    margin-left: auto;
+}
+
+.answer-scale {
+    flex: 0 1 110px;
+    height: 9px;
     border-radius: 999px;
     background: var(--border);
     overflow: hidden;
@@ -1967,6 +1981,27 @@ div.book-cover {
     height: 100%;
     border-radius: 999px;
     background: var(--accent);
+}
+
+.answer-stars {
+    display: inline-flex;
+    gap: 2px;
+    font-size: 1.4rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* a star in the colour of the border, with as much of it in the accent as is filled */
+.star {
+    position: relative;
+    color: var(--border);
+}
+
+.star span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    overflow: hidden;
+    color: var(--accent);
 }
 
 .settings-body h3:first-child {
@@ -2270,27 +2305,35 @@ div.book-cover {
     padding: 8px 18px;
 }
 
+/* the three columns fill what is left of the height, down to the footer,
+   each list scrolling within its column */
 .practice-columns {
+    flex: 1 0 320px;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: start;
+    grid-template-rows: minmax(0, 1fr);
     gap: 14px;
+    min-height: 320px;
 }
 
 @media (max-width: 760px) {
     .practice-columns {
+        flex: none;
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: none;
+    }
+
+    .practice-column {
+        max-height: 62vh;
     }
 }
 
-/* a column no taller than about the window, its list scrolling within it,
-   so that the sessions below are in sight */
 .practice-column {
     display: flex;
     flex-direction: column;
     gap: 8px;
     min-width: 0;
-    max-height: min(62vh, 640px);
+    min-height: 0;
     padding: 12px;
     background: var(--panel);
     border-radius: var(--radius);
@@ -2305,8 +2348,10 @@ div.book-cover {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    /* room for the scroll bar, beside the choices and not over them */
-    padding-right: 4px;
+    /* room for the scroll bar, beside the choices and not over them, and
+       round the choices, so that the border of one chosen is not cut */
+    padding: 2px 10px 2px 2px;
+    scrollbar-gutter: stable;
 }
 
 .practice-column h2 {
@@ -2508,24 +2553,70 @@ div.book-cover {
 }
 
 /* the settings of the exercises chosen, in place of the sessions */
-.exercise-settings-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 12px;
+/* An exercise in the list of those to choose: its icon and its title, as
+   a topic is shown, with what it is said as the mouse is over it. */
+.practice-exercise-choice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 8px;
 }
 
-.exercise-settings-group {
+.practice-exercise-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.practice-choice[aria-pressed="true"] .practice-exercise-icon {
+    background: color-mix(in srgb, var(--accent) 18%, var(--bg));
+    color: var(--accent);
+}
+
+/* the line drawing of the exercise, in the colour of its tile */
+.practice-exercise-glyph {
+    width: 24px;
+    height: 24px;
+    background: currentColor;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    mask-size: contain;
+}
+
+/* The settings of an exercise chosen, under it in the list of the
+   exercises, joined to it as a part of the same card. */
+.practice-exercise:has(.exercise-settings) > .practice-choice {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.exercise-settings {
     display: grid;
     gap: 8px;
-    margin: 0;
-    padding: 8px 12px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--accent);
+    border-top: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--border));
+    border-radius: 0 0 var(--radius) var(--radius);
+    background: color-mix(in srgb, var(--accent) 5%, var(--bg));
+    font-size: 0.9rem;
 }
 
-.exercise-settings-group legend {
-    padding: 0 4px;
-    font-weight: 600;
+/* in a column as narrow as that of the exercises, the name of each
+   setting on the left and what it is set to on the right */
+.exercise-settings .exercise-setting {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    justify-items: end;
+}
+
+.exercise-settings .exercise-setting > :first-child {
+    justify-self: start;
 }
 
 .exercise-setting {
@@ -2534,6 +2625,14 @@ div.book-cover {
     align-items: center;
     justify-content: space-between;
     gap: 6px 12px;
+}
+
+/* a choice, such as a deck, as wide as the room there is, its long names cut */
+.exercise-setting select {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    text-overflow: ellipsis;
 }
 
 .exercise-setting-number {
@@ -3616,31 +3715,25 @@ div.book-cover {
     text-decoration: line-through;
 }
 
-.memory-removed summary {
+/* the kinds of memories, each folded apart */
+.memory-group summary {
     color: var(--muted);
     cursor: pointer;
 }
 
-.memory-removed .memory-list {
+.memory-group > .memory-list,
+.memory-group > .sidebar-note {
     margin-top: 8px;
+}
+
+/* the days of the calendar gone by */
+.memory.past {
+    opacity: 0.6;
 }
 
 /* the recaps of the chats, one point to a line */
 .memory.recap p {
     white-space: pre-line;
-}
-
-.memory-recaps {
-    margin-bottom: 12px;
-}
-
-.memory-recaps summary {
-    color: var(--muted);
-    cursor: pointer;
-}
-
-.memory-recaps .memory-list {
-    margin-top: 8px;
 }
 
 /* The learner's texts: the list in the library, and one open to be
@@ -3781,4 +3874,190 @@ div.book-cover {
     color: var(--level-a1);
     font-weight: 600;
     text-decoration: none;
+}
+
+/* The practice sessions, in the panel of the logs: the list fills the
+   panel, which scrolls, and each session wraps onto lines of its own as
+   the panel is narrow. */
+.practice-sessions {
+    padding: 12px;
+}
+
+.practice-sessions .history h2 {
+    display: none;
+}
+
+.practice-sessions .history-list {
+    max-height: none;
+    padding: 0;
+    overflow: visible;
+    border: none;
+}
+
+.practice-sessions .history-item summary {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+}
+
+.practice-sessions .history-what {
+    flex-basis: 100%;
+    order: 1;
+    white-space: normal;
+}
+
+/* The exercises done, in the panel of the logs: each a card that opens on
+   its rounds, each a card of its own. */
+.done-exercise > details > summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.done-exercise > details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.done-exercise-icon {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--panel);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.done-exercise-icon .practice-exercise-glyph {
+    width: 20px;
+    height: 20px;
+}
+
+.done-exercise-what {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* how it went, and what does it again, on one line under what it was of */
+.done-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 22px;
+    margin-top: 2px;
+}
+
+.done-results {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.done-results .history-bar {
+    width: 64px;
+    height: 4px;
+}
+
+.done-count {
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.done-rounds {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.done-round {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: var(--radius);
+    background: var(--bg);
+    font-size: 0.9em;
+}
+
+.done-round.right {
+    border-left-color: rgb(46 160 67);
+}
+
+.done-round.partial {
+    border-left-color: rgb(224 160 32);
+}
+
+.done-round.wrong {
+    border-left-color: var(--danger);
+}
+
+.done-round p {
+    margin: 4px 0 0;
+    white-space: pre-line;
+}
+
+.done-round-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 0.85em;
+}
+
+.done-round-task {
+    color: var(--muted);
+}
+
+.done-log {
+    margin-top: 8px;
+}
+
+.done-log summary {
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.done-log p {
+    margin: 4px 0 0;
+    white-space: pre-line;
+}
+
+.done-again {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+/* a small button that does a card again, quiet until it is pointed at */
+.done-again .chip {
+    padding: 1px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.6;
+}
+
+.done-again .chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.done-again .chip.accent {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    color: var(--accent);
+}
+
+.done-again .chip.accent:hover {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
 }

@@ -9,11 +9,13 @@ import { BookReader } from "./components/BookReader";
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
 import { Evaluations } from "./components/Evaluations";
+import { ExercisesDone } from "./components/ExercisesDone";
 import { Icon } from "./components/Icon";
 import { Inspector } from "./components/Inspector";
 import { LogsPanel } from "./components/LogsPanel";
 import { MemoryList } from "./components/MemoryList";
 import { Practice } from "./components/Practice";
+import { PracticeSessions } from "./components/PracticeSessions";
 import { SelectionTools } from "./components/SelectionTools";
 import { SetEditor } from "./components/SetEditor";
 import { SettingsPanel, type SettingsTab } from "./components/SettingsPanel";
@@ -49,21 +51,22 @@ import type { ProfileUsage } from "./lib/checker";
 import { type Evaluation, evaluationUsage, startEvaluation, USAGE_ID as EVALUATION_USAGE_ID } from "./lib/evaluations";
 import { newId } from "./lib/ids";
 import { begun, EMPTY_TRACE, type Trace, traced } from "./lib/inspect";
-import { type Activity, loadLayout, type Panel, saveLayout } from "./lib/layout";
+import { type Activity, type LibraryTab, loadLayout, type LogsTab, type Panel, saveLayout } from "./lib/layout";
+import { LOGGED_EVENT } from "./lib/logs";
 import type { ChatMessage } from "./lib/openrouter";
-import { fetchGenerationUsage } from "./lib/openrouter";
-import { choosingOf, type Learner, practiceUsage, startSession, USAGE_ID as PRACTICE_USAGE_ID } from "./lib/practice";
+import {
+    choosingOf,
+    type Learner,
+    type PracticeSession,
+    practiceUsage,
+    replayExercise,
+    startSession,
+    USAGE_ID as PRACTICE_USAGE_ID,
+} from "./lib/practice";
 import { logOut } from "./lib/session";
 import { deleteSet, fetchSets, membersOf, newSet, saveSet, wordLists, type WordSet } from "./lib/sets";
-import { applyAppearance, exerciseVocabularyOf, saveSettings, type Settings } from "./lib/settings";
-import {
-    bookSource,
-    exerciseSource,
-    messageSource,
-    speechInstructions,
-    type SpeechSource,
-    type Voice,
-} from "./lib/speaking";
+import { applyAppearance, exerciseVocabularyOf, expandPrompt, saveSettings, type Settings } from "./lib/settings";
+import { bookSource, exerciseSource, messageSource, type SpeechSource, type Voice } from "./lib/speaking";
 import { type BackgroundTask, fetchTasks, TASKS_INTERVAL_MS, withTask } from "./lib/tasks";
 import { deleteText, fetchTexts, saveText, type Text } from "./lib/texts";
 import type { Asking, Translated } from "./lib/translate";
@@ -116,9 +119,19 @@ export function App({ user, initialSettings, initialChats }: Props) {
     // the panel on the left, with the words, the chats and the books
     const [libraryOpen, setLibraryOpen] = useState(() => loadLayout().libraryOpen);
     // the logs, which take the place of the library on the left while they are open
-    const [logsOpen, setLogsOpen] = useState(false);
+    const [logsOpen, setLogsOpen] = useState(() => loadLayout().logsOpen);
     // tells the logs from those before something more was logged
     const [logsRevision, setLogsRevision] = useState(0);
+    // which of the logs and the practice sessions the panel of the logs shows
+    const [logsTab, setLogsTab] = useState<LogsTab>(() => loadLayout().logsTab);
+    // a session left unfinished taken up from the practice sessions, for Practice to go on with
+    const [resuming, setResuming] = useState<{ session: PracticeSession; nonce: number } | null>(null);
+    // what was logged that no task tells of, such as the log an exercise wrote itself
+    useEffect(() => {
+        const listAgain = () => setLogsRevision((revision) => revision + 1);
+        window.addEventListener(LOGGED_EVENT, listAgain);
+        return () => window.removeEventListener(LOGGED_EVENT, listAgain);
+    }, []);
     // the panels on the right share one place, so one is shown at a time
     const [openPanel, setOpenPanel] = useState<Panel | "subchat" | null>(() => loadLayout().panel);
     // The panels are found as they were left the next time the page is
@@ -126,9 +139,19 @@ export function App({ user, initialSettings, initialChats }: Props) {
     // the tab shown last is shown again when the page is opened, and the text open last
     const [activity, setActivity] = useState<Activity>(() => loadLayout().activity);
     const [textId, setTextId] = useState<string | null>(() => loadLayout().text);
+    const [sidebarTab, setSidebarTab] = useState<LibraryTab>(() => loadLayout().libraryTab);
     useEffect(
-        () => saveLayout({ libraryOpen, panel: openPanel === "subchat" ? null : openPanel, activity, text: textId }),
-        [libraryOpen, openPanel, activity, textId],
+        () =>
+            saveLayout({
+                libraryOpen,
+                logsOpen,
+                libraryTab: sidebarTab,
+                logsTab,
+                panel: openPanel === "subchat" ? null : openPanel,
+                activity,
+                text: textId,
+            }),
+        [libraryOpen, logsOpen, sidebarTab, logsTab, openPanel, activity, textId],
     );
     // the selection the floating chat is about, with a number that tells it from the one before
     const [asked, setAsked] = useState<{ translated: Translated; nonce: number } | null>(null);
@@ -147,9 +170,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
     const [usageRevision, setUsageRevision] = useState(0);
     const [chatStore, setChatStore] = useState<ChatStore>(() =>
         storeOf(initialChats, initialSettings.defaultContextId, initialSettings.language)
-    );
-    const [sidebarTab, setSidebarTab] = useState<"words" | "vocabulary" | "memories" | "texts" | "chats" | "books">(
-        "vocabulary",
     );
     // the learner's texts and their corrections, or why they could not be listed
     const [texts, setTexts] = useState<Text[] | string>([]);
@@ -428,19 +448,18 @@ export function App({ user, initialSettings, initialChats }: Props) {
             apiKey: settings.apiKey,
             model: settings.speechModel,
             voice: settings.speechVoice,
-            instructions: speechInstructions(settings.speechDirection, settings.language, settings.level),
+            instructions: expandPrompt(settings.speechDirection, words, settings.language, settings.level).trim(),
         }),
         [
             settings.apiKey,
             settings.speechModel,
             settings.speechVoice,
             settings.speechDirection,
+            words,
             settings.language,
             settings.level,
         ],
     );
-    const latestVoice = useRef(voice);
-    latestVoice.current = voice;
     const followTasks = useCallback((fetched: BackgroundTask[]) => {
         setTasks(fetched);
         for (const task of fetched) {
@@ -465,26 +484,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
             }
             if (task.kind === "memories") {
                 setMemoriesRevision((revision) => revision + 1);
-            }
-            // Audio comes without what it cost, which is looked up
-            // afterwards, by what each request for it goes by.
-            const { apiKey, model } = latestVoice.current;
-            for (const { generation } of task.result) {
-                // only OpenRouter keeps what a request used
-                if (generation && apiKey && !model.url) {
-                    void fetchGenerationUsage(apiKey, generation).then((used) =>
-                        addUsageEntry({
-                            id: generation,
-                            at: Date.now(),
-                            category: "speech",
-                            chatId: "speech",
-                            model: used?.model ?? model.model,
-                            promptTokens: used?.promptTokens ?? 0,
-                            completionTokens: used?.completionTokens ?? 0,
-                            cost: used?.cost ?? null,
-                        })
-                    );
-                }
             }
         }
     }, [addUsageEntry]);
@@ -626,6 +625,21 @@ export function App({ user, initialSettings, initialChats }: Props) {
         setOpenPanel(panel === wanted ? null : wanted);
     }
 
+    /**
+     * Does an exercise of a session that is over again, in Practice: exactly
+     * as it was, or, if `fresh`, with the same settings and made anew.
+     */
+    function replay(session: PracticeSession, exercise: string, fresh = false) {
+        replayExercise(session.id, exercise, learner, fresh).then(
+            (again) => {
+                setResuming({ session: again, nonce: Date.now() });
+                setActivity("practice");
+                setLogsRevision((revision) => revision + 1);
+            },
+            (failed: Error) => window.alert(failed.message),
+        );
+    }
+
     function openSettings(tab: SettingsTab) {
         setSettingsTab(tab);
         setOpenPanel("settings");
@@ -640,8 +654,66 @@ export function App({ user, initialSettings, initialChats }: Props) {
         <WritingChecks language={settings.language}>
             <div className="app">
                 <aside className="side-panel left" hidden={!logsOpen}>
-                    <SidePanel title="Logs" onClose={() => setLogsOpen(false)} flush>
-                        <LogsPanel active={logsOpen} revision={logsRevision} onOpenBook={openBook} />
+                    <SidePanel
+                        title="Logs"
+                        // the logs take the place of the library, and closing them closes the left side
+                        onClose={() => {
+                            setLogsOpen(false);
+                            setLibraryOpen(false);
+                        }}
+                        flush
+                        tabs={
+                            <div className="tabs" role="tablist">
+                                <button
+                                    role="tab"
+                                    aria-selected={logsTab === "logs"}
+                                    onClick={() => setLogsTab("logs")}
+                                >
+                                    Logs
+                                </button>
+                                <button
+                                    role="tab"
+                                    aria-selected={logsTab === "exercises"}
+                                    onClick={() => setLogsTab("exercises")}
+                                >
+                                    Exercises
+                                </button>
+                                <button
+                                    role="tab"
+                                    aria-selected={logsTab === "sessions"}
+                                    onClick={() => setLogsTab("sessions")}
+                                >
+                                    Practice sessions
+                                </button>
+                            </div>
+                        }
+                    >
+                        <div className="tab-panel" role="tabpanel" hidden={logsTab !== "logs"}>
+                            <LogsPanel
+                                active={logsOpen && logsTab === "logs"}
+                                revision={logsRevision}
+                                onOpenBook={openBook}
+                            />
+                        </div>
+                        <div className="tab-panel" role="tabpanel" hidden={logsTab !== "exercises"}>
+                            <ExercisesDone
+                                active={logsOpen && logsTab === "exercises"}
+                                language={settings.language}
+                                revision={logsRevision}
+                                onReplay={replay}
+                            />
+                        </div>
+                        <div className="tab-panel" role="tabpanel" hidden={logsTab !== "sessions"}>
+                            <PracticeSessions
+                                active={logsOpen && logsTab === "sessions"}
+                                language={settings.language}
+                                revision={logsRevision}
+                                onResume={(session) => {
+                                    setResuming({ session, nonce: Date.now() });
+                                    setActivity("practice");
+                                }}
+                            />
+                        </div>
                     </SidePanel>
                 </aside>
                 <aside className="side-panel left" hidden={!libraryOpen || logsOpen}>
@@ -931,10 +1003,17 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             onSpeakReplies={(speakReplies) => updateSettings({ ...settings, speakReplies })}
                             onSpeak={speakMessage}
                             onExchange={(label) => setTrace((current) => begun(current, label, Date.now()))}
-                            onTrace={(event) => setTrace((current) => traced(current, event))}
+                            onTrace={(event) => {
+                                setTrace((current) => traced(current, event));
+                                // the tutor may have written down a strategy or an entry of its calendar
+                                if (event.type === "done") {
+                                    setMemoriesRevision((revision) => revision + 1);
+                                }
+                            }}
                             onNewChat={() => setTrace(EMPTY_TRACE)}
                             settings={settings}
                             onSettingsChange={updateSettings}
+                            words={words}
                             checksSlot={panel === "checks" && activity === "tutor" ? panelSlot : null}
                             onCloseChecks={() => setOpenPanel(null)}
                             onEditQuestions={() => openSettings("questions")}
@@ -981,6 +1060,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     language={settings.language}
                                     settings={settings}
                                     onSettingsChange={updateSettings}
+                                    words={words}
                                     onUsage={addUsageEntry}
                                     checksSlot={panel === "checks" && activity === "texts" ? panelSlot : null}
                                     onCloseChecks={() => setOpenPanel(null)}
@@ -998,6 +1078,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     </div>
                     <div className="pane" hidden={activity !== "practice"}>
                         <Practice
+                            resuming={resuming}
                             active={activity === "practice"}
                             settings={settings}
                             learner={learner}

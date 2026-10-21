@@ -315,3 +315,33 @@ def test_what_was_answered_is_in_the_results_however_far_it_got() -> None:
     assert results["total"] == 2
     assert [made["result"] for made in results["sets"]] == ["right"]
     assert results["sets"][0]["items"][0]["text"] == "Ich [stehe] um 6 Uhr [auf]."
+
+
+def test_each_set_is_reported_as_made_in_the_step_it_is_made_in() -> None:
+    model = FakeModel(ITEMS)
+    started = start(CONTEXT, model)
+    checked = act(CONTEXT, started.state, {"answers": RIGHT}, model)
+
+    prepared = act(CONTEXT, checked.state, {"prepare": True}, model)
+    shown = act(CONTEXT, prepared.state, {"next": True}, model)
+
+    [made] = started.made
+    assert made == {"items": started.state["sets"][0]}
+    assert set(made["items"][0]) == {"text", "hints", "translation"}
+    assert (checked.made, len(prepared.made), shown.made) == ([], 1, [])
+
+
+def test_a_set_done_again_is_taken_from_those_made_before_and_no_model_asked() -> None:
+    made = start(CONTEXT, FakeModel(ITEMS)).made
+    again = {**CONTEXT, "instances": 1, "replay": made}
+    model = FakeModel({"items": []})
+
+    started = start(again, model)
+    step = act(again, started.state, {"answers": RIGHT}, model)
+
+    assert model.asked == []
+    assert started.made == []
+    assert [item["parts"] for item in started.show["items"]] == [
+        parts_of(item["text"]) for item in made[0]["items"]
+    ]
+    assert step.graded[0]["result"] == "right"

@@ -12,6 +12,9 @@ An exercise is a directory of its own here, with:
                     `prompts_beside` gives the backend
     ui/index.js     what the learner sees, a module the app mounts, as
                     kit.js describes, with ui/style.css if it has one
+    ui/icon.svg     what the app shows the exercise with where it is
+                    chosen, if it has one: a line drawing of 24 by 24 in
+                    currentColor, which the app fills with its own colour
 
 The `options` of a manifest, if it has any, are the settings of the
 exercise the learner may change, besides how many times it is done, by
@@ -38,9 +41,37 @@ in place of the text from then on.
 
 The app remembers what the learner chose of each, for the next time.
 
+An option may also be `{"label": "Deck", "anki_decks": true}`: a deck of
+the learner's Anki collection, by its id as text, which the app fills in as
+its choices. The exercise is told the deck it chose under `anki_decks` in
+the context, by the name of the option: `{"id": ..., "name": ...}`, the id
+as a number and the full name, such as "Deutsch::Verben".
+
 An exercise whose manifest has `"once": true` is done once, with no time
 limit, such as one that corrects a text: how many instances it has, and how
 long it may take, are not for the learner to choose.
+
+An exercise that makes what the learner does, such as a set of sentences
+or a story with its questions, declares in its manifest the shape of one
+`instance` of it, as checker/instances.py describes, and reports each
+instance it makes, in the step it makes it, as `made`: what it made for the
+learner, of that shape, with nothing of what the learner answered, so that
+the same can be done again exactly. The app keeps each, after checking it
+is of that shape. When the exercise is done again, the context has under
+`replay` the instances it made, in order, as many as there are instances
+to do, which it does in place of making new ones, reporting none as made;
+`replay` is None otherwise. One that makes nothing, such as reviewing the
+learner's Anki cards or reading theory, declares no instance.
+
+An exercise whose manifest has `"topics": false` is not about the topics
+of the session; one that is about neither them nor a lesson, such as
+reviewing the learner's Anki cards, can be chosen only when neither is.
+
+An exercise whose manifest has `"first": true` is listed before every
+other, such as reviewing the learner's Anki cards; and one whose manifest
+has `"own_tool": true` is offered by the tutor with a tool of its own, by
+its id, apart from the one that offers the exercises made for the learner,
+such as one that makes nothing.
 
 An exercise whose manifest has `"lesson": false` practises no lesson, such
 as one that corrects a text: a session of such exercises alone has none,
@@ -78,7 +109,9 @@ The context is the same for every call:
      "guidance": "...",
      "minutes": 0,
      "exam": "",
-     "texts": {"text": {"id": ..., "title": ..., "content": ...}}}
+     "replay": None,
+     "texts": {"text": {"id": ..., "title": ..., "content": ...}},
+     "anki_decks": {"deck": {"id": 1, "name": "Deutsch"}}}
 
 A session of no lesson reviews the lessons practised last, and its
 `lesson` is made of them: its id is empty, it has every point of them once,
@@ -115,6 +148,12 @@ what its texts and tasks are like, and an example of one, which the
 exercise is to follow, as `describe_exam` tells a model, in place of the
 lesson. The `lesson` is then made of the points of the level of the exam.
 It is empty in practice.
+
+`log`, which `finish` may return, is the log of the exercise as it writes
+it itself, a line or two, for one whose grades say too little for a model
+to write one worth reading, such as reviewing the learner's Anki cards,
+whose grades are buttons; it is kept in place of the log a model would
+write.
 
 `scores`, which `finish` may return, say what the learner can do as far
 as the exercise shows it, each a number from 0 to 100, by the names of
@@ -161,7 +200,35 @@ Each call is made in a process of its own, which is given no key and keeps
 nothing: whatever is needed for the next call goes into the state. A
 language model is asked through the server, with `model.ask`, a model that
 sees pictures well with `model.look`, and a picture drawn by an image model
-with `model.draw`. A message may show the model a picture, with a content of
+with `model.draw`. The learner's Anki collection is studied, as
+the reviewer of Anki studies it, with `ask_anki`, its answers recorded as
+reviews and synced to the learner's other devices; the scheduler takes the
+options of the decks, such as their limits and steps, from the collection.
+What it is asked is one of:
+
+    {"op": "sync"}                    sync the collection now, as before
+                                      studying it
+    {"op": "next", "deck": ID}        the next card of the deck and its
+                                      subdecks, which becomes the current
+                                      deck of the collection
+    {"op": "answer", "deck": ID, "card": ID, "rating": 1 to 4, "millis": N}
+                                      answer the card at the top of the
+                                      queue with Again, Hard, Good or Easy,
+                                      after N milliseconds of looking at it
+
+`next` replies `{"card": ..., "counts": {"new": ..., "learning": ...,
+"review": ...}}`, the card None once nothing more is due today, and else
+`{"id", "note_id", "ord", "queue", "question", "answer", "css",
+"question_av", "answer_av", "labels", "settings"}`: its sides as HTML, with
+each sound, or text read aloud, as `[anki:play:q:N]` or `[anki:play:a:N]`
+for the Nth of `question_av` or `answer_av`, each `{"kind": "sound",
+"file": ...}` or `{"kind": "tts", "text": ..., "lang": ..., "speed": ...}`;
+the labels of the four buttons, such as "<10m"; and what the deck's options
+and the preferences say of how it is shown. `answer` replies as `next` does,
+with whether it was `answered`: not when the card was no longer at the top
+of the queue, as when a sync brought a review of it from elsewhere.
+
+A message may show the model a picture, with a content of
 parts:
 
     [{"type": "text", "text": ...},
@@ -352,6 +419,10 @@ class ModelError(Exception):
     """The model could not be asked, or gave no answer that could be used."""
 
 
+class AnkiError(Exception):
+    """The Anki collection could not be studied. The message says why."""
+
+
 class Model(Protocol):
     def ask(self, messages: list[dict[str, Any]]) -> str:
         """What the model replies to `messages`, each a `{"role": ...,
@@ -377,6 +448,12 @@ class Step:
     results: Any = None
     written: dict[str, list[str]] = field(default_factory=dict)
     scores: dict[str, float] | None = None
+    # the log of the exercise as it writes it itself, from `finish`, in
+    # place of the one a model would write from the grades
+    log: str | None = None
+    # the instances made in the step, each of the shape of `instance` in the
+    # manifest, which the app keeps so that the exercise can be done again
+    made: list[Any] = field(default_factory=list)
 
 
 def written(
@@ -689,6 +766,15 @@ def describe_words(context: dict[str, Any]) -> str:
     return PROMPTS(name, language=context["language"], lemmas=lemmas)
 
 
+def ask_anki(model: Model, request: dict[str, Any]) -> Any:
+    """What the learner's Anki collection replies to `request`, as asked
+    through the server that `model` is given by. Raises AnkiError."""
+    anki = getattr(model, "anki", None)
+    if anki is None:
+        raise AnkiError("there is no Anki collection here")
+    return anki(request)
+
+
 class _StdioModel:
     """Asks the server, which asks the model, over the pipes the process was
     started with."""
@@ -706,13 +792,22 @@ class _StdioModel:
     def draw(self, prompt: str, aspect_ratio: str = "1:1") -> str:
         return self._request({"draw": {"prompt": prompt, "aspect_ratio": aspect_ratio}})
 
+    def anki(self, request: dict[str, Any]) -> Any:
+        try:
+            return self._answer({"anki": request})
+        except ModelError as error:
+            raise AnkiError(str(error)) from None
+
     def _request(self, request: dict[str, Any]) -> str:
+        return str(self._answer(request))
+
+    def _answer(self, request: dict[str, Any]) -> Any:
         self._out.write(json.dumps(request) + "\n")
         self._out.flush()
         answer = json.loads(self._into.readline() or "{}")
         if "answer" not in answer:
             raise ModelError(answer.get("error") or "the server gave no answer")
-        return str(answer["answer"])
+        return answer["answer"]
 
 
 Start = Callable[[dict[str, Any], Model], Step]
@@ -743,9 +838,11 @@ def serve(start: Start, act: Act, finish: Finish) -> None:
                 "results": step.results,
                 "written": step.written,
                 "scores": step.scores,
+                "log": step.log,
+                "made": step.made,
             }
         }
-    except ModelError as error:
+    except (ModelError, AnkiError) as error:
         reply = {"error": str(error)}
     # in ASCII, which no pipe can garble
     out.write(json.dumps(reply) + "\n")

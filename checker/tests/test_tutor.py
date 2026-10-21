@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Iterator
 from functools import partial
 from pathlib import Path
@@ -19,9 +20,9 @@ from profiling import Profile, ProfileError
 from storage import UserStore
 from tutor import (
     MAX_FOCUS,
-    MAX_RECAPS,
     MAX_TURNS,
     USUAL_KNOWN_WORDS,
+    USUAL_RECAPS,
     Done,
     Remembered,
     Tool,
@@ -31,8 +32,9 @@ from tutor import (
     converse,
     data_tools,
     evaluation_tool,
-    exercise_tools,
+    exercise_tool,
     instructions,
+    memory_tools,
     practised,
     read_messages,
     recap,
@@ -266,34 +268,35 @@ def test_the_tutor_cannot_answer_without_a_model_it_can_ask() -> None:
         converse(ASKED, [], Model(), "", lambda _: None, FakeStream())
 
 
-def test_an_exercise_is_a_tool_with_the_options_of_its_manifest() -> None:
-    cloze, stories, theory = exercise_tools([CLOZE, STORIES, THEORY], LESSONS, TOPICS)
+def test_the_exercises_are_one_tool_that_lists_each_with_its_options() -> None:
+    [tool] = exercise_tool([CLOZE, STORIES, THEORY], LESSONS, TOPICS)
 
-    assert cloze.name == "exercise_cloze"
-    assert "Fill the gaps" in cloze.description
-    assert cloze.parameters["required"] == ["lesson", "instances"]
-    assert cloze.parameters["properties"]["lesson"]["enum"] == ["dative", "perfect", ""]
-    assert cloze.parameters["properties"]["topics"]["items"]["enum"] == [
-        "At the doctor's"
-    ]
-    assert cloze.parameters["properties"]["sentences"] == {
-        "type": "integer",
-        "minimum": 1,
-        "maximum": 10,
-        "description": "Sentences in a set, 5 unless another fits better",
-    }
-    assert stories.parameters["properties"]["then"]["enum"] == ["questions", "retell"]
-    assert set(theory.parameters["properties"]) == {"lesson"}
-    assert theory.parameters["properties"]["lesson"]["enum"] == ["dative", "perfect"]
+    assert tool.name == "exercise"
+    assert tool.parameters["required"] == ["exercise"]
+    properties = tool.parameters["properties"]
+    assert properties["exercise"]["enum"] == ["cloze", "stories", "theory"]
+    assert properties["lesson"]["enum"] == ["dative", "perfect", ""]
+    assert properties["topics"]["items"]["enum"] == ["At the doctor's"]
+    assert (
+        "- cloze: Fill the gaps. Fill in the gaps of sentences. Options: sentences,"
+        " Sentences in a set, from 1 to 10, 5 unless another fits better."
+    ) in tool.description
+    assert "then, Then, one of questions (Answer questions)" in tool.description
+    assert "- theory: Theory. Read the lesson. It teaches a lesson" in tool.description
 
 
 def test_calling_an_exercise_offers_it_with_the_options_it_was_not_called_with_as_usual() -> (
     None
 ):
-    cloze, stories, _ = exercise_tools([CLOZE, STORIES, THEORY], LESSONS, TOPICS)
+    [tool] = exercise_tool([CLOZE, STORIES, THEORY], LESSONS, TOPICS)
 
-    offered = stories.run(
-        {"lesson": "dative", "instances": 2, "topics": ["At the doctor's"]}
+    offered = tool.run(
+        {
+            "exercise": "stories",
+            "lesson": "dative",
+            "instances": 2,
+            "topics": ["At the doctor's"],
+        }
     )
 
     assert offered.shown == {
@@ -313,27 +316,40 @@ def test_calling_an_exercise_offers_it_with_the_options_it_was_not_called_with_a
         "words": [],
     }
     assert '"lesson_title": "The dative"' in offered.content
-    reviewing = cloze.run({"lesson": "", "instances": 1}).shown
+    reviewing = tool.run({"exercise": "cloze", "lesson": ""}).shown
     assert reviewing is not None and reviewing["options"] == {"sentences": 5}
+    assert reviewing["instances"] == 1
 
 
 @pytest.mark.parametrize(
     "arguments, error",
     [
         (
-            {"lesson": "genitive", "instances": 2},
+            {"exercise": "sing", "lesson": "dative"},
+            "there is no exercise 'sing'; there are stories, theory",
+        ),
+        (
+            {"exercise": "stories", "lesson": "genitive", "instances": 2},
             "there is no lesson 'genitive'; the lessons tool lists them",
         ),
         (
-            {"lesson": "dative", "instances": 0},
+            {"exercise": "theory", "lesson": ""},
+            "there is no lesson ''; the lessons tool lists them",
+        ),
+        (
+            {"exercise": "stories", "lesson": "dative", "instances": 0},
             "instances is a whole number from 1 to 50",
         ),
         (
-            {"lesson": "dative", "instances": 2, "then": "sing"},
+            {"exercise": "stories", "lesson": "dative", "options": {"then": "sing"}},
             "then is one of questions, retell",
         ),
         (
-            {"lesson": "dative", "instances": 2, "topics": ["Space"]},
+            {"exercise": "stories", "lesson": "dative", "options": {"sentences": 3}},
+            "stories has no options ['sentences']; it has then",
+        ),
+        (
+            {"exercise": "stories", "lesson": "dative", "topics": ["Space"]},
             "there are no topics ['Space']",
         ),
     ],
@@ -341,10 +357,10 @@ def test_calling_an_exercise_offers_it_with_the_options_it_was_not_called_with_a
 def test_an_exercise_called_with_what_it_cannot_take_says_why(
     arguments: dict[str, Any], error: str
 ) -> None:
-    stories = exercise_tools([STORIES], LESSONS, TOPICS)[0]
-    stream = FakeStream(called("exercise_stories", arguments), answered("Oh."))
+    [tool] = exercise_tool([STORIES, THEORY], LESSONS, TOPICS)
+    stream = FakeStream(called("exercise", arguments), answered("Oh."))
 
-    added, _ = converse(ASKED, [stories], MODEL, "", lambda _: None, stream)
+    added, _ = converse(ASKED, [tool], MODEL, "", lambda _: None, stream)
 
     assert added[1]["content"] == f"error: {error}"
 
@@ -589,42 +605,138 @@ def test_a_recap_that_says_nothing_is_an_error() -> None:
         recap([], "German", lambda _: ("  \n", Profile({})))
 
 
-def test_the_tutor_is_told_the_earlier_recaps_then_its_memories_then_the_last_recap() -> (
+def test_the_tutor_is_told_how_many_recaps_and_entries_there_are_but_not_what_they_say() -> (
     None
 ):
-    recaps = [
+    today = time.strftime("%Y-%m-%d")
+    tomorrow = time.strftime("%Y-%m-%d", time.localtime(time.time() + 86400))
+    memories = [
+        *MEMORIES,
+        {"id": 5, "content": "Chat.", "createdAt": MADE_AT, "kind": "recap"},
+        {"id": 6, "content": "Anki first.", "createdAt": MADE_AT, "kind": "strategy"},
         {
-            "id": 10 + number,
-            "content": f"Chat {number}.\nAgreed on more.",
+            "id": 7,
+            "content": "A mock exam of A2.",
             "createdAt": MADE_AT,
-            "kind": "recap",
-        }
-        for number in range(MAX_RECAPS + 1)
+            "kind": "calendar",
+            "day": today,
+        },
+        {
+            "id": 8,
+            "content": "Chapter 3 read.",
+            "createdAt": MADE_AT,
+            "kind": "calendar",
+            "day": tomorrow,
+        },
+        {
+            "id": 9,
+            "content": "Chapter 2 read.",
+            "createdAt": MADE_AT,
+            "kind": "calendar",
+            "day": "1971-01-01",
+        },
     ]
 
-    told = instructions("German", "English", "B1", [*MEMORIES, *recaps])
+    told = instructions("German", "English", "B1", memories)
 
-    # the oldest is one too many
-    assert "Chat 0." not in told
-    places = [
-        told.index(said)
-        for said in (
-            "Recap of the lesson of 1971-01-01:\n  Chat 1.\n  Agreed on more.",
-            f"Chat {MAX_RECAPS - 1}.",
-            "- [1971-01-01] Likes football.",
-            f"Recap of the lesson of 1971-01-01:\n  Chat {MAX_RECAPS}.",
-        )
+    assert "- [1971-01-01] Likes football." in told
+    for kept in ("Chat.", "Anki first.", "A mock exam of A2.", "Chapter 3 read."):
+        assert kept not in told
+    assert "1 in all, the latest of 1971-01-01" in told
+    assert "today: 1; for the next 7 days: 1; for days gone by, still on it: 1" in told
+    assert "agreed on how to hold the lessons, which the strategy tool" in told
+
+
+def test_the_tutor_with_no_strategy_is_told_to_ask_the_learner_for_one() -> None:
+    told = instructions("German", "English", "B1", MEMORIES)
+
+    assert "ask them what they would like to do in the lessons to come" in told
+    assert "first lesson with your student" in told
+    assert "Your calendar is empty." in told
+
+
+def test_the_recaps_tool_gives_the_latest_recaps_first_as_many_as_asked(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    for number in range(USUAL_RECAPS + 2):
+        store.add_memory(f"Chat {number}.\nAgreed on more.", kind="recap")
+    recaps = {tool.name: tool for tool in memory_tools(store)}["recaps"]
+
+    usual = json.loads(recaps.run({}).content)
+    two = json.loads(recaps.run({"count": 2}).content)
+
+    assert len(usual) == USUAL_RECAPS
+    assert [each["recap"] for each in two] == [
+        [f"Chat {USUAL_RECAPS + 1}.", "Agreed on more."],
+        [f"Chat {USUAL_RECAPS}.", "Agreed on more."],
     ]
-    assert places == sorted(places)
 
 
-def test_the_tutor_with_one_recap_is_told_it_after_its_memories() -> None:
-    [only] = [{"id": 9, "content": "Chat.", "createdAt": MADE_AT, "kind": "recap"}]
+def test_a_strategy_agreed_on_is_written_down_and_takes_the_place_of_one_it_replaces(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    old = store.add_memory("Anki first, then an exercise.", kind="strategy")
+    tools = {tool.name: tool for tool in memory_tools(store)}
 
-    told = instructions("German", "English", "B1", [only])
+    tools["agree_strategy"].run(
+        {"what": "One exercise, then a chapter of the book.", "replaces": [old]}
+    )
 
-    assert told.index("do not remember anything") < told.index("Recap of the lesson")
-    assert "earlier lessons with your student" not in told
+    [kept] = json.loads(tools["strategy"].run({}).content)
+    assert kept["what"] == "One exercise, then a chapter of the book."
+    [replaced] = store.memories(removed=True)
+    assert (replaced["id"], replaced["removedBy"]) == (old, "tutor")
+    with pytest.raises(ToolError):
+        tools["agree_strategy"].run({"what": "More.", "replaces": [kept["id"] + 99]})
+
+
+def test_the_calendar_gives_what_was_planned_by_day_with_what_was_crossed_out(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    tools = {tool.name: tool for tool in memory_tools(store)}
+    later = time.strftime("%Y-%m-%d", time.localtime(time.time() + 9 * 86400))
+    today = time.strftime("%Y-%m-%d")
+
+    tools["plan"].run({"day": later, "what": "Chapter 3 read."})
+    exam = json.loads(tools["plan"].run({"day": today, "what": "A mock exam."}).content)
+    tools["cross_out"].run({"id": exam["id"], "why": "done"})
+
+    every = json.loads(tools["calendar"].run({}).content)
+    until_today = json.loads(tools["calendar"].run({"to": today}).content)
+    assert [(each["day"], each["what"]) for each in every] == [
+        (today, "A mock exam."),
+        (later, "Chapter 3 read."),
+    ]
+    assert every[0]["crossed_out"] == {"by": "tutor", "why": "done"}
+    assert "crossed_out" not in every[1]
+    assert [each["what"] for each in until_today] == ["A mock exam."]
+
+
+def test_the_calendar_takes_no_day_gone_by_nor_one_that_is_not_a_day(
+    tmp_path: Path,
+) -> None:
+    tools = {tool.name: tool for tool in memory_tools(UserStore(tmp_path))}
+
+    for day in ("2000-01-01", "21.10.26", "2026-02-30", None):
+        with pytest.raises(ToolError):
+            tools["plan"].run({"day": day, "what": "A mock exam."})
+    with pytest.raises(ToolError):
+        tools["calendar"].run({"from": "tomorrow"})
+
+
+def test_only_a_strategy_or_an_entry_of_the_calendar_is_crossed_out(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    fact = store.add_memory("Likes football.")
+    tools = {tool.name: tool for tool in memory_tools(store)}
+
+    with pytest.raises(ToolError):
+        tools["cross_out"].run({"id": fact, "why": "no longer"})
+    assert [each["id"] for each in store.memories()] == [fact]
 
 
 def test_the_tutor_is_told_the_tone_set_last_with_its_memories_going_first() -> None:
@@ -660,16 +772,17 @@ CORRECTING = {
 
 
 def test_an_exercise_on_a_text_is_called_with_the_text_and_no_lesson() -> None:
-    [tool] = exercise_tools([CORRECTING], LESSONS, TOPICS)
+    [tool] = exercise_tool([CORRECTING], LESSONS, TOPICS)
 
-    offered = tool.run({"instances": 1, "text": "t1"})
+    offered = tool.run(
+        {"exercise": "correcting", "instances": 3, "options": {"text": "t1"}}
+    )
 
     # done once, on no lesson, it is called with neither
-    assert "lesson" not in tool.parameters["properties"]
-    assert "instances" not in tool.parameters["properties"]
+    assert "It practises no lesson" in tool.description
+    assert "It is done once" in tool.description
+    assert "one of t1 (Wochenende)" in tool.description
     assert offered.shown is not None and offered.shown["instances"] == 1
-    assert tool.parameters["properties"]["text"]["enum"] == ["t1"]
-    assert "t1: Wochenende" in tool.parameters["properties"]["text"]["description"]
     assert offered.shown is not None
     assert (offered.shown["lesson"], offered.shown["labels"]) == (
         "",
@@ -683,14 +796,15 @@ def test_an_exercise_on_a_text_is_not_offered_where_there_is_no_text() -> None:
         "options": {"text": {"label": "Text", "texts": True, "choices": {}}},
     }
 
-    assert exercise_tools([none], LESSONS, TOPICS) == []
+    assert exercise_tool([none], LESSONS, TOPICS) == []
 
 
 def test_an_exercise_is_steered_by_a_focus_and_the_words_it_is_given() -> None:
-    [cloze] = exercise_tools([CLOZE], LESSONS, TOPICS)
+    [cloze] = exercise_tool([CLOZE], LESSONS, TOPICS)
 
     offered = cloze.run(
         {
+            "exercise": "cloze",
             "lesson": "dative",
             "instances": 2,
             "focus": "  Every sentence needs seit  with the dative. ",
@@ -715,9 +829,9 @@ def test_an_exercise_is_steered_by_a_focus_and_the_words_it_is_given() -> None:
 def test_an_exercise_steered_with_what_it_cannot_take_says_why(
     steering: dict[str, Any], error: str
 ) -> None:
-    [cloze] = exercise_tools([CLOZE], LESSONS, TOPICS)
+    [cloze] = exercise_tool([CLOZE], LESSONS, TOPICS)
     stream = FakeStream(
-        called("exercise_cloze", {"lesson": "dative", "instances": 1, **steering}),
+        called("exercise", {"exercise": "cloze", "lesson": "dative", **steering}),
         answered("Oh."),
     )
 
@@ -904,3 +1018,18 @@ def test_the_words_tool_tells_the_model_which_categories_to_build_on() -> None:
 
     assert "noun, particle" in words.description
     assert str(USUAL_KNOWN_WORDS) in words.description
+
+
+def test_the_tutor_does_not_see_a_session_left_before_anything_was_done_in_it(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.start_session("s1", "German", "dative", [], {"cloze": 1})
+    store.hide_session("s1")
+    tools = {tool.name: tool for tool in data_tools(store, lambda: LESSONS, "German")}
+
+    sessions = json.loads(tools["sessions"].run({}).content)
+    lessons = json.loads(tools["lessons"].run({}).content)
+
+    assert sessions == []
+    assert not any(lesson["practised"] for lesson in lessons)

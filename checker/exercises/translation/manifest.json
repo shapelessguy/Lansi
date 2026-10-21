@@ -8,5 +8,34 @@
             "max": 10,
             "default": 5
         }
+    },
+    "instance": {
+        "type": "object",
+        "description": "a set of sentences to translate, shown and judged together",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "source": {
+                            "type": "string",
+                            "description": "the sentence to translate, in the language the learner reads"
+                        },
+                        "reference": {
+                            "type": "string",
+                            "description": "a right translation of it, in the language learned"
+                        }
+                    },
+                    "required": [
+                        "source",
+                        "reference"
+                    ]
+                }
+            }
+        },
+        "required": [
+            "items"
+        ]
     }
 }

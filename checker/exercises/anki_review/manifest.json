@@ -1,0 +1,15 @@
+{
+    "title": "Review Anki cards",
+    "description": "Review the cards of a deck of your Anki collection, and its subdecks, as Anki does: each card is shown, then its answer, and you choose Again, Hard, Good or Easy. Each answer is a review in Anki, scheduled by the options of the deck and synced to your other devices. It goes on until nothing more is due today, or you leave it.",
+    "lesson": false,
+    "topics": false,
+    "options": {
+        "deck": {
+            "label": "Deck",
+            "anki_decks": true
+        }
+    },
+    "once": true,
+    "first": true,
+    "own_tool": true
+}

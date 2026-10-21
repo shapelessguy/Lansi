@@ -36,6 +36,12 @@ export interface Sentence {
     words?: WordRating[];
     /** True while the words are being rated. */
     rating_words?: boolean;
+    /** The sentence as it should be, once a model has written it, if that was asked for. */
+    correction?: string | null;
+    /** True while the correction is being written. */
+    correcting?: boolean;
+    /** Why the correction could not be had, if it could not. */
+    correction_error?: string | null;
 }
 
 /** How right a word of a sentence is where it stands. */
@@ -89,8 +95,10 @@ export interface CheckReply {
  * the sentence it is in comes back as not complete. Finished sentences are
  * profiled by having `model` answer `questions`, if there is a key, and with
  * `rateWords` their words are then rated. `language` is the one being
- * learned, which the spelling and the sentences are checked by. Without
- * `profile`, only the spelling is checked, and nothing is asked of a model.
+ * learned, which the spelling and the sentences are checked by. With
+ * `correctWith`, a language model, each finished sentence is also written
+ * as it should be, alongside the questions. Without `profile`, only the
+ * spelling is checked, and nothing is asked of a model.
  */
 export async function fetchCheck(
     text: string,
@@ -100,7 +108,10 @@ export async function fetchCheck(
     questions: RequestQuestions,
     rateWords: boolean,
     language: string,
+    correctWith: ModelChoice | null,
     profile = true,
+    /** What the server counts what the requests used under, such as the chat the text is of. */
+    usageId?: string,
 ): Promise<CheckReply> {
     const response = await checkerFetch("/sentences", {
         method: "POST",
@@ -113,13 +124,58 @@ export async function fetchCheck(
             questions,
             words: rateWords,
             language,
+            correct: correctWith && modelRequest(correctWith),
             profile,
+            usage: usageId,
         }),
     });
     if (!response.ok) {
         throw new Error(`checker server: ${response.status}`);
     }
-    return response.json();
+    return inUtf16(text, await response.json());
+}
+
+/**
+ * Where each character of `text` starts as JavaScript counts, in UTF-16
+ * units, by where it starts as the checker server counts, in characters: a
+ * character beyond the first 65536, such as most emoji, is two units.
+ */
+function utf16Offsets(text: string): (offset: number) => number {
+    const starts = [0];
+    for (const character of text) {
+        starts.push(starts[starts.length - 1] + character.length);
+    }
+    return (offset) => starts[Math.min(Math.max(offset, 0), starts.length - 1)];
+}
+
+/**
+ * A reply about `text` with every place in it counted as JavaScript counts,
+ * where the server counted characters: otherwise everything after an emoji
+ * would be placed too early, and its sentences not found where they are.
+ */
+export function inUtf16(text: string, reply: CheckReply): CheckReply {
+    const inText = utf16Offsets(text);
+    return {
+        ...reply,
+        sentences: reply.sentences.map((sentence) => {
+            const inSentence = utf16Offsets(sentence.text);
+            return {
+                ...sentence,
+                start: inText(sentence.start),
+                end: inText(sentence.end),
+                spelling: sentence.spelling.map((issue) => ({
+                    ...issue,
+                    start: inSentence(issue.start),
+                    end: inSentence(issue.end),
+                })),
+                words: sentence.words?.map((word) => ({
+                    ...word,
+                    start: inSentence(word.start),
+                    end: inSentence(word.end),
+                })),
+            };
+        }),
+    };
 }
 
 /**

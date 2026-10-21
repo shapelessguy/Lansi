@@ -3,7 +3,6 @@
 
 import { type ModelChoice, modelRequest } from "./models";
 import { checkerFetch } from "./session";
-import { LANGUAGE_PLACEHOLDER, LEVEL_PLACEHOLDER } from "./settings";
 import { pcmToWav } from "./speech";
 import type { BackgroundTask } from "./tasks";
 import { describeError } from "./translate";
@@ -44,14 +43,6 @@ export interface Voice {
     voice: string;
     /** How to read, such as "slowly and clearly". Not spoken. */
     instructions: string;
-}
-
-/**
- * The direction a speech model is given, as the learner wrote it, with the
- * language being learned and their level in it filled in.
- */
-export function speechInstructions(direction: string, language: string, level: string): string {
-    return direction.replaceAll(LANGUAGE_PLACEHOLDER, language).replaceAll(LEVEL_PLACEHOLDER, level).trim();
 }
 
 /** How many sentences from the one that is listened to have their audio asked for ahead of time. */

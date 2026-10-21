@@ -2,7 +2,7 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 """Translates what was selected in a text, and answers what is asked about
-it afterwards.
+it afterwards. It also corrects the sentences the learner writes.
 
 A language model is given the selection with the sentences it is in and the
 few before them, so that it translates the words as they are meant there. It
@@ -138,6 +138,18 @@ class Translator:
         return self._ask(
             PROMPTS("translating.translating", language=language, into=into),
             [{"role": "user", "content": passage.marked()}],
+            model,
+        )
+
+    def correct(
+        self, sentence: str, language: str, model: Model
+    ) -> tuple[str, Profile]:
+        """`sentence`, written by someone learning `language`, as it should
+        be, or as it is if nothing in it is wrong, with what asking for it
+        used. Raises TranslationError."""
+        return self._ask(
+            PROMPTS("correcting", language=language),
+            [{"role": "user", "content": sentence}],
             model,
         )
 

@@ -25,6 +25,10 @@
 //                             player of the app; `number` tells the texts
 //                             of the exercise apart, as the audio of each
 //                             is kept, and is 0 if not given
+//   exercise.ankiMedia(name)  resolves with an address, in the page, of the
+//                             file `name` of the media of the learner's Anki
+//                             collection, such as a picture of a card, or
+//                             rejects with why there is none
 //
 // Text the interface shows can be selected to have it translated or
 // taken into the vocabulary, as anywhere in the app, without anything done

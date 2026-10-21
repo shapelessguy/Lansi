@@ -5,8 +5,10 @@ import { type RefObject, type TextareaHTMLAttributes, useCallback, useMemo, useR
 import { createPortal } from "react-dom";
 
 import { type ProfileUsage, sentenceAtCaret } from "../lib/checker";
+import { orModel } from "../lib/models";
 import { requestQuestions } from "../lib/questions";
-import type { Settings } from "../lib/settings";
+import type { WordLists } from "../lib/sets";
+import { expandPrompt, type Settings } from "../lib/settings";
 import type { UsageEntry } from "../lib/usage";
 import { ChecksPanel } from "./ChecksPanel";
 import { useWritingCheck } from "./WritingChecks";
@@ -23,6 +25,8 @@ export interface CheckedTextareaProps
     /** What the sentences are profiled by, and what changes it from the panel of the checks. */
     settings: Settings;
     onSettingsChange: (settings: Settings) => void;
+    /** What the keywords for words in the questions stand for. */
+    words: WordLists;
     /** Counts what profiling the sentences used, under `usageId`, the chat or the text it is of. */
     onUsage: (entry: UsageEntry) => void;
     usageId: string;
@@ -46,6 +50,7 @@ export function CheckedTextarea(
         inputRef,
         settings,
         onSettingsChange,
+        words,
         onUsage,
         usageId,
         checksSlot,
@@ -56,7 +61,17 @@ export function CheckedTextarea(
 ) {
     const ownRef = useRef<HTMLTextAreaElement>(null);
     const box = inputRef ?? ownRef;
-    const questions = useMemo(() => requestQuestions(settings.questions), [settings.questions]);
+    const { language, level } = settings;
+    const questions = useMemo(
+        () => requestQuestions(settings.questions, (text) => expandPrompt(text, words, language, level)),
+        [settings.questions, words, language, level],
+    );
+    // as a selection is translated: by the translation model, or else the chat model
+    const corrector = useMemo(
+        () => orModel(settings.translationModel, settings.model),
+        [settings.translationModel, settings.model],
+    );
+    const correctWith = settings.correctSentences ? corrector : null;
     const countProfiling = useCallback(
         (used: ProfileUsage) =>
             onUsage({
@@ -78,6 +93,8 @@ export function CheckedTextarea(
             model: settings.profileModel,
             questions,
             rateWords: settings.rateWords,
+            correctWith,
+            usageId,
         },
         countProfiling,
     );
@@ -105,6 +122,9 @@ export function CheckedTextarea(
                         })}
                     rateWords={settings.rateWords}
                     onRateWords={(rateWords) => onSettingsChange({ ...settings, rateWords })}
+                    corrector={corrector}
+                    correct={settings.correctSentences}
+                    onCorrect={(correctSentences) => onSettingsChange({ ...settings, correctSentences })}
                     // the panel goes on showing the sentence the caret was on after a click in it
                     sentence={value ? sentenceAtCaret(check, lastCaret) : null}
                     hasText={value.trim() !== ""}

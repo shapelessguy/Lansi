@@ -34,6 +34,12 @@ test: _checker-env
     {{ checker_python }} -m pytest -q checker
     cd chat-ui && npm install && npm test
 
+# Ask the real decision model the grammar question about sentences whose
+# errors are known: the usual one, or `model`, to compare them. Billed on
+# OpenRouter: needs OPENROUTER_API_KEY.
+test-live model="": _checker-env
+    CHECKER_LIVE_TESTS=1 CHECKER_LIVE_MODEL={{ quote(model) }} {{ checker_python }} -m pytest -q -rA checker/tests/test_grammar_question_live.py
+
 # Run linting and type checking
 lint: _checker-env
     cargo clippy --target-dir out/rust -p anki-deck-status -- -D warnings

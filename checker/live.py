@@ -29,6 +29,7 @@ from profiling import (
 )
 from sentences import Sentence, split_sentences
 from spelling import Speller, StudySpeller
+from translating import TranslationError
 
 # Runs a job without making the caller wait for it.
 Background = Callable[[Callable[[], None]], None]
@@ -39,12 +40,21 @@ OnProfiled = Callable[[str, "Profile | None", "str | None", bool], None]
 # Told when the words of a sentence have been rated: the sentence, the
 # ratings or else why there are none, and whether they were dropped.
 OnRated = Callable[[str, "list[WordRating] | None", "str | None", bool], None]
+# Writes a sentence, by someone learning a language, as it should be, with
+# what asking for it used: the sentence, the language and the model to ask.
+# Raises TranslationError.
+Corrector = Callable[[str, str, Model], tuple[str, Profile]]
+# Told when a sentence has been corrected: the sentence, the correction or
+# else why there is none, and whether it was dropped.
+OnCorrected = Callable[[str, "str | None", "str | None", bool], None]
 # A sentence's wording, the model asked with the language the sentence is
 # judged by, and a question's name and content.
 _Key = tuple[str, str, str, str]
 # The name, in a key, of the rating of a sentence's words. No question can
 # have it, as it is not a name that can be sent.
 _WORDS = "\0words"
+# The name, in a key, of the correction of a sentence.
+_CORRECTION = "\0correction"
 
 
 def in_a_thread(job: Callable[[], None]) -> None:
@@ -60,6 +70,8 @@ class _Asked:
     answer: Answer | None = None
     # The ratings, when what was asked is how right each word is.
     words: list[WordRating] | None = None
+    # The sentence as it should be, when that is what was asked.
+    correction: str | None = None
     error: str | None = None
     # The sentence was changed or gone back to while the question was out.
     # Its answer is not kept when it comes back.
@@ -97,6 +109,14 @@ class LiveChecker:
     dropped in the same way if the sentence does not stay as it is. A word is
     taken as wrong only as far as the answers found the sentence wrong.
 
+    A sentence can be corrected as well, if that is asked for, by a language
+    model rather than the decision model: it is asked to write the sentence
+    as it should be once the caret leaves it, alongside the questions, and
+    its answer is kept and dropped as theirs are. The rating of the words
+    then waits for the correction as well as for the answers, and the model
+    rates them with it to go by; if it cannot be had, they are rated by the
+    answers alone.
+
     An answer belongs to the question as it was asked and to the model that
     was asked. Other questions and another model are asked afresh, and going
     back to earlier ones brings back the answers they gave.
@@ -110,11 +130,15 @@ class LiveChecker:
         background: Background = in_a_thread,
         on_rated: OnRated | None = None,
         max_remembered: int = 10000,
+        corrector: Corrector | None = None,
+        on_corrected: OnCorrected | None = None,
     ) -> None:
         self._speller = speller
         self._profiler = profiler
         self._on_profiled = on_profiled
         self._on_rated = on_rated
+        self._corrector = corrector
+        self._on_corrected = on_corrected
         self._background = background
         self._max_remembered = max_remembered
         self._asked: OrderedDict[_Key, _Asked] = OrderedDict()
@@ -134,6 +158,7 @@ class LiveChecker:
         model: Model | None = None,
         questions: Questions | None = None,
         rate_words: bool = False,
+        correct_with: Model | None = None,
     ) -> list[Sentence]:
         """Split `text` into sentences and fill in what is known about each.
 
@@ -143,7 +168,10 @@ class LiveChecker:
         one on OpenRouter with no key, none are. `questions` are the
         questions to ask it, if not the usual ones; with no questions at
         all, nothing is profiled. With `rate_words`, the words of each sentence
-        are rated once it has been profiled."""
+        are rated once it has been profiled. With `correct_with`, the
+        language model that writes each finished sentence as it should be,
+        it is asked to alongside the questions, and the words are rated with
+        what it wrote."""
         sentences = split_sentences(text, caret)
         if questions is None:
             questions = QUESTIONS
@@ -154,18 +182,29 @@ class LiveChecker:
         language = (self._profiler.language if self._profiler else None) or ""
         asked_model = f"{model.url} {model.name} {language}" if model else ""
         can_ask = bool(self._profiler and model and model.problem() is None)
+        # a model that names none is the corrector's usual one
+        can_correct = bool(self._corrector and correct_with and correct_with.has_key)
+        correcting_model = (
+            f"{correct_with.url} {correct_with.name} {language}" if correct_with else ""
+        )
         # one at an address of the learner's own is asked all at once
         together = bool(model and not model.on_openrouter)
         # what to ask in each request
         to_ask: list[tuple[str, dict[str, _Question]]] = []
         # the sentences to rate the words of, each with what is known of it
-        to_rate: list[tuple[str, list[dict[str, str]], float, _Key, _Asked]] = []
+        to_rate: list[
+            tuple[str, str | None, list[dict[str, str]], float, _Key, _Asked]
+        ] = []
+        # the sentences to correct, each with where its correction is kept
+        to_correct: list[tuple[str, _Key, _Asked]] = []
         asked_questions = json.dumps(questions, sort_keys=True)
         with self._lock:
             # the questions the text, as it is now, wants answered
             wanted: set[_Key] = set()
             for sentence in sentences:
                 sentence.spelling = self._speller.check(sentence.text)
+                correction_key = (sentence.text, correcting_model, _CORRECTION, "")
+                corrected = self._asked.get(correction_key) if correct_with else None
                 keys = {
                     name: (
                         sentence.text,
@@ -175,12 +214,36 @@ class LiveChecker:
                     )
                     for name, question in questions.items()
                 }
-                # the words are rated by what the questions said, so their
-                # rating belongs to the questions as well
-                words_key = (sentence.text, asked_model, _WORDS, asked_questions)
+                # The words are rated by what the questions said, and by the
+                # correction once there is one, so their rating belongs to
+                # both: without one, they are rated by the questions alone.
+                correction = corrected.correction if corrected else None
+                rated_with = (
+                    asked_questions
+                    if correction is None
+                    else f"{asked_questions}\0{correction}"
+                )
+                words_key = (sentence.text, asked_model, _WORDS, rated_with)
                 if not sentence.complete:
                     self._being_written(sentence, keys, words_key)
+                    if correct_with:
+                        self._correction_being_written(sentence, correction_key)
                     continue
+                if correct_with:
+                    wanted.add(correction_key)
+                    if corrected:
+                        self._asked.move_to_end(correction_key)
+                    elif can_correct and has_words(sentence.text):
+                        corrected = self._asked[correction_key] = _Asked()
+                        self._asking[correction_key] = corrected
+                        to_correct.append((sentence.text, correction_key, corrected))
+                    if corrected:
+                        sentence.correction = corrected.correction
+                        sentence.correcting = corrected.state == "asking"
+                        sentence.correction_error = corrected.error
+                # the correction is out alongside the questions, and the words
+                # wait for it as they wait for the answers
+                waiting = bool(corrected and corrected.state == "asking")
                 new: dict[str, _Question] = {}
                 for name, key in keys.items():
                     wanted.add(key)
@@ -202,12 +265,18 @@ class LiveChecker:
                 rated = self._asked.get(words_key)
                 if rated:
                     self._asked.move_to_end(words_key)
-                elif can_ask and sentence.profile and has_words(sentence.text):
+                elif (
+                    can_ask
+                    and sentence.profile
+                    and not waiting
+                    and has_words(sentence.text)
+                ):
                     rated = self._asked[words_key] = self._asking[words_key] = _Asked()
                     answers = sentence.profile.answers
                     to_rate.append(
                         (
                             sentence.text,
+                            correction,
                             describe_assessment(questions, answers),
                             doubt_about(answers),
                             words_key,
@@ -218,16 +287,31 @@ class LiveChecker:
                     sentence.words = rated.words or []
                     sentence.rating_words = rated.state == "asking"
                     sentence.profile_error = rated.error
+                elif waiting and can_ask and sentence.profile:
+                    sentence.rating_words = True
             self._drop_unwanted(wanted)
             self._forget_the_oldest()
-            self._in_flight += len(to_ask) + len(to_rate)
+            self._in_flight += len(to_ask) + len(to_rate) + len(to_correct)
+        for sentence_text, correction_key, corrected in to_correct:
+            assert correct_with
+            self._background(
+                partial(
+                    self._correct,
+                    sentence_text,
+                    language,
+                    correction_key,
+                    corrected,
+                    correct_with,
+                )
+            )
         for sentence_text, new in to_ask:
             self._background(partial(self._ask, sentence_text, new, model or Model()))
-        for sentence_text, assessment, doubt, words_key, rated in to_rate:
+        for sentence_text, correction, assessment, doubt, words_key, rated in to_rate:
             self._background(
                 partial(
                     self._rate,
                     sentence_text,
+                    correction,
                     assessment,
                     doubt,
                     words_key,
@@ -288,6 +372,14 @@ class LiveChecker:
         # changed it so far, so what was found out about it still holds.
         if keys and len(answers) == len(keys):
             sentence.profile = Profile(answers)
+
+    def _correction_being_written(self, sentence: Sentence, key: _Key) -> None:
+        corrected = self._asked.get(key)
+        if corrected and corrected.state == "failed":
+            # leaving the sentence again is a fresh chance to ask
+            del self._asked[key]
+        elif corrected and corrected.correction:
+            sentence.correction = corrected.correction
 
     def _fill_in(self, sentence: Sentence, keys: dict[str, _Key]) -> None:
         """Say where the profile of a finished sentence stands."""
@@ -357,6 +449,7 @@ class LiveChecker:
     def _rate(
         self,
         sentence_text: str,
+        correction: str | None,
         assessment: list[dict[str, str]],
         doubt: float,
         key: _Key,
@@ -370,7 +463,7 @@ class LiveChecker:
         ratings, profile, error = None, None, None
         try:
             ratings, profile = self._profiler.rate_words(
-                sentence_text, assessment, model
+                sentence_text, assessment, model, correction
             )
             ratings = weigh_ratings(ratings, doubt)
         except ProfileError as failure:
@@ -388,3 +481,33 @@ class LiveChecker:
                     rated.error = error
         if self._on_rated:
             self._on_rated(sentence_text, ratings, error, rated.dropped)
+
+    def _correct(
+        self,
+        sentence_text: str,
+        language: str,
+        key: _Key,
+        corrected: _Asked,
+        model: Model,
+    ) -> None:
+        """Have a sentence written as it should be and keep what was written,
+        unless the sentence was changed or gone back to while waiting."""
+        assert self._corrector
+        correction, used, error = None, None, None
+        try:
+            correction, used = self._corrector(sentence_text, language, model)
+        except TranslationError as failure:
+            error = str(failure)
+        finally:
+            with self._lock:
+                self._in_flight -= 1
+                if used:
+                    self._unbilled.append(used)
+                if self._asking.get(key) is corrected:
+                    del self._asking[key]
+                if not corrected.dropped:
+                    corrected.state = "answered" if correction else "failed"
+                    corrected.correction = correction
+                    corrected.error = error
+        if self._on_corrected:
+            self._on_corrected(sentence_text, correction, error, corrected.dropped)

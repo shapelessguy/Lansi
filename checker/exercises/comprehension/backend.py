@@ -23,10 +23,15 @@ exercise starts, and each other once the one before was answered, when the
 interface asks for it to be `prepare`d, or else when it goes on to the
 `next`. The score is the share of the questions answered right, as reading
 or as listening.
+
+Each text, with its questions, is an instance, reported as made in the step
+it is written in; when the exercise is done again, the texts it wrote are
+taken in order from `replay` in place of being written.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from kit import (
@@ -149,12 +154,19 @@ def describe_made(texts: list[dict[str, Any]]) -> str:
     return f"\n{PROMPTS('made', listed=listed)}\n"
 
 
-def make_text(context: dict[str, Any], state: dict[str, Any], model: Model) -> None:
+def make_text(
+    context: dict[str, Any], state: dict[str, Any], model: Model
+) -> list[dict[str, Any]]:
     """Has the model write the next text, unless it was written already or
-    every text was."""
+    every text was; or takes it from those done again. Returns what was
+    written, as the instances to report."""
     texts = state["texts"]
     if len(texts) > len(state["done"]) or len(texts) >= context["instances"]:
-        return
+        return []
+    replay = context.get("replay")
+    if replay:
+        texts.append(json.loads(json.dumps(replay[len(texts)])))
+        return []
     answers = answers_of(context)
     heard = by_of(context) == "listening"
     prompt = PROMPTS(
@@ -177,6 +189,7 @@ def make_text(context: dict[str, Any], state: dict[str, Any], model: Model) -> N
     )
     reply = ask_json(model, [{"role": "user", "content": prompt}])
     texts.append(read_text(reply, answers, questions_of(context)))
+    return [json.loads(json.dumps(texts[-1]))]
 
 
 def check(text: dict[str, Any], chosen: list[Any]) -> list[dict[str, Any]]:
@@ -250,9 +263,12 @@ def _told(state: dict[str, Any]) -> list[str]:
 
 def start(context: dict[str, Any], model: Model) -> Step:
     state: dict[str, Any] = {"texts": [], "done": [], "reviewing": False, "told": 0}
-    make_text(context, state, model)
+    made = make_text(context, state, model)
     return Step(
-        state=state, show=_show(context, state), written=written([], _told(state))
+        state=state,
+        show=_show(context, state),
+        written=written([], _told(state)),
+        made=made,
     )
 
 
@@ -264,14 +280,18 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     message = message if isinstance(message, dict) else {}
     more = len(state["done"]) < context["instances"]
     if message.get("prepare") and state["reviewing"] and more:
-        make_text(context, state, model)
-    elif message.get("next") and state["reviewing"] and more:
-        make_text(context, state, model)
+        made = make_text(context, state, model)
+        return Step(state=state, show=_show(context, state), made=made)
+    if message.get("next") and state["reviewing"] and more:
+        made = make_text(context, state, model)
         state["reviewing"] = False
         return Step(
-            state=state, show=_show(context, state), written=written([], _told(state))
+            state=state,
+            show=_show(context, state),
+            written=written([], _told(state)),
+            made=made,
         )
-    elif isinstance(message.get("answers"), list) and not state["reviewing"]:
+    if isinstance(message.get("answers"), list) and not state["reviewing"]:
         text = state["texts"][len(state["done"])]
         feedback = check(text, message["answers"])
         one = grade_of(

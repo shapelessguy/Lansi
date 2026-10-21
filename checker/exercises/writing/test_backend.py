@@ -113,3 +113,28 @@ def test_a_form_takes_what_the_text_says_as_it_is_without_asking_a_model() -> No
     ]
     assert len(model.asked) == 1
     assert finish(context, step.state, model).scores == {"writing": 50.0}
+
+
+def test_each_task_is_reported_as_made_in_the_step_it_is_made_in() -> None:
+    model = FakeModel(TASK, RATED, TASK)
+    started = start(CONTEXT, model)
+    rated = act(CONTEXT, started.state, {"text": "Liebe Frau Schmidt"}, model)
+
+    prepared = act(CONTEXT, rated.state, {"prepare": True}, model)
+
+    assert started.made == [{"kind": "email", **TASK}]
+    assert (rated.made, len(prepared.made)) == ([], 1)
+
+
+def test_a_task_done_again_is_taken_from_those_made_before_and_only_rated() -> None:
+    made = start(CONTEXT, FakeModel(TASK)).made
+    again = {**CONTEXT, "instances": 1, "replay": made}
+    model = FakeModel(RATED)
+
+    started = start(again, model)
+    act(again, started.state, {"text": "Liebe Frau Schmidt"}, model)
+
+    assert started.made == []
+    assert started.state["tasks"] == made
+    # the only request is the one that rates what was written
+    assert len(model.asked) == 1

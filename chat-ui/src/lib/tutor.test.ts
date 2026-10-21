@@ -67,9 +67,8 @@ test("a turn is done once the last event comes, and says nothing of what it is d
     expect(doingNow(turn)).toBeNull();
 });
 
-test("what the tutor thinks about is nothing before it has reasoned a sentence", () => {
+test("what the tutor thinks about is nothing before it has reasoned", () => {
     expect(thinkingAbout("")).toBe("");
-    expect(thinkingAbout("First the logs.\n\nThen the dative mistakes  \n")).toBe("First the logs.");
 });
 
 test("what the tutor thinks about is the latest heading of its steps, when it gives them", () => {
@@ -79,14 +78,12 @@ test("what the tutor thinks about is the latest heading of its steps, when it gi
     expect(thinkingAbout(`${thinking}\n\n## Picking the words\nSome`)).toBe("Picking the words");
 });
 
-test("what the tutor thinks about is the latest sentence finished, and not the one still coming", () => {
-    expect(thinkingAbout("The learner wants to translate. They are at B1. I should pick")).toBe(
-        "They are at B1.",
-    );
+test("what the tutor thinks about is nothing when its reasoning has no headings", () => {
+    expect(thinkingAbout("The learner wants to translate. They are at B1. I should pick")).toBe("");
 });
 
 test("what the tutor thinks about is cut short at a word when it is long", () => {
-    const long = `${"The learner keeps confusing the dative and the accusative ".repeat(3)}.`;
+    const long = `**${"The learner keeps confusing the dative and the accusative ".repeat(3).trim()}**`;
 
     const about = thinkingAbout(long);
 

@@ -244,6 +244,27 @@ def test_rate_words_asks_of_every_word_whether_it_is_right_by_what_was_found() -
     assert (profile.id, profile.input_tokens) == ("gen-dec-2", 400)
 
 
+def test_rate_words_gives_the_model_the_correction_of_the_sentence_if_there_is_one() -> (
+    None
+):
+    sent: list[dict[str, Any]] = []
+
+    def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
+        sent.append(body)
+        answers = {f"w{n}": {"type": "noul", "noul": 0.5} for n in range(1, 5)}
+        return {"id": "gen-dec-3", "answers": answers}
+
+    Profiler("some/model", send).rate_words(
+        "Ich habe ein Hund.", [], KEYED, "Ich habe einen Hund."
+    )
+
+    assert sent[0]["state"] == {
+        "sentence": "Ich habe ein Hund.",
+        "correction": "Ich habe einen Hund.",
+        "assessment": [],
+    }
+
+
 def test_rate_words_fails_when_a_word_is_not_given_a_value() -> None:
     def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
         return {"answers": {"w1": {"type": "noul", "noul": "yes"}}}
@@ -266,7 +287,7 @@ def test_an_assessment_gives_each_question_with_its_answer_in_words() -> None:
     assert describe_assessment(QUESTIONS, answers) == [
         {
             "question": QUESTIONS["grammar_errors"]["instructions"],
-            "answer": "one: The sentence has exactly one grammar error.",
+            "answer": "one: " + QUESTIONS["grammar_errors"]["criteria"]["one"],
         },
         {
             "question": QUESTIONS["clarity"]["instructions"],

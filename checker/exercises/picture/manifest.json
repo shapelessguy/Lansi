@@ -8,5 +8,65 @@
             "max": 20,
             "default": 14
         }
+    },
+    "instance": {
+        "type": "object",
+        "description": "a picture drawn for the topic, with the things in it to be labelled",
+        "properties": {
+            "image": {
+                "type": "string",
+                "description": "the picture, as a data URL, which the app keeps as a file of its own"
+            },
+            "scene": {
+                "type": "string",
+                "description": "what the picture shows"
+            },
+            "planned": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "thing": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "thing"
+                    ]
+                },
+                "description": "the things the illustrator was asked to draw"
+            },
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "thing": {
+                            "type": "string"
+                        },
+                        "x": {
+                            "type": "integer",
+                            "description": "where its point is, from 0 to 1000 of the width"
+                        },
+                        "y": {
+                            "type": "integer",
+                            "description": "where its point is, from 0 to 1000 of the height"
+                        }
+                    },
+                    "required": [
+                        "thing",
+                        "x",
+                        "y"
+                    ]
+                },
+                "description": "the things found in it, each with its point"
+            }
+        },
+        "required": [
+            "image",
+            "scene",
+            "planned",
+            "items"
+        ]
     }
 }

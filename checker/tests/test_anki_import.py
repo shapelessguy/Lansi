@@ -317,8 +317,9 @@ class DeckStatus(BaseHTTPRequestHandler):
     inside it and another beside it, and the right password for linking
     ben."""
 
-    # the last query it was sent
+    # the last query it was sent, and the last review
     sql = ""
+    review: dict[str, Any] = {}
 
     def _answer(self, reply: object, status: int = 200) -> None:
         body = (reply if isinstance(reply, str) else json.dumps(reply)).encode()
@@ -341,6 +342,13 @@ class DeckStatus(BaseHTTPRequestHandler):
             self._answer({"decks": decks})
         elif self.path == "/users/ada/api/schedTimingToday":
             self._answer({"days_elapsed": 100, "next_day_at": 1_700_000_000})
+        elif self.path == "/users/ada/media/hund%20bild.png":
+            body = b"PNG"
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self._answer("no Anki account is linked", 404)
 
@@ -358,6 +366,15 @@ class DeckStatus(BaseHTTPRequestHandler):
             )
         elif self.path == "/users/ada/api/getFieldNames":
             self._answer({"vals": [f"Front of {asked['ntid']}", "Back"]})
+        elif self.path in ("/users/ada/review/next", "/users/ada/review/answer"):
+            DeckStatus.review = asked
+            card = {"id": 5, "question": "Hund"}
+            answered = {"answered": True} if self.path.endswith("answer") else {}
+            self._answer({**answered, "card": card, "counts": {"new": 1}})
+        elif self.path == "/users/ada/sync":
+            self._answer({"synced": True})
+        elif self.path == "/users/ben/sync":
+            self._answer("sync failed: offline", 502)
         else:
             self._answer("no Anki account is linked", 404)
 
@@ -447,3 +464,37 @@ def test_the_known_words_cannot_be_had_when_the_deck_status_server_is_not_there(
 
     with pytest.raises(AnkiUnavailable, match="cannot be reached"):
         AnkiLink("ada", url).known_words()
+
+
+def test_a_deck_is_studied_card_by_card_through_the_deck_status_server(
+    deck_status: str,
+) -> None:
+    ada = AnkiLink("ada", deck_status)
+
+    ada.sync()
+    shown = ada.next_card(2)
+    asked_next = DeckStatus.review
+    answered = ada.answer_card(2, 5, 3, 1200)
+
+    assert shown["card"] == {"id": 5, "question": "Hund"}
+    assert asked_next == {"deck_id": 2}
+    assert answered["answered"]
+    assert DeckStatus.review == {
+        "deck_id": 2,
+        "card_id": 5,
+        "rating": 3,
+        "millis": 1200,
+    }
+
+
+def test_a_sync_that_failed_is_refused_with_the_reason(deck_status: str) -> None:
+    with pytest.raises(AnkiRefused, match="offline"):
+        AnkiLink("ben", deck_status).sync()
+
+
+def test_a_file_of_the_media_is_had_with_its_type_or_refused(deck_status: str) -> None:
+    ada = AnkiLink("ada", deck_status)
+
+    assert ada.media("hund bild.png") == (b"PNG", "image/png")
+    with pytest.raises(AnkiRefused, match="no file katze.png"):
+        ada.media("katze.png")

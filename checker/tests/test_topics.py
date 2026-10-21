@@ -20,6 +20,7 @@ from topics import (
     as_picture,
     choose_words,
     clear_background,
+    draw,
     make_icon,
     rank,
     topic_text,
@@ -139,6 +140,35 @@ def test_a_picture_for_an_exercise_is_a_jpeg_no_bigger_than_it_need_be() -> None
     assert picture.startswith("data:image/jpeg;base64,")
     image = Image.open(io.BytesIO(base64.b64decode(picture.split(",", 1)[1])))
     assert image.size == (1024, 1024)
+
+
+REFUSED_RATIO = (
+    "OpenRouter refused the request (400): No provider for openai/gpt-image-1-mini"
+    ' supports the requested parameter(s): aspect_ratio "4:3", n "1". Provider'
+    " rejections: OpenAI: aspect_ratio: not supported. Accepted: 1:1, 3:2, 2:3, auto"
+)
+
+
+def test_a_picture_is_drawn_in_the_nearest_shape_the_model_takes() -> None:
+    sent = FakeOpenRouter()
+
+    def send(path: str, body: dict[str, Any], model: Model) -> dict[str, Any]:
+        if body["aspect_ratio"] == "4:3":
+            raise ProfileError(REFUSED_RATIO)
+        return sent(path, body, model)
+
+    picture, _, _ = draw("a kitchen", IMAGE_MODEL, "4:3", send)
+
+    assert picture == SYMBOL
+    assert [body["aspect_ratio"] for _, body in sent.asked] == ["3:2"]
+
+
+def test_a_picture_refused_for_something_else_is_a_failure() -> None:
+    def send(path: str, body: dict[str, Any], model: Model) -> dict[str, Any]:
+        raise ProfileError("OpenRouter refused the request (402): no credits")
+
+    with pytest.raises(ProfileError, match="no credits"):
+        draw("a kitchen", IMAGE_MODEL, "4:3", send)
 
 
 def test_an_image_model_that_sends_no_image_is_a_failure() -> None:

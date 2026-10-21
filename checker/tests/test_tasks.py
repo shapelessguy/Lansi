@@ -52,3 +52,19 @@ def test_only_the_newest_tasks_are_remembered_the_newest_first() -> None:
 
     titles = [task["title"] for task in tasks.listing()]
     assert titles == [str(number) for number in range(KEPT + 1, 1, -1)]
+
+
+def test_what_a_task_used_is_told_once_it_is_done_and_not_when_it_breaks() -> None:
+    told: list[tuple[str, list[Any]]] = []
+    tasks = Tasks(background=lambda job: job(), on_used=lambda *each: told.append(each))
+
+    def job(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+        return [], [{"id": "gen-1"}]
+
+    def broken(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+        raise RuntimeError("gone")
+
+    tasks.start("icon", "Beim Arzt", 1, job)
+    tasks.start("words", "Der Hund", 1, broken)
+
+    assert told == [("icon", [{"id": "gen-1"}])]

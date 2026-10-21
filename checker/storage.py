@@ -13,19 +13,22 @@ What was written in an exercise is processed once the exercise is over.
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import shutil
 import sqlite3
 import threading
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 22
+SCHEMA_VERSION = 25
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -463,12 +466,44 @@ ALTER TABLE tutor_memories ADD COLUMN kind TEXT NOT NULL DEFAULT 'fact';
 _TUTOR_TURNS = """
 ALTER TABLE tutor_messages ADD COLUMN turn TEXT NOT NULL DEFAULT '{}';
 """
+# What came with version 23: the day an entry of the calendar of the tutor
+# is for, as YYYY-MM-DD, a memory of what the tutor and the learner planned
+# to do then; the other memories have none.
+_CALENDAR = """
+ALTER TABLE tutor_memories ADD COLUMN day TEXT;
+"""
+# What came with version 24: what the exercises made for the learner, each
+# instance, such as a set of sentences, kept as a file of its own, JSON of
+# the shape the manifest of its exercise declares, in exercises/, by its
+# exercise and its id; and, for an exercise of a session that does again
+# what one of another did, the ids of the instances it replays, in order.
+_INSTANCES = """
+CREATE TABLE instances (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+    exercise TEXT NOT NULL,
+    -- where it is among those the exercise made in the session, from 0
+    position INTEGER NOT NULL,
+    -- in seconds since the epoch
+    made_at REAL NOT NULL
+);
+CREATE INDEX instances_by_exercise ON instances (session_id, exercise, position);
+ALTER TABLE session_exercises ADD COLUMN replay TEXT;
+"""
+# What came with version 25: whether a session is hidden: one left before
+# anything was done in it, kept only for what its exercises made, which can
+# be done again, and listed nowhere else.
+_HIDDEN = """
+ALTER TABLE sessions ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+"""
 # how far an exercise the tutor offered got
 OFFER_STATUSES = ("running", "done", "abandoned")
 
-# The kinds of memories: a "fact" of the learner that lasts, or the "recap"
-# of a chat. Each line of a recap is kept, as there are a few.
-MEMORY_KINDS = ("fact", "recap")
+# The kinds of memories: a "fact" of the learner that lasts, a "strategy",
+# a way of holding the lessons the tutor and the learner agreed on, an
+# entry of the "calendar", something they planned to do on a day, or the
+# "recap" of a chat. Each line of a recap is kept, as there are a few.
+MEMORY_KINDS = ("fact", "strategy", "calendar", "recap")
 
 # the longest a text and its title may be, in characters
 MAX_TEXT = 200_000
@@ -508,6 +543,57 @@ _LISTED = "id, title, author, language, added_at, cover_type"
 
 # An id is given by the app, and is part of the name of a file for a topic.
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,119}")
+
+
+# A picture an instance holds, as a data URL, which is kept as a file of its
+# own beside it: the kind of file it is, and what it is in base64.
+_PICTURE = re.compile(r"data:image/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=\s]+)")
+
+
+def _pictures_out(value: Any, instance_id: str, files: list[tuple[str, bytes]]) -> Any:
+    """An instance with each picture it holds as a data URL taken out into
+    `files`, each a name beside the instance and what it is, and named in
+    its place as `{"$file": NAME, "type": ...}`."""
+    if isinstance(value, dict):
+        return {
+            key: _pictures_out(each, instance_id, files) for key, each in value.items()
+        }
+    if isinstance(value, list):
+        return [_pictures_out(each, instance_id, files) for each in value]
+    found = _PICTURE.fullmatch(value) if isinstance(value, str) else None
+    if found is None:
+        return value
+    kind = found.group(1)
+    name = f"{instance_id}-{len(files)}.{'jpg' if kind == 'jpeg' else kind}"
+    files.append((name, base64.b64decode(found.group(2))))
+    return {"$file": name, "type": f"image/{kind}"}
+
+
+def _pictures_in(value: Any, folder: Path) -> Any:
+    """An instance as it was made, with each picture taken out of it by
+    `_pictures_out` put back as a data URL."""
+    if isinstance(value, list):
+        return [_pictures_in(each, folder) for each in value]
+    if not isinstance(value, dict):
+        return value
+    name = value.get("$file")
+    if (
+        isinstance(name, str)
+        and set(value) == {"$file", "type"}
+        and is_id(name.split(".")[0])
+    ):
+        data = base64.b64encode((folder / name).read_bytes()).decode()
+        return f"data:{value['type']};base64,{data}"
+    return {key: _pictures_in(each, folder) for key, each in value.items()}
+
+
+def read_day(value: object) -> str:
+    """A day as YYYY-MM-DD, as `value` gives it. Raises ValueError for one
+    that is not a day of the calendar."""
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise ValueError("a day is YYYY-MM-DD")
+    date.fromisoformat(value)
+    return value
 
 
 @dataclass
@@ -627,6 +713,7 @@ class UserStore:
         self._covers = self._directory / "covers"
         self._speech = self._directory / "speech"
         self._icons = self._directory / "topics"
+        self._instances = self._directory / "exercises"
         self._now = now
         self._db = sqlite3.connect(
             str(self._directory / "app.db"), check_same_thread=False
@@ -679,6 +766,12 @@ class UserStore:
                 self._db.executescript(_RECAPS)
             if version < 22:
                 self._db.executescript(_TUTOR_TURNS)
+            if version < 23:
+                self._db.executescript(_CALENDAR)
+            if version < 24:
+                self._db.executescript(_INSTANCES)
+            if version < 25:
+                self._db.executescript(_HIDDEN)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -924,11 +1017,12 @@ class UserStore:
         self, removed: bool = False, kind: str | None = None
     ) -> list[dict[str, Any]]:
         """The memories of the tutor, the oldest first: those it has, or
-        those that were removed; of one of MEMORY_KINDS, or of every kind."""
+        those that were removed; of one of MEMORY_KINDS, or of every kind.
+        An entry of the calendar has the `day` it is for, the others None."""
         with self._lock:
             rows = self._db.execute(
                 "SELECT id, content, created_at, chat_id, removed_at, removed_why,"
-                " removed_by, kind FROM tutor_memories"
+                " removed_by, kind, day FROM tutor_memories"
                 " WHERE (removed_at IS NULL) = ? AND kind = coalesce(?, kind)"
                 " ORDER BY id",
                 (not removed, kind),
@@ -943,6 +1037,7 @@ class UserStore:
                 "removedWhy": removed_why,
                 "removedBy": removed_by,
                 "kind": kind,
+                "day": day,
             }
             for (
                 memory_id,
@@ -953,27 +1048,38 @@ class UserStore:
                 removed_why,
                 removed_by,
                 kind,
+                day,
             ) in rows
         ]
 
     def add_memory(
-        self, content: str, chat_id: str | None = None, kind: str = "fact"
+        self,
+        content: str,
+        chat_id: str | None = None,
+        kind: str = "fact",
+        day: str | None = None,
     ) -> int:
-        """Keep a memory of the tutor of one of MEMORY_KINDS, and return its
-        id. Raises ValueError for one that says nothing, or of another kind."""
+        """Keep a memory of the tutor of one of MEMORY_KINDS, one of the
+        calendar for its `day`, and return its id. Raises ValueError for one
+        that says nothing, of another kind, or of the calendar without a day
+        as YYYY-MM-DD."""
         if kind not in MEMORY_KINDS:
             raise ValueError(f"a memory is one of {', '.join(MEMORY_KINDS)}")
+        if kind == "calendar":
+            day = read_day(day)
+        else:
+            day = None
         lines = [" ".join(line.split()) for line in content.splitlines()]
         content = "\n".join(line for line in lines if line)
-        if kind == "fact":
+        if kind != "recap":
             content = " ".join(content.split())
         if not content:
             raise ValueError("a memory says something")
         with self._lock, self._db:
             cursor = self._db.execute(
-                "INSERT INTO tutor_memories (content, created_at, chat_id, kind)"
-                " VALUES (?, ?, ?, ?)",
-                (content, self._now(), chat_id, kind),
+                "INSERT INTO tutor_memories (content, created_at, chat_id, kind, day)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (content, self._now(), chat_id, kind, day),
             )
         assert cursor.lastrowid is not None
         return cursor.lastrowid
@@ -1367,6 +1473,9 @@ class UserStore:
                 "words": None if words is None else json.loads(words),
                 "mix_topics": bool(mix_topics),
                 "kind": kind,
+                # left before anything was done in it, and kept only for what
+                # its exercises made
+                "hidden": bool(hidden),
                 "exercises": {},
                 # what each exercise was told to heed, by exercise
                 "guidance": {},
@@ -1391,13 +1500,21 @@ class UserStore:
                 mix_topics,
                 lessons,
                 kind,
+                hidden,
             ) in (
                 self._db.execute(
                     "SELECT id, language, lesson, topics, started_at, finished_at,"
-                    " status, words, mix_topics, lessons, kind FROM sessions"
+                    " status, words, mix_topics, lessons, kind, hidden FROM sessions"
                     f" {where} ORDER BY started_at DESC",
                     values,
                 )
+            )
+        }
+        # how many instances each exercise made
+        made: dict[tuple[str, str], int] = {
+            (session_id, exercise): count
+            for session_id, exercise, count in self._db.execute(
+                "SELECT session_id, exercise, COUNT(*) FROM instances GROUP BY 1, 2"
             )
         }
         # how many grades of each result each exercise kept
@@ -1419,10 +1536,11 @@ class UserStore:
             exam,
             started_at,
             scores,
+            replay,
         ) in self._db.execute(
             "SELECT session_id, exercise, instances, state IS NOT NULL,"
             " finished_at IS NOT NULL, guidance, options, minutes, exam,"
-            " started_at, scores FROM session_exercises ORDER BY position"
+            " started_at, scores, replay FROM session_exercises ORDER BY position"
         ):
             if session_id not in sessions:
                 continue
@@ -1442,6 +1560,13 @@ class UserStore:
                 "started_at": started_at,
                 # what it scored, as it reported when it finished
                 "scores": None if scores is None else json.loads(scores),
+                # how many of its instances are kept, which it can be done
+                # again with: those it replays, or those it made
+                "kept": len(json.loads(replay))
+                if replay is not None
+                else made.get((session_id, exercise), 0),
+                # whether it does again what one of another session did
+                "replays": replay is not None,
                 "results": {
                     result: graded.get((session_id, exercise), {}).get(result, 0)
                     for result in ("right", "partial", "wrong")
@@ -1470,6 +1595,118 @@ class UserStore:
                 " WHERE id = ? AND status = 'running'",
                 (status, self._now(), session_id),
             )
+
+    def delete_session(self, session_id: str) -> None:
+        """Forget a session, with what was done in it and the audio made for
+        its exercises."""
+        with self._lock, self._db:
+            made = self._db.execute(
+                "SELECT exercise, id FROM instances WHERE session_id = ?", (session_id,)
+            ).fetchall()
+            self._db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            for spoken in self._speech.glob(f"{session_id}-*"):
+                shutil.rmtree(spoken, ignore_errors=True)
+            for exercise, instance_id in made:
+                folder = self._instances / exercise
+                (folder / f"{instance_id}.json").unlink(missing_ok=True)
+                for picture in folder.glob(f"{instance_id}-*"):
+                    picture.unlink(missing_ok=True)
+
+    def hide_session(self, session_id: str) -> None:
+        """Hide a session left before anything was done in it, keeping it
+        only for what its exercises made."""
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE sessions SET hidden = 1 WHERE id = ?", (session_id,)
+            )
+
+    def add_instances(
+        self, session_id: str, exercise: str, made: list[Any]
+    ) -> list[str]:
+        """Keep the instances an exercise of a session made, after those it
+        made before, each as a file of its own, and return their ids."""
+        if not made:
+            return []
+        if not is_id(exercise):
+            raise ValueError("an exercise has an id")
+        with self._lock, self._db:
+            (before,) = self._db.execute(
+                "SELECT COUNT(*) FROM instances WHERE session_id = ? AND exercise = ?",
+                (session_id, exercise),
+            ).fetchone()
+            ids = [uuid.uuid4().hex for _ in made]
+            folder = self._instances / exercise
+            folder.mkdir(parents=True, exist_ok=True)
+            for instance_id, instance in zip(ids, made):
+                files: list[tuple[str, bytes]] = []
+                kept = _pictures_out(instance, instance_id, files)
+                for name, data in files:
+                    (folder / name).write_bytes(data)
+                (folder / f"{instance_id}.json").write_text(
+                    json.dumps(kept, ensure_ascii=False, indent=1),
+                    encoding="utf-8",
+                )
+            self._db.executemany(
+                "INSERT INTO instances (id, session_id, exercise, position, made_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                [
+                    (instance_id, session_id, exercise, before + number, self._now())
+                    for number, instance_id in enumerate(ids)
+                ],
+            )
+        return ids
+
+    def set_replay(self, session_id: str, exercise: str, ids: list[str]) -> None:
+        """Have an exercise of a session that has not started do again the
+        instances of `ids`, in order, in place of making new ones."""
+        with self._lock, self._db:
+            self._db.execute(
+                "UPDATE session_exercises SET replay = ?"
+                " WHERE session_id = ? AND exercise = ? AND state IS NULL",
+                (json.dumps(ids), session_id, exercise),
+            )
+
+    def instance_ids(self, session_id: str, exercise: str) -> list[str]:
+        """The ids of the instances an exercise of a session is made of, in
+        order: those it replays, or else those it made."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT replay FROM session_exercises"
+                " WHERE session_id = ? AND exercise = ?",
+                (session_id, exercise),
+            ).fetchone()
+            if row and row[0] is not None:
+                replayed: list[str] = json.loads(row[0])
+                return replayed
+            return [
+                instance_id
+                for (instance_id,) in self._db.execute(
+                    "SELECT id FROM instances WHERE session_id = ? AND exercise = ?"
+                    " ORDER BY position",
+                    (session_id, exercise),
+                )
+            ]
+
+    def instances(self, exercise: str, ids: list[str]) -> list[Any]:
+        """The instances of an exercise by their ids, in order. Raises
+        ValueError for one that is not kept."""
+        found = []
+        for instance_id in ids:
+            file = self._instances / exercise / f"{instance_id}.json"
+            if not (is_id(exercise) and is_id(instance_id) and file.is_file()):
+                raise ValueError(f"the instance {instance_id} of {exercise} is gone")
+            try:
+                found.append(
+                    _pictures_in(
+                        json.loads(file.read_text(encoding="utf-8")),
+                        self._instances / exercise,
+                    )
+                )
+            except OSError:
+                raise ValueError(
+                    f"a picture of the instance {instance_id} of {exercise} is gone"
+                ) from None
+        return found
 
     def exercise_state(
         self, session_id: str, exercise: str
@@ -1878,12 +2115,16 @@ class UserStore:
         assert topic
         return topic
 
-    def add_starter_topics(self, topics: list[tuple[str, str]]) -> int:
-        """Keep `topics`, each a title and what it is about, without icons,
-        the first of them listed first, unless they were added before: they
-        are added once, so that one deleted stays deleted. A topic of the
-        same title as one there is is left out. Returns how many were
-        added."""
+    def add_starter_topics(
+        self,
+        topics: list[tuple[str, str]],
+        icon_of: Callable[[str], bytes | None] = lambda _: None,
+    ) -> int:
+        """Keep `topics`, each a title and what it is about, with the PNG
+        icon `icon_of` gives by its title, if any, the first of them listed
+        first, unless they were added before: they are added once, so that
+        one deleted stays deleted. A topic of the same title as one there is
+        is left out. Returns how many were added."""
         with self._lock, self._db:
             if self._db.execute(
                 "SELECT 1 FROM kept WHERE name = 'starter_topics'"
@@ -1907,6 +2148,10 @@ class UserStore:
             self._db.execute(
                 "INSERT INTO kept (name, body) VALUES ('starter_topics', 'true')"
             )
+        for topic_id, title, _, _ in rows:
+            icon = icon_of(title)
+            if icon is not None:
+                self.save_icon(topic_id, icon, "image/png")
         return len(rows)
 
     def delete_topic(self, topic_id: str) -> None:

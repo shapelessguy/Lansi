@@ -9,6 +9,7 @@ import type { ProfileUsage } from "../lib/checker";
 import { newId } from "../lib/ids";
 import { canAsk } from "../lib/models";
 import { endSession, type Learner, type PracticeSession, stepExercise } from "../lib/practice";
+import type { WordLists } from "../lib/sets";
 import type { Settings } from "../lib/settings";
 import { allowPlaying, speakMark } from "../lib/speaking";
 import type { BackgroundTask } from "../lib/tasks";
@@ -68,6 +69,8 @@ interface Props {
     /** What the sentences written to the tutor are checked by, as in the chat, and what changes it. */
     settings: Settings;
     onSettingsChange: (settings: Settings) => void;
+    /** What the keywords for words in the questions stand for. */
+    words: WordLists;
     /** Where the checks of the sentence being written are shown, if they are open. */
     checksSlot: HTMLElement | null;
     onCloseChecks: () => void;
@@ -115,6 +118,7 @@ export function Tutor(
         onTrace,
         onNewChat,
         settings,
+        words,
         onSettingsChange,
         checksSlot,
         onCloseChecks,
@@ -580,6 +584,7 @@ export function Tutor(
                     onKeyDown={onKeyDown}
                     settings={settings}
                     onSettingsChange={onSettingsChange}
+                    words={words}
                     onUsage={onCheckingUsage}
                     // counted under the chat with the tutor
                     usageId={`tutor:${chatId}`}

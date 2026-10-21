@@ -15,6 +15,7 @@ from speaking import (
     BookSentence,
     Speaker,
     SpeechError,
+    generation_usages,
     playable,
     sentences_between,
     sentences_of_message,
@@ -255,3 +256,48 @@ def test_the_emoticons_of_a_message_are_not_read_out() -> None:
     )
 
     assert [sentence.text for sentence in found] == ["Hallo!", "Wie geht\u2019s?"]
+
+
+def test_what_audio_used_is_looked_up_until_openrouter_has_it() -> None:
+    asked: list[str] = []
+
+    def look_up(generation: str, model: Model) -> dict[str, Any] | None:
+        asked.append(generation)
+        if generation == "gen-2" and asked.count("gen-2") < 2:
+            return None
+        if generation == "gen-3":
+            raise OSError("down")
+        return {
+            "model": "some/tts",
+            "total_cost": 0.01,
+            "tokens_prompt": 150,
+            "native_tokens_prompt": 162,
+            "native_tokens_completion": 1450,
+        }
+
+    used = generation_usages(
+        ["gen-1", "gen-2", "gen-3", "", "gen-1"],
+        Model("some/tts", key=KEY),
+        look_up,
+        wait=lambda _: None,
+    )
+
+    assert [(each.id, each.cost, each.input_tokens) for each in used] == [
+        ("gen-1", 0.01, 162),
+        ("gen-2", 0.01, 162),
+        ("gen-3", None, 0),
+    ]
+    assert used[0].output_tokens == 1450
+    # one that came is not asked for again
+    assert asked.count("gen-1") == 1
+
+
+def test_what_audio_used_elsewhere_than_on_openrouter_is_not_looked_up() -> None:
+    def look_up(generation: str, model: Model) -> dict[str, Any] | None:
+        raise AssertionError("asked")
+
+    model = Model("tts", url="http://127.0.0.1:1")
+
+    [used] = generation_usages(["gen-1"], model, look_up, wait=lambda _: None)
+
+    assert (used.id, used.cost) == ("gen-1", None)

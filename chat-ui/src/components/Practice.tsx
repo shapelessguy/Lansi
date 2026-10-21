@@ -14,8 +14,9 @@ import {
     type ExerciseInfo,
     fetchExercises,
     fetchLessons,
+    fetchPracticeSessions,
     fetchSession,
-    fetchSessions,
+    interfaceAddress,
     type Learner,
     type Lesson,
     lessonsRead,
@@ -25,6 +26,7 @@ import {
     type PracticeSession,
     resumeAt,
     scoreOf,
+    sessionTitleOf,
     startSession,
     stepExercise,
 } from "../lib/practice";
@@ -42,7 +44,6 @@ import {
 import { type ChosenExercise, ExerciseSettings } from "./ExerciseSettings";
 import { ExerciseView } from "./ExerciseView";
 import { LevelBadge } from "./Level";
-import { SessionHistory } from "./SessionHistory";
 import { TimeLeft } from "./TimeLeft";
 import { TopicList } from "./TopicList";
 
@@ -64,6 +65,8 @@ interface Props {
     onOpenSettings: () => void;
     /** Has a text of an exercise of a session read aloud, which the exercise numbers `number`. */
     onReadAloud: (sessionId: string, exercise: string, number: number, text: string) => void;
+    /** A session left unfinished to take up, as chosen among the practice sessions, with what tells it from before. */
+    resuming?: { session: PracticeSession; nonce: number } | null;
 }
 
 type Loaded<T> = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; items: T[] };
@@ -86,6 +89,7 @@ export function Practice(
         onChangeSettings,
         onOpenSettings,
         onReadAloud,
+        resuming,
     }: Props,
 ) {
     const language = settings.language;
@@ -108,7 +112,7 @@ export function Practice(
     // every session there was, the latest first, which is what a session left open is taken up from
     const [history, setHistory] = useState<PracticeSession[]>([]);
     const loadHistory = useCallback(() => {
-        fetchSessions().then(setHistory, () => undefined);
+        fetchPracticeSessions().then(setHistory, () => undefined);
     }, []);
     // the sessions are listed again whenever one starts or ends
     useEffect(loadHistory, [loadHistory, session?.id, ended]);
@@ -225,13 +229,8 @@ export function Practice(
         return (lessons.status === "ready" && lessons.items.find((lesson) => lesson.id === id)?.title) || id;
     }
 
-    /** What a session is of: its lesson, or the lessons it reviews. */
     function sessionTitle(of: PracticeSession): string {
-        if (of.lesson) {
-            return lessonTitle(of.lesson);
-        }
-        const count = of.lessons?.length ?? 0;
-        return `Review of ${count} ${count === 1 ? "lesson" : "lessons"}`;
+        return sessionTitleOf(of, lessonTitle, titleOf);
     }
 
     function titleOf(id: string): string {
@@ -240,6 +239,12 @@ export function Practice(
 
     function isTheory(id: string): boolean {
         return exercises.status === "ready" && exercises.items.some((each) => each.id === id && each.theory);
+    }
+
+    /** Whether an exercise is done once, as theory is, or one whose manifest says so, such as correcting a text. */
+    function isOnce(id: string): boolean {
+        return isTheory(id)
+            || (exercises.status === "ready" && exercises.items.some((each) => each.id === id && each.once));
     }
 
     /** Chooses a lesson, or leaves it out again, which makes the session a review. */
@@ -302,12 +307,39 @@ export function Practice(
         );
     }
 
+    // an exercise chosen that cannot be with the lesson and the topics chosen since is left out
+    useEffect(() => {
+        if (exercises.status !== "ready") {
+            return;
+        }
+        const left = exercises.items.filter((exercise) => chosen[exercise.id] !== undefined && unavailable(exercise));
+        if (left.length > 0) {
+            setChosen((current) =>
+                Object.fromEntries(Object.entries(current).filter(([id]) => !left.some((each) => each.id === id)))
+            );
+        }
+    });
+
+    /** Why an exercise cannot be chosen with the lesson and the topics chosen, or null if it can. */
+    function unavailable(exercise: ExerciseInfo): string | null {
+        if (exercise.theory && !lessonId) {
+            return "Theory is that of a lesson: choose one";
+        }
+        if (exercise.lesson === false && exercise.topics === false && (lessonId || chosenTopics.length > 0)) {
+            return "It is done on its own, with no lesson or topic: leave them unchosen";
+        }
+        return null;
+    }
+
     function toggle(id: string) {
         setChosen(({ [id]: had, ...rest }) => {
             if (had !== undefined) {
                 return rest;
             }
-            return isTheory(id) ? { [id]: 1, ...rest } : { ...rest, [id]: instancesOf(id) };
+            if (isTheory(id)) {
+                return { [id]: 1, ...rest };
+            }
+            return { ...rest, [id]: isOnce(id) ? 1 : instancesOf(id) };
         });
     }
 
@@ -349,6 +381,13 @@ export function Practice(
         setSession(left);
         setAt(resumeAt(left));
     }
+
+    // a session taken up from the list of the practice sessions
+    useEffect(() => {
+        if (resuming) {
+            resume(resuming.session);
+        }
+    }, [resuming]);
 
     function end(current: PracticeSession) {
         setBusy(true);
@@ -396,11 +435,22 @@ export function Practice(
             <div className="practice">
                 <div className="practice-bar">
                     <span>
-                        <strong>{sessionTitle(session)}</strong>
-                        {" · "}
+                        {/* a session of no lesson is told by its exercise alone */}
+                        {(session.lesson || (session.lessons?.length ?? 0) > 0) && (
+                            <>
+                                <strong>{sessionTitle(session)}</strong>
+                                {" · "}
+                            </>
+                        )}
                         {info?.title ?? exercise} ({at + 1} of {order.length})
-                        {/* theory is about the lesson alone, and has no topics or words */}
-                        <span className="practice-detail" hidden={info?.theory}>
+                        {
+                            /* theory is about the lesson alone, and one of neither a lesson nor topics, such as a
+                            review of the Anki cards, about nothing of the kind: neither has topics or words */
+                        }
+                        <span
+                            className="practice-detail"
+                            hidden={info?.theory || (info?.lesson === false && info?.topics === false)}
+                        >
                             {session.topics.length > 0 && ` · ${session.topics.map(topicTitle).join(" + ")}`}
                             {session.words
                                 && ` · ${
@@ -592,42 +642,48 @@ export function Practice(
                                 && exercises.items.map((exercise) => (
                                     <li key={exercise.id} className="practice-exercise">
                                         <button
-                                            className="practice-choice"
+                                            className="practice-choice practice-exercise-choice"
                                             aria-pressed={chosen[exercise.id] !== undefined}
-                                            disabled={exercise.theory && !lessonId}
-                                            title={exercise.theory && !lessonId
-                                                ? "Theory is that of a lesson: choose one"
-                                                : undefined}
+                                            disabled={unavailable(exercise) !== null}
+                                            // what it is, which its icon stands for, is said as the mouse is over it
+                                            title={unavailable(exercise) ?? exercise.description}
                                             onClick={() =>
                                                 toggle(exercise.id)}
                                         >
+                                            <span className="practice-exercise-icon" aria-hidden>
+                                                {exercise.icon
+                                                    ? (
+                                                        <span
+                                                            className="practice-exercise-glyph"
+                                                            style={{
+                                                                maskImage: `url("${
+                                                                    interfaceAddress(`${exercise.id}/ui/icon.svg`)
+                                                                }")`,
+                                                            }}
+                                                        />
+                                                    )
+                                                    : exercise.title.charAt(0)}
+                                            </span>
                                             <span className="practice-title">{exercise.title}</span>
-                                            <span className="practice-detail">{exercise.description}</span>
                                         </button>
+                                        {/* its settings, under it as it is chosen */}
+                                        {configured.filter((each) =>
+                                            each.exercise.id === exercise.id
+                                        ).map((each) => (
+                                            <ExerciseSettings
+                                                key={exercise.id}
+                                                chosen={each}
+                                                onInstances={setInstances}
+                                                onMinutes={setMinutes}
+                                                onChange={setOption}
+                                            />
+                                        ))}
                                     </li>
                                 ))}
                         </ul>
                     </section>
                 </div>
                 {error && <p className="practice-note error">{error}</p>}
-                {configured.length > 0
-                    ? (
-                        <ExerciseSettings
-                            chosen={configured}
-                            onInstances={setInstances}
-                            onMinutes={setMinutes}
-                            onChange={setOption}
-                        />
-                    )
-                    : (
-                        <SessionHistory
-                            sessions={history}
-                            sessionTitle={sessionTitle}
-                            topicTitle={topicTitle}
-                            exerciseTitle={titleOf}
-                            onResume={resume}
-                        />
-                    )}
             </div>
             <div className="practice-footer">
                 <span className="practice-summary">
@@ -646,7 +702,7 @@ export function Practice(
                         {" · "}
                         {chosenCount > 0
                             ? Object.entries(chosen)
-                                .map(([id, times]) => (isTheory(id) ? titleOf(id) : `${titleOf(id)} ×${times}`))
+                                .map(([id, times]) => (isOnce(id) ? titleOf(id) : `${titleOf(id)} ×${times}`))
                                 .join(", ")
                             : "choose an exercise"}
                     </span>

@@ -8,9 +8,20 @@ export type Panel = "checks" | "usage" | "settings";
 export type Activity = "tutor" | "inspector" | "chat" | "books" | "texts" | "practice" | "evaluations";
 
 /** Which panels are shown at the sides, and what the main area shows. */
+/** The tabs of the library, on the left. */
+export type LibraryTab = "words" | "vocabulary" | "memories" | "texts" | "chats" | "books";
+/** The tabs of the panel of the logs, on the left in place of the library. */
+export type LogsTab = "logs" | "exercises" | "sessions";
+
 export interface Layout {
     /** Whether the panel on the left, with the words, the chats and the texts, is shown. */
     libraryOpen: boolean;
+    /** Whether the logs are shown on the left, in place of the library. */
+    logsOpen: boolean;
+    /** The tab of the library shown last. */
+    libraryTab: LibraryTab;
+    /** The tab of the panel of the logs shown last. */
+    logsTab: LogsTab;
     /** The panel shown on the right, or null if none is. */
     panel: Panel | null;
     /** What was shown last, which the app opens on. */
@@ -21,6 +32,8 @@ export interface Layout {
 
 const STORAGE_KEY = "chat-ui.layout";
 const PANELS: readonly unknown[] = ["checks", "usage", "settings"];
+const LIBRARY_TABS: readonly unknown[] = ["words", "vocabulary", "memories", "texts", "chats", "books"];
+const LOGS_TABS: readonly unknown[] = ["logs", "exercises", "sessions"];
 const ACTIVITIES: readonly unknown[] = ["tutor", "inspector", "chat", "books", "texts", "practice", "evaluations"];
 
 /**
@@ -29,7 +42,15 @@ const ACTIVITIES: readonly unknown[] = ["tutor", "inspector", "chat", "books", "
  * closed there.
  */
 export function defaultLayout(windowWidth: number): Layout {
-    return { libraryOpen: windowWidth > 720, panel: windowWidth > 1300 ? "usage" : null, activity: "chat", text: null };
+    return {
+        libraryOpen: windowWidth > 720,
+        logsOpen: false,
+        libraryTab: "vocabulary",
+        logsTab: "logs",
+        panel: windowWidth > 1300 ? "usage" : null,
+        activity: "chat",
+        text: null,
+    };
 }
 
 /** Fills in anything missing or unusable in a stored layout with the defaults. */
@@ -41,6 +62,11 @@ export function normalizeLayout(stored: unknown, windowWidth: number): Layout {
     const candidate = stored as Partial<Layout>;
     return {
         libraryOpen: typeof candidate.libraryOpen === "boolean" ? candidate.libraryOpen : defaults.libraryOpen,
+        logsOpen: typeof candidate.logsOpen === "boolean" ? candidate.logsOpen : defaults.logsOpen,
+        libraryTab: LIBRARY_TABS.includes(candidate.libraryTab)
+            ? candidate.libraryTab as LibraryTab
+            : defaults.libraryTab,
+        logsTab: LOGS_TABS.includes(candidate.logsTab) ? candidate.logsTab as LogsTab : defaults.logsTab,
         // null is a choice too: the panel was closed
         panel: candidate.panel === null || PANELS.includes(candidate.panel)
             ? candidate.panel as Panel | null

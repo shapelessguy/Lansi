@@ -288,7 +288,12 @@ def test_a_prompt_of_an_exercise_is_an_error_when_it_uses_a_value_not_given(
 
 @pytest.mark.parametrize(
     "directory",
-    sorted(path.parent for path in EXERCISES.glob("*/backend.py")),
+    # those that ask a model, as one that only studies Anki does not
+    sorted(
+        path.parent
+        for path in EXERCISES.glob("*/backend.py")
+        if "prompts_beside" in path.read_text(encoding="utf-8")
+    ),
     ids=lambda path: path.name,
 )
 def test_every_exercise_keeps_its_prompts_beside_its_backend(directory: Path) -> None:

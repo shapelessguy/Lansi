@@ -60,6 +60,48 @@ export async function chooseAnkiDecks(ids: number[]): Promise<AnkiDeck[]> {
     return (await ankiReply<{ decks: AnkiDeck[] }>(asked)).decks;
 }
 
+/** How many files of the media of the collection are kept in the page at once. */
+const KEPT_MEDIA = 100;
+/** The files of the media fetched last, by their names, the latest last. */
+const media = new Map<string, Promise<string>>();
+
+/**
+ * The address, in the page, of a file of the media of the collection, such
+ * as a picture or a sound of a card, which is fetched with the token that
+ * an address in an <img> could not send. Those fetched last are kept.
+ */
+export function ankiMediaUrl(name: string): Promise<string> {
+    const kept = media.get(name);
+    if (kept) {
+        media.delete(name);
+        media.set(name, kept);
+        return kept;
+    }
+    const fetched = ankiFile(name);
+    media.set(name, fetched);
+    // a file that could not be fetched is fetched again the next time
+    fetched.catch(() => media.delete(name));
+    while (media.size > KEPT_MEDIA) {
+        const [oldest, address] = media.entries().next().value as [string, Promise<string>];
+        media.delete(oldest);
+        address.then((url) => URL.revokeObjectURL(url), () => undefined);
+    }
+    return fetched;
+}
+
+async function ankiFile(name: string): Promise<string> {
+    let response: Response;
+    try {
+        response = await checkerFetch(`/anki/media/${encodeURIComponent(name)}`);
+    } catch {
+        throw new Error("Could not reach the checker server. Is `just checker` running?");
+    }
+    if (!response.ok) {
+        throw new Error(`${name} is not in the media of Anki.`);
+    }
+    return URL.createObjectURL(await response.blob());
+}
+
 /** What a linked Anki account is doing, in a line. */
 export function describeAnki(anki: AnkiState, locale?: string): string {
     if (anki.error) {

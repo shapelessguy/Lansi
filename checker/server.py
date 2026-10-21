@@ -83,11 +83,12 @@ from speaking import (
     BookSentence,
     Speaker,
     SpeechError,
+    generation_usages,
     sentences_between,
     sentences_of_message,
 )
 from spelling import StudySpeller
-from starter_topics import STARTER_TOPICS
+from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore, is_id
 from tasks import Tasks
 from topics import (
@@ -109,8 +110,9 @@ from tutor import (
     converse,
     data_tools,
     evaluation_tool,
-    exercise_tools,
+    exercise_tool,
     instructions,
+    memory_tools,
     practised,
     recap,
     remember,
@@ -229,6 +231,16 @@ def print_ratings(
     log(f"{datetime.now():%H:%M:%S} words: {sentence}\n       {result}")
 
 
+def print_correction(
+    sentence: str, correction: str | None, error: str | None, dropped: bool
+) -> None:
+    """Announces what a sentence was corrected to."""
+    result = correction if correction is not None else f"failed: {error}"
+    if dropped:
+        result += " (dropped: the sentence was changed or gone back to)"
+    log(f"{datetime.now():%H:%M:%S} corrected: {sentence}\n       {result}")
+
+
 def in_background(
     tasks: Tasks, kind: str
 ) -> Callable[[str, Callable[[], list[Profile]]], None]:
@@ -255,6 +267,59 @@ def describe_usage(profile: Profile) -> dict[str, object]:
         "output_tokens": profile.output_tokens,
         "cost": profile.cost,
     }
+
+
+# The kinds of work the usage is added up by, as the app names them, by the
+# kind of each task; a task is counted under its kind, as the app adds up
+# apart what is counted under each id, such as that of a chat. What reading
+# aloud used is counted apart, once it is looked up.
+TASK_CATEGORIES = {
+    "words": "vocabulary",
+    "embeddings": "vocabulary",
+    "icon": "practice",
+    "log": "practice",
+    "questions": "translation",
+    "memories": "tutor",
+}
+# the longest id usage may be counted under, in characters
+MAX_USAGE_ID = 200
+
+
+def count_usage(
+    store: UserStore | None, category: str, usage_id: str, used: list[Any]
+) -> None:
+    """Count what requests to the models used, each as describe_usage says
+    it, under `category` and `usage_id`, as soon as they come back, so that
+    it is counted whether or not the app is there to be told; the app may
+    tell it again, and it is counted once."""
+    if store is None or not used:
+        return
+    at = int(time.time() * 1000)
+    store.add_usage(
+        [
+            {
+                "id": each["id"],
+                "at": at,
+                "category": category,
+                "chatId": usage_id,
+                "model": each["model"] or "unknown",
+                "promptTokens": each["input_tokens"],
+                "completionTokens": each["output_tokens"],
+                "cost": each["cost"],
+            }
+            for each in used
+        ]
+    )
+
+
+def count_task_usage(store: UserStore, kind: str, used: list[Any]) -> None:
+    """Count what a task of `kind` used, once it is done."""
+    count_usage(
+        store,
+        TASK_CATEGORIES.get(kind, "vocabulary"),
+        f"task:{kind}",
+        used,
+    )
 
 
 def describe_outcomes(outcomes: list[Outcome]) -> str:
@@ -735,6 +800,22 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     step,
                     missing,
                 )
+                # audio comes without what it cost, which is looked up
+                # apart, as it takes a while, and counted once it is
+                generations = [str(each.get("generation") or "") for each in outcomes]
+                threading.Thread(
+                    target=lambda: count_usage(
+                        store,
+                        "speech",
+                        "speech",
+                        [
+                            describe_usage(profile)
+                            for profile in generation_usages(generations, model)
+                        ],
+                    ),
+                    name="speech usage",
+                    daemon=True,
+                ).start()
                 return outcomes, []
 
             title = " ".join(sentences[0].text.split())[:MAX_TITLE_LENGTH]
@@ -863,6 +944,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                          `show`, and the `tasks` it started,
                                          such as writing the log of an
                                          exercise that is over
+            POST /sessions/S/exercises/ID/replay
+                                         start a session that does that
+                                         exercise again exactly as it was,
+                                         with what it made, as it says
+                                         under `kept` of its progress, or,
+                                         with `{"fresh": true}`, with the
+                                         same settings and what it does
+                                         made anew; the reply is the session
 
         A POST that starts a session may bring `"guidance": {ID: ...}`, what
         each exercise is to aim at, such as the tutor steers it to, which it
@@ -906,6 +995,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     )
             elif method == "POST" and url.path == "/sessions":
                 self._start_session(practice, api_key)
+            elif method == "POST" and step and step.group(3) == "replay":
+                fresh = self._read_body().get("fresh") is True
+                self._reply(
+                    HTTPStatus.OK,
+                    practice.replay(step.group(1), step.group(2), fresh),
+                )
             elif method == "POST" and (end or step):
                 body = self._read_body()
                 learner, ask, draw, look = self._models(body, api_key)
@@ -932,6 +1027,16 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     )
                     reply = {"show": show}
                 usage = [describe_usage(profile) for profile in used]
+                session_id = end.group(1) if end else step.group(1) if step else ""
+                kept_session = store.session(session_id) if store else None
+                count_usage(
+                    store,
+                    "practice",
+                    "evaluations"
+                    if kept_session and kept_session.get("kind") == "evaluation"
+                    else "practice",
+                    usage,
+                )
                 # the logs of the exercises it finished, being written
                 started = [
                     task
@@ -1053,11 +1158,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     for task in self.account.tasks.listing()
                     if task["id"] not in before and task["kind"] == "log"
                 ]
+                usage = [describe_usage(profile) for profile in used]
+                count_usage(self.account.store, "practice", "evaluations", usage)
                 self._reply(
                     HTTPStatus.OK,
                     {
                         "evaluation": evaluation,
-                        "usage": [describe_usage(profile) for profile in used],
+                        "usage": usage,
                         "tasks": logging,
                     },
                 )
@@ -1234,6 +1341,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             steering=steering,
         )
         usage = [describe_usage(profile) for profile in used]
+        count_usage(self.account.store, "practice", "practice", usage)
         self._reply(HTTPStatus.OK, {**session, "usage": usage})
 
     def _anki(self, method: str) -> bool:
@@ -1254,9 +1362,18 @@ class CheckerHandler(BaseHTTPRequestHandler):
             PUT /anki/decks    choose the `{"decks": [id, ...]}` that are
                                sent, and no other of the decks there are;
                                those made later are chosen
+            GET /anki/media/NAME
+                               a file of the media of the collection, such
+                               as a picture of a card that is studied
         """
         path = urlsplit(self.path).path
-        if path not in ("/anki", "/anki/link", "/anki/words", "/anki/decks"):
+        media = re.fullmatch(r"/anki/media/([^/]+)", path)
+        if not media and path not in (
+            "/anki",
+            "/anki/link",
+            "/anki/words",
+            "/anki/decks",
+        ):
             return False
         store = self.account.store
         anki = self.account.anki
@@ -1280,6 +1397,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._reply(HTTPStatus.OK, anki.link(username.strip(), password))
             elif method == "DELETE" and path == "/anki/link":
                 self._reply(HTTPStatus.OK, anki.unlink())
+            elif method == "GET" and media:
+                data, kind = anki.media(unquote(media.group(1)))
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "private, max-age=3600")
+                self.end_headers()
+                self.wfile.write(data)
             elif method == "GET" and path == "/anki/words":
                 skipped = store.skipped_anki_decks() if store else []
                 self._reply(HTTPStatus.OK, anki.known_words(skipped))
@@ -1309,7 +1434,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             else:
                 return False
         except AnkiRefused as error:
-            self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+            status = HTTPStatus.NOT_FOUND if media else HTTPStatus.BAD_REQUEST
+            self._reply(status, {"error": str(error)})
         except AnkiUnavailable as error:
             self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
         return True
@@ -1510,13 +1636,15 @@ class CheckerHandler(BaseHTTPRequestHandler):
             kept = self.account.store.add_log(
                 "translation", language, subject, content, where
             )
+        usage = [describe_usage(used)]
+        count_usage(self.account.store, "translation", "translate", usage)
         self._reply(
             HTTPStatus.OK,
             {
                 "translation": translation,
                 "passage": asdict(passage),
                 "log": kept,
-                "usage": [describe_usage(used)],
+                "usage": usage,
             },
         )
 
@@ -1613,7 +1741,9 @@ class CheckerHandler(BaseHTTPRequestHandler):
         except TranslationError as error:
             self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
             return
-        self._reply(HTTPStatus.OK, {"reply": reply, "usage": [describe_usage(used)]})
+        usage = [describe_usage(used)]
+        count_usage(self.account.store, "translation", "translate", usage)
+        self._reply(HTTPStatus.OK, {"reply": reply, "usage": usage})
 
     def _tutor_chats(self, method: str, api_key: str | None = None) -> bool:
         """Answers a request about the chats with the tutor and its memories,
@@ -1763,7 +1893,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
             def job(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
                 with remembering:
-                    # the recaps of the chats are not for this to decide on
+                    # the recaps are written apart, and the strategy and the
+                    # calendar by the tutor as it agrees on them
                     remembered, used = remember(
                         chat["messages"],
                         store.memories(kind="fact"),
@@ -1861,13 +1992,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
         sets = [str(kept["name"]) for kept in vocabulary.sets()] if vocabulary else []
         tools = [
             *data_tools(store, lambda: lessons, language, evaluations),
+            *memory_tools(store),
             words_tool(
                 partial(known_words, vocabulary, anki_words=anki_words),
                 sets,
                 anki=anki_words is not None,
                 practised=practised_categories(language),
             ),
-            *exercise_tools(practice.exercises(), lessons, store.topics()),
+            *exercise_tool(practice.exercises(), lessons, store.topics()),
             *evaluation_tool(levels),
         ]
         told = instructions(
@@ -1948,13 +2080,9 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 language,
                 [*([messages[-1]] if done is None else []), kept],
             )
-        emit(
-            {
-                "type": "done",
-                "messages": added,
-                "usage": [describe_usage(profile) for profile in used],
-            }
-        )
+        usage = [describe_usage(profile) for profile in used]
+        count_usage(store, "tutor", "tutor", usage)
+        emit({"type": "done", "messages": added, "usage": usage})
 
     def _read_translating(
         self, body: dict[str, Any], api_key: str | None
@@ -1997,10 +2125,9 @@ class CheckerHandler(BaseHTTPRequestHandler):
             # the messages and the exercises are processed with the same models
             self.account.processor.configure(model, decision_model)
         status, used = importer.status()
-        self._reply(
-            HTTPStatus.OK,
-            {**asdict(status), "usage": [describe_usage(profile) for profile in used]},
-        )
+        usage = [describe_usage(profile) for profile in used]
+        count_usage(self.account.store, "vocabulary", "vocabulary", usage)
+        self._reply(HTTPStatus.OK, {**asdict(status), "usage": usage})
 
     def _take_language(self, body: dict[str, Any]) -> None:
         """Takes the `language` of a request, if it has one, as the language
@@ -2027,12 +2154,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
             read_model(body.get("decision_model"), api_key or ""),
         )
         log(f"{datetime.now():%H:%M:%S} words taken in\n{describe_outcomes(outcomes)}")
+        usage = [describe_usage(profile) for profile in used]
+        count_usage(self.account.store, "vocabulary", "vocabulary", usage)
         self._reply(
             HTTPStatus.OK,
-            {
-                "words": [asdict(outcome) for outcome in outcomes],
-                "usage": [describe_usage(profile) for profile in used],
-            },
+            {"words": [asdict(outcome) for outcome in outcomes], "usage": usage},
         )
 
     def _take_selection(self, intake: Intake, api_key: str | None) -> None:
@@ -2095,7 +2221,9 @@ class CheckerHandler(BaseHTTPRequestHandler):
         self._reply(HTTPStatus.OK, {"task": task})
 
     def _check_sentences(self, api_key: str | None) -> None:
-        text, caret, model, questions, rate_words, profile = self._read_request(api_key)
+        text, caret, model, questions, rate_words, profile, correct_with, usage_id = (
+            self._read_request(api_key)
+        )
         if not profile:
             # the spelling of a text box whose sentences are not profiled;
             # the requests to the model are left to be reported to the one
@@ -2111,17 +2239,19 @@ class CheckerHandler(BaseHTTPRequestHandler):
             )
             return
         sentences = self.account.checker.check(
-            text, caret, model, questions, rate_words
+            text, caret, model, questions, rate_words, correct_with
         )
         log(f"{datetime.now():%H:%M:%S}\n{describe(sentences)}")
         used, pending = self.account.checker.billing()
+        usage = [describe_usage(profile) for profile in used]
+        count_usage(self.account.store, "checking", usage_id, usage)
         self._reply(
             HTTPStatus.OK,
             {
                 "sentences": [asdict(sentence) for sentence in sentences],
                 # the requests to the model that have come back since the
                 # last time, including those whose answers were dropped
-                "usage": [describe_usage(profile) for profile in used],
+                "usage": usage,
                 # whether any are still out, and so worth asking again for
                 "pending": pending,
             },
@@ -2129,13 +2259,17 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
     def _read_request(
         self, api_key: str | None
-    ) -> tuple[str, int | None, Model, Questions | None, bool, bool]:
+    ) -> tuple[str, int | None, Model, Questions | None, bool, bool, Model | None, str]:
         """The parts of a `{"text": ..., "caret": ..., "model": ...,
-        "questions": ..., "words": ..., "profile": ...}` request body. The
-        caret may be left out or null, for when the text box is not in use,
-        and so may the model and the questions, for the model the server was
-        started with and the usual questions. With `"profile": false` only
-        the spelling is checked."""
+        "questions": ..., "words": ..., "profile": ..., "correct": ...}`
+        request body. The caret may be left out or null, for when the text
+        box is not in use, and so may the model and the questions, for the
+        model the server was started with and the usual questions. With
+        `"profile": false` only the spelling is checked. `correct` is the
+        language model that writes each finished sentence as it should be,
+        if that is wanted, and null or left out if not. `usage` is what what
+        the requests to the models used is counted under, such as the chat
+        the text box is of, "checking" if it is left out."""
         body = self._read_body()
         self._take_language(body)
         text = body.get("text")
@@ -2154,7 +2288,21 @@ class CheckerHandler(BaseHTTPRequestHandler):
         # whether to rate the words of each sentence once it is profiled
         rate_words = body.get("words") is True
         profile = body.get("profile") is not False
-        return text, caret, model, questions, rate_words, profile
+        correct = body.get("correct")
+        correct_with = None if correct is None else read_model(correct, api_key or "")
+        usage_id = body.get("usage")
+        if not isinstance(usage_id, str) or not usage_id:
+            usage_id = "checking"
+        return (
+            text,
+            caret,
+            model,
+            questions,
+            rate_words,
+            profile,
+            correct_with,
+            usage_id[:MAX_USAGE_ID],
+        )
 
     def _read_body(self) -> dict[str, Any]:
         """The JSON object a request brought. Raises ValueError."""
@@ -2286,7 +2434,7 @@ if __name__ == "__main__":
                 f"{describe_outcomes(outcomes)}"
             ),
         )
-        kept.add_starter_topics(STARTER_TOPICS)
+        kept.add_starter_topics(STARTER_TOPICS, starter_icon)
         processor = Processor(
             kept,
             intake,
@@ -2295,18 +2443,24 @@ if __name__ == "__main__":
                 f" ({item.role}, {len(outcomes)} words)"
             ),
         )
-        tasks = Tasks()
+        tasks = Tasks(on_used=partial(count_task_usage, kept))
+        # the language model asked when a request names none
+        translator = Translator(model=os.environ.get("CHECKER_CHAT_MODEL", ""))
         account = Account(
             LiveChecker(
-                speller, profiler, on_profiled=print_profile, on_rated=print_ratings
+                speller,
+                profiler,
+                on_profiled=print_profile,
+                on_rated=print_ratings,
+                corrector=translator.correct,
+                on_corrected=print_correction,
             ),
             intake,
             importer,
             kept,
             processor,
             anki=anki,
-            # the language model asked when a request names none
-            translator=Translator(model=os.environ.get("CHECKER_CHAT_MODEL", "")),
+            translator=translator,
             speaker=Speaker(kept),
             tasks=tasks,
             practice=Practice(
@@ -2314,6 +2468,7 @@ if __name__ == "__main__":
                 lemmas_of=partial(lemmas_of, intake),
                 on_words=log,
                 later=in_background(tasks, "log"),
+                anki=anki,
             ),
         )
         assert account.practice

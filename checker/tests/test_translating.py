@@ -181,3 +181,24 @@ def test_messages_that_are_not_a_chat_ending_with_the_user_are_refused(
 ) -> None:
     with pytest.raises(ValueError):
         read_messages(messages)
+
+
+def test_correct_sends_the_sentence_alone_and_gives_back_what_the_model_wrote() -> None:
+    fake = FakeModel(says="Ich habe einen Hund.")
+
+    correction, used = Translator(fake).correct(
+        "Ich habe ein Hund.", "German", SOME_MODEL
+    )
+
+    assert correction == "Ich habe einen Hund."
+    assert used.cost == 0.001
+    system, user = fake.bodies[0]["messages"]
+    assert "German" in system["content"]
+    assert user == {"role": "user", "content": "Ich habe ein Hund."}
+
+
+def test_correct_fails_when_the_model_cannot_be_reached() -> None:
+    fake = FakeModel(says=ProfileError("could not reach OpenRouter"))
+
+    with pytest.raises(TranslationError, match="could not reach"):
+        Translator(fake).correct("Ich habe ein Hund.", "German", SOME_MODEL)

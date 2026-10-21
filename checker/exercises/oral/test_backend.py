@@ -100,3 +100,31 @@ def test_speaking_scores_the_ratings_without_pronunciation() -> None:
         "vocabulary": 50.0,
         "structures": 50.0,
     }
+
+
+def test_each_task_is_reported_as_made_in_the_step_it_is_made_in() -> None:
+    two = {**CONTEXT, "instances": 2}
+    model = FakeModel(TASK, RATED, TASK)
+    started = start(two, model)
+    rated = act(two, started.state, {"answers": ["Isst du?", "Tee."]}, model)
+
+    prepared = act(two, rated.state, {"prepare": True}, model)
+
+    [made] = started.made
+    assert made == started.state["tasks"][0]
+    assert set(made) == {"card", "prompts"}
+    assert (rated.made, len(prepared.made)) == ([], 1)
+
+
+def test_a_task_done_again_is_taken_from_those_made_before_and_only_rated() -> None:
+    made = start(CONTEXT, FakeModel(TASK)).made
+    again = {**CONTEXT, "instances": 1, "replay": made}
+    model = FakeModel(RATED)
+
+    started = start(again, model)
+    act(again, started.state, {"answers": ["Isst du?", "Tee."]}, model)
+
+    assert started.made == []
+    assert started.state["tasks"] == made
+    # the only request is the one that rates what was said
+    assert len(model.asked) == 1

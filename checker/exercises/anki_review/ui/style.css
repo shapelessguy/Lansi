@@ -1,0 +1,78 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+   License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html */
+
+/* The reviewer of Anki. The card itself is shown in a shadow root of its
+   own, with the styles of its notetype, which these do not reach. */
+.anki-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+.anki-counts {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+/* the colours of the counts in Anki */
+.anki-count.new {
+    color: #3b82f6;
+}
+
+.anki-count.learning {
+    color: #dc2626;
+}
+
+.anki-count.review {
+    color: #16a34a;
+}
+
+.anki-count.current {
+    text-decoration: underline;
+}
+
+.anki-timer {
+    font-variant-numeric: tabular-nums;
+}
+
+.anki-side {
+    margin: 12px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.anki-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.anki-button {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 76px;
+}
+
+.anki-due {
+    color: var(--muted);
+    font-size: 0.8em;
+}
+
+.anki-button.again {
+    border-color: #dc2626;
+}
+
+.anki-button.hard {
+    border-color: #a3a3a3;
+}
+
+.anki-button.good {
+    border-color: #16a34a;
+}
+
+.anki-button.easy {
+    border-color: #3b82f6;
+}

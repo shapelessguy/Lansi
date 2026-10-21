@@ -208,6 +208,23 @@ describe("exerciseKit", () => {
 
         expect(read).toEqual([["Anna steht auf.", 2], ["Ben kommt mit.", 0], ["Wer?", 0]]);
     });
+
+    it("has a file of the Anki media fetched by its name, and refuses what is no name", async () => {
+        const asked: string[] = [];
+        const { kit } = exerciseKit(
+            async () => null,
+            () => undefined,
+            () => undefined,
+            async (name) => {
+                asked.push(name);
+                return `blob:${name}`;
+            },
+        );
+
+        await expect(kit.ankiMedia("hund.png")).resolves.toBe("blob:hund.png");
+        await expect(kit.ankiMedia("")).rejects.toThrow();
+        expect(asked).toEqual(["hund.png"]);
+    });
 });
 
 describe("the options of an exercise", () => {

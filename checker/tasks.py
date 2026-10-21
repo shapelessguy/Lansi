@@ -61,9 +61,13 @@ class Tasks:
         self,
         background: Callable[[Callable[[], None]], None] = run_on_a_thread,
         now: Callable[[], float] = time.time,
+        on_used: Callable[[str, list[Any]], None] | None = None,
     ) -> None:
         self._background = background
         self._now = now
+        # told the kind of each task that is done and what it used, so that
+        # it is counted whether or not anyone is there to see the task
+        self._on_used = on_used
         # the newest first
         self._tasks: list[Task] = []
         self._lock = threading.Lock()
@@ -92,6 +96,8 @@ class Tasks:
                     )
                     task.finished_at = self._now()
                 return
+            if self._on_used is not None and usage:
+                self._on_used(kind, usage)
             with self._lock:
                 task.result, task.usage = result, usage
                 task.state, task.finished_at = "done", self._now()

@@ -225,3 +225,31 @@ def test_a_story_has_as_many_questions_and_is_as_long_as_the_learner_chose() -> 
     (prompt,) = model.asked
     assert "about 190 words" in prompt and "write 1 questions" in prompt
     assert step.show["questions"] == ["Wann steht Anna auf?"]
+
+
+def test_each_story_is_reported_as_made_in_the_step_it_is_written_in() -> None:
+    model = FakeModel(STORY, {"verdicts": [RIGHT, RIGHT]}, STORY)
+    started = start(CONTEXT, model)
+    answered = act(
+        CONTEXT, started.state, {"answers": ["Um sechs.", "Den Arzt."]}, model
+    )
+
+    prepared = act(CONTEXT, answered.state, {"prepare": True}, model)
+
+    assert started.made == [STORY]
+    assert (answered.made, prepared.made) == ([], [STORY])
+
+
+def test_a_story_done_again_is_taken_from_those_written_before_and_only_judged() -> (
+    None
+):
+    again = {**CONTEXT, "instances": 1, "replay": [STORY]}
+    model = FakeModel({"verdicts": [RIGHT, RIGHT]})
+
+    started = start(again, model)
+    act(again, started.state, {"answers": ["Um sechs.", "Den Arzt."]}, model)
+
+    assert started.made == []
+    assert started.show["story"]["text"] == STORY["text"]
+    # the only request is the one that judges what was answered
+    assert len(model.asked) == 1

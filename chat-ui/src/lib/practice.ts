@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import type { ProfileUsage } from "./checker";
+import { announceLogged } from "./logs";
 import { type ModelChoice, modelRequest } from "./models";
 import { checkerFetch } from "./session";
 import type { Settings } from "./settings";
@@ -55,6 +56,18 @@ export interface ExerciseInfo {
     theory: boolean;
     /** Whether it is done once, with no time limit, such as correcting a text. */
     once?: boolean;
+    /** Whether it practises a lesson; one that does not, such as correcting a text, needs none. */
+    lesson?: boolean;
+    /** Whether it is about the topics chosen; one that is about neither them nor a lesson is done on its own. */
+    topics?: boolean;
+    /** Whether it is listed before every other, such as reviewing the Anki cards. */
+    first?: boolean;
+    /** Whether the tutor offers it with a tool of its own. */
+    own_tool?: boolean;
+    /** Whether its interface has an icon, `ID/ui/icon.svg`, which it is shown with in place of its description. */
+    icon?: boolean;
+    /** The shape of one instance of what it makes, kept so that it can be done again; null if it makes nothing. */
+    instance?: Record<string, unknown> | null;
     /** Its options, by their names. */
     options: Record<string, ExerciseOption>;
 }
@@ -102,6 +115,10 @@ export interface ExerciseProgress {
     started_at: number | null;
     /** What it scored, from 0 to 100 by what it shows, once it is finished, or null. */
     scores: Record<string, number> | null;
+    /** How many of the instances it made, or does again, are kept, which it can be done again with. */
+    kept?: number;
+    /** Whether it does again what an exercise of another session made. */
+    replays?: boolean;
 }
 
 export interface PracticeSession {
@@ -127,6 +144,12 @@ export interface PracticeSession {
     minutes: Record<string, number>;
     /** "evaluation" for a part of an evaluation, which is not listed with practice. */
     kind: "practice" | "evaluation";
+    /**
+     * Whether it was left before anything was done in it, and is kept only
+     * for what its exercises made, which can be done again: it is listed
+     * among the exercises done, and nowhere else.
+     */
+    hidden?: boolean;
     progress: Record<string, ExerciseProgress>;
 }
 
@@ -144,7 +167,7 @@ export interface Learner {
 }
 
 /** How many instances of an exercise there are unless the learner says otherwise. */
-export const DEFAULT_INSTANCES = 5;
+export const DEFAULT_INSTANCES = 1;
 export const MAX_INSTANCES = 50;
 /** The longest time limit an exercise may have, in minutes, as the server takes it. */
 export const MAX_MINUTES = 240;
@@ -267,10 +290,12 @@ export function stepExercise(
     message: unknown,
     learner: Learner,
 ): Promise<{ show: unknown; usage: ProfileUsage[]; tasks?: BackgroundTask[] }> {
-    return call(
+    const stepped = call<{ show: unknown; usage: ProfileUsage[]; tasks?: BackgroundTask[] }>(
         `/sessions/${encodeURIComponent(sessionId)}/exercises/${encodeURIComponent(exercise)}/${op}`,
         posting({ message }, learner),
     );
+    // an exercise that writes its log itself has it as soon as it is finished
+    return op === "finish" ? stepped.then((done) => (announceLogged(), done)) : stepped;
 }
 
 /** What the learner answered once, as an exercise graded it. */
@@ -285,7 +310,32 @@ export interface Grade {
     note: string;
 }
 
-/** Every session there was, the latest first. */
+/**
+ * What a session is of: its lesson, by its title as `lessonTitle` gives
+ * it, the lessons it reviews, or, for one of none, such as a review of the
+ * Anki cards, its exercises, by their titles as `exerciseTitle` gives them.
+ */
+export function sessionTitleOf(
+    session: PracticeSession,
+    lessonTitle: (id: string) => string,
+    exerciseTitle: (id: string) => string,
+): string {
+    if (session.lesson) {
+        return lessonTitle(session.lesson);
+    }
+    const count = session.lessons?.length ?? 0;
+    if (count === 0) {
+        return Object.keys(session.exercises).map(exerciseTitle).join(", ");
+    }
+    return `Review of ${count} ${count === 1 ? "lesson" : "lessons"}`;
+}
+
+/** Every session there was, the latest first, but those that are hidden, as only the exercises done list them. */
+export async function fetchPracticeSessions(): Promise<PracticeSession[]> {
+    return (await fetchSessions()).filter((session) => !session.hidden);
+}
+
+/** Every session there was, the latest first, those that are hidden too. */
 export async function fetchSessions(): Promise<PracticeSession[]> {
     const { sessions } = await call<{ sessions: PracticeSession[] }>("/sessions");
     return sessions;
@@ -398,6 +448,23 @@ export function endSession(
     return call(`/sessions/${encodeURIComponent(sessionId)}/end`, posting({ status }, learner));
 }
 
+/**
+ * Starts a session that does an exercise of a session again exactly as it
+ * was, with what it made kept, or, if `fresh`, with the same settings and
+ * what it does made anew, and resolves with the session.
+ */
+export function replayExercise(
+    sessionId: string,
+    exercise: string,
+    learner: Learner,
+    fresh = false,
+): Promise<PracticeSession> {
+    return call(
+        `/sessions/${encodeURIComponent(sessionId)}/exercises/${encodeURIComponent(exercise)}/replay`,
+        posting({ fresh }, learner),
+    );
+}
+
 /** What a request of an exercise used, as the usage is counted. */
 export function practiceUsage(used: ProfileUsage, at: number): UsageEntry {
     return profileUsage(used, at, "practice", USAGE_ID);
@@ -436,6 +503,8 @@ export interface ExerciseKit {
     finish(): void;
     /** Has `text` read aloud; `number` tells the texts of the exercise apart. */
     readAloud(text: string, number?: number): void;
+    /** The address of a file of the media of the learner's Anki collection, such as a picture of a card. */
+    ankiMedia(name: string): Promise<string>;
 }
 
 /** The interface of an exercise, ready to be mounted, as `exercises/kit.js` describes. */
@@ -498,6 +567,7 @@ export function exerciseKit(
     act: (message: unknown) => Promise<unknown>,
     finish: () => void,
     readAloud: (text: string, number: number) => void = () => undefined,
+    ankiMedia: (name: string) => Promise<string> = () => Promise.reject(new Error("There is no Anki here.")),
 ): { kit: ExerciseKit; show: (show: unknown) => void } {
     let handler: (show: unknown) => void = () => undefined;
     const kit: ExerciseKit = {
@@ -515,6 +585,8 @@ export function exerciseKit(
                 readAloud(text, Number.isSafeInteger(number) && number >= 0 ? number : 0);
             }
         },
+        ankiMedia: (name) =>
+            typeof name === "string" && name ? ankiMedia(name) : Promise.reject(new Error("A file has a name.")),
     };
     return { kit, show: (shown) => handler(shown) };
 }

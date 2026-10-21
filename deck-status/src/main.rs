@@ -3,10 +3,12 @@
 
 //! A small server that signs in to a sync account like any other device,
 //! fetches the collection periodically, and serves its contents as JSON so
-//! that other applications can read them.
+//! that other applications can read them. Its decks may be studied through
+//! it too, whose reviews are synced like those made anywhere else.
 
 mod api;
 mod mirror;
+mod review;
 mod status;
 mod users;
 
@@ -131,6 +133,9 @@ async fn serve(addr: SocketAddr, state: AppState) -> Result<()> {
         .route("/users/{user}/api/{method}", get(api_call).post(api_call))
         .route("/users/{user}/sql", post(sql))
         .route("/users/{user}/media/{name}", get(media))
+        .route("/users/{user}/review/next", post(review_next))
+        .route("/users/{user}/review/answer", post(review_answer))
+        .route("/users/{user}/sync", post(sync_now))
         .layer(middleware::from_fn_with_state(state.clone(), require_token))
         .with_state(state);
     let listener = TcpListener::bind(addr)
@@ -272,6 +277,88 @@ fn json_response(result: Result<Result<Vec<u8>, ApiError>, tokio::task::JoinErro
             (StatusCode::INTERNAL_SERVER_ERROR, message).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "request failed").into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct NextRequest {
+    deck_id: i64,
+}
+
+/// The next card of a deck and its subdecks, which becomes the current deck.
+async fn review_next(
+    State(state): State<AppState>,
+    Path(user): Path<String>,
+    Json(request): Json<NextRequest>,
+) -> Response {
+    let Some(linked) = state.users.get(&user) else {
+        return not_linked();
+    };
+    let shown =
+        tokio::task::spawn_blocking(move || review::next(&linked.backend, request.deck_id)).await;
+    reviewed(shown)
+}
+
+#[derive(Deserialize)]
+struct AnswerRequest {
+    deck_id: i64,
+    card_id: i64,
+    /// 1 to 4, for Again, Hard, Good and Easy.
+    rating: u8,
+    /// How long the card was looked at.
+    #[serde(default)]
+    millis: u32,
+}
+
+/// Answers a card, and returns the next one. The answer is synced soon.
+async fn review_answer(
+    State(state): State<AppState>,
+    Path(user): Path<String>,
+    Json(request): Json<AnswerRequest>,
+) -> Response {
+    let Some(linked) = state.users.get(&user) else {
+        return not_linked();
+    };
+    if !(1..=4).contains(&request.rating) {
+        return (StatusCode::BAD_REQUEST, "a card is answered with 1 to 4").into_response();
+    }
+    let answered = tokio::task::spawn_blocking(move || {
+        let answered = review::answer(
+            &linked.backend,
+            request.deck_id,
+            request.card_id,
+            request.rating,
+            request.millis,
+        );
+        if matches!(answered, Ok(review::Answered { answered: true, .. })) {
+            linked.sync_soon();
+        }
+        answered
+    })
+    .await;
+    reviewed(answered)
+}
+
+/// Syncs the collection of `user` now, as before studying it, and waits
+/// for the sync to be done.
+async fn sync_now(State(state): State<AppState>, Path(user): Path<String>) -> Response {
+    let Some(linked) = state.users.get(&user) else {
+        return not_linked();
+    };
+    match tokio::task::spawn_blocking(move || linked.sync_now()).await {
+        Ok(Ok(())) => Json(json!({ "synced": true })).into_response(),
+        Ok(Err(err)) => (StatusCode::BAD_GATEWAY, format!("{err:#}")).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "the sync failed").into_response(),
+    }
+}
+
+fn reviewed<T: serde::Serialize>(
+    result: Result<anyhow::Result<T>, tokio::task::JoinError>,
+) -> Response {
+    match result {
+        Ok(Ok(shown)) => Json(shown).into_response(),
+        Ok(Err(err)) => (StatusCode::BAD_REQUEST, format!("{err:#}")).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "studying failed").into_response(),
     }
 }
 

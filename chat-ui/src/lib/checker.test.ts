@@ -6,6 +6,7 @@ import { expect, test } from "vitest";
 import {
     applySuggestion,
     doubt,
+    inUtf16,
     type LiveCheck,
     markedParts,
     type Sentence,
@@ -188,4 +189,35 @@ test("a word is marked the more strongly the less right it is, and not at all wh
     expect(doubt(0.425)).toBeCloseTo(0.5);
     expect([0.85, 0.9, 1].map(doubt)).toEqual([0, 0, 0]);
     expect(doubt(0.2)).toBeGreaterThan(doubt(0.6));
+});
+
+test("places the server counted in characters are counted as JavaScript counts, past an emoji", () => {
+    const typed = "Gut. Ich 😊 hab Hundd. Ja.";
+    // as the server counts, the emoji is one character, so "Hundd" is at 10-15 of its sentence
+    const server = (text: string, start: number, length: number): Sentence => ({
+        ...sentence(text, start, []),
+        end: start + length,
+    });
+    const reply = {
+        sentences: [
+            server("Gut.", 0, 4),
+            {
+                ...server("Ich 😊 hab Hundd.", 5, 16),
+                spelling: [{ word: "Hundd", start: 10, end: 15, suggestions: [] }],
+                words: [{ word: "Hundd", start: 10, end: 15, value: 0.2 }],
+            },
+            server("Ja.", 22, 3),
+        ],
+        usage: [],
+        pending: false,
+    };
+
+    const placed = inUtf16(typed, reply).sentences;
+
+    expect(placed.map((each) => typed.slice(each.start, each.end))).toEqual(["Gut.", "Ich 😊 hab Hundd.", "Ja."]);
+    expect(placed[1].spelling[0]).toMatchObject({ start: 11, end: 16 });
+    expect(placed[1].words?.[0]).toMatchObject({ start: 11, end: 16 });
+    expect(sentenceParts(typed, { text: typed, sentences: placed }, []).filter((part) => part.sentence)).toHaveLength(
+        3,
+    );
 });

@@ -8,5 +8,42 @@
             "max": 10,
             "default": 5
         }
+    },
+    "instance": {
+        "type": "object",
+        "description": "a set of sentences, shown and checked together",
+        "properties": {
+            "items": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "the sentence, with each gap in brackets and the answers it takes joined by |"
+                        },
+                        "hints": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "a hint for each gap, empty for none"
+                        },
+                        "translation": {
+                            "type": "string",
+                            "description": "the sentence in the language the learner reads"
+                        }
+                    },
+                    "required": [
+                        "text",
+                        "hints",
+                        "translation"
+                    ]
+                }
+            }
+        },
+        "required": [
+            "items"
+        ]
     }
 }

@@ -17,6 +17,12 @@ when they ask for the labels to be checked, the model that sees pictures is
 shown the picture with each point marked by its number, and judges every
 label by what is under it. Each point is graded then, a point left blank as
 wrong. Each instance is a picture, drawn once the one before it is checked.
+
+A picture is reported as made once the things in it were found, in the
+step they were: its image, its scene, what was planned and where each thing
+is, without the labels. When the exercise is done again, the pictures are
+taken in order from `replay` in place of being drawn; one in which nothing
+was found is looked at again.
 """
 
 from __future__ import annotations
@@ -228,9 +234,26 @@ def make_picture(
     model: Model,
     drawn: list[str],
     scenes: list[str] | None = None,
+    at: int = 0,
 ) -> dict[str, Any]:
     """A picture with many things on it, of none of the `scenes` there were
-    before and with none of the things `drawn` in them. Raises ModelError."""
+    before and with none of the things `drawn` in them; or, when the
+    exercise is done again, the one of those `at` that place. Raises
+    ModelError."""
+    replay = context.get("replay")
+    if replay:
+        again = replay[at]
+        kept: dict[str, Any] = {
+            **{key: json.loads(json.dumps(again[key])) for key in INSTANCE},
+            "labels": [""] * len(again["items"]),
+            "judged": None,
+            "lost": "",
+            # it was kept, and is not reported as made again
+            "reported": True,
+        }
+        if not kept["items"]:
+            locate(model, kept)
+        return kept
     avoid = ""
     if scenes:
         avoid += " " + PROMPTS("avoid.scenes", scenes="; ".join(scenes))
@@ -259,6 +282,7 @@ def make_picture(
         "items": [],
         "labels": [],
         "judged": None,
+        "reported": False,
     }
     # The picture cost far more than asking where things are in it, so that
     # this is asked again rather than the picture being lost: once now, and
@@ -267,6 +291,19 @@ def make_picture(
     if picture["lost"]:
         locate(model, picture)
     return picture
+
+
+# what of a picture is the instance it is, which is kept to do it again
+INSTANCE = ("image", "scene", "planned", "items")
+
+
+def made_of(picture: dict[str, Any]) -> list[dict[str, Any]]:
+    """The picture as the instance to report as made, once the things in it
+    were found and if it was not reported before; nothing otherwise."""
+    if picture.get("reported", True) or picture.get("lost") or not picture["items"]:
+        return []
+    picture["reported"] = True
+    return [{key: picture[key] for key in INSTANCE}]
 
 
 def locate(model: Model, picture: dict[str, Any]) -> None:
@@ -461,7 +498,7 @@ def start(context: dict[str, Any], model: Model) -> Step:
         "done": [],
         "picture": picture,
     }
-    return Step(state=state, show=_show(state))
+    return Step(state=state, show=_show(state), made=made_of(picture))
 
 
 def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step:
@@ -471,7 +508,7 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     if message.get("look"):
         if picture.get("lost"):
             locate(model, picture)
-        return Step(state=state, show=_show(state))
+        return Step(state=state, show=_show(state), made=made_of(picture))
     if message.get("check"):
         if picture.get("judged") or not any(picture["labels"]):
             return Step(state=state, show=_show(state))
@@ -483,12 +520,14 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
         if not _show(state)["more"]:
             return Step(state=state, show=_show(state))
         scenes = state.get("scenes", []) + [picture.get("scene", "")]
-        made = make_picture(context, model, _drawn(state), [s for s in scenes if s])
+        drawn = make_picture(
+            context, model, _drawn(state), [s for s in scenes if s], state["drawn"]
+        )
         state["scenes"] = scenes
         state["done"] += _done(picture)
-        state["picture"] = made
+        state["picture"] = drawn
         state["drawn"] += 1
-        return Step(state=state, show=_show(state))
+        return Step(state=state, show=_show(state), made=made_of(drawn))
     point, text = message.get("point"), message.get("label")
     if (
         not isinstance(point, int)

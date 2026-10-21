@@ -14,6 +14,10 @@ reads the judgement, or else when it goes on to the `next`.
 Once a set is judged, the translations are reported as written by the
 learner, and the corrections and the other ways the learner is shown as
 written by the model.
+
+Each set is an instance, reported as made in the step it is made in, as
+`{"items": [...]}`; when the exercise is done again, the sets it made are
+taken in order from `replay` in place of being made.
 """
 
 from __future__ import annotations
@@ -94,12 +98,19 @@ def sentences_of(context: dict[str, Any]) -> int:
     return int(option(context, "sentences", SENTENCES))
 
 
-def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> None:
+def make_set(
+    context: dict[str, Any], state: dict[str, Any], model: Model
+) -> list[dict[str, Any]]:
     """Has the model make the next set of sentences, other than those made
-    before, unless it was made already or every set was."""
+    before, unless it was made already or every set was; or takes it from
+    those done again. Returns what was made, as the instances to report."""
     sets = state["sets"]
     if len(sets) > len(state["checked"]) or len(sets) >= context["instances"]:
-        return
+        return []
+    replay = context.get("replay")
+    if replay:
+        sets.append([dict(item) for item in replay[len(sets)]["items"]])
+        return []
     prompt = PROMPTS(
         "making",
         language=context["language"],
@@ -114,6 +125,7 @@ def make_set(context: dict[str, Any], state: dict[str, Any], model: Model) -> No
     )
     reply = ask_json(model, [{"role": "user", "content": prompt}])
     sets.append(read_items(reply, sentences_of(context)))
+    return [{"items": [dict(item) for item in sets[-1]]}]
 
 
 def judge(
@@ -185,8 +197,8 @@ def _show(context: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
 
 def start(context: dict[str, Any], model: Model) -> Step:
     state: dict[str, Any] = {"sets": [], "checked": [], "reviewing": False}
-    make_set(context, state, model)
-    return Step(state=state, show=_show(context, state))
+    made = make_set(context, state, model)
+    return Step(state=state, show=_show(context, state), made=made)
 
 
 def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step:
@@ -197,11 +209,13 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     checked = state["checked"]
     more = len(checked) < context["instances"]
     if message.get("prepare") and state["reviewing"] and more:
-        make_set(context, state, model)
-    elif message.get("next") and state["reviewing"] and more:
-        make_set(context, state, model)
+        made = make_set(context, state, model)
+        return Step(state=state, show=_show(context, state), made=made)
+    if message.get("next") and state["reviewing"] and more:
+        made = make_set(context, state, model)
         state["reviewing"] = False
-    elif isinstance(message.get("answers"), list) and not state["reviewing"]:
+        return Step(state=state, show=_show(context, state), made=made)
+    if isinstance(message.get("answers"), list) and not state["reviewing"]:
         items = state["sets"][len(checked)]
         answers = [
             " ".join(answer.split())[:MAX_ANSWER_LENGTH]

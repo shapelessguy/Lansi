@@ -43,6 +43,18 @@ IMPORTERS: dict[str, AnkiImporter] = {}
 INTAKES: dict[str, Intake] = {}
 
 
+@pytest.fixture(autouse=True)
+def no_lookups_of_audio(monkeypatch: pytest.MonkeyPatch) -> None:
+    """What audio used is looked up on OpenRouter, which the tests do not
+    reach: it is told as costing nothing."""
+    monkeypatch.setattr(
+        "server.generation_usages",
+        lambda generations, model: [
+            Profile({}, id=each, model=model.name) for each in generations if each
+        ],
+    )
+
+
 @pytest.fixture
 def url() -> Iterator[str]:
     """A checker server on a free port, stopped after the test."""
@@ -100,6 +112,7 @@ class KeyEchoingProfiler(Profiler):
         sentence: str,
         assessment: list[dict[str, str]],
         model: Model,
+        correction: str | None = None,
     ) -> tuple[list[WordRating], Profile]:
         return [WordRating("Wie", 0, 3, 0.25)], Profile({}, id="rating")
 
@@ -203,6 +216,9 @@ def test_sentences_request_returns_and_prints_the_checked_sentences(
             "profile_error": None,
             "words": [],
             "rating_words": False,
+            "correction": None,
+            "correcting": False,
+            "correction_error": None,
         },
         {
             "text": "Wie geht Hundd",
@@ -218,6 +234,9 @@ def test_sentences_request_returns_and_prints_the_checked_sentences(
             "profile_error": None,
             "words": [],
             "rating_words": False,
+            "correction": None,
+            "correcting": False,
+            "correction_error": None,
         },
     ]
     printed = capsys.readouterr().out
@@ -666,6 +685,11 @@ class FakeAnki(AnkiLink):
             raise AnkiRefused("no Anki account is linked")
         return ANKI_WORDS
 
+    def media(self, name: str) -> tuple[bytes, str]:
+        if name != "hund bild.png":
+            raise AnkiRefused(f"there is no file {name} in Anki (404)")
+        return b"PNG", "image/png"
+
 
 def test_an_anki_account_is_linked_and_its_words_given_to_its_user() -> None:
     anki = FakeAnki()
@@ -739,6 +763,18 @@ def test_the_anki_decks_unticked_are_left_out_and_all_others_kept_in(
     assert [deck["chosen"] for deck in chosen[1]["decks"]] == [False, True]
     assert (left_out, anki.asked_decks) == ([1], [1, 2])
     assert refused[0] == 400
+
+
+def test_a_file_of_the_anki_media_is_sent_as_it_is_or_refused() -> None:
+    account = Account(LiveChecker(Speller(language=None)), anki=FakeAnki())
+
+    with server_of(account) as url:
+        with urllib.request.urlopen(f"{url}/anki/media/hund%20bild.png") as response:
+            sent = (response.status, response.headers["Content-Type"], response.read())
+        missing = ask(f"{url}/anki/media/katze.png", "GET")
+
+    assert sent == (200, "image/png", b"PNG")
+    assert missing[0] == 404
 
 
 def test_there_is_no_anki_for_an_account_without_it() -> None:
@@ -1085,6 +1121,37 @@ def test_a_selection_is_translated_with_the_sentences_around_it(
     ]
 
 
+def test_what_a_translation_used_is_counted_without_the_app_telling_it(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {"selection": "Hund", "language": "German", "model": "some/model"}
+
+    post(f"{with_users}/translate", json.dumps(body).encode(), key="sk-test", token=ada)
+    told_again = {
+        "id": "gen-1",
+        "at": 2_000,
+        "category": "translation",
+        "chatId": "translate",
+        "model": "some/model",
+        "promptTokens": 40,
+        "completionTokens": 3,
+        "cost": 0.001,
+    }
+    _, again, _ = send(
+        f"{with_users}/usage",
+        "POST",
+        ada,
+        json.dumps({"entries": [told_again]}).encode(),
+    )
+    _, usage, _ = send(f"{with_users}/usage?chat=translate&since=0", "GET", ada)
+
+    # what the app tells again is counted once
+    assert json.loads(again) == {"kept": 0}
+    assert json.loads(usage)["chat"]["requests"] == 1
+    assert json.loads(usage)["byModel"][0]["category"] == "translation"
+
+
 def test_a_translation_that_cannot_be_had_is_answered_with_the_reason(
     with_users: str,
 ) -> None:
@@ -1344,6 +1411,7 @@ class FakeRunner(Runner):
         ask: Any,
         draw: Any = None,
         look: Any = None,
+        anki: Any = None,
     ) -> tuple[dict[str, Any], list[Profile]]:
         state = request["state"] or {"done": 0}
         logs = []
@@ -1405,6 +1473,8 @@ def test_a_session_of_practice_keeps_the_logs_of_its_exercises(with_users: str) 
         "answered": 1,
         "started_at": ANY,
         "scores": None,
+        "kept": 0,
+        "replays": False,
         "results": {"right": 0, "partial": 0, "wrong": 1},
     }
     assert [(log["answer"], log["correction"]) for log in found["grades"]] == [
@@ -1544,6 +1614,26 @@ def test_a_session_is_started_with_the_words_its_topic_needs(with_users: str) ->
         "lemmas": ["der Arzt", "krank", "gehen"],
     }
     assert session["usage"]
+
+
+def test_an_exercise_that_kept_nothing_is_not_done_again(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {
+        "language": "German",
+        "lesson": "trennbare-verben",
+        "exercises": {"cloze": 1},
+    }
+    _, started, _ = send(
+        f"{with_users}/sessions", "POST", ada, json.dumps(body).encode()
+    )
+    session = json.loads(started)["id"]
+
+    refused, said, _ = send(
+        f"{with_users}/sessions/{session}/exercises/cloze/replay", "POST", ada, b"{}"
+    )
+
+    assert refused == 400
+    assert "nothing" in json.loads(said)["error"]
 
 
 def test_a_session_with_words_chosen_in_a_way_there_is_not_is_refused(
@@ -1768,7 +1858,7 @@ def test_the_tutor_streams_what_it_does_a_line_at_a_time_and_ends_with_what_was_
         "tool",
         "assistant",
     ]
-    assert "exercise_cloze" in [tool["function"]["name"] for tool in asked[0]["tools"]]
+    assert "exercise" in [tool["function"]["name"] for tool in asked[0]["tools"]]
     assert "They are at level A1" in asked[0]["messages"][0]["content"]
 
 
@@ -1983,7 +2073,12 @@ def test_the_tutor_is_told_its_memories_and_forgets_one_the_learner_deletes(
 
     assert "do not remember anything" in asked[0]["messages"][0]["content"]
     assert "Likes football." in asked[1]["messages"][0]["content"]
-    assert "  Agreed to practise the dative." in asked[1]["messages"][0]["content"]
+    # the recap is looked up, not told
+    assert "Agreed to practise the dative." not in asked[1]["messages"][0]["content"]
+    assert "1 in all" in asked[1]["messages"][0]["content"]
+    assert {"recaps", "strategy", "calendar", "plan"} <= {
+        tool["function"]["name"] for tool in asked[1]["tools"]
+    }
     assert deleted == 200
     assert [each["kind"] for each in json.loads(after)["memories"]] == ["recap"]
     assert [each["removedBy"] for each in json.loads(after)["removed"]] == ["learner"]

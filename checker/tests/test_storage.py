@@ -3,12 +3,25 @@
 
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 from typing import Any
 
 import pytest
+from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore
 
+# What came with versions 24 and 25, taken out of a store to make it as one
+# was before: the instances the exercises made, what each replays, and
+# whether a session is hidden.
+BEFORE_INSTANCES = """
+ALTER TABLE sessions DROP COLUMN hidden;
+DROP TABLE instances;
+ALTER TABLE session_exercises DROP COLUMN replay;
+"""
+# What came with version 23, taken out of a store to make it as one was
+# before: the day of an entry of the calendar of the tutor.
+BEFORE_DAYS = " ALTER TABLE tutor_memories DROP COLUMN day;"
 # What came with version 22, taken out of a store to make it as one was
 # before, along with what came before it: what else a tutor message holds.
 BEFORE_TURNS = " ALTER TABLE tutor_messages DROP COLUMN turn;"
@@ -358,6 +371,7 @@ def test_books_can_be_kept_where_things_were_kept_before_there_were_books(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.save_settings({"level": "B1"})
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.execute("DROP TABLE books")  # noqa: SLF001
     before._db.execute("DROP TABLE book_speech")  # noqa: SLF001
@@ -441,6 +455,7 @@ def test_sessions_can_be_kept_where_things_were_kept_before_there_were_sessions(
         "embeddings",
         "usage",
     )
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     for table in later:
         before._db.execute(f"DROP TABLE {table}")  # noqa: SLF001
@@ -460,6 +475,7 @@ def test_usage_can_be_kept_where_things_were_kept_before_there_was_usage(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.save_settings({"level": "B1"})
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.execute("DROP TABLE written")  # noqa: SLF001
     before._db.execute("DROP TABLE grades")  # noqa: SLF001
@@ -483,6 +499,7 @@ def test_the_texts_kept_before_are_dropped_and_sessions_kept(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.start_session("s1", "German", "lesson", [], {"cloze": 3})
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.execute("DROP TABLE written")  # noqa: SLF001
     before._db.execute("DROP TABLE grades")  # noqa: SLF001
@@ -534,6 +551,7 @@ def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> Non
         "words": None,
         "mix_topics": False,
         "kind": "practice",
+        "hidden": False,
         "exercises": {"cloze": 3, "translation": 2},
         "guidance": {"cloze": "", "translation": ""},
         "options": {"cloze": {}, "translation": {}},
@@ -545,6 +563,8 @@ def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> Non
                 "answered": 1,
                 "started_at": 20.0,
                 "scores": None,
+                "kept": 0,
+                "replays": False,
                 "results": {"right": 0, "partial": 1, "wrong": 0},
             },
             "translation": {
@@ -552,6 +572,8 @@ def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> Non
                 "answered": 0,
                 "started_at": None,
                 "scores": None,
+                "kept": 0,
+                "replays": False,
                 "results": {"right": 0, "partial": 0, "wrong": 0},
             },
         },
@@ -673,10 +695,69 @@ def test_the_starter_topics_are_added_once_without_icons_and_after_none_of_the_s
     ]
 
 
+def test_the_starter_topics_come_with_the_icons_there_are_of_them(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path / "ada")
+    icons = {"Travel": b"\x89PNG travel"}
+
+    store.add_starter_topics([("Family", "relatives"), ("Travel", "trips")], icons.get)
+
+    assert [(topic["title"], topic["icon"]) for topic in store.topics()] == [
+        ("Family", False),
+        ("Travel", True),
+    ]
+    assert store.icon("starter-1") == (b"\x89PNG travel", "image/png")
+
+
+def test_the_instances_an_exercise_made_are_kept_as_files_and_go_with_it(
+    store: UserStore, tmp_path: Path
+) -> None:
+    store.start_session("s1", "German", "dativ", [], {"cloze": 2})
+    first = store.add_instances("s1", "cloze", [{"items": ["a"]}])
+    second = store.add_instances("s1", "cloze", [{"items": ["b"]}])
+    store.start_session("s2", "German", "dativ", [], {"cloze": 2})
+    store.set_replay("s2", "cloze", second + first)
+
+    ids = store.instance_ids("s1", "cloze")
+    files = sorted((tmp_path / "ada" / "exercises" / "cloze").iterdir())
+    assert ids == first + second
+    assert store.instances("cloze", ids) == [{"items": ["a"]}, {"items": ["b"]}]
+    assert store.instance_ids("s2", "cloze") == second + first
+    assert len(files) == 2
+    store.delete_session("s1")
+    assert list((tmp_path / "ada" / "exercises" / "cloze").iterdir()) == []
+    with pytest.raises(ValueError, match="gone"):
+        store.instances("cloze", ids)
+
+
+def test_a_picture_an_instance_holds_is_kept_as_a_file_beside_it(
+    store: UserStore, tmp_path: Path
+) -> None:
+    store.start_session("s1", "German", "dativ", [], {"picture": 1})
+    picture = (
+        "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8 a picture").decode()
+    )
+
+    [made] = store.add_instances("s1", "picture", [{"image": picture, "scene": "x"}])
+
+    folder = tmp_path / "ada" / "exercises" / "picture"
+    assert (folder / f"{made}-0.jpg").read_bytes() == b"\xff\xd8 a picture"
+    assert "base64" not in (folder / f"{made}.json").read_text(encoding="utf-8")
+    assert store.instances("picture", [made]) == [{"image": picture, "scene": "x"}]
+    store.delete_session("s1")
+    assert list(folder.iterdir()) == []
+
+
+def test_every_starter_topic_has_an_icon() -> None:
+    assert all(starter_icon(title) for title, _ in STARTER_TOPICS)
+
+
 def test_a_log_can_be_kept_where_findings_were_left_naming_the_logs_before(
     tmp_path: Path,
 ) -> None:
     before = UserStore(tmp_path / "ada")
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.executescript(  # noqa: SLF001
         "CREATE TABLE findings (id INTEGER PRIMARY KEY,"
@@ -698,6 +779,7 @@ def test_the_logs_of_exercises_are_among_those_of_everything_once_logs_are_of_mo
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.start_session("s1", "German", "trennbare-verben", [], {"cloze": 3})
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(BEFORE_EVALUATIONS)  # noqa: SLF001
     before._db.executescript(  # noqa: SLF001
         "DROP TABLE logs;"
@@ -858,6 +940,7 @@ def test_the_scores_kept_before_are_named_in_english(tmp_path: Path) -> None:
     before.end_evaluation(
         "e1", "finished", {"scores": {"schreiben_aufgabe": 50}, "passed": None}
     )
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(BEFORE_TUTOR)  # noqa: SLF001
     before._db.execute("PRAGMA user_version = 16")  # noqa: SLF001
     before.close()
@@ -959,7 +1042,8 @@ def test_an_answer_of_the_tutor_keeps_what_was_shown_and_how_far_its_exercises_g
 def test_tutor_messages_kept_before_turns_were_have_none(tmp_path: Path) -> None:
     before = UserStore(tmp_path / "ada")
     before.add_tutor_messages("c1", "German", [{"role": "user", "content": "Hallo"}])
-    before._db.executescript(BEFORE_TURNS)  # noqa: SLF001
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
+    before._db.executescript(BEFORE_DAYS + BEFORE_TURNS)  # noqa: SLF001
     before._db.execute("PRAGMA user_version = 21")  # noqa: SLF001
     before.close()
 
@@ -1024,6 +1108,7 @@ def test_memories_can_be_kept_where_there_were_tutor_chats_before_them(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.add_tutor_messages("c1", "German", [{"role": "user", "content": "Hallo"}])
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(  # noqa: SLF001
         "DROP TABLE learner_texts; DROP TABLE tutor_memories;"
         " ALTER TABLE tutor_chats DROP COLUMN closed_at;" + BEFORE_TURNS
@@ -1057,11 +1142,54 @@ def test_a_recap_is_kept_line_by_line_apart_from_the_facts(tmp_path: Path) -> No
         store.add_memory("Something.", kind="dream")
 
 
+def test_a_strategy_is_kept_on_one_line_as_its_own_kind(tmp_path: Path) -> None:
+    store = UserStore(tmp_path)
+
+    store.add_memory("Anki first,\n  then a   chapter.", "c1", "strategy")
+
+    assert [memory["content"] for memory in store.memories(kind="strategy")] == [
+        "Anki first, then a chapter."
+    ]
+    assert store.memories(kind="fact") == []
+
+
+def test_an_entry_of_the_calendar_is_kept_for_its_day(tmp_path: Path) -> None:
+    store = UserStore(tmp_path)
+
+    store.add_memory("A mock exam.", kind="calendar", day="2026-10-21")
+    store.add_memory("Likes football.", day="2026-10-21")
+
+    assert [(each["kind"], each["day"]) for each in store.memories()] == [
+        ("calendar", "2026-10-21"),
+        ("fact", None),
+    ]
+    for day in (None, "21.10.26", "2026-13-01"):
+        with pytest.raises(ValueError):
+            store.add_memory("A mock exam.", kind="calendar", day=day)
+
+
+def test_memories_kept_before_there_was_a_calendar_have_no_day(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.add_memory("Likes football.")
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
+    before._db.executescript(BEFORE_DAYS)  # noqa: SLF001
+    before._db.execute("PRAGMA user_version = 22")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+    store.add_memory("A mock exam.", kind="calendar", day="2026-10-21")
+
+    assert [each["day"] for each in store.memories()] == [None, "2026-10-21"]
+
+
 def test_memories_kept_before_there_were_recaps_are_facts(tmp_path: Path) -> None:
     before = UserStore(tmp_path / "ada")
     before.add_memory("Likes football.")
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(  # noqa: SLF001
-        "ALTER TABLE tutor_memories DROP COLUMN kind;" + BEFORE_TURNS
+        "ALTER TABLE tutor_memories DROP COLUMN kind;" + BEFORE_DAYS + BEFORE_TURNS
     )
     before._db.execute("PRAGMA user_version = 20")  # noqa: SLF001
     before.close()
@@ -1127,8 +1255,10 @@ def test_texts_can_be_kept_where_there_were_memories_before_them(
 ) -> None:
     before = UserStore(tmp_path / "ada")
     before.add_memory("Likes football.")
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
     before._db.executescript(  # noqa: SLF001
         "DROP TABLE learner_texts; ALTER TABLE tutor_memories DROP COLUMN kind;"
+        + BEFORE_DAYS
         + BEFORE_TURNS
     )
     before._db.execute("PRAGMA user_version = 19")  # noqa: SLF001

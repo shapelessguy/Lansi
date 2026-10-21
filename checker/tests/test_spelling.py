@@ -7,7 +7,18 @@ import pytest
 from spelling import Speller, SpellingIssue, StudySpeller
 
 # "hund" is listed twice so that it counts as the more common word
-DICTIONARY = ["ich", "habe", "einen", "hund", "hund", "hunde", "geht", "wie", "es"]
+DICTIONARY = [
+    "ich",
+    "habe",
+    "ein",
+    "einen",
+    "hund",
+    "hund",
+    "hunde",
+    "geht",
+    "wie",
+    "es",
+]
 
 
 @pytest.fixture
@@ -30,6 +41,14 @@ def test_check_reports_a_misspelled_word_with_its_place_and_suggestions(
 
     assert issues == [SpellingIssue("Hundd", 15, 20, ["Hund", "Hunde"])]
     assert text[issues[0].start : issues[0].end] == "Hundd"
+
+
+def test_check_leaves_a_grammar_error_of_correctly_spelled_words_to_the_profile(
+    speller: Speller,
+) -> None:
+    # "einen" is right: the profile's grammar question is what finds this
+    assert speller.check("Ich habe ein Hund.") == []
+    assert [issue.word for issue in speller.check("Ich habe ein Hnud.")] == ["Hnud"]
 
 
 def test_check_reports_every_misspelled_word_in_order(speller: Speller) -> None:

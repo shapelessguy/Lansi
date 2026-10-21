@@ -46,5 +46,55 @@
                 "0": "As often as I like"
             }
         }
+    },
+    "instance": {
+        "type": "object",
+        "description": "a text to understand, with its questions",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "its title, or empty"
+            },
+            "shown": {
+                "type": "string",
+                "description": "what goes with it to be read all along, such as a list to match, or empty"
+            },
+            "text": {
+                "type": "string",
+                "description": "the text, read or heard"
+            },
+            "questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {
+                            "type": "string"
+                        },
+                        "options": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "answer": {
+                            "type": "integer",
+                            "description": "the place of the right option, from 0"
+                        }
+                    },
+                    "required": [
+                        "prompt",
+                        "options",
+                        "answer"
+                    ]
+                }
+            }
+        },
+        "required": [
+            "title",
+            "shown",
+            "text",
+            "questions"
+        ]
     }
 }

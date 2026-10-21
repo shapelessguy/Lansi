@@ -68,7 +68,7 @@ from logs import describe_record, read_json
 from models import Model
 from profiling import Profile, ProfileError, error_message
 from prompts import PROMPTS
-from storage import LOG_KINDS
+from storage import LOG_KINDS, read_day
 from translating import TranslationError
 
 # Sends a chat request to a model to be streamed, and gives each piece of
@@ -99,8 +99,15 @@ MAX_LOGS = 50
 # when it is not told
 MAX_KNOWN_WORDS = 200
 USUAL_KNOWN_WORDS = 50
-# the recaps of how many of the latest chats the tutor is told
-MAX_RECAPS = 10
+# how many recaps of the latest chats the tool that looks them up gives at
+# most, and how many when it is not told
+MAX_RECAPS = 50
+USUAL_RECAPS = 10
+# how many days after today the tutor is told how many entries of its
+# calendar there are for
+COMING_DAYS = 7
+# the longest a strategy or an entry of the calendar may be, in characters
+MAX_PLANNED = 600
 # how many instances of an exercise may be offered, as practice allows
 MAX_INSTANCES = 50
 # how long the log of an exercise done in the chat is waited for, and how
@@ -163,52 +170,56 @@ def instructions(
     tone: str = "",
 ) -> str:
     """What the tutor is told before the chat: how to talk with the learner,
-    the `tone` they set, if they set one, and the `memories` it has of them,
-    of every kind, which go before the tone where they say otherwise: the recaps of the chats before the latest,
-    of as many as MAX_RECAPS in all, the oldest first; then the memories
-    that last; then the recap of the latest chat, last of all, as it is what
-    the next lesson most often picks up from."""
+    the `tone` they set, if they set one, and of the `memories` it has of
+    them, which go before the tone where they say otherwise, the facts in
+    full; of the strategy, the recaps and the calendar, only how many there
+    are, as it looks them up with memory_tools."""
+    today = time.strftime("%Y-%m-%d")
     facts = [memory for memory in memories if memory.get("kind", "fact") == "fact"]
+    strategies = [memory for memory in memories if memory.get("kind") == "strategy"]
     recaps = [memory for memory in memories if memory.get("kind") == "recap"]
-    shown = recaps[-MAX_RECAPS:]
-    earlier, latest = shown[:-1], shown[-1] if shown else None
+    days = [memory["day"] for memory in memories if memory.get("kind") == "calendar"]
+    coming = time.strftime(
+        "%Y-%m-%d", time.localtime(time.time() + COMING_DAYS * 86400)
+    )
     listed = "\n".join(
         f"- [{_day(memory['createdAt'])}] {memory['content']}" for memory in facts
     )
-    told = []
-    if earlier:
-        told.append(
-            PROMPTS(
-                "tutor.memories.earlier",
-                recaps="\n\n".join(_recapped(memory) for memory in earlier),
-            )
-        )
-    told.append(
+    told = [
         PROMPTS("tutor.memories.listed", memories=listed)
         if facts
-        else PROMPTS("tutor.memories.none")
-    )
-    if latest is not None:
-        told.append(PROMPTS("tutor.memories.latest", recap=_recapped(latest)))
+        else PROMPTS("tutor.memories.none"),
+        PROMPTS(
+            "tutor.memories.recaps",
+            count=len(recaps),
+            latest=_day(recaps[-1]["createdAt"]),
+        )
+        if recaps
+        else PROMPTS("tutor.memories.no_recaps"),
+        PROMPTS(
+            "tutor.memories.calendar",
+            today=sum(day == today for day in days),
+            coming=sum(today < day <= coming for day in days),
+            days=COMING_DAYS,
+            missed=sum(day < today for day in days),
+        )
+        if days
+        else PROMPTS("tutor.memories.no_calendar"),
+        PROMPTS("tutor.memories.strategy")
+        if strategies
+        else PROMPTS("tutor.memories.no_strategy"),
+    ]
     told_all = PROMPTS(
         "tutor.system",
         language=language,
         into=into,
         level=level or "unknown",
-        today=time.strftime("%Y-%m-%d"),
+        today=today,
         tone=PROMPTS("tutor.tone", tone=" ".join(tone.split())) if tone.strip() else "",
         memories="\n\n".join(told),
     )
     # a part that was left out leaves no gap
     return re.sub(r"\n{3,}", "\n\n", told_all)
-
-
-def _recapped(memory: dict[str, Any]) -> str:
-    """The recap of a chat as the tutor is told it, marked as one, with the
-    day of the chat."""
-    return f"Recap of the lesson of {_day(memory['createdAt'])}:\n" + "\n".join(
-        f"  {line}" for line in memory["content"].splitlines()
-    )
 
 
 def _said(chat: list[dict[str, str]]) -> str:
@@ -675,7 +686,12 @@ def data_tools(
     sessions and logs, and the `lessons` of the `language` they learn."""
 
     def practised() -> set[str]:
-        return {session["lesson"] for session in store.sessions() if session["lesson"]}
+        # a session left before anything was done in it is not practice
+        return {
+            session["lesson"]
+            for session in store.sessions()
+            if session["lesson"] and not session.get("hidden")
+        }
 
     def list_lessons(_: dict[str, Any]) -> Done:
         done = practised()
@@ -706,7 +722,7 @@ def data_tools(
                 },
             }
             for session in store.sessions()
-            if session["language"] == language
+            if session["language"] == language and not session.get("hidden")
         ][:count]
         return Done(json.dumps(listed, ensure_ascii=False))
 
@@ -781,6 +797,200 @@ def data_tools(
             ),
         ),
         *([] if evaluations is None else [_evaluations_tool(evaluations, language)]),
+    ]
+
+
+def memory_tools(store: Any) -> list[Tool]:
+    """The tools with which the tutor looks up, in `store`, the recaps of
+    the latest chats, the strategy and its calendar, and with which it
+    writes down a strategy and an entry of the calendar as soon as the
+    learner agrees on it, and crosses either out."""
+
+    def kept(memory: dict[str, Any]) -> dict[str, Any]:
+        return {"id": memory["id"], "agreed": _day(memory["createdAt"])}
+
+    def list_recaps(arguments: dict[str, Any]) -> Done:
+        count = arguments.get("count")
+        count = USUAL_RECAPS if count is None else _whole(count, "count", 1, MAX_RECAPS)
+        listed = [
+            {"day": _day(memory["createdAt"]), "recap": memory["content"].splitlines()}
+            for memory in reversed(store.memories(kind="recap"))
+        ][:count]
+        return Done(json.dumps(listed, ensure_ascii=False))
+
+    def list_strategy(_: dict[str, Any]) -> Done:
+        listed = [
+            {**kept(memory), "what": memory["content"]}
+            for memory in store.memories(kind="strategy")
+        ]
+        return Done(json.dumps(listed, ensure_ascii=False))
+
+    def list_calendar(arguments: dict[str, Any]) -> Done:
+        bounds = [arguments.get(name) for name in ("from", "to")]
+        try:
+            least, most = [
+                None if bound is None else read_day(bound) for bound in bounds
+            ]
+        except ValueError as error:
+            raise ToolError(f"from and to are days: {error}") from None
+        entries = [
+            {**kept(memory), "day": memory["day"], "what": memory["content"]}
+            for memory in store.memories(kind="calendar")
+        ] + [
+            {
+                **kept(memory),
+                "day": memory["day"],
+                "what": memory["content"],
+                "crossed_out": {
+                    "by": memory["removedBy"],
+                    "why": memory["removedWhy"],
+                },
+            }
+            for memory in store.memories(removed=True, kind="calendar")
+        ]
+        listed = sorted(
+            (
+                entry
+                for entry in entries
+                if (least is None or entry["day"] >= least)
+                and (most is None or entry["day"] <= most)
+            ),
+            key=lambda entry: (entry["day"], entry["id"]),
+        )
+        return Done(json.dumps(listed, ensure_ascii=False))
+
+    def said(arguments: dict[str, Any]) -> str:
+        what = arguments.get("what")
+        if not isinstance(what, str) or not what.strip():
+            raise ToolError("what is what was agreed on, in a sentence or two")
+        if len(what) > MAX_PLANNED:
+            raise ToolError(f"what is at most {MAX_PLANNED} characters long")
+        return what
+
+    def held(memory_id: object, kinds: tuple[str, ...]) -> dict[str, Any]:
+        memories: list[dict[str, Any]] = store.memories()
+        for memory in memories:
+            if memory["id"] == memory_id and memory["kind"] in kinds:
+                return memory
+        raise ToolError(f"there is no entry {memory_id!r} to cross out")
+
+    def agree(arguments: dict[str, Any]) -> Done:
+        what = said(arguments)
+        replaces = arguments.get("replaces") or []
+        if not isinstance(replaces, list):
+            raise ToolError("replaces is a list of the ids of strategies")
+        replaced = [held(each, ("strategy",)) for each in replaces]
+        memory_id = store.add_memory(what, kind="strategy")
+        for memory in replaced:
+            store.remove_memory(
+                memory["id"], f"replaced by the strategy {memory_id}", "tutor"
+            )
+        return Done(json.dumps({"id": memory_id, "replaced": replaces}))
+
+    def plan(arguments: dict[str, Any]) -> Done:
+        what = said(arguments)
+        try:
+            day = read_day(arguments.get("day"))
+        except ValueError as error:
+            raise ToolError(str(error)) from None
+        if day < time.strftime("%Y-%m-%d"):
+            raise ToolError("a day that has passed cannot be planned")
+        return Done(
+            json.dumps({"id": store.add_memory(what, kind="calendar", day=day)})
+        )
+
+    def cross_out(arguments: dict[str, Any]) -> Done:
+        memory = held(arguments.get("id"), ("strategy", "calendar"))
+        why = arguments.get("why")
+        if not isinstance(why, str) or not why.strip():
+            raise ToolError("why says why it is crossed out, such as that it was done")
+        store.remove_memory(memory["id"], " ".join(why.split()), "tutor")
+        return Done(json.dumps({"crossed_out": memory["id"]}))
+
+    def text(name: str) -> dict[str, Any]:
+        return {"type": "string", "description": PROMPTS(f"tutor.tools.{name}")}
+
+    return [
+        Tool(
+            "recaps",
+            PROMPTS("tutor.tools.recaps", usual=USUAL_RECAPS),
+            {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": MAX_RECAPS,
+                        "description": PROMPTS("tutor.tools.count", most=MAX_RECAPS),
+                    }
+                },
+            },
+            list_recaps,
+            lambda _: "Reading the recaps of the lessons",
+        ),
+        Tool(
+            "strategy",
+            PROMPTS("tutor.tools.strategy"),
+            {"type": "object", "properties": {}},
+            list_strategy,
+            lambda _: "Looking at the strategy",
+        ),
+        Tool(
+            "calendar",
+            PROMPTS("tutor.tools.calendar"),
+            {
+                "type": "object",
+                "properties": {"from": text("from"), "to": text("to")},
+            },
+            list_calendar,
+            lambda _: "Looking at the calendar",
+        ),
+        Tool(
+            "agree_strategy",
+            PROMPTS("tutor.tools.agree_strategy"),
+            {
+                "type": "object",
+                "properties": {
+                    "what": text("strategy_what"),
+                    "replaces": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": PROMPTS("tutor.tools.replaces"),
+                    },
+                },
+                "required": ["what"],
+            },
+            agree,
+            lambda _: "Writing down the strategy",
+        ),
+        Tool(
+            "plan",
+            PROMPTS("tutor.tools.plan"),
+            {
+                "type": "object",
+                "properties": {"day": text("day"), "what": text("plan_what")},
+                "required": ["day", "what"],
+            },
+            plan,
+            lambda arguments: f"Putting it on the calendar for {arguments.get('day')}",
+        ),
+        Tool(
+            "cross_out",
+            PROMPTS("tutor.tools.cross_out"),
+            {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "description": PROMPTS("tutor.tools.entry"),
+                    },
+                    "why": text("why"),
+                },
+                "required": ["id", "why"],
+            },
+            cross_out,
+            lambda _: "Crossing it out",
+        ),
     ]
 
 
@@ -997,184 +1207,304 @@ def evaluation_tool(levels: list[dict[str, Any]]) -> list[Tool]:
     ]
 
 
-def exercise_tools(
+def exercise_tool(
     manifests: list[dict[str, Any]],
     lessons: list[dict[str, Any]],
     topics: list[dict[str, Any]],
 ) -> list[Tool]:
-    """A tool for each exercise of `manifests`, with what the exercise may
-    be chosen with as its parameters: a lesson of `lessons`, how many times
-    it is done and the `topics` it is about, and its options. Calling it
-    offers the exercise to the learner."""
+    """The tool that offers the learner an exercise of `manifests`, which
+    its description lists, each with its options, so that what every
+    exercise is chosen with is said once: a lesson of `lessons`, how many
+    times it is done, the `topics` it is about, its options and what steers
+    it. An exercise whose manifest says so, such as one that makes
+    nothing, has a tool of its own, by its id, called with its options.
+    None where there is no exercise to offer."""
+    # one that has nothing to choose, such as a text where there is none,
+    # cannot be offered
+    offerable = {
+        manifest["id"]: manifest
+        for manifest in manifests
+        if all(
+            option.get("choices", True)
+            for option in (manifest.get("options") or {}).values()
+        )
+    }
+    own = [manifest for manifest in offerable.values() if manifest.get("own_tool")]
+    offerable = {
+        exercise: manifest
+        for exercise, manifest in offerable.items()
+        if not manifest.get("own_tool")
+    }
     lesson_ids = [lesson["id"] for lesson in lessons]
     titles = {lesson["id"]: lesson["title"] for lesson in lessons}
     # by title, as the model is told them; the newest of a title stands for it
     topic_ids: dict[str, str] = {}
     for topic in reversed(topics):
         topic_ids[topic["title"]] = topic["id"]
+    properties: dict[str, Any] = {
+        "exercise": {
+            "type": "string",
+            "enum": list(offerable),
+            "description": PROMPTS("tutor.tools.exercise_id"),
+        },
+        "lesson": {
+            "type": "string",
+            "enum": [*lesson_ids, ""],
+            "description": PROMPTS("tutor.tools.lesson"),
+        },
+        "instances": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": MAX_INSTANCES,
+            "description": PROMPTS("tutor.tools.instances"),
+        },
+        "options": {
+            "type": "object",
+            "description": PROMPTS("tutor.tools.options"),
+        },
+        # what steers it to what the learner needs now
+        "focus": {
+            "type": "string",
+            "maxLength": MAX_FOCUS,
+            "description": PROMPTS("tutor.tools.focus"),
+        },
+        "words": {
+            "type": "array",
+            "items": {"type": "string"},
+            "maxItems": MAX_WORDS,
+            "description": PROMPTS("tutor.tools.words"),
+        },
+    }
+    if topic_ids:
+        properties["topics"] = {
+            "type": "array",
+            "items": {"type": "string", "enum": list(topic_ids)},
+            "description": PROMPTS("tutor.tools.topics"),
+        }
+
+    def offer(arguments: dict[str, Any]) -> Done:
+        manifest = offerable.get(arguments.get("exercise"))
+        if manifest is None:
+            raise ToolError(
+                f"there is no exercise {arguments.get('exercise')!r};"
+                f" there are {', '.join(offerable)}"
+            )
+        return _offered(manifest, arguments, lesson_ids, titles, topic_ids)
+
+    catalog = "\n".join(_listed(manifest) for manifest in offerable.values())
+    own_tools = [_own_tool(manifest, lesson_ids, titles, topic_ids) for manifest in own]
+    if not offerable:
+        return own_tools
     return [
-        _exercise_tool(manifest, lesson_ids, titles, topic_ids)
-        for manifest in manifests
-        # one that has nothing to choose, such as a text where there is none,
-        # cannot be offered
-        if all(
-            option.get("choices", True)
-            for option in (manifest.get("options") or {}).values()
-        )
+        *own_tools,
+        Tool(
+            "exercise",
+            PROMPTS("tutor.tools.exercise", exercises=catalog),
+            {"type": "object", "properties": properties, "required": ["exercise"]},
+            offer,
+            lambda arguments: (
+                f"Preparing the exercise “{offerable[arguments['exercise']]['title']}”"
+                if arguments.get("exercise") in offerable
+                else "Preparing an exercise"
+            ),
+        ),
     ]
 
 
-def _exercise_tool(
+def _own_tool(
     manifest: dict[str, Any],
     lesson_ids: list[str],
     titles: dict[str, str],
     topic_ids: dict[str, str],
 ) -> Tool:
-    theory = bool(manifest.get("theory"))
-    # one that practises no lesson is called with none
-    lessons = manifest.get("lesson", True) is not False
+    """The tool of its own that offers an exercise, called with its options,
+    and with a lesson and how many times it is done where it has them."""
     options = manifest.get("options") or {}
     properties: dict[str, Any] = {}
-    required = []
-    if lessons:
+    if manifest.get("lesson", True) is not False:
         properties["lesson"] = {
             "type": "string",
-            "enum": lesson_ids if theory else [*lesson_ids, ""],
-            "description": PROMPTS(
-                "tutor.tools.theory_lesson" if theory else "tutor.tools.lesson"
-            ),
+            "enum": [*lesson_ids, ""],
+            "description": PROMPTS("tutor.tools.lesson"),
         }
-        required.append("lesson")
-    # one done once is not called with how many times
-    once = bool(manifest.get("once"))
-    if not theory and not once:
+    if not manifest.get("once") and not manifest.get("theory"):
         properties["instances"] = {
             "type": "integer",
             "minimum": 1,
             "maximum": MAX_INSTANCES,
             "description": PROMPTS("tutor.tools.instances"),
         }
-        required.append("instances")
-    if not theory:
-        if topic_ids:
-            properties["topics"] = {
-                "type": "array",
-                "items": {"type": "string", "enum": list(topic_ids)},
-                "description": PROMPTS("tutor.tools.topics"),
-            }
-        for name, option in options.items():
-            properties[name] = _option_schema(option)
-        # what steers it to what the learner needs now
-        properties["focus"] = {
-            "type": "string",
-            "maxLength": MAX_FOCUS,
-            "description": PROMPTS("tutor.tools.focus"),
-        }
-        properties["words"] = {
-            "type": "array",
-            "items": {"type": "string"},
-            "maxItems": MAX_WORDS,
-            "description": PROMPTS("tutor.tools.words"),
+    for name, option in options.items():
+        properties[name] = {
+            "description": _option_said(name, option),
+            **(
+                {"type": "string", "enum": list(option["choices"])}
+                if "choices" in option
+                else {
+                    "type": "integer",
+                    "minimum": option["min"],
+                    "maximum": option["max"],
+                }
+            ),
         }
 
     def offer(arguments: dict[str, Any]) -> Done:
-        lesson = arguments.get("lesson", "") if lessons else ""
-        if lessons and (
-            not isinstance(lesson, str) or lesson not in properties["lesson"]["enum"]
-        ):
-            raise ToolError(
-                f"there is no lesson {lesson!r}; the lessons tool lists them"
-            )
-        offered: dict[str, Any] = {
-            "kind": "exercise",
+        called = {
             "exercise": manifest["id"],
-            "title": manifest["title"],
-            "theory": theory,
-            # whether it practises a lesson, as one on a text does not
-            "practises_lesson": lessons,
-            "lesson": lesson,
-            "lesson_title": titles.get(lesson, ""),
-            "instances": 1,
-            "topics": [],
-            "options": {},
+            "lesson": arguments.get("lesson", ""),
+            "instances": arguments.get("instances", 1),
+            "options": {name: arguments[name] for name in options if name in arguments},
         }
-        if not theory:
-            offered["instances"] = (
-                1
-                if once
-                else _whole(arguments.get("instances"), "instances", 1, MAX_INSTANCES)
-            )
-            chosen = arguments.get("topics") or []
-            unknown = [each for each in chosen if each not in topic_ids]
-            if not isinstance(chosen, list) or unknown:
-                raise ToolError(f"there are no topics {unknown!r}")
-            offered["topics"] = [topic_ids[each] for each in chosen]
-            offered["topic_titles"] = list(chosen)
-            offered["options"] = {
-                name: _option_value(name, option, arguments.get(name))
-                for name, option in options.items()
-            }
-            # what each choice is called, such as the title of a text
-            offered["labels"] = {
-                name: option["choices"][offered["options"][name]]
-                for name, option in options.items()
-                if "choices" in option
-            }
-            focus = arguments.get("focus") or ""
-            words = arguments.get("words") or []
-            if not isinstance(focus, str) or len(focus) > MAX_FOCUS:
-                raise ToolError(f"focus is a text of at most {MAX_FOCUS} characters")
-            if not (
-                isinstance(words, list)
-                and len(words) <= MAX_WORDS
-                and all(isinstance(each, str) and each.strip() for each in words)
-            ):
-                raise ToolError(f"words are at most {MAX_WORDS} words")
-            offered["focus"] = " ".join(focus.split())
-            offered["words"] = list(dict.fromkeys(each.strip() for each in words))
-        told = {
-            name: value
-            for name, value in offered.items()
-            if name not in ("kind", "topics", "theory", "practises_lesson")
-        }
-        return Done(
-            PROMPTS(
-                "tutor.tools.offered", offered=json.dumps(told, ensure_ascii=False)
-            ),
-            offered,
-        )
+        return _offered(manifest, called, lesson_ids, titles, topic_ids)
 
     return Tool(
-        f"exercise_{manifest['id']}",
+        manifest["id"],
         PROMPTS(
-            "tutor.tools.exercise",
+            "tutor.tools.own_exercise",
             title=manifest["title"],
             description=manifest["description"],
         ),
-        {"type": "object", "properties": properties, "required": required},
+        {"type": "object", "properties": properties},
         offer,
         lambda _: f"Preparing the exercise “{manifest['title']}”",
     )
 
 
-def _option_schema(option: dict[str, Any]) -> dict[str, Any]:
-    """The schema of an option of a manifest: one of its choices, each said
-    with its label, or a whole number between its bounds."""
-    if "choices" in option:
-        said = "; ".join(
-            f"{value}: {label}" for value, label in option["choices"].items()
+def _listed(manifest: dict[str, Any]) -> str:
+    """An exercise as the description of the tool that offers it lists it:
+    its id, title and description, what it is called with that others are
+    not, and its options."""
+    theory = bool(manifest.get("theory"))
+    marks = []
+    if theory:
+        marks.append(PROMPTS("tutor.tools.exercise_theory"))
+    elif manifest.get("lesson", True) is False:
+        marks.append(PROMPTS("tutor.tools.exercise_no_lesson"))
+    if manifest.get("once") and not theory:
+        marks.append(PROMPTS("tutor.tools.exercise_once"))
+    options = manifest.get("options") or {}
+    if options and not theory:
+        marks.append(
+            PROMPTS(
+                "tutor.tools.exercise_options",
+                options="; ".join(
+                    _option_said(name, option) for name, option in options.items()
+                ),
+            )
         )
-        return {
-            "type": "string",
-            "enum": list(option["choices"]),
-            "description": f"{option['label']} ({said})",
-        }
-    return {
-        "type": "integer",
-        "minimum": option["min"],
-        "maximum": option["max"],
-        "description": f"{option['label']}, {option['default']} unless another fits better",
+    return " ".join(
+        [f"- {manifest['id']}: {manifest['title']}. {manifest['description']}", *marks]
+    )
+
+
+def _offered(
+    manifest: dict[str, Any],
+    arguments: dict[str, Any],
+    lesson_ids: list[str],
+    titles: dict[str, str],
+    topic_ids: dict[str, str],
+) -> Done:
+    """An exercise offered as it was called with `arguments`, with the
+    options it was not called with as usual. Raises ToolError."""
+    theory = bool(manifest.get("theory"))
+    # one that practises no lesson is called with none
+    lessons = manifest.get("lesson", True) is not False
+    options = manifest.get("options") or {}
+    lesson = arguments.get("lesson") or "" if lessons else ""
+    if lessons and (
+        not isinstance(lesson, str)
+        or lesson not in lesson_ids
+        and (theory or lesson != "")
+    ):
+        raise ToolError(f"there is no lesson {lesson!r}; the lessons tool lists them")
+    offered: dict[str, Any] = {
+        "kind": "exercise",
+        "exercise": manifest["id"],
+        "title": manifest["title"],
+        "theory": theory,
+        # whether it practises a lesson, as one on a text does not
+        "practises_lesson": lessons,
+        "lesson": lesson,
+        "lesson_title": titles.get(lesson, ""),
+        "instances": 1,
+        "topics": [],
+        "options": {},
     }
+    if not theory:
+        offered["instances"] = (
+            1
+            if manifest.get("once")
+            else _whole(arguments.get("instances", 1), "instances", 1, MAX_INSTANCES)
+        )
+        chosen = arguments.get("topics") or []
+        unknown = [each for each in chosen if each not in topic_ids]
+        if not isinstance(chosen, list) or unknown:
+            raise ToolError(f"there are no topics {unknown!r}")
+        offered["topics"] = [topic_ids[each] for each in chosen]
+        offered["topic_titles"] = list(chosen)
+        given = arguments.get("options") or {}
+        if not isinstance(given, dict):
+            raise ToolError("options are an object, of the options of the exercise")
+        unknown = [name for name in given if name not in options]
+        if unknown:
+            raise ToolError(
+                f"{manifest['id']} has no options {unknown!r}; it has"
+                f" {', '.join(options) or 'none'}"
+            )
+        offered["options"] = {
+            name: _option_value(name, option, given.get(name))
+            for name, option in options.items()
+        }
+        # what each choice is called, such as the title of a text
+        offered["labels"] = {
+            name: option["choices"][offered["options"][name]]
+            for name, option in options.items()
+            if "choices" in option
+        }
+        focus = arguments.get("focus") or ""
+        words = arguments.get("words") or []
+        if not isinstance(focus, str) or len(focus) > MAX_FOCUS:
+            raise ToolError(f"focus is a text of at most {MAX_FOCUS} characters")
+        if not (
+            isinstance(words, list)
+            and len(words) <= MAX_WORDS
+            and all(isinstance(each, str) and each.strip() for each in words)
+        ):
+            raise ToolError(f"words are at most {MAX_WORDS} words")
+        offered["focus"] = " ".join(focus.split())
+        offered["words"] = list(dict.fromkeys(each.strip() for each in words))
+    told = {
+        name: value
+        for name, value in offered.items()
+        if name not in ("kind", "topics", "theory", "practises_lesson")
+    }
+    return Done(
+        PROMPTS("tutor.tools.offered", offered=json.dumps(told, ensure_ascii=False)),
+        offered,
+    )
+
+
+def _option_said(name: str, option: dict[str, Any]) -> str:
+    """An option of a manifest as the tool that offers the exercise lists
+    it: one of its choices, each said with its label, or a whole number
+    between its bounds."""
+    if "choices" in option:
+        return PROMPTS(
+            "tutor.tools.option_choices",
+            name=name,
+            label=option["label"],
+            choices=", ".join(
+                f"{value} ({label})" for value, label in option["choices"].items()
+            ),
+        )
+    return PROMPTS(
+        "tutor.tools.option_number",
+        name=name,
+        label=option["label"],
+        least=option["min"],
+        most=option["max"],
+        usual=option["default"],
+    )
 
 
 def _option_value(name: str, option: dict[str, Any], value: object) -> Any:

@@ -24,5 +24,40 @@
                 "longer": "Longer"
             }
         }
+    },
+    "instance": {
+        "type": "object",
+        "description": "a story, with its questions when they are asked",
+        "properties": {
+            "title": {
+                "type": "string"
+            },
+            "text": {
+                "type": "string"
+            },
+            "questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "question": {
+                            "type": "string"
+                        },
+                        "answer": {
+                            "type": "string",
+                            "description": "what the model meant to be answered"
+                        }
+                    },
+                    "required": [
+                        "question",
+                        "answer"
+                    ]
+                }
+            }
+        },
+        "required": [
+            "title",
+            "text"
+        ]
     }
 }

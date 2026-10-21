@@ -3,7 +3,15 @@
 
 import { doubt, type Sentence } from "../lib/checker";
 import type { ModelChoice } from "../lib/models";
-import { answerFraction, askedQuestions, describeAnswer, isAskable, type ProfileQuestion } from "../lib/questions";
+import {
+    answerFraction,
+    answerStars,
+    askedQuestions,
+    describeAnswer,
+    isAskable,
+    type ProfileQuestion,
+    type Stars,
+} from "../lib/questions";
 import { SidePanel } from "./SidePanel";
 
 interface Props {
@@ -13,6 +21,10 @@ interface Props {
     /** Whether the words of each sentence are rated as well, and what to do when that is changed. */
     rateWords: boolean;
     onRateWords: (rateWords: boolean) => void;
+    /** Whether each sentence is written as it should be by `corrector`, and what to do when that is changed. */
+    correct: boolean;
+    onCorrect: (correct: boolean) => void;
+    corrector: ModelChoice;
     /** The sentence the caret is on, if any. */
     sentence: Sentence | null;
     /** Whether anything is written in the chat box. */
@@ -24,6 +36,20 @@ interface Props {
     model: ModelChoice;
     onEditQuestions: () => void;
     onClose: () => void;
+}
+
+/** Stars, each filled as far as `filled` reaches into it. */
+function StarRow({ stars, filled }: Stars) {
+    return (
+        <span className="answer-stars" role="img" aria-label={`${filled} of ${stars} stars`}>
+            {Array.from({ length: stars }, (_, at) => (
+                <span key={at} className="star">
+                    ★
+                    <span style={{ width: `${Math.min(1, Math.max(0, filled - at)) * 100}%` }}>★</span>
+                </span>
+            ))}
+        </span>
+    );
 }
 
 /** What the questions came back with for a sentence, or why there is nothing to show yet. */
@@ -47,7 +73,8 @@ function Answers({ sentence, questions }: { sentence: Sentence; questions: Profi
         <dl className="answers">
             {questions.map((question) => {
                 const answer = profile.answers[question.id];
-                const fraction = answer ? answerFraction(question, answer) : null;
+                const stars = answer ? answerStars(question, answer) : null;
+                const fraction = answer && !stars ? answerFraction(question, answer) : null;
                 return (
                     <div key={question.id} className="answer">
                         <dt>{question.title}</dt>
@@ -60,12 +87,13 @@ function Answers({ sentence, questions }: { sentence: Sentence; questions: Profi
                                     {Math.round(answer.confidence * 100)}%
                                 </span>
                             )}
+                            {stars && <StarRow {...stars} />}
+                            {fraction !== null && (
+                                <span className="answer-scale" aria-hidden="true">
+                                    <span style={{ width: `${fraction * 100}%` }} />
+                                </span>
+                            )}
                         </dd>
-                        {fraction !== null && (
-                            <div className="answer-scale" aria-hidden="true">
-                                <span style={{ width: `${fraction * 100}%` }} />
-                            </div>
-                        )}
                     </div>
                 );
             })}
@@ -94,12 +122,45 @@ function Words({ sentence }: { sentence: Sentence }) {
     );
 }
 
+/** The sentence as the language model wrote it, or that it is on its way. */
+function Correction({ sentence }: { sentence: Sentence }) {
+    let shown;
+    if (sentence.correction) {
+        shown = sentence.correction === sentence.text
+            ? <p className="checks-note">Nothing to correct.</p>
+            : <blockquote className="checks-sentence checks-correction">{sentence.correction}</blockquote>;
+    } else if (sentence.correction_error) {
+        shown = <p className="checks-note error">{sentence.correction_error}</p>;
+    } else {
+        shown = (
+            <p className="checks-note">
+                {sentence.correcting
+                    ? "Correcting…"
+                    : sentence.complete
+                    ? "Not corrected."
+                    : "It is corrected once the cursor leaves the sentence."}
+            </p>
+        );
+    }
+    return (
+        <dl className="answers">
+            <div className="answer">
+                <dt>Correction</dt>
+                <dd className="correction">{shown}</dd>
+            </div>
+        </dl>
+    );
+}
+
 export function ChecksPanel(
     {
         questions,
         onToggle,
         rateWords,
         onRateWords,
+        correct,
+        onCorrect,
+        corrector,
         sentence,
         hasText,
         checkerRunning,
@@ -115,6 +176,18 @@ export function ChecksPanel(
             <div className="usage checks">
                 <section>
                     <h3>Spelling</h3>
+                    <label className="toggle">
+                        <span>
+                            Correct each sentence
+                            <small>Has the translation model write it as it should be, alongside the questions</small>
+                        </span>
+                        <input
+                            type="checkbox"
+                            role="switch"
+                            checked={correct}
+                            onChange={(event) => onCorrect(event.target.checked)}
+                        />
+                    </label>
                     {questions.length === 0 && <p className="checks-note">There are no questions.</p>}
                     {questions.map((question) => (
                         <label key={question.id} className="toggle">
@@ -137,7 +210,9 @@ export function ChecksPanel(
                     <label className="toggle">
                         <span>
                             Rate each word
-                            <small>Asks, by the answers above, how right each word is</small>
+                            <small>
+                                Asks, by the answers above{correct ? " and the correction" : ""}, how right each word is
+                            </small>
                         </span>
                         <input
                             type="checkbox"
@@ -160,6 +235,7 @@ export function ChecksPanel(
                         : (
                             <>
                                 <blockquote className="checks-sentence">{sentence.text}</blockquote>
+                                {correct && (hasKey || corrector.url) && <Correction sentence={sentence} />}
                                 {!hasKey && !model.url
                                     ? <p className="checks-note">Add your OpenRouter API key in the settings.</p>
                                     : asked.length === 0
@@ -181,6 +257,18 @@ export function ChecksPanel(
                         </span>
                         {model.model}
                     </p>
+                    {correct && (
+                        <p className="checks-model">
+                            <span
+                                className={corrector.url ? "badge local" : "badge"}
+                                title={corrector.url || undefined}
+                            >
+                                {corrector.url ? "Own server" : "OpenRouter"}
+                            </span>
+                            {corrector.model || "the usual model"}
+                            <small>corrects</small>
+                        </p>
+                    )}
                 </section>
                 <p className="usage-note">
                     {model.url

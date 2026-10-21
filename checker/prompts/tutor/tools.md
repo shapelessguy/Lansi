@@ -1,15 +1,19 @@
 # The tutor's tools
 
-What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, and `words_known` the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `exercise` is said of each exercise of practice, which offers it to the learner, and `offered` is what the tutor is told once it has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `length` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, `lesson`, `instances` and `topics` of an exercise, and `theory_lesson` in place of `lesson` for one that teaches the lesson rather than asks.
+What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `agree_strategy` writes down a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `exercise` offers the learner an exercise of practice, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `length` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
 
 Variables:
-- `$title`: the title of the exercise
-- `$description`: what the exercise is, as its manifest says
-- `$most`: how many there may be at most
+- `$exercises`: the exercises there are, one to a line as "- id: title. what it is", with what `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say of it after
+- `$title`, `$description`: the title of an exercise offered with a tool of its own, and what it is, as its manifest says
+- `$options`: the options of an exercise, each as `option_choices` or `option_number` says, joined by semicolons
+- `$name`, `$label`: the name of an option, and what it is, as the manifest of the exercise says
+- `$choices`: the choices of an option, each as "value (what it is)", joined by commas
+- `$least`, `$usual`: the least an option may be, and what it is unless another fits better
+- `$most`: how many there may be at most, or the most an option may be
 - `$kinds`: the kinds of logs there are, joined by commas
 - `$offered`: the exercise or the mock exam offered, with what it was called with, as JSON
 - `$levels`: the levels there are mock exams of, joined by commas
-- `$usual`: how many words the tool gives when it is not told how many
+- `$usual`: how many words, or recaps, the tool gives when it is not told how many
 - `$practised`: the categories whose words practice is best built on, joined by commas, as the categories of the language say
 
 ## Prompt: lessons
@@ -90,19 +94,52 @@ Only the logs of this kind, one of: $kinds. Leave it out for logs of every kind.
 
 ## Prompt: exercise
 
-Offer the learner the exercise "$title", ready to start: $description
+Offer the learner an exercise, ready to start; it appears under your message. The exercises:
+$exercises
+
+## Prompt: own_exercise
+
+Offer the learner the exercise "$title", ready to start; it appears under your message: $description
+
+## Prompt: exercise_id
+
+The exercise to offer, by its id.
+
+## Prompt: exercise_theory
+
+It teaches a lesson rather than asks, and is called with the lesson alone.
+
+## Prompt: exercise_no_lesson
+
+It practises no lesson, and is called with none.
+
+## Prompt: exercise_once
+
+It is done once, and is called with no instances.
+
+## Prompt: exercise_options
+
+Options: $options.
+
+## Prompt: option_choices
+
+$name, $label, one of $choices, the first unless another fits better
+
+## Prompt: option_number
+
+$name, $label, from $least to $most, $usual unless another fits better
+
+## Prompt: options
+
+The options of the exercise, as its line in the list of exercises gives them, such as {"sentences": 5}; one left out is as usual.
 
 ## Prompt: lesson
 
-The lesson to practise, by its id as the lessons tool gives it; empty to review the lessons practised last.
-
-## Prompt: theory_lesson
-
-The lesson to read, by its id as the lessons tool gives it.
+The lesson to practise or to read, by its id as the lessons tool gives it; empty to review the lessons practised last, except for one that teaches a lesson.
 
 ## Prompt: instances
 
-How many times the exercise is to be done.
+How many times the exercise is to be done, 1 if left out.
 
 ## Prompt: topics
 
@@ -111,3 +148,59 @@ The topics the exercise is to be about, by their titles; none for everyday life.
 ## Prompt: offered
 
 The exercise was offered to the learner, who decides whether to start it: $offered
+
+## Prompt: recaps
+
+The recaps of your latest lessons with the learner, the latest first, each with its day and what was done in it, a point to a line, as you wrote it once the lesson was over. Gives the $usual latest if you do not say how many.
+
+## Prompt: strategy
+
+The strategy: how you and the learner agreed to hold the lessons, each with its id and the day it was agreed on.
+
+## Prompt: calendar
+
+What you and the learner planned to do on a day, such as a mock exam or a chapter to have read by then, by day, each with its id and the day it was planned on; one that was crossed out says by whom and why, such as that it was done. Every entry if you give neither day.
+
+## Prompt: from
+
+The first day to give the entries of, as YYYY-MM-DD; leave it out for every day before `to`.
+
+## Prompt: to
+
+The last day to give the entries of, as YYYY-MM-DD; leave it out for every day after `from`.
+
+## Prompt: agree_strategy
+
+Write down a strategy, as soon as you and the learner agree on it: how the lessons are to be held from now on, such as what a lesson is made of and in what order. Call it only once they plainly agreed, never for a way you merely suggested, and never for what you do in this lesson alone. A day set for something, such as a mock exam, goes on the calendar instead.
+
+## Prompt: strategy_what
+
+The strategy, whole, as you agreed on it, in a sentence or two of English, such as "Each lesson: first one exercise, then a chapter of the book they are reading, talked over."
+
+## Prompt: replaces
+
+The ids of the strategies this one takes the place of, which are crossed out; leave it out when it adds to them.
+
+## Prompt: plan
+
+Put something on the calendar, as soon as you and the learner agree to do it on a day, today or later, such as a mock exam, or a chapter to have read. Call it only once they plainly agreed.
+
+## Prompt: day
+
+The day, as YYYY-MM-DD, worked out from what the learner said, such as "next Friday" or "21.10.26", with today's date.
+
+## Prompt: plan_what
+
+What is to be done on the day, in a sentence of English, such as "A mock exam of A2, in full."
+
+## Prompt: cross_out
+
+Cross out a strategy or an entry of the calendar: a strategy given up, an entry done, cancelled or moved. An entry moved is crossed out and planned again for its new day.
+
+## Prompt: entry
+
+The id of the strategy or of the entry of the calendar, as the tool that looks them up gives it.
+
+## Prompt: why
+
+Why it is crossed out, in a few words, such as "done" or "moved to 2026-11-02".

@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import base64
 import io
+import math
+import re
 import threading
 import uuid
 from collections.abc import Callable, Iterable
@@ -104,11 +106,15 @@ def draw(
     problem = model.problem()
     if problem:
         raise ProfileError(problem)
-    response = send(
-        "images",
-        {"model": model.name, "prompt": prompt, "aspect_ratio": aspect_ratio, "n": 1},
-        model,
-    )
+    body = {"model": model.name, "prompt": prompt, "aspect_ratio": aspect_ratio, "n": 1}
+    try:
+        response = send("images", body, model)
+    except ProfileError as error:
+        # a model that draws only some shapes draws the nearest it can
+        nearest = _nearest_ratio(str(error), aspect_ratio)
+        if nearest is None:
+            raise
+        response = send("images", {**body, "aspect_ratio": nearest}, model)
     try:
         image = response["data"][0]
         picture = base64.b64decode(image["b64_json"], validate=True)
@@ -120,6 +126,26 @@ def draw(
         kind if isinstance(kind, str) else "image/png",
         _usage(response, model.name),
     )
+
+
+def _nearest_ratio(refused: str, aspect_ratio: str) -> str | None:
+    """Of the aspect ratios a request to draw was `refused` for not being
+    one of, as OpenRouter says them, the nearest to `aspect_ratio`; None
+    when it was refused for something else."""
+    accepted = re.search(r"aspect_ratio\b.*?Accepted: ([\d:, ]+)", refused, re.S)
+    ratios = re.findall(r"(\d+):(\d+)", accepted.group(1)) if accepted else []
+    wanted = _ratio(aspect_ratio)
+    if not ratios or wanted is None:
+        return None
+    width, height = min(
+        ratios, key=lambda each: abs(math.log(int(each[0]) / int(each[1]) / wanted))
+    )
+    return None if f"{width}:{height}" == aspect_ratio else f"{width}:{height}"
+
+
+def _ratio(aspect_ratio: str) -> float | None:
+    found = re.fullmatch(r"(\d+):(\d+)", aspect_ratio)
+    return int(found.group(1)) / int(found.group(2)) if found else None
 
 
 def _open(picture: bytes) -> Image.Image:

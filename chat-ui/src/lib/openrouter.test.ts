@@ -3,7 +3,7 @@
 
 import { expect, test } from "vitest";
 
-import { parseStream, usageFromGeneration } from "./openrouter";
+import { parseStream } from "./openrouter";
 
 function event(content: string): string {
     return `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`;
@@ -29,30 +29,6 @@ test("the usage event gives tokens, cost and the model that answered", () => {
         model: "vendor/some-model",
     });
     expect(parsed.text).toBe("Hallo");
-});
-
-test("a generation record gives the billed token counts, cost and model", () => {
-    const usage = usageFromGeneration({
-        model: "google/gemini-3.8-flash-tts",
-        total_cost: 0.0131,
-        tokens_prompt: 150,
-        tokens_completion: 1400,
-        native_tokens_prompt: 162,
-        native_tokens_completion: 1450,
-    });
-
-    expect(usage).toEqual({
-        promptTokens: 162,
-        completionTokens: 1450,
-        cost: 0.0131,
-        model: "google/gemini-3.8-flash-tts",
-    });
-});
-
-test("a generation record with gaps falls back to the other counts and an unknown cost", () => {
-    const usage = usageFromGeneration({ tokens_prompt: 150, native_tokens_prompt: null, total_cost: null });
-
-    expect(usage).toEqual({ promptTokens: 150, completionTokens: 0, cost: null, model: null });
 });
 
 test("usage without a cost reports the cost as unknown", () => {

@@ -36,6 +36,7 @@ use crate::mirror::media_folder;
 use crate::mirror::open_backend;
 use crate::mirror::Mirror;
 use crate::mirror::SharedStatus;
+use crate::mirror::Wake;
 
 const COLLECTION_FILE: &str = "collection.anki2";
 const KEY_FILE: &str = "hkey";
@@ -45,8 +46,37 @@ pub(crate) struct Linked {
     pub backend: Backend,
     pub status: SharedStatus,
     pub media_folder: PathBuf,
-    /// Dropped to stop the mirror, which then removes the collection.
-    stop: Mutex<Option<mpsc::Sender<()>>>,
+    /// What wakes the mirror; dropped to stop it, which then removes the
+    /// collection.
+    wake: Mutex<Option<mpsc::Sender<Wake>>>,
+}
+
+/// How long a sync asked for may take before the request gives up waiting.
+const SYNC_TIMEOUT: Duration = Duration::from_secs(120);
+
+impl Linked {
+    /// Has the collection synced soon, as it was changed here.
+    pub(crate) fn sync_soon(&self) {
+        if let Some(wake) = self.wake.lock().unwrap().as_ref() {
+            let _ = wake.send(Wake::Soon);
+        }
+    }
+
+    /// Syncs the collection now, and waits for the sync to be done.
+    pub(crate) fn sync_now(&self) -> Result<()> {
+        let (done, finished) = mpsc::channel();
+        let sent = match self.wake.lock().unwrap().as_ref() {
+            Some(wake) => wake.send(Wake::Now(done)).is_ok(),
+            None => false,
+        };
+        if !sent {
+            return Err(anyhow!("the collection is being unlinked"));
+        }
+        finished
+            .recv_timeout(SYNC_TIMEOUT)
+            .context("the sync took too long")?
+            .map_err(|message| anyhow!(message))
+    }
 }
 
 /// Why a user could not be linked.
@@ -167,7 +197,7 @@ impl Users {
         let Some(linked) = self.linked.lock().unwrap().remove(name) else {
             return false;
         };
-        linked.stop.lock().unwrap().take();
+        linked.wake.lock().unwrap().take();
         println!("Unlinked the collection of {name}");
         true
     }
@@ -185,18 +215,18 @@ impl Users {
             endpoint: self.endpoint.clone(),
             io_timeout_secs: None,
         };
-        let (stop, stopped) = mpsc::channel();
+        let (wake, woken) = mpsc::channel();
         let linked = Arc::new(Linked {
             backend: backend.clone(),
             status: SharedStatus::default(),
             media_folder: media_folder(&collection_path),
-            stop: Mutex::new(Some(stop)),
+            wake: Mutex::new(Some(wake)),
         });
         let mirror = Mirror::new(backend.clone(), auth, self.sync_media);
         let (interval, shared) = (self.interval, linked.status.clone());
         let user = name.to_owned();
         std::thread::spawn(move || {
-            mirror.run(interval, shared, stopped);
+            mirror.run(interval, shared, woken);
             if let Err(err) = remove(&backend, &folder) {
                 eprintln!("removing the collection of {user} failed: {err:#}");
             }

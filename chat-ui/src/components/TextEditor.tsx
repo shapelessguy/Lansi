@@ -3,6 +3,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 
+import type { WordLists } from "../lib/sets";
 import type { Settings } from "../lib/settings";
 import { blocksOf, fetchText, type Inline, saveText, type Text } from "../lib/texts";
 import type { UsageEntry } from "../lib/usage";
@@ -14,6 +15,8 @@ interface Props {
     /** What the sentences are checked with, as in the chat, and what changes it. */
     settings: Settings;
     onSettingsChange: (next: Settings) => void;
+    /** What the keywords for words in the questions stand for. */
+    words: WordLists;
     onUsage: (entry: UsageEntry) => void;
     /** Where the checks of the sentence under the caret are shown, while the panel is open. */
     checksSlot: HTMLElement | null;
@@ -40,6 +43,7 @@ export function TextEditor(
         id,
         language,
         settings,
+        words,
         onSettingsChange,
         onUsage,
         checksSlot,
@@ -163,6 +167,7 @@ export function TextEditor(
                 onChange={(content) => change(text.title, content)}
                 settings={settings}
                 onSettingsChange={onSettingsChange}
+                words={words}
                 onUsage={onUsage}
                 // counted under the text, as what the chat asks is under the chat
                 usageId={`text:${id}`}

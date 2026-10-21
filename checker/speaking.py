@@ -24,7 +24,9 @@ import io
 import json
 import re
 import threading
+import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 import wave
@@ -34,10 +36,15 @@ from dataclasses import dataclass
 from typing import Any
 
 from models import Model
+from profiling import Profile
 from sentences import split_sentences
 from storage import UserStore
 
 TIMEOUT_SECS = 60
+# how often, and how long apart, OpenRouter is asked what a request for
+# audio used, as its record of the request comes a moment after it
+LOOKUPS = 6
+LOOKUP_GAP_SECS = 1.5
 # what Gemini's speech models produce when the reply does not say otherwise
 DEFAULT_SAMPLE_RATE = 24_000
 # how many sentences are being read at the same time
@@ -153,6 +160,83 @@ def send_speech(body: dict[str, Any], model: Model) -> tuple[bytes, str, str]:
         ) from None
     except OSError as error:
         raise SpeechError(f"could not reach {model.where}: {error}") from None
+
+
+def look_up_generation(generation: str, model: Model) -> dict[str, Any] | None:
+    """What OpenRouter keeps of the request it calls `generation`, or None
+    while it has nothing yet. Raises OSError and ValueError."""
+    request = urllib.request.Request(
+        model.endpoint(f"generation?id={urllib.parse.quote(generation)}"),
+        headers=model.headers(),
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECS) as response:
+            data = json.load(response).get("data")
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return None
+        raise
+    return data if isinstance(data, dict) else None
+
+
+def generation_usages(
+    generations: list[str],
+    model: Model,
+    look_up: Callable[[str, Model], dict[str, Any] | None] = look_up_generation,
+    wait: Callable[[float], None] = time.sleep,
+) -> list[Profile]:
+    """What each request for audio of `generations` used, which its reply
+    does not say, as OpenRouter keeps it. All are looked up together, a few
+    times over as OpenRouter may not have them yet; one it never has, or
+    every one when the model is not on OpenRouter, which keeps nothing of
+    them, is told with no cost and no tokens."""
+    found: dict[str, Profile] = {}
+    missing = list(dict.fromkeys(each for each in generations if each))
+    for _ in range(LOOKUPS if model.on_openrouter else 0):
+        if not missing:
+            break
+        wait(LOOKUP_GAP_SECS)
+        with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+            looked = list(
+                pool.map(lambda each: _looked_up(each, model, look_up), missing)
+            )
+        for generation, data in zip(missing, looked):
+            if data is not None:
+                found[generation] = _generation_profile(generation, data, model)
+        missing = [each for each in missing if each not in found]
+    return [
+        found.get(each) or Profile({}, id=each, model=model.name)
+        for each in dict.fromkeys(each for each in generations if each)
+    ]
+
+
+def _looked_up(
+    generation: str,
+    model: Model,
+    look_up: Callable[[str, Model], dict[str, Any] | None],
+) -> dict[str, Any] | None:
+    try:
+        return look_up(generation, model)
+    except (OSError, ValueError):
+        return None
+
+
+def _generation_profile(generation: str, data: dict[str, Any], model: Model) -> Profile:
+    def count(*keys: str) -> int:
+        found = [data.get(key) for key in keys]
+        return next((each for each in found if isinstance(each, int) and each >= 0), 0)
+
+    cost = data.get("total_cost")
+    answered_by = data.get("model")
+    return Profile(
+        {},
+        cost=cost if isinstance(cost, (int, float)) else None,
+        id=generation,
+        model=answered_by if isinstance(answered_by, str) else model.name,
+        # the provider's own counts are the ones billed
+        input_tokens=count("native_tokens_prompt", "tokens_prompt"),
+        output_tokens=count("native_tokens_completion", "tokens_completion"),
+    )
 
 
 def playable(data: bytes, content_type: str) -> tuple[bytes, str]:

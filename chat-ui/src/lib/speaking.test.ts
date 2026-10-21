@@ -3,13 +3,7 @@
 
 import { expect, test } from "vitest";
 
-import { normalizeSpeed, speechInstructions, spotBeside, stepped, wanted } from "./speaking";
-
-test("the speech model is told the direction as written, with the language and the level filled in", () => {
-    expect(speechInstructions("  Speak {{language}} for a learner at {{level}}; only {{language}}. ", "Italian", "A2"))
-        .toBe("Speak Italian for a learner at A2; only Italian.");
-    expect(speechInstructions("Read slowly.", "German", "B1")).toBe("Read slowly.");
-});
+import { normalizeSpeed, spotBeside, stepped, wanted } from "./speaking";
 
 test("the next and the previous sentence are a step away, and there is none beyond the ends", () => {
     expect(stepped(2, 1, 5)).toBe(3);

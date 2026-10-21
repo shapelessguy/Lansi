@@ -12,6 +12,7 @@ from unittest.mock import ANY
 
 import exercising
 import pytest
+from anki_import import AnkiLink, AnkiUnavailable
 from exercising import (
     EXERCISES_DIRECTORY,
     Choosing,
@@ -71,6 +72,15 @@ def act(context, state, message, model):
         return Step(state=state, show=None, scores={"tanzen": 3})
     if message == "context":
         return Step(state=state, show={"minutes": context["minutes"], "exam": context["exam"]})
+    if message == "make":
+        return Step(state=state, show=None, made=[{"text": "Ich stehe auf."}])
+    if message == "make odd":
+        return Step(state=state, show=None, made=[{"text": 3}])
+    if message == "replay":
+        return Step(state=state, show=context["replay"])
+    if message == "own log":
+        state["own log"] = True
+        return Step(state=state, show=None)
     if message == "write":
         said = written(["Ich stehe auf."], ["Wann stehst du auf?"])
         return Step(state=state, show=None, written=said)
@@ -79,7 +89,8 @@ def act(context, state, message, model):
 
 def finish(context, state, model):
     scores = {"reading": 100 * state["done"] / 3} if state.get("scored") else None
-    return Step(results={"done": state["done"]}, scores=scores)
+    log = "Did it all.  " if state.get("own log") else None
+    return Step(results={"done": state["done"]}, scores=scores, log=log)
 
 serve(start, act, finish)
 """
@@ -322,6 +333,7 @@ def test_an_exercise_is_told_the_lesson_with_its_points(
             ask: Any,
             draw: Any = None,
             look: Any = None,
+            anki: Any = None,
         ) -> Any:
             told.append(request["context"])
             return {"state": {}, "show": None, "graded": []}, []
@@ -475,6 +487,8 @@ def test_a_finished_exercise_keeps_its_results_and_takes_no_more_steps(
         "answered": 1,
         "started_at": ANY,
         "scores": None,
+        "kept": 0,
+        "replays": False,
         "results": {"right": 1, "partial": 0, "wrong": 0},
     }
     with pytest.raises(ValueError, match="finished"):
@@ -517,6 +531,133 @@ def test_the_log_of_an_exercise_is_written_from_its_grades_after_it_finishes(
     }
 
 
+# what echo makes, when its manifest declares it
+ECHO_INSTANCE = {
+    "type": "object",
+    "properties": {"text": {"type": "string"}},
+    "required": ["text"],
+}
+
+
+def making(directory: Path) -> None:
+    """Has echo declare the instance it makes."""
+    (directory / "echo" / "manifest.json").write_text(
+        json.dumps({"title": "Echo", "instance": ECHO_INSTANCE}), encoding="utf-8"
+    )
+
+
+def test_what_an_exercise_makes_is_kept_and_done_again_exactly(
+    practice: Practice, directory: Path
+) -> None:
+    making(directory)
+    session, _ = practice.start_session(
+        "German", LESSON, [], {"echo": 3}, options={"echo": {}}, minutes={"echo": 5}
+    )
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "make", LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "make", LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "Eins.", LEARNER, answering())
+    practice.end_session(session["id"], "finished", LEARNER, answering())
+
+    again = practice.replay(session["id"], "echo")
+    practice.step(again["id"], "echo", "start", None, LEARNER, answering())
+    shown, _ = practice.step(again["id"], "echo", "act", "replay", LEARNER, answering())
+    practice.step(again["id"], "echo", "act", "make", LEARNER, answering())
+    once_more = practice.replay(again["id"], "echo")
+
+    kept = practice._store.session(session["id"])
+    assert kept and kept["progress"]["echo"]["kept"] == 2
+    assert shown == [{"text": "Ich stehe auf."}, {"text": "Ich stehe auf."}]
+    assert (again["lesson"], again["exercises"], again["minutes"]) == (
+        LESSON,
+        {"echo": 2},
+        {"echo": 5},
+    )
+    assert again["progress"]["echo"]["replays"]
+    # what a replay makes is not kept, and doing it again does the same
+    assert practice._store.instance_ids(
+        once_more["id"], "echo"
+    ) == practice._store.instance_ids(session["id"], "echo")
+
+
+def test_an_instance_unlike_the_shape_of_its_exercise_is_refused(
+    practice: Practice, directory: Path
+) -> None:
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+
+    # echo declares no instance yet
+    with pytest.raises(ExerciseError, match="no instance"):
+        practice.step(session["id"], "echo", "act", "make", LEARNER, answering())
+    making(directory)
+    with pytest.raises(ExerciseError, match="text is not text"):
+        practice.step(session["id"], "echo", "act", "make odd", LEARNER, answering())
+    assert practice._store.instance_ids(session["id"], "echo") == []
+
+
+def test_a_session_left_untouched_is_kept_hidden_for_what_it_made(
+    practice: Practice, directory: Path
+) -> None:
+    making(directory)
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "make", LEARNER, answering())
+
+    ended, _ = practice.end_session(session["id"], "abandoned", LEARNER, answering())
+    # it is not a lesson practised, as nothing was done in it
+    practised = practice.practised("German")
+    again = practice.replay(session["id"], "echo")
+
+    kept = practice._store.session(session["id"])
+    assert ended["hidden"] and kept and kept["hidden"]
+    assert practised == []
+    assert again["exercises"] == {"echo": 1}
+
+
+def test_an_exercise_that_kept_nothing_is_done_again_only_made_anew(
+    practice: Practice, directory: Path
+) -> None:
+    making(directory)
+    session, _ = practice.start_session(
+        "German", LESSON, [], {"echo": 3}, options={"echo": {"a": 1}}
+    )
+
+    with pytest.raises(ValueError, match="nothing"):
+        practice.replay(session["id"], "echo")
+    fresh = practice.replay(session["id"], "echo", fresh=True)
+
+    assert (fresh["lesson"], fresh["exercises"]) == (LESSON, {"echo": 3})
+    assert not fresh["progress"]["echo"]["replays"]
+
+
+def test_an_exercise_that_makes_nothing_is_not_done_again(practice: Practice) -> None:
+    # echo declares no instance, as reviewing the Anki cards does not
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+
+    with pytest.raises(ValueError, match="not one to do again"):
+        practice.replay(session["id"], "echo", fresh=True)
+
+
+def test_the_log_an_exercise_writes_itself_is_kept_and_no_model_writes_one(
+    directory: Path, tmp_path: Path
+) -> None:
+    jobs: list[tuple[str, Any]] = []
+    practice = Practice(
+        UserStore(tmp_path / "user"),
+        directory=directory,
+        later=lambda title, job: jobs.append((title, job)),
+    )
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "own log", LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "Eins.", LEARNER, answering())
+
+    practice.step(session["id"], "echo", "finish", None, LEARNER, failing)
+
+    assert jobs == []
+    assert practice._store.logs(session["id"]) == {"echo": "Did it all."}
+
+
 def test_an_exercise_in_which_nothing_was_done_gets_no_log(
     practice: Practice,
 ) -> None:
@@ -549,6 +690,7 @@ def test_ending_a_session_finishes_the_exercises_that_were_started(
     shutil.copytree(directory / "echo", directory / "other")
     session, _ = practice.start_session("German", LESSON, [], {"echo": 3, "other": 2})
     practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "Eins.", LEARNER, answering())
 
     ended, _ = practice.end_session(session["id"], "finished", LEARNER, answering())
 
@@ -609,11 +751,33 @@ def test_starting_a_session_abandons_the_one_that_was_running(
     practice: Practice,
 ) -> None:
     first, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(first["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(first["id"], "echo", "act", "Eins.", LEARNER, answering())
 
     practice.start_session("German", LESSON, [], {"echo": 1})
 
     kept = practice._store.session(first["id"])
     assert kept and kept["status"] == "abandoned"
+
+
+def test_a_session_in_which_nothing_was_done_is_not_kept_once_it_is_left(
+    practice: Practice, directory: Path
+) -> None:
+    theory_beside(directory)
+    left, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    practice.step(left["id"], "echo", "start", None, LEARNER, answering())
+    ended, _ = practice.end_session(left["id"], "abandoned", LEARNER, answering())
+    untouched, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    read, _ = practice.start_session("German", LESSON, [], {"notes": 1})
+    practice.step(read["id"], "notes", "start", None, LEARNER, answering())
+
+    practice.end_session(read["id"], "finished", LEARNER, answering())
+
+    assert ended["status"] == "abandoned"
+    # the one left running when another started is not kept either, but the
+    # theory that was read is
+    assert [each["id"] for each in practice._store.sessions()] == [read["id"]]
+    assert untouched["id"] not in [each["id"] for each in practice._store.sessions()]
 
 
 def test_logs_that_are_not_logs_are_refused_and_none_is_kept(
@@ -627,6 +791,7 @@ def test_logs_that_are_not_logs_are_refused_and_none_is_kept(
             ask: Any,
             draw: Any = None,
             look: Any = None,
+            anki: Any = None,
         ) -> Any:
             logs = [{"result": "right", "answer": "a"}, {"result": "great"}]
             return {"state": {}, "show": None, "graded": logs}, []
@@ -663,7 +828,9 @@ def test_a_session_without_a_lesson_reviews_the_lessons_practised_last_in_order(
     taught = [lesson.id for lesson in practice._grammar.lessons("German")]
     # the first twelve lessons, practised from the last to the first
     for lesson in reversed(taught[:12]):
-        practice.start_session("German", lesson, [], {"echo": 1})
+        practised, _ = practice.start_session("German", lesson, [], {"echo": 1})
+        practice.step(practised["id"], "echo", "start", None, LEARNER, answering())
+        practice.step(practised["id"], "echo", "act", "Eins.", LEARNER, answering())
     told = recording(practice, directory)
 
     session, _ = practice.start_session("German", "", [], {"echo": 2})
@@ -703,6 +870,7 @@ def recording(practice: Practice, directory: Path) -> list[dict[str, Any]]:
             ask: Any,
             draw: Any = None,
             look: Any = None,
+            anki: Any = None,
         ) -> Any:
             told.append(request["context"])
             return {"state": {}, "show": None, "graded": []}, []
@@ -847,6 +1015,7 @@ def test_an_exercise_is_told_what_it_was_answered_with_in_the_sessions_before(
             ask: Any,
             draw: Any = None,
             look: Any = None,
+            anki: Any = None,
         ) -> Any:
             told.append(request["context"])
             return {"state": {}, "show": None, "graded": []}, []
@@ -1056,3 +1225,104 @@ def test_an_exercise_done_once_has_one_instance_and_no_time_limit(
         1,
         0,
     )
+
+
+class FakeAnkiLink(AnkiLink):
+    """A collection of one deck, whose cards are answered in turn, with
+    what was asked of it."""
+
+    def __init__(self, cards: list[str], decks: bool = True) -> None:
+        super().__init__("ada")
+        self.cards = list(cards)
+        self.has_decks = decks
+        self.asked: list[tuple[Any, ...]] = []
+
+    def decks(self) -> list[dict[str, Any]]:
+        if not self.has_decks:
+            raise AnkiUnavailable("no Anki account is linked")
+        return [{"id": 7, "name": "Deutsch::Tiere", "total_cards": len(self.cards)}]
+
+    def sync(self) -> None:
+        self.asked.append(("sync",))
+
+    def _shown(self) -> dict[str, Any]:
+        front = self.cards[0] if self.cards else None
+        card = front and {
+            "id": len(self.cards),
+            "question": front,
+            "answer": f"{front}<hr id=answer>back",
+        }
+        return {"card": card, "counts": {"new": len(self.cards)}}
+
+    def next_card(self, deck_id: int) -> dict[str, Any]:
+        self.asked.append(("next", deck_id))
+        return self._shown()
+
+    def answer_card(
+        self, deck_id: int, card_id: int, rating: int, millis: int
+    ) -> dict[str, Any]:
+        self.asked.append(("answer", deck_id, card_id, rating))
+        self.cards.pop(0)
+        return {"answered": True, **self._shown()}
+
+
+def test_a_deck_of_anki_is_reviewed_and_each_card_graded_by_its_button(
+    directory: Path, tmp_path: Path
+) -> None:
+    shutil.copytree(EXERCISES_DIRECTORY / "anki_review", directory / "anki_review")
+    anki = FakeAnkiLink(["der Hund", "die Katze"])
+    practice = Practice(UserStore(tmp_path / "user"), directory=directory, anki=anki)
+    [review] = [each for each in practice.exercises() if each["id"] == "anki_review"]
+
+    session, _ = practice.start_session(
+        "German", "", [], {"anki_review": 5}, options={"anki_review": {"deck": "7"}}
+    )
+    shown, _ = practice.step(
+        session["id"], "anki_review", "start", None, LEARNER, answering()
+    )
+    then, _ = practice.step(
+        session["id"], "anki_review", "act", {"rating": 1}, LEARNER, answering()
+    )
+
+    assert review["options"]["deck"]["choices"] == {"7": "Deutsch::Tiere"}
+    assert shown["deck"] == "Deutsch::Tiere"
+    assert shown["card"]["question"] == "der Hund"
+    assert then["card"]["question"] == "die Katze"
+    assert anki.asked == [("sync",), ("next", 7), ("answer", 7, 2, 1)]
+    [kept] = practice._store.grades(session["id"])  # noqa: SLF001
+    assert (kept["result"], kept["task"], kept["answer"]) == (
+        "wrong",
+        "der Hund",
+        "Again",
+    )
+
+
+def test_a_review_of_anki_is_not_started_without_a_deck_to_review(
+    directory: Path, tmp_path: Path
+) -> None:
+    shutil.copytree(EXERCISES_DIRECTORY / "anki_review", directory / "anki_review")
+    practice = Practice(
+        UserStore(tmp_path / "user"),
+        directory=directory,
+        anki=FakeAnkiLink([], decks=False),
+    )
+
+    with pytest.raises(ValueError, match="link one first"):
+        practice.start_session("German", "", [], {"anki_review": 5})
+    with pytest.raises(ValueError, match="link one first"):
+        practice.start_session(
+            "German", "", [], {"anki_review": 5}, options={"anki_review": {"deck": "7"}}
+        )
+
+
+def test_a_backend_cannot_ask_of_anki_without_a_collection(directory: Path) -> None:
+    shutil.copytree(EXERCISES_DIRECTORY / "anki_review", directory / "anki_review")
+    context = {
+        "instances": 1,
+        "options": {},
+        "anki_decks": {"deck": {"id": 7, "name": "Deutsch"}},
+    }
+    request = {"op": "start", "context": context, "state": None, "message": None}
+
+    with pytest.raises(ExerciseError, match="no Anki collection"):
+        Runner(directory).run("anki_review", request, answering())

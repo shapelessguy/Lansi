@@ -36,6 +36,9 @@ test("stored values are kept and gaps are filled from the defaults", () => {
     expect(settings.profileModel).toEqual(onOpenRouter("typesafe/jev-1.13"));
     expect(settings.enterSends).toBe(true);
     expect(settings.rateWords).toBe(true);
+    // each correction is a billed request, so it is asked for only by turning it on
+    expect(settings.correctSentences).toBe(false);
+    expect(normalizeSettings({ correctSentences: true }).correctSentences).toBe(true);
     expect(settings.contexts).toEqual(defaultSettings().contexts);
 });
 
@@ -205,4 +208,11 @@ test("an evaluation takes 1 to 8 half hours, timed unless it was chosen not to b
 test("the reasoning model is kept, and names none for the chat model", () => {
     expect(normalizeSettings({ reasoningModel: "some/thinker" }).reasoningModel).toEqual(onOpenRouter("some/thinker"));
     expect(normalizeSettings({}).reasoningModel).toEqual(onOpenRouter(""));
+});
+
+test("every keyword is filled in, as often as it is named", () => {
+    const words = { active: ["Hund"], named: { travel: ["Zug", "Bahnhof"] } };
+
+    expect(expandPrompt("{{language}} at {{level}}: {{words}}; {{words:Travel}}; {{language}}", words, "German", "B1"))
+        .toBe("German at B1: Hund; Zug, Bahnhof; German");
 });

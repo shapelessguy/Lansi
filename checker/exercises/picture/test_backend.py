@@ -374,3 +374,56 @@ def test_each_picture_is_planned_from_some_of_the_words_drawn_afresh() -> None:
         assert len(words) == SHOWN_WORDS
         assert words == sorted(words, key=lemmas.index)
     assert told[0] != told[1] or told[1] != told[2]
+
+
+def test_a_picture_is_reported_as_made_once_its_things_are_found() -> None:
+    model = FakeModel(plan("a table"), {"boxes": [box(1, 300, 500)]})
+
+    step = start(CONTEXT, model)
+
+    assert step.made == [
+        {
+            "image": IMAGE,
+            "scene": "A kitchen.",
+            "planned": [{"thing": "a table"}],
+            "items": [{"thing": "a table", "x": 300, "y": 500}],
+        }
+    ]
+    labelled = act(CONTEXT, step.state, {"point": 0, "label": "der Tisch"}, model)
+    assert labelled.made == []
+
+
+def test_a_picture_whose_things_are_found_when_looked_at_again_is_made_then() -> None:
+    model = FakeModel(
+        plan("a table"), {"boxes": []}, {"boxes": []}, {"boxes": [box(1, 300, 500)]}
+    )
+
+    lost = start(CONTEXT, model)
+    found = act(CONTEXT, lost.state, {"look": True}, model)
+    again = act(CONTEXT, found.state, {"look": True}, model)
+
+    assert lost.made == []
+    assert [made["items"] for made in found.made] == [
+        [{"thing": "a table", "x": 300, "y": 500}]
+    ]
+    assert again.made == []
+
+
+def test_a_picture_done_again_is_taken_from_those_drawn_before_and_only_judged() -> (
+    None
+):
+    made = start(CONTEXT, FakeModel(plan("a table"), {"boxes": [box(1, 300, 500)]}))
+    again = {**CONTEXT, "instances": 1, "replay": made.made}
+    model = FakeModel({"labels": [verdict(1, "right")]})
+
+    started = start(again, model)
+    state = act(again, started.state, {"point": 0, "label": "der Tisch"}, model).state
+    checked = act(again, state, {"check": True}, model)
+
+    assert (started.made, model.drawn) == ([], [])
+    assert started.show["image"] == IMAGE
+    assert started.show["points"] == [
+        {"x": 300, "y": 500, "label": "", "feedback": None}
+    ]
+    # the only request is the one that judges the labels
+    assert len(model.asked) == 1 and checked.graded

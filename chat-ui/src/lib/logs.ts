@@ -4,6 +4,18 @@
 import { checkerFetch } from "./session";
 
 /**
+ * What is dispatched on the window once something may have been logged
+ * that no task of the background tells of, such as the log an exercise
+ * wrote itself as it finished, so that the logs are listed again.
+ */
+export const LOGGED_EVENT = "lansi:logged";
+
+/** Tells whoever lists the logs that something may have been logged. */
+export function announceLogged(): void {
+    window.dispatchEvent(new Event(LOGGED_EVENT));
+}
+
+/**
  * The attribute that a panel puts on what can be selected in it to say
  * where it is, as the JSON of a `Where`, so that what is done with a
  * selection is logged with it.

@@ -18,5 +18,26 @@
             "max": 6,
             "default": 4
         }
+    },
+    "instance": {
+        "type": "object",
+        "description": "a task of speaking: a card, and the turns to answer",
+        "properties": {
+            "card": {
+                "type": "string",
+                "description": "what the card says, or empty for the turns of a partner alone"
+            },
+            "prompts": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "description": "the turns to answer"
+            }
+        },
+        "required": [
+            "card",
+            "prompts"
+        ]
     }
 }

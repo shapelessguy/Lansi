@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { ankiMediaUrl } from "../lib/anki";
 import type { ProfileUsage } from "../lib/checker";
 import type { Where } from "../lib/logs";
 import { exerciseKit, type Learner, loadInterface, stepExercise } from "../lib/practice";
@@ -78,6 +79,7 @@ export function ExerciseView(
                     ),
                 () => latest.current.onFinish(),
                 (text, number) => latest.current.onReadAloud(text, number),
+                ankiMediaUrl,
             );
             unmount = ui.mount(root, kit);
             show(first);

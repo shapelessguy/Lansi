@@ -610,7 +610,10 @@ function ContentTab({ settings, onChange }: TabProps) {
     return (
         <>
             <h3>Keywords</h3>
-            <p className="hint">Write these in a prompt, and each is replaced by what it stands for:</p>
+            <p className="hint">
+                Write these in any prompt, whether of a context, of the speech model or of a question about each
+                sentence, and each is replaced by what it stands for:
+            </p>
             <dl className="keywords">
                 <div>
                     <dt>
@@ -686,8 +689,7 @@ function ContentTab({ settings, onChange }: TabProps) {
                     onChange={(event) => onChange({ ...settings, speechDirection: event.target.value })}
                 />
                 <small>
-                    Passed to the speech model as a direction, with <code>{LANGUAGE_PLACEHOLDER}</code> and{" "}
-                    <code>{LEVEL_PLACEHOLDER}</code> filled in. It is not read aloud.
+                    Passed to the speech model as a direction, with the keywords above filled in. It is not read aloud.
                 </small>
             </label>
         </>
@@ -804,7 +806,10 @@ function QuestionsTab({ settings, onChange }: TabProps) {
             <h3>Questions about each sentence</h3>
             <p className="hint">
                 Each sentence you finish typing in the chat is sent to the sentence check model with these questions.
-                Turn them on and off in the Checks panel, where the answers are shown as well.
+                Turn them on and off in the Checks panel, where the answers are shown as well. The keywords of the
+                Prompts tab, such as{" "}
+                <code>{LANGUAGE_PLACEHOLDER}</code>, are filled in, in what a question asks and in what its options
+                mean.
             </p>
             {questions.map((question) => (
                 <QuestionEditor

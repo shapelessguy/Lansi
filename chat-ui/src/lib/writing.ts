@@ -41,6 +41,10 @@ export interface Profiling {
     model: ModelChoice;
     questions: RequestQuestions;
     rateWords: boolean;
+    /** The language model that writes each sentence as it should be, or null to leave them as they are. */
+    correctWith: ModelChoice | null;
+    /** What the server counts what profiling used under: the chat or the text the box is of. */
+    usageId?: string;
 }
 
 /** What was last sent about a text box, or is about to be. */
@@ -54,7 +58,9 @@ export interface Sent {
 /** What is asked about a text box: its spelling, in `language`, and, if they are profiled, about its sentences. */
 export function askedOf(language: string, profiling: Profiling | null): string {
     return JSON.stringify(
-        profiling ? [language, profiling.model, profiling.questions, profiling.rateWords] : [language],
+        profiling
+            ? [language, profiling.model, profiling.questions, profiling.rateWords, profiling.correctWith]
+            : [language],
     );
 }
 
@@ -86,8 +92,11 @@ export function checkText(
             profiling.questions,
             profiling.rateWords,
             language,
+            profiling.correctWith,
+            true,
+            profiling.usageId,
         )
-        : fetchCheck(text, caret, "", onOpenRouter(""), {}, false, language, false);
+        : fetchCheck(text, caret, "", onOpenRouter(""), {}, false, language, null, false);
 }
 
 /** How a text box lays out its text, which the copy of it behind the box that carries the underlines must match. */

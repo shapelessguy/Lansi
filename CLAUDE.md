@@ -33,6 +33,9 @@ A language-learning chat built on an Anki collection. Three parts:
   with a backend run in a process of its own and an interface, a module
   the app mounts in a shadow root, as `exercises/kit.py` and
   `exercises/kit.js` describe;
+  what an exercise makes, each instance of the shape its manifest
+  declares (`instances.py`), is kept in `exercises/` of the user's folder,
+  so that the exercise can be done again exactly as it was;
   sessions of practice, the grades of what was answered and what was written
   in each exercise, whose words go into the vocabulary as those of the
   chats do (`processing.py`), are kept by `exercising.py` and `storage.py`;

@@ -211,3 +211,30 @@ def test_what_was_translated_is_in_the_results() -> None:
         "reference": "Ich stehe um sechs auf.",
     }
     assert results["sets"][0]["feedback"][0]["answer"] == "Ich aufstehe um sechs."
+
+
+def test_each_set_is_reported_as_made_in_the_step_it_is_made_in() -> None:
+    model = FakeModel(ITEMS, {"verdicts": [RIGHT] * 4}, ITEMS)
+    started = start(CONTEXT, model)
+    judged = act(CONTEXT, started.state, {"answers": ANSWERS}, model)
+
+    prepared = act(CONTEXT, judged.state, {"prepare": True}, model)
+
+    [made] = started.made
+    assert made == {"items": started.state["sets"][0]}
+    assert set(made["items"][0]) == {"source", "reference"}
+    assert (judged.made, len(prepared.made)) == ([], 1)
+
+
+def test_a_set_done_again_is_taken_from_those_made_before_and_only_judged() -> None:
+    made = start(CONTEXT, FakeModel(ITEMS)).made
+    again = {**CONTEXT, "instances": 1, "replay": made}
+    model = FakeModel({"verdicts": [RIGHT] * 4})
+
+    started = start(again, model)
+    act(again, started.state, {"answers": ANSWERS}, model)
+
+    assert started.made == []
+    assert started.show["sources"] == [item["source"] for item in made[0]["items"]]
+    # the only request is the one that judges what was translated
+    assert len(model.asked) == 1
