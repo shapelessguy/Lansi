@@ -67,5 +67,61 @@
         "required": [
             "kind"
         ]
+    },
+    "messages": {
+        "German": {
+            "Write": "Schreiben",
+            "Write a short message, an email or a post on a situation, to every point it asks for, or fill in a form from a text; what you write is rated as an exam rates it. Each instance is a task.": "Schreib eine kurze Nachricht, eine E-Mail oder einen Beitrag zu einer Situation, zu jedem verlangten Punkt, oder füll ein Formular nach einem Text aus; was du schreibst, wird wie in einer Prüfung bewertet. Jede Runde ist eine Aufgabe.",
+            "What to write": "Was geschrieben wird",
+            "A message to a friend": "Eine Nachricht an einen Freund",
+            "An email with Sie": "Eine E-Mail mit „Sie“",
+            "An opinion, as in a forum": "Eine Meinung, wie in einem Forum",
+            "A form, filled in from a text": "Ein Formular, nach einem Text ausgefüllt",
+            "About how many words": "Ungefähr wie viele Wörter",
+            "Task {at} of {total}": "Aufgabe {at} von {total}",
+            "Done": "Fertig",
+            "Next": "Weiter",
+            "Hand in": "Abgeben",
+            "{count} of about {words} words": "{count} von etwa {words} Wörtern",
+            "Next…": "Weiter…",
+            "Rating…": "Wird bewertet…",
+            "Next task": "Nächste Aufgabe",
+            "Making the next task…": "Nächste Aufgabe wird erstellt…",
+            "(nothing written)": "(nichts geschrieben)",
+            "In the text: {reference}": "Im Text: {reference}",
+            "Good": "Gut",
+            "Partly there": "Zum Teil",
+            "Not yet": "Noch nicht",
+            "What you wrote": "Was du geschrieben hast",
+            "Corrected": "Korrigiert",
+            "Handing in…": "Wird abgegeben…"
+        },
+        "Italian": {
+            "Write": "Scrivere",
+            "Write a short message, an email or a post on a situation, to every point it asks for, or fill in a form from a text; what you write is rated as an exam rates it. Each instance is a task.": "Scrivi un breve messaggio, un'email o un post su una situazione, toccando ogni punto richiesto, oppure compila un modulo a partire da un testo; ciò che scrivi viene valutato come in un esame. Ogni turno è un compito.",
+            "What to write": "Cosa scrivere",
+            "A message to a friend": "Un messaggio a un amico",
+            "An email with Sie": "Un'email formale (con «Sie»)",
+            "An opinion, as in a forum": "Un'opinione, come in un forum",
+            "A form, filled in from a text": "Un modulo, compilato a partire da un testo",
+            "About how many words": "Circa quante parole",
+            "Task {at} of {total}": "Compito {at} di {total}",
+            "Done": "Fatto",
+            "Next": "Avanti",
+            "Hand in": "Consegna",
+            "{count} of about {words} words": "{count} parole su circa {words}",
+            "Next…": "Avanti…",
+            "Rating…": "Valutazione…",
+            "Next task": "Compito successivo",
+            "Making the next task…": "Creazione del compito successivo…",
+            "(nothing written)": "(niente di scritto)",
+            "In the text: {reference}": "Nel testo: {reference}",
+            "Good": "Bene",
+            "Partly there": "In parte",
+            "Not yet": "Non ancora",
+            "What you wrote": "Cosa hai scritto",
+            "Corrected": "Corretto",
+            "Handing in…": "Consegna in corso…"
+        }
     }
 }

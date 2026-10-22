@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { type Message, t } from "./i18n";
 import { fetchOpenRouterModels, type ListedModel } from "./models";
 import { checkerFetch } from "./session";
 import type { ModelReply, ModelRequest, TutorEvent, TutorMessage } from "./tutor";
@@ -129,8 +130,8 @@ export function traced(trace: Trace, event: TutorEvent): Trace {
 /** What a part of the context is, which it is coloured by. */
 export type PartKind = "system" | "tools" | "user" | "assistant" | "reasoning" | "tool";
 
-/** What each kind of part of the context is called. */
-export const PART_KINDS: Record<PartKind, string> = {
+/** What each kind of part of the context is called, to be shown with `t`. */
+export const PART_KINDS: Record<PartKind, Message> = {
     system: "System prompt",
     tools: "Tool definitions",
     user: "Learner",
@@ -161,14 +162,14 @@ export function partsOf(request: ModelRequest): Part[] {
     let number = 0;
     for (const message of request.messages) {
         if (message.role === "system") {
-            parts.push(part("system", "System prompt", message.content ?? ""));
+            parts.push(part("system", t("System prompt"), message.content ?? ""));
             continue;
         }
         number += 1;
         parts.push(...messageParts(message, number));
     }
     for (const tool of request.tools ?? []) {
-        parts.push(part("tools", `Tool: ${tool.function.name}`, JSON.stringify(tool, null, 2)));
+        parts.push(part("tools", t("Tool: {name}", { name: tool.function.name }), JSON.stringify(tool, null, 2)));
     }
     return parts;
 }
@@ -176,10 +177,10 @@ export function partsOf(request: ModelRequest): Part[] {
 function messageParts(message: TutorMessage & { role: string }, number: number): Part[] {
     const content = message.content ?? "";
     if (message.role === "tool") {
-        return [part("tool", `#${number} tool result`, content)];
+        return [part("tool", t("#{number} tool result", { number }), content)];
     }
     if (message.role === "user") {
-        return [part("user", `#${number} learner`, content)];
+        return [part("user", t("#{number} learner", { number }), content)];
     }
     const parts: Part[] = [];
     const calls = message.tool_calls as { function: { name: string; arguments: string } }[] | undefined;
@@ -187,10 +188,18 @@ function messageParts(message: TutorMessage & { role: string }, number: number):
         content,
         ...(calls ?? []).map((call) => `→ ${call.function.name}(${call.function.arguments})`),
     ].filter(Boolean).join("\n");
-    parts.push(part("assistant", `#${number} tutor${calls?.length ? ", calling tools" : ""}`, said));
+    parts.push(
+        part(
+            "assistant",
+            calls?.length ? t("#{number} tutor, calling tools", { number }) : t("#{number} tutor", { number }),
+            said,
+        ),
+    );
     const details = message.reasoning_details;
     if (Array.isArray(details) && details.length > 0) {
-        parts.push(part("reasoning", `#${number} reasoning handed back`, JSON.stringify(details, null, 2)));
+        parts.push(
+            part("reasoning", t("#{number} reasoning handed back", { number }), JSON.stringify(details, null, 2)),
+        );
     }
     return parts;
 }

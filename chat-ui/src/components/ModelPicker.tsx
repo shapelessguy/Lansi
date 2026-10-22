@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { useEffect, useState } from "react";
+import { t } from "../lib/i18n";
 import { fetchModelsAt, type ModelChoice } from "../lib/models";
 
 /** What the list says in place of an id for a value that is typed, or asked at an address. */
@@ -61,20 +62,20 @@ export function ModelPicker({ label, value, onChange, listed, none }: Props) {
     return (
         <>
             <select aria-label={label} value={selected} onChange={(event) => choose(event.target.value)}>
-                <option value={CUSTOM}>Custom OpenRouter model…</option>
-                <option value={ADDRESS}>OpenAI-compatible server…</option>
-                {none && <option value={NONE}>Same as {none}</option>}
+                <option value={CUSTOM}>{t("Custom OpenRouter model…")}</option>
+                <option value={ADDRESS}>{t("OpenAI-compatible server…")}</option>
+                {none && <option value={NONE}>{t("Same as {name}", { name: none })}</option>}
                 {/* the usual model, until the list is known */}
                 {mode === "list" && value.model && !listed.includes(value.model) && (
                     <option value={value.model}>{value.model}</option>
                 )}
-                {!none && mode === "list" && !value.model && <option value="">Choose a model</option>}
+                {!none && mode === "list" && !value.model && <option value="">{t("Choose a model")}</option>}
                 {listed.map((id) => <option key={id} value={id}>{id}</option>)}
             </select>
             {mode === "custom" && (
                 <input
                     type="text"
-                    aria-label={`${label}: its id on OpenRouter`}
+                    aria-label={t("{label}: its id on OpenRouter", { label })}
                     spellCheck={false}
                     placeholder="provider/model"
                     value={value.model}
@@ -115,7 +116,7 @@ function AtAddress({ label, value, onChange }: Pick<Props, "label" | "value" | "
         <>
             <input
                 type="url"
-                aria-label={`${label}: address of the server`}
+                aria-label={t("{label}: address of the server", { label })}
                 spellCheck={false}
                 placeholder="http://127.0.0.1:8000/v1"
                 value={value.url}
@@ -124,15 +125,15 @@ function AtAddress({ label, value, onChange }: Pick<Props, "label" | "value" | "
             <input
                 type="password"
                 autoComplete="off"
-                aria-label={`${label}: key of the server`}
-                placeholder="Key, if the server needs one"
+                aria-label={t("{label}: key of the server", { label })}
+                placeholder={t("Key, if the server needs one")}
                 value={value.key}
                 onChange={(event) => onChange({ ...value, key: event.target.value.trim() })}
             />
             <OpenChoice
-                label={`${label}: model on the server`}
+                label={t("{label}: model on the server", { label })}
                 options={models}
-                placeholder="model"
+                placeholder={t("model")}
                 value={value.model}
                 onChange={(model) => onChange({ ...value, model })}
             />
@@ -171,8 +172,8 @@ export function OpenChoice({ label, options, value, placeholder, onChange }: Ope
                         }
                     }}
                 >
-                    <option value={CUSTOM}>Custom…</option>
-                    {value === "" && !typing && <option value="">Choose one</option>}
+                    <option value={CUSTOM}>{t("Custom…")}</option>
+                    {value === "" && !typing && <option value="">{t("Choose one")}</option>}
                     {options.map((option) => <option key={option} value={option}>{option}</option>)}
                 </select>
             )}

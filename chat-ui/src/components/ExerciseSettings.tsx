@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "../lib/i18n";
 import { type ExerciseInfo, MAX_INSTANCES, MAX_MINUTES, type OptionValue } from "../lib/practice";
 
 /** An exercise that was chosen, with how many times it is done and what its options are set to. */
@@ -40,13 +41,13 @@ export function ExerciseSettings({ chosen, onInstances, onMinutes, onChange }: P
             {!exercise.once && (
                 <>
                     <label className="exercise-setting">
-                        <span>Times</span>
+                        <span>{t("Times")}</span>
                         <span className="exercise-setting-number">
                             <input
                                 type="number"
                                 min={1}
                                 max={MAX_INSTANCES}
-                                title={`1 to ${MAX_INSTANCES}`}
+                                title={t("{least} to {most}", { least: 1, most: MAX_INSTANCES })}
                                 value={instances}
                                 onChange={(event) => {
                                     const typed = typedNumber(event.target.valueAsNumber, 1, MAX_INSTANCES);
@@ -58,13 +59,13 @@ export function ExerciseSettings({ chosen, onInstances, onMinutes, onChange }: P
                         </span>
                     </label>
                     <label className="exercise-setting">
-                        <span>Time limit</span>
+                        <span>{t("Time limit")}</span>
                         <span className="exercise-setting-number">
                             <input
                                 type="number"
                                 min={0}
                                 max={MAX_MINUTES}
-                                title="Minutes, 0 for no limit"
+                                title={t("Minutes, 0 for no limit")}
                                 value={minutes}
                                 onChange={(event) => {
                                     const typed = typedNumber(event.target.valueAsNumber, 0, MAX_MINUTES);
@@ -73,7 +74,7 @@ export function ExerciseSettings({ chosen, onInstances, onMinutes, onChange }: P
                                     }
                                 }}
                             />
-                            <span className="practice-detail">min</span>
+                            <span className="practice-detail">{t("min")}</span>
                         </span>
                     </label>
                 </>
@@ -85,8 +86,8 @@ export function ExerciseSettings({ chosen, onInstances, onMinutes, onChange }: P
                         ? (
                             <span className="practice-detail">
                                 {"texts" in option
-                                    ? "None left to correct: write one in the Texts tab"
-                                    : "None to choose"}
+                                    ? t("None left to correct: write one in the Texts tab")
+                                    : t("None to choose")}
                             </span>
                         )
                         : "choices" in option
@@ -106,7 +107,7 @@ export function ExerciseSettings({ chosen, onInstances, onMinutes, onChange }: P
                                     type="number"
                                     min={option.min}
                                     max={option.max}
-                                    title={`${option.min} to ${option.max}`}
+                                    title={t("{least} to {most}", { least: option.min, most: option.max })}
                                     value={values[name]}
                                     onChange={(event) => {
                                         const typed = typedNumber(

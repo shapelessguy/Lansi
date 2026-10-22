@@ -6,6 +6,7 @@ import Markdown from "react-markdown";
 import { canAsk } from "../lib/models";
 
 import { isAtEnd, type StoredChat } from "../lib/chats";
+import { t } from "../lib/i18n";
 import type { Where } from "../lib/logs";
 import { type ChatMessage, streamChat } from "../lib/openrouter";
 import type { WordLists } from "../lib/sets";
@@ -14,6 +15,7 @@ import { allowPlaying, speakMark } from "../lib/speaking";
 import type { UsageEntry } from "../lib/usage";
 import { CheckedTextarea } from "./CheckedTextarea";
 import { SideList } from "./SideList";
+import { T } from "./T";
 
 interface Props {
     /** The chats, shown in the empty space on the left of the messages. */
@@ -180,31 +182,34 @@ export function Chat(
             <section className="chat">
                 <header className="chat-header">
                     <label className="context-picker">
-                        <span>Context</span>
+                        <span>{t("Context")}</span>
                         <select
                             value={context.id}
                             onChange={(event) => onContext(event.target.value)}
                             disabled={messages.length > 0}
-                            title={messages.length > 0 ? "Start a new chat to change the context" : undefined}
+                            title={messages.length > 0 ? t("Start a new chat to change the context") : undefined}
                         >
                             {settings.contexts.map((candidate) => (
                                 <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
                             ))}
                         </select>
                     </label>
-                    <label className="check" title="Reads each reply aloud once it has arrived. The audio is kept.">
+                    <label
+                        className="check"
+                        title={t("Reads each reply aloud once it has arrived. The audio is kept.")}
+                    >
                         <input
                             type="checkbox"
                             checked={settings.speakReplies}
                             onChange={(event) => onSettingsChange({ ...settings, speakReplies: event.target.checked })}
                         />
-                        Speak replies
+                        {t("Speak replies")}
                     </label>
-                    <button onClick={onNewChat}>New chat</button>
+                    <button onClick={onNewChat}>{t("New chat")}</button>
                 </header>
 
                 <div className="chat-body">
-                    <SideList label="Chats">{list}</SideList>
+                    <SideList label={t("Chats")}>{list}</SideList>
                     <div
                         className="messages"
                         data-selectable
@@ -222,8 +227,10 @@ export function Chat(
                             <div className="empty">
                                 <h2>{context.name}</h2>
                                 <p>
-                                    This chat starts with the “{context.name}” context. Write a message below, or click
-                                    a word on the left to add it.
+                                    {t(
+                                        "This chat starts with the “{name}” context. Write a message below, or click a word on the left to add it.",
+                                        { name: context.name },
+                                    )}
                                 </p>
                             </div>
                         )}
@@ -238,8 +245,8 @@ export function Chat(
                                                 data-speak={speakMark(chatId, index)}
                                                 onClick={() => onSpeak(chatId, index, message.content)}
                                                 disabled={!message.content || (busy && index === messages.length - 1)}
-                                                title="Read aloud"
-                                                aria-label="Read this reply aloud"
+                                                title={t("Read aloud")}
+                                                aria-label={t("Read this reply aloud")}
                                             >
                                                 🔊
                                             </button>
@@ -261,8 +268,12 @@ export function Chat(
 
                 {!canAsk(settings.model, settings.apiKey) && (
                     <div className="notice">
-                        Add your OpenRouter API key in{" "}
-                        <button className="link" onClick={onOpenSettings}>Settings</button> to start chatting.
+                        <T
+                            message="Add your OpenRouter API key in {settings} to start chatting."
+                            values={{
+                                settings: <button className="link" onClick={onOpenSettings}>{t("Settings")}</button>,
+                            }}
+                        />
                     </div>
                 )}
                 <form
@@ -276,8 +287,8 @@ export function Chat(
                         className="composer-input"
                         inputRef={inputRef}
                         rows={2}
-                        placeholder="Write a message"
-                        aria-label="Message"
+                        placeholder={t("Write a message")}
+                        aria-label={t("Message")}
                         value={draft}
                         onChange={setDraft}
                         onKeyDown={onKeyDown}
@@ -295,8 +306,8 @@ export function Chat(
                         <label
                             className="check"
                             title={settings.enterSends
-                                ? "Enter sends the message, and Shift+Enter starts a new line"
-                                : "Enter starts a new line, and Shift+Enter sends the message"}
+                                ? t("Enter sends the message, and Shift+Enter starts a new line")
+                                : t("Enter starts a new line, and Shift+Enter sends the message")}
                         >
                             <input
                                 type="checkbox"
@@ -304,17 +315,17 @@ export function Chat(
                                 onChange={(event) =>
                                     onSettingsChange({ ...settings, enterSends: event.target.checked })}
                             />
-                            Enter sends
+                            {t("Enter sends")}
                         </label>
                         {busy
-                            ? <button type="button" onClick={() => abort.abort()}>Stop</button>
+                            ? <button type="button" onClick={() => abort.abort()}>{t("Stop")}</button>
                             : (
                                 <button
                                     type="submit"
                                     className="primary"
                                     disabled={!draft.trim() || !canAsk(settings.model, settings.apiKey)}
                                 >
-                                    Send
+                                    {t("Send")}
                                 </button>
                             )}
                     </div>

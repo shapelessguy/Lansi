@@ -14,6 +14,7 @@ import {
 import { newId } from "../lib/ids";
 
 import { ask } from "../lib/dialogs";
+import { languageName, locale, type Message, plural, t } from "../lib/i18n";
 import { fetchOpenRouterModels, type ListedModel, type ModelKind } from "../lib/models";
 import { isAskable, newQuestion, type ProfileQuestion, type QuestionOption } from "../lib/questions";
 import type { WordSet } from "../lib/sets";
@@ -30,13 +31,15 @@ import {
     TRANSLATION_LANGUAGES,
     WORDS_PLACEHOLDER,
 } from "../lib/settings";
+import { Help } from "./Help";
 import { LevelPicker } from "./Level";
 import { ModelPicker, OpenChoice } from "./ModelPicker";
 import { SidePanel } from "./SidePanel";
+import { T } from "./T";
 
 export type SettingsTab = "general" | "models" | "content" | "questions" | "exercises" | "look";
 
-const TABS: { id: SettingsTab; label: string }[] = [
+const TABS: { id: SettingsTab; label: Message }[] = [
     { id: "general", label: "General" },
     { id: "models", label: "Models" },
     { id: "content", label: "Prompts" },
@@ -101,23 +104,22 @@ function AnkiDecks({ onDecks }: { onDecks: () => void }) {
 
     return (
         <fieldset className="anki-decks">
-            <legend>Decks</legend>
-            {decks === null && !error && <small className="import-status">Loading the decks…</small>}
+            <legend>{t("Decks")}</legend>
+            {decks === null && !error && <small className="import-status">{t("Loading the decks…")}</small>}
             {decks?.map((deck) => {
                 const parts = deck.name.split("::");
                 return (
                     <label key={deck.id} className="check" style={{ paddingLeft: (parts.length - 1) * 18 }}>
                         <input type="checkbox" checked={deck.chosen} onChange={() => toggle(deck)} />
                         <span title={deck.name}>{parts[parts.length - 1]}</span>
-                        <small>{deck.total_cards} cards</small>
+                        <small>{plural(deck.total_cards, "{count} card", "{count} cards")}</small>
                     </label>
                 );
             })}
             {error && <small className="import-status error">{error}</small>}
             {decks && (
                 <small className="import-status">
-                    The words of unticked decks are left out of the Anki tab and the import. Decks made later are
-                    ticked.
+                    {t("The words of unticked decks are left out of the Anki tab and the import. Decks made later are ticked.")}
                 </small>
             )}
         </fieldset>
@@ -146,26 +148,26 @@ function AnkiAccount(
     }
 
     if (anki === null) {
-        return <small className="import-status">Asking whether an Anki account is linked…</small>;
+        return <small className="import-status">{t("Asking whether an Anki account is linked…")}</small>;
     }
     if (anki.linked) {
         return (
             <>
                 <div className="anki-account">
                     <span>
-                        AnkiWeb account linked
-                        <small className={anki.error ? "error" : undefined}>{describeAnki(anki)}</small>
+                        {t("AnkiWeb account linked")}
+                        <small className={anki.error ? "error" : undefined}>{describeAnki(anki, locale())}</small>
                     </span>
                     <button
                         type="button"
                         disabled={busy}
                         onClick={() =>
-                            void ask("Unlink your Anki account?", {
-                                detail: "Its words stay in the vocabulary.",
-                                confirm: "Unlink",
+                            void ask(t("Unlink your Anki account?"), {
+                                detail: t("Its words stay in the vocabulary."),
+                                confirm: t("Unlink"),
                             }).then((agreed) => agreed && settle(unlinkAnki()))}
                     >
-                        Unlink
+                        {t("Unlink")}
                     </button>
                 </div>
                 {error && <small className="import-status error">{error}</small>}
@@ -181,7 +183,7 @@ function AnkiAccount(
             }}
         >
             <label className="field">
-                <span>AnkiWeb email</span>
+                <span>{t("AnkiWeb email")}</span>
                 <input
                     type="email"
                     autoComplete="username"
@@ -191,7 +193,14 @@ function AnkiAccount(
                 />
             </label>
             <label className="field">
-                <span>AnkiWeb password</span>
+                <span className="setting-name">
+                    {t("AnkiWeb password")}
+                    <Help>
+                        {t(
+                            "Your password is only used to log in once, and is not kept. A copy of your collection is kept on this server and synced every few minutes, for the Anki tab and the vocabulary.",
+                        )}
+                    </Help>
+                </span>
                 <span className="input-row">
                     <input
                         type="password"
@@ -200,13 +209,9 @@ function AnkiAccount(
                         onChange={(event) => setPassword(event.target.value)}
                     />
                     <button type="submit" disabled={busy || !username.trim() || !password}>
-                        {busy ? "Linking…" : "Link"}
+                        {busy ? t("Linking…") : t("Link")}
                     </button>
                 </span>
-                <small>
-                    Your password is only used to log in once, and is not kept. A copy of your collection is kept on
-                    this server and synced every few minutes, for the Anki tab and the vocabulary.
-                </small>
             </label>
             {error && <small className="import-status error" role="alert">{error}</small>}
         </form>
@@ -220,54 +225,70 @@ function GeneralTab(
         onDecks: () => void;
     },
 ) {
-    const [showKey, setShowKey] = useState(false);
     const ankiWords = anki?.linked ?? false;
 
     return (
         <>
-            <h3>Language</h3>
-            <label className="field">
-                <span>Language you are learning</span>
-                <select
-                    value={settings.language}
-                    onChange={(event) => onChange({ ...settings, language: event.target.value })}
-                >
-                    {LANGUAGES.map((language) => <option key={language} value={language}>{language}</option>)}
-                </select>
-                <small>Used for spelling, sentence checks, prompts and the vocabulary.</small>
-            </label>
+            <h3>{t("Language")}</h3>
+            {/* the level is of the language, so it is chosen beside it */}
             <div className="field">
-                <span>Your level</span>
-                <LevelPicker
-                    label="Your level"
-                    value={settings.level}
-                    onChange={(level) => onChange({ ...settings, level })}
-                />
-                <small>
-                    Fills <code>{LEVEL_PLACEHOLDER}</code> in your prompts.
-                </small>
+                <span className="setting-name">
+                    {t("Language you are learning, and your level")}
+                    <Help>
+                        {t("Used for spelling, sentence checks, prompts and the vocabulary.")}{" "}
+                        <T
+                            message="The level fills {keyword} in your prompts."
+                            values={{ keyword: <code>{LEVEL_PLACEHOLDER}</code> }}
+                        />
+                    </Help>
+                </span>
+                <div className="setting-row">
+                    <select
+                        aria-label={t("Language you are learning")}
+                        value={settings.language}
+                        onChange={(event) => onChange({ ...settings, language: event.target.value })}
+                    >
+                        {LANGUAGES.map((language) => (
+                            <option key={language} value={language}>{languageName(language)}</option>
+                        ))}
+                    </select>
+                    <LevelPicker
+                        label={t("Your level")}
+                        value={settings.level}
+                        onChange={(level) => onChange({ ...settings, level })}
+                    />
+                </div>
             </div>
             <label className="field">
-                <span>Translate into</span>
+                <span className="setting-name">
+                    {t("Translate into")}
+                    <Help>
+                        {t(
+                            "The language text you select is translated into, and exercises explain in. The app is shown in it too.",
+                        )}
+                    </Help>
+                </span>
                 <Choice
-                    options={TRANSLATION_LANGUAGES}
+                    options={[...TRANSLATION_LANGUAGES]}
                     value={settings.translateInto}
+                    label={languageName}
                     onChange={(translateInto) => onChange({ ...settings, translateInto })}
                 />
-                <small>The language text you select is translated into, and exercises explain in.</small>
             </label>
-            <h3>Tutor</h3>
+            <h3>{t("Tutor")}</h3>
             <label className="field">
-                <span>Tutor's tone</span>
+                <span className="setting-name">
+                    {t("Tutor's tone")}
+                    <Help>
+                        {t("How the tutor talks with you. What you ask it in a lesson, once it remembers it, goes first.")}
+                    </Help>
+                </span>
                 <textarea
                     rows={3}
-                    placeholder="Such as: friendly but direct, short answers, correct every mistake"
+                    placeholder={t("Such as: friendly but direct, short answers, correct every mistake")}
                     value={settings.tutorTone}
                     onChange={(event) => onChange({ ...settings, tutorTone: event.target.value })}
                 />
-                <small>
-                    How the tutor talks with you. What you ask it in a lesson, once it remembers it, goes first.
-                </small>
             </label>
             <h3>Anki</h3>
             <AnkiAccount anki={anki} onAnki={onAnki} onDecks={onDecks} />
@@ -275,8 +296,12 @@ function GeneralTab(
                 <>
                     <label className="toggle">
                         <span>
-                            Import Anki words
-                            <small>Adds your Anki words to the vocabulary.</small>
+                            <span className="setting-name">
+                                {t("Import Anki words")}
+                                <Help>
+                                    {t("Adds your Anki words to the vocabulary.")}
+                                </Help>
+                            </span>
                         </span>
                         <input
                             type="checkbox"
@@ -284,21 +309,45 @@ function GeneralTab(
                             onChange={(event) => onChange({ ...settings, importAnki: event.target.checked })}
                         />
                     </label>
-                    <label className="field">
-                        <span>Import them as</span>
+                    {/* on one line, as the switch above it */}
+                    <label className="toggle">
+                        <span>
+                            <span className="setting-name">
+                                {t("Language of your Anki words")}
+                                <Help>
+                                    {t(
+                                        "The language your Anki words are in: they are added to the vocabulary of that language.",
+                                    )}
+                                </Help>
+                            </span>
+                        </span>
                         <select
                             value={settings.ankiLanguage}
                             onChange={(event) => onChange({ ...settings, ankiLanguage: event.target.value })}
                         >
-                            {LANGUAGES.map((language) => <option key={language} value={language}>{language}</option>)}
+                            {LANGUAGES.map((language) => (
+                                <option key={language} value={language}>{languageName(language)}</option>
+                            ))}
                         </select>
-                        <small>The language your Anki words are in.</small>
                     </label>
                 </>
             )}
-            <h3>OpenRouter</h3>
+        </>
+    );
+}
+
+/** The key of OpenRouter, with a button that shows it. */
+function ApiKey({ settings, onChange }: TabProps) {
+    const [showKey, setShowKey] = useState(false);
+    return (
+        <>
             <label className="field">
-                <span>API key</span>
+                <span className="setting-name">
+                    {t("OpenRouter API key")}
+                    <Help>
+                        {t("Kept in this browser only, and sent with each request to the server, which asks OpenRouter with it.")}
+                    </Help>
+                </span>
                 <span className="input-row">
                     <input
                         type={showKey ? "text" : "password"}
@@ -309,12 +358,9 @@ function GeneralTab(
                         onChange={(event) => onChange({ ...settings, apiKey: event.target.value.trim() })}
                     />
                     <button type="button" onClick={() => setShowKey(!showKey)}>
-                        {showKey ? "Hide" : "Show"}
+                        {showKey ? t("Hide") : t("Show")}
                     </button>
                 </span>
-                <small>
-                    Kept in this browser only, and sent with each request to the server, which asks OpenRouter with it.
-                </small>
             </label>
         </>
     );
@@ -352,96 +398,127 @@ function ModelsTab({ settings, onChange }: TabProps) {
             | "embeddingModel"
             | "imageModel"
             | "visionModel",
-        label: string,
+        label: Message,
         kind: ModelKind,
-        none?: string,
+        none?: Message,
     ) => (
         <ModelPicker
-            label={label}
+            label={t(label)}
             value={settings[key]}
             onChange={(chosen) => onChange({ ...settings, [key]: chosen })}
             listed={ids(kind)}
-            none={none}
+            none={none && t(none)}
         />
     );
 
     return (
         <>
+            <ApiKey settings={settings} onChange={onChange} />
             <p className="hint">
-                Each model is one of{" "}
-                <a href="https://openrouter.ai/models" target="_blank" rel="noreferrer">OpenRouter's</a>, asked with
-                your key, or one on a server that takes OpenAI's requests, such as one running on this machine, asked at
-                its address. Such a server's key is kept with your settings.
+                <T
+                    message="Each model is one of {openrouter}, asked with your key, or one on a server that takes OpenAI's requests, such as one running on this machine, asked at its address. Such a server's key is kept with your settings."
+                    values={{
+                        openrouter: (
+                            <a href="https://openrouter.ai/models" target="_blank" rel="noreferrer">
+                                {t("OpenRouter's")}
+                            </a>
+                        ),
+                    }}
+                />
             </p>
-            <h3>Writing</h3>
             <div className="field">
-                <span>Chat and text model</span>
+                <span className="setting-name">
+                    {t("Chat and text model")}
+                    <Help>
+                        {t("Answers in the chat, and makes and checks the exercises. It answers without reasoning first.")}
+                    </Help>
+                </span>
                 {picker("model", "Chat and text model", "text")}
-                <small>
-                    Answers in the chat, and makes and checks the exercises. It answers without reasoning first.
-                </small>
             </div>
             <div className="field">
-                <span>Translation model</span>
+                <span className="setting-name">
+                    {t("Translation model")}
+                    <Help>
+                        {t("Translates the text you select. A small, quick model does this well.")}
+                    </Help>
+                </span>
                 {picker("translationModel", "Translation model", "text", "the chat model")}
-                <small>Translates the text you select. A small, quick model does this well.</small>
             </div>
             <div className="field">
-                <span>Reasoning model</span>
+                <span className="setting-name">
+                    {t("Reasoning model")}
+                    <Help>
+                        {t("Thinks over what needs it before it answers. The list has the models that can reason.")}
+                    </Help>
+                </span>
                 {picker("reasoningModel", "Reasoning model", "reasoning", "the chat model")}
-                <small>Thinks over what needs it before it answers. The list has the models that can reason.</small>
             </div>
-
-            <h3>Checking</h3>
             <div className="field">
-                <span>Sentence check model</span>
+                <span className="setting-name">
+                    {t("Sentence check model")}
+                    <Help>
+                        <T
+                            message="Answers the questions about each sentence you finish typing in the chat, and sorts new words into categories. It is a decision model: a server of your own is asked at {path} under its address."
+                            values={{ path: <code>/decisions</code> }}
+                        />
+                    </Help>
+                </span>
                 {picker("profileModel", "Sentence check model", "decisions")}
-                <small>
-                    Answers the questions about each sentence you finish typing in the chat, and sorts new words into
-                    categories. It is a decision model: a server of your own is asked at <code>/decisions</code>{" "}
-                    under its address.
-                </small>
             </div>
-
-            <h3>Speech</h3>
             <div className="field">
-                <span>Speech model</span>
+                <span className="setting-name">
+                    {t("Speech model")}
+                    <Help>
+                        {t("Reads the books, the replies and the stories aloud.")}
+                    </Help>
+                </span>
                 {picker("speechModel", "Speech model", "speech")}
-                <small>Reads the books, the replies and the stories aloud.</small>
             </div>
             <div className="field">
-                <span>Voice</span>
+                <span className="setting-name">
+                    {t("Voice")}
+                    <Help>
+                        {t("The voices there are depend on the speech model.")}
+                    </Help>
+                </span>
                 <OpenChoice
-                    label="Voice"
+                    label={t("Voice")}
                     options={voices}
-                    placeholder="Voice name"
+                    placeholder={t("Voice name")}
                     value={settings.speechVoice}
                     onChange={(speechVoice) => onChange({ ...settings, speechVoice })}
                 />
-                <small>The voices there are depend on the speech model.</small>
             </div>
-
-            <h3>Topics</h3>
             <div className="field">
-                <span>Embedding model</span>
+                <span className="setting-name">
+                    {t("Embedding model")}
+                    <Help>
+                        {t(
+                            "Embeds every word of your vocabulary once, and each topic, to find the words of a topic. One that knows many languages works best.",
+                        )}
+                    </Help>
+                </span>
                 {picker("embeddingModel", "Embedding model", "embeddings")}
-                <small>
-                    Embeds every word of your vocabulary once, and each topic, to find the words of a topic. One that
-                    knows many languages works best.
-                </small>
             </div>
             <div className="field">
-                <span>Image model</span>
+                <span className="setting-name">
+                    {t("Image model")}
+                    <Help>
+                        {t("Makes the icon of each topic you add, and the pictures of exercises.")}
+                    </Help>
+                </span>
                 {picker("imageModel", "Image model", "image")}
-                <small>Makes the icon of each topic you add, and the pictures of exercises.</small>
             </div>
             <div className="field">
-                <span>Vision model</span>
+                <span className="setting-name">
+                    {t("Vision model")}
+                    <Help>
+                        {t(
+                            "Finds where each thing is on the picture of an exercise. It must see pictures, and a small model often points beside them: one such as Gemini Flash, rather than Flash Lite, is far better at it.",
+                        )}
+                    </Help>
+                </span>
                 {picker("visionModel", "Vision model", "vision", "the chat model")}
-                <small>
-                    Finds where each thing is on the picture of an exercise. It must see pictures, and a small model
-                    often points beside them: one such as Gemini Flash, rather than Flash Lite, is far better at it.
-                </small>
             </div>
         </>
     );
@@ -453,6 +530,8 @@ interface ChoiceProps {
     value: string;
     /** What is used while the value is empty. */
     placeholder?: string;
+    /** What each option is called, if not by itself. */
+    label?: (option: string) => string;
     onChange: (value: string) => void;
 }
 
@@ -460,7 +539,7 @@ interface ChoiceProps {
  * A list to choose from, with everything in it on show. Until it is known
  * what there is to choose from, the value is typed instead.
  */
-function Choice({ options, value, placeholder, onChange }: ChoiceProps) {
+function Choice({ options, value, placeholder, label = (option) => option, onChange }: ChoiceProps) {
     if (options.length === 0) {
         return (
             <input
@@ -475,8 +554,8 @@ function Choice({ options, value, placeholder, onChange }: ChoiceProps) {
     return (
         <select value={value} onChange={(event) => onChange(event.target.value)}>
             {/* a value that is not in the list stays as it is until another is chosen */}
-            {!options.includes(value) && <option value={value}>{value || placeholder}</option>}
-            {options.map((option) => <option key={option} value={option}>{option}</option>)}
+            {!options.includes(value) && <option value={value}>{value ? label(value) : placeholder}</option>}
+            {options.map((option) => <option key={option} value={option}>{label(option)}</option>)}
         </select>
     );
 }
@@ -487,14 +566,17 @@ function ExercisesTab({ settings, onChange, sets }: TabProps & { sets: WordSet[]
 
     return (
         <>
-            <h3>Topics</h3>
+            <h3>{t("Topics")}</h3>
             <label className="toggle">
                 <span>
-                    Mix topics
-                    <small>
-                        Bring all the topics you choose together in the exercises. Off, one of them is drawn for each
-                        session.
-                    </small>
+                    <span className="setting-name">
+                        {t("Mix topics")}
+                        <Help>
+                            {t(
+                                "Bring all the topics you choose together in the exercises. Off, one of them is drawn for each session.",
+                            )}
+                        </Help>
+                    </span>
                 </span>
                 <input
                     type="checkbox"
@@ -503,9 +585,17 @@ function ExercisesTab({ settings, onChange, sets }: TabProps & { sets: WordSet[]
                 />
             </label>
 
-            <h3>Words</h3>
+            <h3>{t("Words")}</h3>
             <label className="field">
-                <span>Words of your vocabulary</span>
+                <span className="setting-name">
+                    {t("Words of your vocabulary")}
+                    <Help>
+                        {t(
+                            "The exercises are given at most 200 of these words, for {language}. With none, they use any words of your level.",
+                            { language: languageName(settings.language) },
+                        )}
+                    </Help>
+                </span>
                 <select
                     value={known ? vocabulary : "all"}
                     onChange={(event) =>
@@ -517,23 +607,25 @@ function ExercisesTab({ settings, onChange, sets }: TabProps & { sets: WordSet[]
                             },
                         })}
                 >
-                    <option value="all">Every word</option>
-                    {sets.map((set) => <option key={set.id} value={set.id}>Set: {set.name || "Untitled"}</option>)}
-                    <option value="none">None</option>
+                    <option value="all">{t("Every word")}</option>
+                    {sets.map((set) => (
+                        <option key={set.id} value={set.id}>
+                            {t("Set: {name}", { name: set.name || t("Untitled") })}
+                        </option>
+                    ))}
+                    <option value="none">{t("None")}</option>
                 </select>
-                <small>
-                    The exercises are given at most 200 of these words, for{" "}
-                    {settings.language}. With none, they use any words of your level.
-                </small>
             </label>
             <label className="toggle">
                 <span>
-                    Words that fit the topics
-                    <small>
-                        Give the 200 words nearest the topics, found with embeddings, rather than the 200 used last.
-                        With 20 or more to choose from, the exercises use those words alone; with fewer, they lean on
-                        them.
-                    </small>
+                    <span className="setting-name">
+                        {t("Words that fit the topics")}
+                        <Help>
+                            {t(
+                                "Give the 200 words nearest the topics, found with embeddings, rather than the 200 used last. With 20 or more to choose from, the exercises use those words alone; with fewer, they lean on them.",
+                            )}
+                        </Help>
+                    </span>
                 </span>
                 <input
                     type="checkbox"
@@ -549,19 +641,24 @@ function ExercisesTab({ settings, onChange, sets }: TabProps & { sets: WordSet[]
 function LookTab({ settings, onChange }: TabProps) {
     return (
         <>
-            <h3>Theme</h3>
+            <h3>{t("Theme")}</h3>
             <label className="field">
-                <span>Light or dark</span>
+                <span>{t("Light or dark")}</span>
                 <select
                     value={settings.theme}
                     onChange={(event) => onChange({ ...settings, theme: event.target.value as Settings["theme"] })}
                 >
-                    {Object.entries(THEMES).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                    {Object.entries(THEMES).map(([id, label]) => <option key={id} value={id}>{t(label)}</option>)}
                 </select>
             </label>
             <div className="field">
-                <span>Colour</span>
-                <div className="swatches" role="radiogroup" aria-label="Colour">
+                <span className="setting-name">
+                    {t("Colour")}
+                    <Help>
+                        {t("Used for buttons, links and what is selected.")}
+                    </Help>
+                </span>
+                <div className="swatches" role="radiogroup" aria-label={t("Colour")}>
                     {Object.entries(ACCENTS).map(([id, accent]) => (
                         <button
                             key={id}
@@ -569,25 +666,29 @@ function LookTab({ settings, onChange }: TabProps) {
                             role="radio"
                             aria-checked={settings.accent === id}
                             className="swatch"
-                            title={accent.label}
-                            aria-label={accent.label}
+                            title={t(accent.label)}
+                            aria-label={t(accent.label)}
                             style={{ background: `light-dark(${accent.light}, ${accent.dark})` }}
                             onClick={() => onChange({ ...settings, accent: id as Settings["accent"] })}
                         />
                     ))}
                 </div>
-                <small>Used for buttons, links and what is selected.</small>
             </div>
             <label className="field">
-                <span>Text size</span>
+                <span className="setting-name">
+                    {t("Text size")}
+                    <Help>
+                        {t("The size of the app. A book has a size of its own, set in the reader.")}
+                    </Help>
+                </span>
                 <select
                     value={settings.textSize}
                     onChange={(event) =>
                         onChange({ ...settings, textSize: event.target.value as Settings["textSize"] })}
                 >
-                    {Object.entries(TEXT_SIZES).map(([id, size]) => <option key={id} value={id}>{size.label}</option>)}
+                    {Object.entries(TEXT_SIZES).map(([id, size]) => <option key={id} value={id}>{t(size.label)}
+                    </option>)}
                 </select>
-                <small>The size of the app. A book has a size of its own, set in the reader.</small>
             </label>
         </>
     );
@@ -602,7 +703,7 @@ function ContentTab({ settings, onChange }: TabProps) {
     }
 
     function addContext() {
-        const context = { id: newId(), name: "New context", prompt: "" };
+        const context = { id: newId(), name: t("New context"), prompt: "" };
         onChange({ ...settings, contexts: [...settings.contexts, context] });
     }
 
@@ -614,45 +715,46 @@ function ContentTab({ settings, onChange }: TabProps) {
 
     return (
         <>
-            <h3>Keywords</h3>
+            <h3>{t("Keywords")}</h3>
             <p className="hint">
-                Write these in any prompt, whether of a context, of the speech model or of a question about each
-                sentence, and each is replaced by what it stands for:
+                {t(
+                    "Write these in any prompt, whether of a context, of the speech model or of a question about each sentence, and each is replaced by what it stands for:",
+                )}
             </p>
             <dl className="keywords">
                 <div>
                     <dt>
                         <code>{LANGUAGE_PLACEHOLDER}</code>
                     </dt>
-                    <dd>the language you are learning ({settings.language})</dd>
+                    <dd>{t("the language you are learning ({language})", { language: settings.language })}</dd>
                 </div>
                 <div>
                     <dt>
                         <code>{LEVEL_PLACEHOLDER}</code>
                     </dt>
-                    <dd>your level in it ({settings.level})</dd>
+                    <dd>{t("your level in it ({level})", { level: settings.level })}</dd>
                 </div>
                 <div>
                     <dt>
                         <code>{WORDS_PLACEHOLDER}</code>
                     </dt>
-                    <dd>the words of the set in use, picked in the Vocabulary tab</dd>
+                    <dd>{t("the words of the set in use, picked in the Vocabulary tab")}</dd>
                 </div>
                 <div>
                     <dt>
-                        <code>{"{{words:Name}}"}</code>
+                        <code>{t("{{words:Name}}")}</code>
                     </dt>
-                    <dd>the words of the set of that name</dd>
+                    <dd>{t("the words of the set of that name")}</dd>
                 </div>
             </dl>
-            <h3>Contexts</h3>
-            <p className="hint">A context is the instruction a chat starts with.</p>
+            <h3>{t("Contexts")}</h3>
+            <p className="hint">{t("A context is the instruction a chat starts with.")}</p>
             {settings.contexts.map((context) => (
                 <fieldset key={context.id} className="context">
                     <div className="input-row">
                         <input
                             type="text"
-                            aria-label="Context name"
+                            aria-label={t("Context name")}
                             value={context.name}
                             onChange={(event) => updateContext(context.id, { name: event.target.value })}
                         />
@@ -661,13 +763,13 @@ function ContentTab({ settings, onChange }: TabProps) {
                             onClick={() => removeContext(context.id)}
                             disabled={settings.contexts.length === 1}
                         >
-                            Delete
+                            {t("Delete")}
                         </button>
                     </div>
                     <textarea
                         rows={5}
-                        aria-label="Context instructions"
-                        placeholder="Instructions for the model"
+                        aria-label={t("Context instructions")}
+                        placeholder={t("Instructions for the model")}
                         value={context.prompt}
                         onChange={(event) => updateContext(context.id, { prompt: event.target.value })}
                     />
@@ -678,24 +780,26 @@ function ContentTab({ settings, onChange }: TabProps) {
                             checked={settings.defaultContextId === context.id}
                             onChange={() => onChange({ ...settings, defaultContextId: context.id })}
                         />
-                        Use for new chats
+                        {t("Use for new chats")}
                     </label>
                 </fieldset>
             ))}
-            <button type="button" onClick={addContext}>Add context</button>
+            <button type="button" onClick={addContext}>{t("Add context")}</button>
 
-            <h3>Speech</h3>
+            <h3>{t("Speech")}</h3>
             <label className="field">
-                <span>How to read</span>
+                <span className="setting-name">
+                    {t("How to read")}
+                    <Help>
+                        {t("Passed to the speech model as a direction, with the keywords above filled in. It is not read aloud.")}
+                    </Help>
+                </span>
                 <textarea
                     rows={4}
-                    placeholder="For example: Speak {{language}} slowly and clearly."
+                    placeholder={t("For example: Speak {{language}} slowly and clearly.")}
                     value={settings.speechDirection}
                     onChange={(event) => onChange({ ...settings, speechDirection: event.target.value })}
                 />
-                <small>
-                    Passed to the speech model as a direction, with the keywords above filled in. It is not read aloud.
-                </small>
             </label>
         </>
     );
@@ -721,56 +825,57 @@ function QuestionEditor(
             <div className="input-row">
                 <input
                     type="text"
-                    aria-label="Question title"
-                    placeholder="Title"
+                    aria-label={t("Question title")}
+                    placeholder={t("Title")}
                     value={question.title}
                     onChange={(event) => onChange({ title: event.target.value })}
                 />
-                <button type="button" onClick={onDelete}>Delete</button>
+                <button type="button" onClick={onDelete}>{t("Delete")}</button>
             </div>
             <textarea
                 rows={3}
-                aria-label="What to ask"
-                placeholder="What to ask about the sentence"
+                aria-label={t("What to ask")}
+                placeholder={t("What to ask about the sentence")}
                 value={question.instructions}
                 onChange={(event) => onChange({ instructions: event.target.value })}
             />
             <label className="check">
-                Answered with
+                {t("Answered with")}
                 <select
                     value={question.kind}
                     onChange={(event) => onChange({ kind: event.target.value as ProfileQuestion["kind"] })}
                 >
-                    <option value="choice">one of these options</option>
-                    <option value="score">a place on this scale</option>
+                    <option value="choice">{t("one of these options")}</option>
+                    <option value="score">{t("a place on this scale")}</option>
                 </select>
             </label>
             <small className="hint">
-                From the worst {scale ? "level" : "option"}{" "}
-                to the best: the bar of the answer is fuller the further down the list it is.
+                {scale
+                    ? t("From the worst level to the best: the bar of the answer is fuller the further down the list it is.")
+                    : t("From the worst option to the best: the bar of the answer is fuller the further down the list it is.")}
             </small>
             {question.options.map((option, index) => (
                 <div key={index} className="input-row option-row">
                     <input
                         type="text"
                         className="option-label"
-                        aria-label={scale ? "Level name" : "Option name"}
-                        placeholder={scale ? "Level" : "Option"}
+                        aria-label={scale ? t("Level name") : t("Option name")}
+                        placeholder={scale ? t("Level") : t("Option")}
                         value={option.label}
                         onChange={(event) => updateOption(index, { label: event.target.value })}
                     />
                     <input
                         type="text"
-                        aria-label="When it applies"
-                        placeholder="When it applies"
+                        aria-label={t("When it applies")}
+                        placeholder={t("When it applies")}
                         value={option.description}
                         onChange={(event) => updateOption(index, { description: event.target.value })}
                     />
                     <button
                         type="button"
                         className="icon-button"
-                        title="Remove"
-                        aria-label={`Remove ${option.label || "option"}`}
+                        title={t("Remove")}
+                        aria-label={t("Remove {name}", { name: option.label || t("option") })}
                         disabled={question.options.length <= 2}
                         onClick={() => onChange({ options: question.options.filter((_, at) => at !== index) })}
                     >
@@ -783,13 +888,14 @@ function QuestionEditor(
                     type="button"
                     onClick={() => onChange({ options: [...question.options, { label: "", description: "" }] })}
                 >
-                    {scale ? "Add level" : "Add option"}
+                    {scale ? t("Add level") : t("Add option")}
                 </button>
             </div>
             {!isAskable(question) && (
                 <small className="hint error">
-                    Not asked yet: it needs something to ask and at least two{" "}
-                    {scale ? "levels" : "options"}, each with a name of its own.
+                    {scale
+                        ? t("Not asked yet: it needs something to ask and at least two levels, each with a name of its own.")
+                        : t("Not asked yet: it needs something to ask and at least two options, each with a name of its own.")}
                 </small>
             )}
         </fieldset>
@@ -808,13 +914,12 @@ function QuestionsTab({ settings, onChange }: TabProps) {
 
     return (
         <>
-            <h3>Questions about each sentence</h3>
+            <h3>{t("Questions about each sentence")}</h3>
             <p className="hint">
-                Each sentence you finish typing in the chat is sent to the sentence check model with these questions.
-                Turn them on and off in the Checks panel, where the answers are shown as well. The keywords of the
-                Prompts tab, such as{" "}
-                <code>{LANGUAGE_PLACEHOLDER}</code>, are filled in, in what a question asks and in what its options
-                mean.
+                <T
+                    message="Each sentence you finish typing in the chat is sent to the sentence check model with these questions. Turn them on and off in the Checks panel, where the answers are shown as well. The keywords of the Prompts tab, such as {keyword}, are filled in, in what a question asks and in what its options mean."
+                    values={{ keyword: <code>{LANGUAGE_PLACEHOLDER}</code> }}
+                />
             </p>
             {questions.map((question) => (
                 <QuestionEditor
@@ -826,7 +931,7 @@ function QuestionsTab({ settings, onChange }: TabProps) {
                 />
             ))}
             <button type="button" onClick={() => onChange({ ...settings, questions: [...questions, newQuestion()] })}>
-                Add question
+                {t("Add question")}
             </button>
         </>
     );
@@ -841,7 +946,7 @@ export function SettingsPanel({ settings, anki, onAnki, onDecks, sets, tab, onTa
 
     return (
         <SidePanel
-            title="Settings"
+            title={t("Settings")}
             onClose={onClose}
             tabs={
                 <div className="tabs" role="tablist">
@@ -852,7 +957,7 @@ export function SettingsPanel({ settings, anki, onAnki, onDecks, sets, tab, onTa
                             aria-selected={tab === id}
                             onClick={() => onTab(id)}
                         >
-                            {label}
+                            {t(label)}
                         </button>
                     ))}
                 </div>

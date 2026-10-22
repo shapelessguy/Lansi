@@ -215,6 +215,10 @@ class Manifest:
     # that what it made is kept and can be done again; None for one that
     # makes nothing, such as reviewing the Anki cards.
     instance: dict[str, Any] | None = None
+    # What it shows, its title, description and options and the texts of its
+    # interface, in each language the app is shown in but English, by the
+    # English name of the language and then by what it says in English.
+    messages: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
@@ -254,6 +258,7 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
                     data.get("own_tool") is True,
                     (path / "ui" / "icon.svg").is_file(),
                     instance,
+                    _read_translations(data.get("messages")),
                 )
             )
     return sorted(
@@ -268,6 +273,20 @@ FILLED_OPTIONS = {
     "texts": "one of your texts that is not corrected yet",
     "anki_decks": "a deck of your Anki collection: link one first",
 }
+
+
+def _read_translations(value: object) -> dict[str, dict[str, str]]:
+    """What a manifest shows in other languages, each text that is not
+    text left out."""
+    return {
+        language: {
+            english: said
+            for english, said in texts.items()
+            if isinstance(english, str) and isinstance(said, str)
+        }
+        for language, texts in (value.items() if isinstance(value, dict) else [])
+        if isinstance(language, str) and isinstance(texts, dict)
+    }
 
 
 def _whole(value: object) -> bool:

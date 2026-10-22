@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { canAsk } from "../lib/models";
 
 import type { ProfileUsage } from "../lib/checker";
+import { interfaceLanguage, languageName, plural, t } from "../lib/i18n";
 import {
     answeredOf,
     choosingOf,
@@ -130,6 +131,8 @@ export function Practice(
         [history, exercises, language],
     );
 
+    // the exercises are listed again in the language of the interface when it changes
+    const shownIn = interfaceLanguage();
     const load = useCallback(() => {
         setLessons({ status: "loading" });
         setExercises({ status: "loading" });
@@ -141,7 +144,7 @@ export function Practice(
             (items) => setExercises({ status: "ready", items }),
             (failed: Error) => setExercises({ status: "error", message: failed.message }),
         );
-    }, [language]);
+    }, [language, shownIn]);
 
     useEffect(load, [load]);
     useEffect(() => setLessonId(null), [language]);
@@ -216,7 +219,7 @@ export function Practice(
     function iconAgain(id: string) {
         setError(null);
         remakeIcon(id, settings.imageModel, learner.apiKey).then(
-            ({ task }) => (task ? onTask(task) : setError("Add your OpenRouter key to make icons.")),
+            ({ task }) => (task ? onTask(task) : setError(t("Add your OpenRouter key to make icons."))),
             (failed: Error) => setError(failed.message),
         );
     }
@@ -323,10 +326,10 @@ export function Practice(
     /** Why an exercise cannot be chosen with the lesson and the topics chosen, or null if it can. */
     function unavailable(exercise: ExerciseInfo): string | null {
         if (exercise.theory && !lessonId) {
-            return "Theory is that of a lesson: choose one";
+            return t("Theory is that of a lesson: choose one");
         }
         if (exercise.lesson === false && exercise.topics === false && (lessonId || chosenTopics.length > 0)) {
-            return "It is done on its own, with no lesson or topic: leave them unchosen";
+            return t("It is done on its own, with no lesson or topic: leave them unchosen");
         }
         return null;
     }
@@ -442,7 +445,7 @@ export function Practice(
                                 {" · "}
                             </>
                         )}
-                        {info?.title ?? exercise} ({at + 1} of {order.length})
+                        {info?.title ?? exercise} {t("({at} of {count})", { at: at + 1, count: order.length })}
                         {
                             /* theory is about the lesson alone, and one of neither a lesson nor topics, such as a
                             review of the Anki cards, about nothing of the kind: neither has topics or words */
@@ -454,8 +457,13 @@ export function Practice(
                             {session.topics.length > 0 && ` · ${session.topics.map(topicTitle).join(" + ")}`}
                             {session.words
                                 && ` · ${
-                                    session.words.mode === "only" ? "only" : "mostly"
-                                } ${session.words.lemmas.length} of your words`}
+                                    t(
+                                        session.words.mode === "only"
+                                            ? "only {count} of your words"
+                                            : "mostly {count} of your words",
+                                        { count: session.words.lemmas.length },
+                                    )
+                                }`}
                         </span>
                     </span>
                     <TimeLeft
@@ -470,18 +478,20 @@ export function Practice(
                         {at + 1 < order.length && (
                             <button
                                 disabled={busy}
-                                title="Leave this exercise as it is and go on to the next. What you answered is kept."
+                                title={t(
+                                    "Leave this exercise as it is and go on to the next. What you answered is kept.",
+                                )}
                                 onClick={() => next(session)}
                             >
-                                Next exercise
+                                {t("Next exercise")}
                             </button>
                         )}
                         <button
                             disabled={busy}
-                            title="Stop the whole session here. What you answered is kept."
+                            title={t("Stop the whole session here. What you answered is kept.")}
                             onClick={() => end(session)}
                         >
-                            End session
+                            {t("End session")}
                         </button>
                     </span>
                 </div>
@@ -520,20 +530,22 @@ export function Practice(
             <div className="practice-body">
                 {ended && (
                     <p className="practice-note">
-                        Session over: {Object.entries(ended.progress)
-                            .map(([id, progress]) =>
-                                ended.exercises[id]
-                                    ? `${titleOf(id)} ${progress.answered} answered`
-                                    : `${titleOf(id)} read`
-                            )
-                            .join(", ")}
+                        {t("Session over: {done}", {
+                            done: Object.entries(ended.progress)
+                                .map(([id, progress]) =>
+                                    ended.exercises[id]
+                                        ? `${titleOf(id)} ${t("{count} answered", { count: progress.answered })}`
+                                        : `${titleOf(id)} ${t("read")}`
+                                )
+                                .join(", "),
+                        })}
                         {scoreOf(ended).percent !== null && ` · ${scoreOf(ended).percent}%`}.
                     </p>
                 )}
                 {unfinished && (
                     <div className="practice-resume">
                         <span>
-                            <strong>Not finished:</strong> {sessionTitle(unfinished)}
+                            <strong>{t("Not finished:")}</strong> {sessionTitle(unfinished)}
                             <span className="practice-detail">
                                 {" · "}
                                 {Object.keys(unfinished.exercises)
@@ -542,31 +554,33 @@ export function Practice(
                             </span>
                         </span>
                         <span className="practice-actions">
-                            <button className="primary" onClick={() => resume(unfinished)}>Continue</button>
-                            <button disabled={busy} onClick={() => end(unfinished)}>End it</button>
+                            <button className="primary" onClick={() => resume(unfinished)}>{t("Continue")}</button>
+                            <button disabled={busy} onClick={() => end(unfinished)}>{t("End it")}</button>
                         </span>
                     </div>
                 )}
                 {!canAsk(learner.model, learner.apiKey) && (
                     <p className="practice-note">
-                        The exercises are made by a model.{" "}
-                        <button onClick={onOpenSettings}>Add your OpenRouter key</button>
+                        {t("The exercises are made by a model.")}{" "}
+                        <button onClick={onOpenSettings}>{t("Add your OpenRouter key")}</button>
                     </p>
                 )}
                 <div className="practice-columns">
                     <section className="practice-column">
                         <h2>
-                            Lesson <span className="practice-hint">one, or none to review</span>
+                            {t("Lesson")} <span className="practice-hint">{t("one, or none to review")}</span>
                         </h2>
-                        {lessons.status === "loading" && <p className="practice-note">Loading lessons…</p>}
+                        {lessons.status === "loading" && <p className="practice-note">{t("Loading lessons…")}</p>}
                         {lessons.status === "error" && (
                             <div className="practice-note error">
                                 <p>{lessons.message}</p>
-                                <button onClick={load}>Try again</button>
+                                <button onClick={load}>{t("Try again")}</button>
                             </div>
                         )}
                         {lessons.status === "ready" && lessons.items.length === 0 && (
-                            <p className="practice-note">There are no lessons for {language} yet.</p>
+                            <p className="practice-note">
+                                {t("There are no lessons for {language} yet.", { language: languageName(language) })}
+                            </p>
                         )}
                         <ul className="practice-list">
                             {lessons.status === "ready" && lessons.items.map((lesson, number) => (
@@ -574,7 +588,7 @@ export function Practice(
                                     <button
                                         className="practice-choice practice-radio practice-lesson"
                                         aria-pressed={lesson.id === lessonId}
-                                        title={lesson.id === lessonId ? "Click again to review instead" : undefined}
+                                        title={lesson.id === lessonId ? t("Click again to review instead") : undefined}
                                         onClick={() => chooseLesson(lesson.id)}
                                     >
                                         <span className="practice-number">{number + 1}</span>
@@ -583,8 +597,8 @@ export function Practice(
                                             ? (
                                                 <span
                                                     className="practice-read"
-                                                    title="Theory read"
-                                                    aria-label="Theory read"
+                                                    title={t("Theory read")}
+                                                    aria-label={t("Theory read")}
                                                 >
                                                     ✓
                                                 </span>
@@ -598,9 +612,9 @@ export function Practice(
                     </section>
                     <section className="practice-column">
                         <h2>
-                            Topics <span className="practice-hint">optional</span>
+                            {t("Topics")} <span className="practice-hint">{t("optional")}</span>
                         </h2>
-                        {topics.status === "loading" && <p className="practice-note">Loading topics…</p>}
+                        {topics.status === "loading" && <p className="practice-note">{t("Loading topics…")}</p>}
                         {topics.status === "error" && <p className="practice-note error">{topics.message}</p>}
                         {topics.status === "ready" && (
                             <TopicList
@@ -620,22 +634,25 @@ export function Practice(
                         {chosenTopics.length > 1 && (
                             <p className="practice-detail">
                                 {settings.exerciseMixTopics
-                                    ? "The topics are mixed."
-                                    : "One of them is drawn for the session."}
+                                    ? t("The topics are mixed.")
+                                    : t("One of them is drawn for the session.")}
                             </p>
                         )}
                         {embedding && (
                             <p className="practice-detail">
-                                Embedding {embedding.title}, to find the words of each topic: {embedding.done} of{" "}
-                                {embedding.total} batches.
+                                {t("Embedding {name}, to find the words of each topic: {done} of {total} batches.", {
+                                    name: embedding.title,
+                                    done: embedding.done,
+                                    total: embedding.total,
+                                })}
                             </p>
                         )}
                     </section>
                     <section className="practice-column">
                         <h2>
-                            Exercises <span className="practice-hint">one or more</span>
+                            {t("Exercises")} <span className="practice-hint">{t("one or more")}</span>
                         </h2>
-                        {exercises.status === "loading" && <p className="practice-note">Loading exercises…</p>}
+                        {exercises.status === "loading" && <p className="practice-note">{t("Loading exercises…")}</p>}
                         {exercises.status === "error" && <p className="practice-note error">{exercises.message}</p>}
                         <ul className="practice-list">
                             {exercises.status === "ready"
@@ -692,19 +709,23 @@ export function Practice(
                         : reviewed.length > 0
                         ? (
                             <strong title={reviewed.map(lessonTitle).join(", ")}>
-                                Review of the last {reviewed.length} {reviewed.length === 1 ? "lesson" : "lessons"}
+                                {plural(
+                                    reviewed.length,
+                                    "Review of the last lesson",
+                                    "Review of the last {count} lessons",
+                                )}
                             </strong>
                         )
-                        : <span className="practice-detail">Choose a lesson</span>}
+                        : <span className="practice-detail">{t("Choose a lesson")}</span>}
                     <span className="practice-detail">
                         {" · "}
-                        {chosenTopics.length > 0 ? chosenTopics.map(topicTitle).join(" + ") : "everyday life"}
+                        {chosenTopics.length > 0 ? chosenTopics.map(topicTitle).join(" + ") : t("everyday life")}
                         {" · "}
                         {chosenCount > 0
                             ? Object.entries(chosen)
                                 .map(([id, times]) => (isOnce(id) ? titleOf(id) : `${titleOf(id)} ×${times}`))
                                 .join(", ")
-                            : "choose an exercise"}
+                            : t("choose an exercise")}
                     </span>
                 </span>
                 <button
@@ -712,7 +733,7 @@ export function Practice(
                     disabled={busy || (!lessonId && reviewed.length === 0) || chosenCount === 0}
                     onClick={begin}
                 >
-                    {busy ? "Starting…" : "Start"}
+                    {busy ? t("Starting…") : t("Start")}
                 </button>
             </div>
         </div>

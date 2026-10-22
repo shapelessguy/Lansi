@@ -1,6 +1,8 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
+
 /**
  * What the app asks or tells the learner in a dialog of its own, over the
  * page, in place of those of the browser: one at a time, the others
@@ -47,14 +49,14 @@ function open(dialog: Dialog): Promise<boolean> {
  */
 export function ask(
     message: string,
-    { detail, confirm = "Delete", cancel = "Cancel", danger = true }: Partial<Omit<Dialog, "message">> = {},
+    { detail, confirm = t("Delete"), cancel = t("Cancel"), danger = true }: Partial<Omit<Dialog, "message">> = {},
 ): Promise<boolean> {
     return open({ message, detail, confirm, cancel, danger });
 }
 
 /** Tells the learner something, such as what went wrong, and resolves once they have read it. */
 export async function tell(message: string, detail?: string): Promise<void> {
-    await open({ message, detail, confirm: "OK", cancel: null, danger: false });
+    await open({ message, detail, confirm: t("OK"), cancel: null, danger: false });
 }
 
 /** Answers the dialog shown, which shows the next one if any is waiting. */

@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import type { ProfileUsage } from "./checker";
+import { t } from "./i18n";
 import { type ModelChoice, modelRequest } from "./models";
 import type { OptionValue } from "./practice";
 import { checkerFetch } from "./session";
@@ -237,7 +238,7 @@ export async function askTutor(
             signal,
         });
     } catch (error) {
-        throw signal?.aborted ? error : new Error("The server cannot be reached.");
+        throw signal?.aborted ? error : new Error(t("The server cannot be reached."));
     }
     if (!response.ok || !response.body) {
         const reply = await response.json().catch(() => ({}));
@@ -261,7 +262,7 @@ export async function askTutor(
             }
         }
         if (done) {
-            throw new Error("The tutor's answer broke off.");
+            throw new Error(t("The tutor's answer broke off."));
         }
     }
 }
@@ -308,7 +309,7 @@ export interface ListedTutorChat {
 export async function fetchTutorChats(): Promise<ListedTutorChat[]> {
     const response = await checkerFetch("/tutor/chats");
     if (!response.ok) {
-        throw new Error("The chats with the tutor could not be listed.");
+        throw new Error(t("The chats with the tutor could not be listed."));
     }
     return (await response.json()).chats;
 }
@@ -316,7 +317,7 @@ export async function fetchTutorChats(): Promise<ListedTutorChat[]> {
 export async function fetchTutorChat(id: string): Promise<KeptTutorChat> {
     const response = await checkerFetch(`/tutor/chats/${encodeURIComponent(id)}`);
     if (!response.ok) {
-        throw new Error("The chat with the tutor could not be found.");
+        throw new Error(t("The chat with the tutor could not be found."));
     }
     return response.json();
 }
@@ -400,7 +401,7 @@ export interface Memory {
 export async function fetchMemories(): Promise<{ memories: Memory[]; removed: Memory[] }> {
     const response = await checkerFetch("/tutor/memories");
     if (!response.ok) {
-        throw new Error("The memories of the tutor could not be listed.");
+        throw new Error(t("The memories of the tutor could not be listed."));
     }
     return response.json();
 }

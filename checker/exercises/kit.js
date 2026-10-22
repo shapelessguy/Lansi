@@ -29,6 +29,17 @@
 //                             file `name` of the media of the learner's Anki
 //                             collection, such as a picture of a card, or
 //                             rejects with why there is none
+//   exercise.language         the language the app is shown in, by its
+//                             English name, such as "Italian"
+//   exercise.t(text, values)  `text`, written in English, in that language,
+//                             with each `{name}` in it given what `values`
+//                             has for it: as the `messages` of the manifest
+//                             have it, as kit.py describes, or else as the
+//                             app has it, or else as it is
+//
+// What the interface shows the learner, as opposed to what the backend made
+// in the language learned, is written in English and shown through
+// `exercise.t`.
 //
 // Text the interface shows can be selected to have it translated or
 // taken into the vocabulary, as anywhere in the app, without anything done
@@ -57,13 +68,17 @@ const CRITERIA = {
     pronunciation: "Pronunciation",
 };
 
-/** The ratings of what was written or said, each from 0 to 4 by a criterion of the kit, as bars. */
-export function ratingsOf(ratings) {
+/**
+ * The ratings of what was written or said, each from 0 to 4 by a criterion
+ * of the kit, as bars, named in the language of the app by `t`, the
+ * `exercise.t` of the interface.
+ */
+export function ratingsOf(ratings, t = (text) => text) {
     return element(
         "dl",
         { className: "ratings" },
         ...Object.entries(ratings).flatMap(([name, value]) => [
-            element("dt", { textContent: CRITERIA[name] ?? name }),
+            element("dt", { textContent: CRITERIA[name] ? t(CRITERIA[name]) : name }),
             element(
                 "dd",
                 {},

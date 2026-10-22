@@ -10,6 +10,7 @@ import { App } from "./App";
 import { DialogHost } from "./components/DialogHost";
 import { Login } from "./components/Login";
 import { fetchChats, type StoredChat } from "./lib/chats";
+import { t } from "./lib/i18n";
 import { currentSession, logOut, onSessionChange } from "./lib/session";
 import { fetchSettings, type Settings } from "./lib/settings";
 
@@ -52,14 +53,14 @@ function Root() {
             <main className="login">
                 <form>
                     <p className="error">{error}</p>
-                    <button type="button" onClick={() => window.location.reload()}>Try again</button>
-                    <button type="button" onClick={logOut}>Log out</button>
+                    <button type="button" onClick={() => window.location.reload()}>{t("Try again")}</button>
+                    <button type="button" onClick={logOut}>{t("Log out")}</button>
                 </form>
             </main>
         );
     }
     if (!kept || kept.user !== session.user) {
-        return <main className="login">Loading…</main>;
+        return <main className="login">{t("Loading…")}</main>;
     }
     // a user who logs in after another starts with nothing of the other's on show
     return <App key={kept.user} user={kept.user} initialSettings={kept.settings} initialChats={kept.chats} />;

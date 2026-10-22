@@ -37,5 +37,45 @@
         "required": [
             "items"
         ]
+    },
+    "messages": {
+        "German": {
+            "Translate": "Übersetzen",
+            "Translate sentences that need the lesson into the language you learn. Each instance is a set of sentences, checked together.": "Übersetze Sätze, die die Lektion brauchen, in die Sprache, die du lernst. Jede Runde ist eine Gruppe von Sätzen, die zusammen geprüft werden.",
+            "Sentences in a set": "Sätze pro Gruppe",
+            "Right": "Richtig",
+            "Almost": "Fast",
+            "Not quite": "Nicht ganz",
+            "(nothing written)": "(nichts geschrieben)",
+            "Corrected: {text}": "Korrigiert: {text}",
+            "Another way: {text}": "Anders gesagt: {text}",
+            "Set {at} of {total}": "Gruppe {at} von {total}",
+            "Your translation": "Deine Übersetzung",
+            "Check": "Prüfen",
+            "Checking…": "Wird geprüft…",
+            "Enter goes to the next sentence": "Enter geht zum nächsten Satz",
+            "Done": "Fertig",
+            "Next": "Weiter",
+            "Making the next sentences…": "Nächste Sätze werden erstellt…"
+        },
+        "Italian": {
+            "Translate": "Tradurre",
+            "Translate sentences that need the lesson into the language you learn. Each instance is a set of sentences, checked together.": "Traduci nella lingua che impari frasi che richiedono la lezione. Ogni turno è un gruppo di frasi, corrette insieme.",
+            "Sentences in a set": "Frasi per gruppo",
+            "Right": "Giusto",
+            "Almost": "Quasi",
+            "Not quite": "Non proprio",
+            "(nothing written)": "(niente di scritto)",
+            "Corrected: {text}": "Corretto: {text}",
+            "Another way: {text}": "In un altro modo: {text}",
+            "Set {at} of {total}": "Gruppo {at} di {total}",
+            "Your translation": "La tua traduzione",
+            "Check": "Controlla",
+            "Checking…": "Controllo…",
+            "Enter goes to the next sentence": "Invio passa alla frase successiva",
+            "Done": "Fatto",
+            "Next": "Avanti",
+            "Making the next sentences…": "Creazione delle frasi successive…"
+        }
     }
 }

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { type ModelChoice, modelRequest } from "./models";
 
 import type { ProfileUsage } from "./checker";
+import { t } from "./i18n";
 import { checkerFetch } from "./session";
 
 /** How often the checker server is told the settings and asked how the import is going. */
@@ -60,10 +61,10 @@ export async function syncImport(
             }),
         });
     } catch {
-        throw new Error("The checker server cannot be reached.");
+        throw new Error(t("The checker server cannot be reached."));
     }
     if (!response.ok) {
-        throw new Error(`The checker server answered ${response.status}.`);
+        throw new Error(t("The checker server answered {status}.", { status: response.status }));
     }
     return await response.json();
 }

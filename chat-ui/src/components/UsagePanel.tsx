@@ -4,6 +4,9 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { T } from "./T";
+
+import { locale, t } from "../lib/i18n";
 import {
     binOf,
     binStarts,
@@ -57,18 +60,19 @@ function shortTokens(tokens: number): string {
 }
 
 function shown(value: number, measure: Measure): string {
-    return measure === "cost" ? formatCost(value) : `${shortTokens(value)} tokens`;
+    return measure === "cost" ? formatCost(value) : t("{count} tokens", { count: shortTokens(value) });
 }
 
 function categoryLabel(category: string): string {
-    return USAGE_CATEGORIES[category as keyof typeof USAGE_CATEGORIES] ?? category;
+    const label = USAGE_CATEGORIES[category as keyof typeof USAGE_CATEGORIES];
+    return label ? t(label) : category;
 }
 
 /** When a bar starts, as the learner reads it: the hour of a day, or the day. */
 function binLabel(at: number, hourly: boolean): string {
     return hourly
-        ? new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
-        : new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+        ? new Date(at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })
+        : new Date(at).toLocaleDateString(locale(), { day: "numeric", month: "short" });
 }
 
 /** Where the pointer is on the page. */
@@ -136,7 +140,7 @@ function UsageChart({ data, measure, hourly }: { data: Stacked; measure: Measure
             onPointerLeave={() => setHovered(null)}
             onPointerMove={(event) => setPointer({ x: event.clientX, y: event.clientY })}
         >
-            <svg width={width} height={height} role="img" aria-label="The usage of the period, by model">
+            <svg width={width} height={height} role="img" aria-label={t("The usage of the period, by model")}>
                 {ticks.map((tick) => (
                     <g key={tick}>
                         <line
@@ -289,7 +293,7 @@ function Pie({ title, slices }: { title: string; slices: Slice[] }) {
             onPointerLeave={() => setHovered(null)}
             onPointerMove={(event) => setPointer({ x: event.clientX, y: event.clientY })}
         >
-            <svg width={PIE_SIZE} height={PIE_SIZE} role="img" aria-label={`${title}, by cost`}>
+            <svg width={PIE_SIZE} height={PIE_SIZE} role="img" aria-label={t("{name}, by cost", { name: title })}>
                 <circle className="usage-pie-track" cx={PIE_SIZE / 2} cy={PIE_SIZE / 2} r={(OUTER + INNER) / 2} />
                 {parts.map((each) => (
                     <path
@@ -318,10 +322,12 @@ function Pie({ title, slices }: { title: string; slices: Slice[] }) {
                         {whole > 0 && ` · ${Math.round((pointed.totals.cost / whole) * 100)}%`}
                     </span>
                     <span>
-                        {formatTokens(pointed.totals.promptTokens)} tokens in ·{" "}
-                        {formatTokens(pointed.totals.completionTokens)} out
+                        {t("{in} tokens in · {out} out", {
+                            in: formatTokens(pointed.totals.promptTokens),
+                            out: formatTokens(pointed.totals.completionTokens),
+                        })}
                     </span>
-                    <span>{formatTokens(pointed.totals.requests)} requests</span>
+                    <span>{t("{count} requests", { count: formatTokens(pointed.totals.requests) })}</span>
                 </Tooltip>
             )}
         </figure>
@@ -368,10 +374,10 @@ function ByCategory({ rows, models }: { rows: UsageSummary["byModel"]; models: s
         );
     return (
         <section className="usage-section">
-            <h3>By kind of work</h3>
+            <h3>{t("By kind of work")}</h3>
             <div className="usage-pies">
                 <Pie
-                    title="All of it"
+                    title={t("All of it")}
                     slices={categories.map((each) => ({
                         key: each.category,
                         label: categoryLabel(each.category),
@@ -451,9 +457,9 @@ export function UsagePanel({ chatId, currentLabel, revision, onClose }: Props) {
     const rows = useMemo(() => byCategoryAndModel(series), [series]);
 
     return (
-        <SidePanel title="Usage" onClose={onClose}>
+        <SidePanel title={t("Usage")} onClose={onClose}>
             <div className="usage">
-                <div className="usage-periods" role="radiogroup" aria-label="Period">
+                <div className="usage-periods" role="radiogroup" aria-label={t("Period")}>
                     {(Object.keys(PERIODS) as Period[]).map((period) => (
                         <button
                             key={period}
@@ -461,11 +467,11 @@ export function UsagePanel({ chatId, currentLabel, revision, onClose }: Props) {
                             aria-checked={view.period === period}
                             onClick={() => changeView({ ...view, period })}
                         >
-                            {PERIODS[period]}
+                            {t(PERIODS[period])}
                         </button>
                     ))}
                 </div>
-                {error && <p className="usage-note">The usage could not be loaded: {error}</p>}
+                {error && <p className="usage-note">{t("The usage could not be loaded: {error}", { error })}</p>}
                 {summary && (
                     <>
                         <section className="usage-hero">
@@ -473,21 +479,31 @@ export function UsagePanel({ chatId, currentLabel, revision, onClose }: Props) {
                                 <Cost totals={summary.since} />
                             </p>
                             <p className="usage-facts">
-                                {formatTokens(summary.since.promptTokens)} tokens in ·{" "}
-                                {formatTokens(summary.since.completionTokens)} out ·{" "}
-                                {formatTokens(summary.since.requests)} requests
+                                {t("{in} tokens in · {out} out", {
+                                    in: formatTokens(summary.since.promptTokens),
+                                    out: formatTokens(summary.since.completionTokens),
+                                })} · {t("{count} requests", { count: formatTokens(summary.since.requests) })}
                             </p>
                             {currentLabel !== null && (
                                 <p className="usage-facts">
-                                    {currentLabel}, all of it: <Cost totals={summary.chat} /> ·{" "}
-                                    {formatTokens(summary.chat.requests)} requests
+                                    <T
+                                        message="{name}, all of it: {cost}"
+                                        values={{ name: currentLabel, cost: <Cost totals={summary.chat} /> }}
+                                    />{" "}
+                                    · {t("{count} requests", { count: formatTokens(summary.chat.requests) })}
                                 </p>
                             )}
                         </section>
                         <section className="usage-section">
                             <div className="usage-section-head">
-                                <h3>By {binOf(view.period) === "hour" ? "hour" : "day"} and model</h3>
-                                <div className="usage-measure" role="radiogroup" aria-label="What the bars measure">
+                                <h3>
+                                    {binOf(view.period) === "hour" ? t("By hour and model") : t("By day and model")}
+                                </h3>
+                                <div
+                                    className="usage-measure"
+                                    role="radiogroup"
+                                    aria-label={t("What the bars measure")}
+                                >
                                     {(["cost", "tokens"] as Measure[]).map((measure) => (
                                         <button
                                             key={measure}
@@ -495,13 +511,13 @@ export function UsagePanel({ chatId, currentLabel, revision, onClose }: Props) {
                                             aria-checked={view.measure === measure}
                                             onClick={() => changeView({ ...view, measure })}
                                         >
-                                            {measure === "cost" ? "Cost" : "Tokens"}
+                                            {measure === "cost" ? t("Cost") : t("Tokens")}
                                         </button>
                                     ))}
                                 </div>
                             </div>
                             {series.length === 0
-                                ? <p className="usage-note">Nothing was asked of the models in this period.</p>
+                                ? <p className="usage-note">{t("Nothing was asked of the models in this period.")}</p>
                                 : (
                                     <>
                                         <UsageChart
@@ -530,8 +546,9 @@ export function UsagePanel({ chatId, currentLabel, revision, onClose }: Props) {
                     </>
                 )}
                 <p className="usage-note">
-                    As reported by OpenRouter for the requests made for this account, on any device. A reply stopped
-                    early is looked up on OpenRouter afterwards, as the cost of speech is, a few seconds after it ends.
+                    {t(
+                        "As reported by OpenRouter for the requests made for this account, on any device. A reply stopped early is looked up on OpenRouter afterwards, as the cost of speech is, a few seconds after it ends.",
+                    )}
                 </p>
             </div>
         </SidePanel>

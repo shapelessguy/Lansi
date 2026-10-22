@@ -1,6 +1,8 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import type { Message } from "./i18n";
+
 export interface Word {
     noteId: number;
     word: string;
@@ -13,7 +15,8 @@ export interface Word {
 
 export type SortKey = "due" | "word" | "meaning" | "interval" | "partOfSpeech";
 
-export const sortLabels: Record<SortKey, string> = {
+/** What each order is called, to be shown with `t`. */
+export const sortLabels: Record<SortKey, Message> = {
     due: "Due date",
     word: "Word",
     meaning: "Meaning",

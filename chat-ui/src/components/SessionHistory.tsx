@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 
+import { locale, type Message, t } from "../lib/i18n";
 import { answeredOf, fetchSession, type Grade, type PracticeSession, scoreOf } from "../lib/practice";
 
 interface Props {
@@ -17,11 +18,18 @@ interface Props {
 
 /** How many sessions are listed, the latest first. */
 const SHOWN = 20;
-const STATUS = { running: "Not finished", finished: "Finished", abandoned: "Left" } as const;
+const STATUS = { running: "Not finished", finished: "Finished", abandoned: "Left" } as const satisfies Record<
+    string,
+    Message
+>;
 const RESULT = { right: "✓", partial: "~", wrong: "✗" } as const;
+const RESULT_NAMES = { right: "right", partial: "partly right", wrong: "wrong" } as const satisfies Record<
+    string,
+    Message
+>;
 
 function when(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleString(undefined, {
+    return new Date(seconds * 1000).toLocaleString(locale(), {
         month: "short",
         day: "numeric",
         hour: "2-digit",
@@ -35,7 +43,7 @@ function ScoreBar({ session }: { session: PracticeSession }) {
     if (score.total === 0) {
         // nothing was there to answer, such as theory alone: it is done once read
         const done = session.status === "finished";
-        const told = done ? "Read" : "Nothing to answer";
+        const told = done ? t("Read") : t("Nothing to answer");
         return (
             <span className="history-score" title={told} aria-label={told}>
                 <span className="history-bar" aria-hidden="true">
@@ -46,7 +54,12 @@ function ScoreBar({ session }: { session: PracticeSession }) {
         );
     }
     const part = (count: number) => `${(100 * count) / Math.max(1, score.total)}%`;
-    const told = `${score.right} right · ${score.partial} almost · ${score.wrong} wrong, of ${score.total}`;
+    const told = t("{right} right · {partial} almost · {wrong} wrong, of {total}", {
+        right: score.right,
+        partial: score.partial,
+        wrong: score.wrong,
+        total: score.total,
+    });
     return (
         <span className="history-score" title={told} aria-label={told}>
             <span className="history-bar" aria-hidden="true">
@@ -86,7 +99,7 @@ export function SessionHistory({ sessions, sessionTitle, topicTitle, exerciseTit
     }
     return (
         <section className="history">
-            <h2>Sessions</h2>
+            <h2>{t("Sessions")}</h2>
             <ul className="history-list">
                 {sessions.slice(0, SHOWN).map((session) => {
                     const shown = done[session.id];
@@ -107,20 +120,20 @@ export function SessionHistory({ sessions, sessionTitle, topicTitle, exerciseTit
                                         </span>
                                     </span>
                                     <ScoreBar session={session} />
-                                    <span className="history-status">{STATUS[session.status]}</span>
+                                    <span className="history-status">{t(STATUS[session.status])}</span>
                                 </summary>
-                                {shown === "loading" && <p className="practice-note">Loading…</p>}
+                                {shown === "loading" && <p className="practice-note">{t("Loading…")}</p>}
                                 {shown === "failed" && (
-                                    <p className="practice-note error">The answers could not be had.</p>
+                                    <p className="practice-note error">{t("The answers could not be had.")}</p>
                                 )}
                                 {typeof shown === "object" && shown.grades.length === 0 && (
-                                    <p className="practice-note">Nothing was answered.</p>
+                                    <p className="practice-note">{t("Nothing was answered.")}</p>
                                 )}
                                 {typeof shown === "object" && shown.grades.length > 0 && (
                                     <ol className="history-grades">
                                         {shown.grades.map((grade, number) => (
                                             <li key={number} className={grade.result}>
-                                                <span className="history-result" title={grade.result}>
+                                                <span className="history-result" title={t(RESULT_NAMES[grade.result])}>
                                                     {RESULT[grade.result]}
                                                 </span>
                                                 <span>
@@ -141,7 +154,7 @@ export function SessionHistory({ sessions, sessionTitle, topicTitle, exerciseTit
                                     && Object.entries(shown.logs).map(([exercise, log]) => (
                                         // what the app keeps of the exercise for the models that profile the learner
                                         <div key={exercise} className="history-log">
-                                            <strong>Log of {exerciseTitle(exercise)}</strong>
+                                            <strong>{t("Log of {name}", { name: exerciseTitle(exercise) })}</strong>
                                             <p>{log}</p>
                                         </div>
                                     ))}
@@ -151,7 +164,7 @@ export function SessionHistory({ sessions, sessionTitle, topicTitle, exerciseTit
                                     className="primary history-resume"
                                     onClick={() => onResume(session)}
                                 >
-                                    Continue
+                                    {t("Continue")}
                                 </button>
                             )}
                         </li>

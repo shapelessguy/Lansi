@@ -4,6 +4,7 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 
+import { t } from "../lib/i18n";
 import type { ChatMessage } from "../lib/openrouter";
 import type { BackgroundTask } from "../lib/tasks";
 import { askAbout, type Asking, endChatAbout, type Translated, usageEntry } from "../lib/translate";
@@ -109,7 +110,7 @@ export function SubChat({ translated, asking, onUsage, onTask, onClose }: Props)
     }
 
     return (
-        <SidePanel title="Ask about it" onClose={onClose} flush>
+        <SidePanel title={t("Ask about it")} onClose={onClose} flush>
             <div className="subchat-log" data-selectable>
                 <blockquote className="subchat-passage">
                     {passage.before}
@@ -142,14 +143,14 @@ export function SubChat({ translated, asking, onUsage, onTask, onClose }: Props)
                 <textarea
                     ref={input}
                     rows={2}
-                    placeholder="Ask about the selection"
-                    title="Enter sends, and Shift+Enter starts a new line"
-                    aria-label="Question about the selection"
+                    placeholder={t("Ask about the selection")}
+                    title={t("Enter sends, and Shift+Enter starts a new line")}
+                    aria-label={t("Question about the selection")}
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={onKeyDown}
                 />
-                <button type="submit" className="primary" disabled={!draft.trim() || busy}>Send</button>
+                <button type="submit" className="primary" disabled={!draft.trim() || busy}>{t("Send")}</button>
             </form>
         </SidePanel>
     );

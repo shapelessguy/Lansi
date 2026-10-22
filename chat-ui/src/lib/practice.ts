@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import type { ProfileUsage } from "./checker";
+import { filled, type InterfaceLanguage, interfaceLanguage, plural, t, translated } from "./i18n";
 import { announceLogged } from "./logs";
 import { type ModelChoice, modelRequest } from "./models";
 import { checkerFetch } from "./session";
@@ -70,6 +71,52 @@ export interface ExerciseInfo {
     instance?: Record<string, unknown> | null;
     /** Its options, by their names. */
     options: Record<string, ExerciseOption>;
+    /** What it shows, in each language the interface is written in but English, by what it says in English. */
+    messages?: ExerciseMessages;
+}
+
+/**
+ * What an exercise shows, its manifest and its interface, in each language
+ * the interface is written in but English, by what it says in English.
+ */
+export type ExerciseMessages = Partial<Record<InterfaceLanguage, Record<string, string>>>;
+
+/** What each exercise shows in the other languages, by its id, as the server last listed them. */
+const exerciseMessages = new Map<string, ExerciseMessages>();
+
+/**
+ * `text` of the exercise `id` in the language of the interface, with each
+ * `{name}` in it given its value: as the exercise has it, or else as the app
+ * has it, or else as it is.
+ */
+export function exerciseText(id: string, text: string, values: Record<string, string | number> = {}): string {
+    const language = interfaceLanguage();
+    const own = language === "English" ? undefined : exerciseMessages.get(id)?.[language]?.[text];
+    return own === undefined ? translated(text, values) : filled(own, values);
+}
+
+/** An exercise as it is shown: its title, description and options in the language of the interface. */
+function shownExercise(exercise: ExerciseInfo): ExerciseInfo {
+    const text = (said: string) => exerciseText(exercise.id, said);
+    return {
+        ...exercise,
+        title: text(exercise.title),
+        description: text(exercise.description),
+        options: Object.fromEntries(
+            Object.entries(exercise.options ?? {}).map(([name, option]) => [
+                name,
+                "choices" in option
+                    ? {
+                        ...option,
+                        label: text(option.label),
+                        choices: Object.fromEntries(
+                            Object.entries(option.choices).map(([value, label]) => [value, text(label)]),
+                        ),
+                    }
+                    : { ...option, label: text(option.label) },
+            ]),
+        ),
+    };
 }
 
 /** The value of an option that is taken unless another is chosen: its first choice, or its default. */
@@ -180,7 +227,7 @@ export async function call<Reply>(path: string, init: RequestInit = {}): Promise
     try {
         response = await checkerFetch(path, init);
     } catch {
-        throw new Error("The server cannot be reached.");
+        throw new Error(t("The server cannot be reached."));
     }
     const reply = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -215,9 +262,18 @@ export async function fetchLessons(language: string): Promise<Lesson[]> {
     return lessons;
 }
 
+/** Has what the exercises show in the other languages known, if they were not listed yet. */
+export async function knowExercises(): Promise<void> {
+    if (exerciseMessages.size === 0) {
+        await fetchExercises();
+    }
+}
+
+/** The exercises there are, in the language of the interface as it is now. */
 export async function fetchExercises(): Promise<ExerciseInfo[]> {
     const { exercises } = await call<{ exercises: ExerciseInfo[] }>("/exercises");
-    return exercises;
+    exercises.forEach((exercise) => exerciseMessages.set(exercise.id, exercise.messages ?? {}));
+    return exercises.map(shownExercise);
 }
 
 /** How the topics and the words of a session are chosen, as the server takes it. */
@@ -340,7 +396,7 @@ export function sessionTitleOf(
     if (count === 0) {
         return Object.keys(session.exercises).map(exerciseTitle).join(", ");
     }
-    return `Review of ${count} ${count === 1 ? "lesson" : "lessons"}`;
+    return plural(count, "Review of {count} lesson", "Review of {count} lessons");
 }
 
 /** Every session there was, the latest first, but those that are hidden, as only the exercises done list them. */
@@ -384,7 +440,7 @@ export function answeredOf(session: PracticeSession, exercise: string): string {
     if (!session.exercises[exercise]) {
         return "";
     }
-    return `${session.progress[exercise]?.answered ?? 0} answered`;
+    return t("{count} answered", { count: session.progress[exercise]?.answered ?? 0 });
 }
 
 /** How a session went: how many of its instances had each result, out of how many there were to be. */
@@ -518,6 +574,10 @@ export interface ExerciseKit {
     readAloud(text: string, number?: number): void;
     /** The address of a file of the media of the learner's Anki collection, such as a picture of a card. */
     ankiMedia(name: string): Promise<string>;
+    /** The language the app is shown in, by its English name, which the interface is shown in too. */
+    language: InterfaceLanguage;
+    /** `text`, what the interface shows, in that language, with each `{name}` in it given its value. */
+    t(text: string, values?: Record<string, string | number>): string;
 }
 
 /** The interface of an exercise, ready to be mounted, as `exercises/kit.js` describes. */
@@ -580,7 +640,8 @@ export function exerciseKit(
     act: (message: unknown) => Promise<unknown>,
     finish: () => void,
     readAloud: (text: string, number: number) => void = () => undefined,
-    ankiMedia: (name: string) => Promise<string> = () => Promise.reject(new Error("There is no Anki here.")),
+    ankiMedia: (name: string) => Promise<string> = () => Promise.reject(new Error(t("There is no Anki here."))),
+    exercise = "",
 ): { kit: ExerciseKit; show: (show: unknown) => void } {
     let handler: (show: unknown) => void = () => undefined;
     const kit: ExerciseKit = {
@@ -600,6 +661,8 @@ export function exerciseKit(
         },
         ankiMedia: (name) =>
             typeof name === "string" && name ? ankiMedia(name) : Promise.reject(new Error("A file has a name.")),
+        language: interfaceLanguage(),
+        t: (text, values = {}) => (typeof text === "string" ? exerciseText(exercise, text, values) : String(text)),
     };
     return { kit, show: (shown) => handler(shown) };
 }

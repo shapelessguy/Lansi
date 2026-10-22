@@ -68,5 +68,51 @@
             "planned",
             "items"
         ]
+    },
+    "messages": {
+        "German": {
+            "Label the picture": "Das Bild beschriften",
+            "Label the things marked on a picture drawn for the topic, then have them checked. Each instance is a picture.": "Beschrifte die markierten Dinge auf einem Bild, das zum Thema gezeichnet wurde, und lass sie dann prüfen. Jede Runde ist ein Bild.",
+            "Things on a picture": "Dinge auf einem Bild",
+            "What is it?": "Was ist das?",
+            "What the point is on": "Worauf der Punkt liegt",
+            "right": "richtig",
+            "almost": "fast",
+            "wrong": "falsch",
+            "{labelled} of {count} labelled. Click a point to label it, and check when you are done.": "{labelled} von {count} beschriftet. Klick auf einen Punkt, um ihn zu beschriften, und lass prüfen, wenn du fertig bist.",
+            "picture {at} of {total}": "Bild {at} von {total}",
+            "A picture with points to label": "Ein Bild mit Punkten zum Beschriften",
+            "Point {number}": "Punkt {number}",
+            "Look again": "Noch einmal schauen",
+            "Looking…": "Es wird geschaut…",
+            "No thing could be found on the picture.": "Auf dem Bild wurde nichts gefunden.",
+            "Check labels": "Beschriftungen prüfen",
+            "Checking…": "Wird geprüft…",
+            "Next picture": "Nächstes Bild",
+            "Drawing the next picture…": "Nächstes Bild wird gezeichnet…",
+            "Done": "Fertig"
+        },
+        "Italian": {
+            "Label the picture": "Etichetta l'immagine",
+            "Label the things marked on a picture drawn for the topic, then have them checked. Each instance is a picture.": "Etichetta le cose segnate su un'immagine disegnata per l'argomento, poi falle controllare. Ogni turno è un'immagine.",
+            "Things on a picture": "Cose in un'immagine",
+            "What is it?": "Che cos'è?",
+            "What the point is on": "Su cosa si trova il punto",
+            "right": "giusta",
+            "almost": "quasi",
+            "wrong": "sbagliata",
+            "{labelled} of {count} labelled. Click a point to label it, and check when you are done.": "{labelled} di {count} etichettati. Clicca un punto per etichettarlo, e controlla quando hai finito.",
+            "picture {at} of {total}": "immagine {at} di {total}",
+            "A picture with points to label": "Un'immagine con punti da etichettare",
+            "Point {number}": "Punto {number}",
+            "Look again": "Guarda di nuovo",
+            "Looking…": "Ricerca…",
+            "No thing could be found on the picture.": "Non è stato trovato niente nell'immagine.",
+            "Check labels": "Controlla le etichette",
+            "Checking…": "Controllo…",
+            "Next picture": "Immagine successiva",
+            "Drawing the next picture…": "Disegno dell'immagine successiva…",
+            "Done": "Fatto"
+        }
     }
 }

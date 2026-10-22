@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { doubt, type Sentence } from "../lib/checker";
+import { t } from "../lib/i18n";
 import type { ModelChoice } from "../lib/models";
 import {
     answerFraction,
@@ -41,7 +42,7 @@ interface Props {
 /** Stars, each filled as far as `filled` reaches into it. */
 function StarRow({ stars, filled }: Stars) {
     return (
-        <span className="answer-stars" role="img" aria-label={`${filled} of ${stars} stars`}>
+        <span className="answer-stars" role="img" aria-label={t("{filled} of {stars} stars", { filled, stars })}>
             {Array.from({ length: stars }, (_, at) => (
                 <span key={at} className="star">
                     ★
@@ -62,10 +63,10 @@ function Answers({ sentence, questions }: { sentence: Sentence; questions: Profi
         return (
             <p className="checks-note">
                 {sentence.profiling
-                    ? "Checking…"
+                    ? t("Checking…")
                     : sentence.complete
-                    ? "Not checked."
-                    : "It is checked once the cursor leaves the sentence."}
+                    ? t("Not checked.")
+                    : t("It is checked once the cursor leaves the sentence.")}
             </p>
         );
     }
@@ -80,10 +81,10 @@ function Answers({ sentence, questions }: { sentence: Sentence; questions: Profi
                         <dt>{question.title}</dt>
                         <dd>
                             <span className="answer-value">
-                                {answer ? describeAnswer(question, answer) : "No answer"}
+                                {answer ? describeAnswer(question, answer) : t("No answer")}
                             </span>
                             {answer && answer.confidence !== null && (
-                                <span className="answer-confidence" title="How sure the model is">
+                                <span className="answer-confidence" title={t("How sure the model is")}>
                                     {Math.round(answer.confidence * 100)}%
                                 </span>
                             )}
@@ -105,10 +106,10 @@ function Answers({ sentence, questions }: { sentence: Sentence; questions: Profi
 function Words({ sentence }: { sentence: Sentence }) {
     const words = sentence.words ?? [];
     if (words.length === 0) {
-        return sentence.rating_words ? <p className="checks-note">Rating the words…</p> : null;
+        return sentence.rating_words ? <p className="checks-note">{t("Rating the words…")}</p> : null;
     }
     return (
-        <ul className="word-ratings" aria-label="How right each word is">
+        <ul className="word-ratings" aria-label={t("How right each word is")}>
             {words.map((word, index) => (
                 <li
                     key={index}
@@ -127,7 +128,7 @@ function Correction({ sentence }: { sentence: Sentence }) {
     let shown;
     if (sentence.correction) {
         shown = sentence.correction === sentence.text
-            ? <p className="checks-note">Nothing to correct.</p>
+            ? <p className="checks-note">{t("Nothing to correct.")}</p>
             : <blockquote className="checks-sentence checks-correction">{sentence.correction}</blockquote>;
     } else if (sentence.correction_error) {
         shown = <p className="checks-note error">{sentence.correction_error}</p>;
@@ -135,17 +136,17 @@ function Correction({ sentence }: { sentence: Sentence }) {
         shown = (
             <p className="checks-note">
                 {sentence.correcting
-                    ? "Correcting…"
+                    ? t("Correcting…")
                     : sentence.complete
-                    ? "Not corrected."
-                    : "It is corrected once the cursor leaves the sentence."}
+                    ? t("Not corrected.")
+                    : t("It is corrected once the cursor leaves the sentence.")}
             </p>
         );
     }
     return (
         <dl className="answers">
             <div className="answer">
-                <dt>Correction</dt>
+                <dt>{t("Correction")}</dt>
                 <dd className="correction">{shown}</dd>
             </div>
         </dl>
@@ -172,14 +173,16 @@ export function ChecksPanel(
 ) {
     const asked = askedQuestions(questions);
     return (
-        <SidePanel title="Sentence checks" onClose={onClose}>
+        <SidePanel title={t("Sentence checks")} onClose={onClose}>
             <div className="usage checks">
                 <section>
-                    <h3>Spelling</h3>
+                    <h3>{t("Spelling")}</h3>
                     <label className="toggle">
                         <span>
-                            Correct each sentence
-                            <small>Has the translation model write it as it should be, alongside the questions</small>
+                            {t("Correct each sentence")}
+                            <small>
+                                {t("Has the translation model write it as it should be, alongside the questions")}
+                            </small>
                         </span>
                         <input
                             type="checkbox"
@@ -188,12 +191,12 @@ export function ChecksPanel(
                             onChange={(event) => onCorrect(event.target.checked)}
                         />
                     </label>
-                    {questions.length === 0 && <p className="checks-note">There are no questions.</p>}
+                    {questions.length === 0 && <p className="checks-note">{t("There are no questions.")}</p>}
                     {questions.map((question) => (
                         <label key={question.id} className="toggle">
                             <span>
-                                {question.title || "Untitled"}
-                                {!isAskable(question) && <small>Incomplete, so it is not asked</small>}
+                                {question.title || t("Untitled")}
+                                {!isAskable(question) && <small>{t("Incomplete, so it is not asked")}</small>}
                             </span>
                             <input
                                 type="checkbox"
@@ -203,15 +206,17 @@ export function ChecksPanel(
                             />
                         </label>
                     ))}
-                    <button className="link" onClick={onEditQuestions}>Edit questions</button>
+                    <button className="link" onClick={onEditQuestions}>{t("Edit questions")}</button>
                 </section>
                 <section>
-                    <h3>Then</h3>
+                    <h3>{t("Then")}</h3>
                     <label className="toggle">
                         <span>
-                            Rate each word
+                            {t("Rate each word")}
                             <small>
-                                Asks, by the answers above{correct ? " and the correction" : ""}, how right each word is
+                                {correct
+                                    ? t("Asks, by the answers above and the correction, how right each word is")
+                                    : t("Asks, by the answers above, how right each word is")}
                             </small>
                         </span>
                         <input
@@ -223,13 +228,13 @@ export function ChecksPanel(
                     </label>
                 </section>
                 <section>
-                    <h3>Sentence under the cursor</h3>
+                    <h3>{t("Sentence under the cursor")}</h3>
                     {!sentence
                         ? (
                             <p className="checks-note">
                                 {checkerRunning || !hasText
-                                    ? "Write in the chat to see what the questions say about each sentence."
-                                    : "Nothing yet. The checker server may not be running."}
+                                    ? t("Write in the chat to see what the questions say about each sentence.")
+                                    : t("Nothing yet. The checker server may not be running.")}
                             </p>
                         )
                         : (
@@ -237,9 +242,9 @@ export function ChecksPanel(
                                 <blockquote className="checks-sentence">{sentence.text}</blockquote>
                                 {correct && (hasKey || corrector.url) && <Correction sentence={sentence} />}
                                 {!hasKey && !model.url
-                                    ? <p className="checks-note">Add your OpenRouter API key in the settings.</p>
+                                    ? <p className="checks-note">{t("Add your OpenRouter API key in the settings.")}</p>
                                     : asked.length === 0
-                                    ? <p className="checks-note">No question is turned on.</p>
+                                    ? <p className="checks-note">{t("No question is turned on.")}</p>
                                     : (
                                         <>
                                             <Answers sentence={sentence} questions={asked} />
@@ -250,10 +255,10 @@ export function ChecksPanel(
                         )}
                 </section>
                 <section>
-                    <h3>Answered by</h3>
+                    <h3>{t("Answered by")}</h3>
                     <p className="checks-model">
                         <span className={model.url ? "badge local" : "badge"} title={model.url || undefined}>
-                            {model.url ? "Own server" : "OpenRouter"}
+                            {model.url ? t("Own server") : "OpenRouter"}
                         </span>
                         {model.model}
                     </p>
@@ -263,17 +268,19 @@ export function ChecksPanel(
                                 className={corrector.url ? "badge local" : "badge"}
                                 title={corrector.url || undefined}
                             >
-                                {corrector.url ? "Own server" : "OpenRouter"}
+                                {corrector.url ? t("Own server") : "OpenRouter"}
                             </span>
-                            {corrector.model || "the usual model"}
-                            <small>corrects</small>
+                            {corrector.model || t("the usual model")}
+                            <small>{t("corrects")}</small>
                         </p>
                     )}
                 </section>
                 <p className="usage-note">
                     {model.url
-                        ? `Turning a question on asks it about the finished sentences in the box, at ${model.url}.`
-                        : "Turning a question on asks it about the finished sentences in the box, which is billed."}
+                        ? t("Turning a question on asks it about the finished sentences in the box, at {url}.", {
+                            url: model.url,
+                        })
+                        : t("Turning a question on asks it about the finished sentences in the box, which is billed.")}
                 </p>
             </div>
         </SidePanel>

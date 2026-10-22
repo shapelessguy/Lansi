@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
 import { type ModelChoice, modelRequest } from "./models";
 import { checkerFetch } from "./session";
 import { pcmToWav } from "./speech";
@@ -248,7 +249,8 @@ export async function fetchSentenceAudio(base: string, sentenceId: string, signa
         if (response.ok) {
             return response.blob();
         }
-        reason = (await response.json().catch(() => ({}))).error ?? `The server answered ${response.status}.`;
+        reason = (await response.json().catch(() => ({}))).error
+            ?? t("The server answered {status}.", { status: response.status });
         // the server stops waiting after a while, and is then asked again
         if (reason !== "the audio is not made yet") {
             break;

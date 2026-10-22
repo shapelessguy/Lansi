@@ -28,6 +28,7 @@ function taskOf(task) {
 }
 
 export function mount(root, exercise) {
+    const t = exercise.t;
     const error = element("p", { className: "error" });
 
     function send(message, button, busyText, fields = []) {
@@ -45,7 +46,8 @@ export function mount(root, exercise) {
     }
 
     function progress(at, total) {
-        return element("div", { className: "progress", textContent: `Task ${Math.min(at + 1, total)} of ${total}` });
+        return element("div", { className: "progress", textContent: t("Task {at} of {total}", { at: Math.min(at + 1, total), total }),
+        });
     }
 
     function writing(show) {
@@ -53,7 +55,7 @@ export function mount(root, exercise) {
         const last = show.at + 1 >= show.total;
         const done = element("button", {
             className: "primary",
-            textContent: show.exam ? (last ? "Done" : "Next") : "Hand in",
+            textContent: show.exam ? (last ? t("Done") : t("Next")) : t("Hand in"),
         });
         let fields;
         let message;
@@ -71,16 +73,17 @@ export function mount(root, exercise) {
                 ),
             ];
         } else {
-            const text = element("textarea", { placeholder: "Write here", spellcheck: false, rows: 8 });
-            const count = element("span", { className: "muted", textContent: `0 of about ${show.words} words` });
-            text.oninput = () => (count.textContent = `${wordsIn(text.value)} of about ${show.words} words`);
+            const text = element("textarea", { placeholder: t("Write here"), spellcheck: false, rows: 8 });
+            const counted = () => t("{count} of about {words} words", { count: wordsIn(text.value), words: show.words });
+            const count = element("span", { className: "muted", textContent: counted() });
+            text.oninput = () => (count.textContent = counted());
             fields = [text];
             message = () => ({ text: text.value });
             parts = [text, count];
         }
         done.onclick = () => {
             if (fields.some((field) => field.value.trim())) {
-                send(message(), done, show.exam ? "Next…" : "Rating…", fields);
+                send(message(), done, show.exam ? t("Next…") : t("Rating…"), fields);
             }
         };
         root.replaceChildren(
@@ -93,8 +96,8 @@ export function mount(root, exercise) {
     }
 
     function reviewing(show) {
-        const go = element("button", { className: "primary", textContent: show.more ? "Next task" : "Done" });
-        go.onclick = show.more ? () => send({ next: true }, go, "Making the next task…") : () => exercise.finish();
+        const go = element("button", { className: "primary", textContent: show.more ? t("Next task") : t("Done") });
+        go.onclick = show.more ? () => send({ next: true }, go, t("Making the next task…")) : () => exercise.finish();
         const feedback = show.feedback;
         const parts = [];
         if (feedback.kind === "form") {
@@ -107,10 +110,10 @@ export function mount(root, exercise) {
                             "li",
                             { className: `feedback ${field.result}` },
                             element("div", { className: "muted", textContent: field.label }),
-                            element("strong", { textContent: field.answer || "(nothing written)" }),
+                            element("strong", { textContent: field.answer || t("(nothing written)") }),
                             field.result === "right"
                                 ? null
-                                : element("div", { textContent: `In the text: ${field.reference}` }),
+                                : element("div", { textContent: t("In the text: {reference}", { reference: field.reference }) }),
                             field.note ? element("div", { className: "muted", textContent: field.note }) : null,
                         )
                     ),
@@ -121,13 +124,13 @@ export function mount(root, exercise) {
                 element(
                     "div",
                     { className: `feedback ${feedback.result}` },
-                    element("strong", { textContent: LABELS[feedback.result] }),
-                    ratingsOf(feedback.ratings),
+                    element("strong", { textContent: t(LABELS[feedback.result]) }),
+                    ratingsOf(feedback.ratings, t),
                     feedback.note ? element("p", { textContent: feedback.note }) : null,
                 ),
-                element("h3", { textContent: "What you wrote" }),
+                element("h3", { textContent: t("What you wrote") }),
                 element("p", { className: "written", textContent: feedback.answer }),
-                feedback.correction ? element("h3", { textContent: "Corrected" }) : null,
+                feedback.correction ? element("h3", { textContent: t("Corrected") }) : null,
                 feedback.correction ? element("p", { className: "written", textContent: feedback.correction }) : null,
             );
         }
@@ -149,7 +152,7 @@ export function mount(root, exercise) {
      * the part is handed in at once, or, if more is to come, it goes on to it.
      */
     function withheld(show) {
-        root.replaceChildren(element("p", { className: "muted", textContent: "Handing in…" }), error);
+        root.replaceChildren(element("p", { className: "muted", textContent: t("Handing in…") }), error);
         const going = show.more ? exercise.act({ next: true }) : Promise.resolve(exercise.finish());
         going.catch((failed) => {
             error.textContent = failed.message;

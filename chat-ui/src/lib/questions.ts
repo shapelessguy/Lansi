@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
 import { newId } from "./ids";
 /** One of the answers a question can be given. */
 export interface QuestionOption {
@@ -164,11 +165,11 @@ export function requestQuestions(
 /** An answer in words, such as "none" or "Mostly clear (2.4 of 3)". */
 export function describeAnswer(question: ProfileQuestion, answer: ProfileAnswer): string {
     if (answer.kind === "choice" || answer.score === null) {
-        return answer.choice ?? "No answer";
+        return answer.choice ?? t("No answer");
     }
     const highest = answer.max_score ?? question.options.length - 1;
     const level = question.options[Math.round(answer.score)]?.label.trim();
-    const place = `${answer.score.toFixed(1)} of ${highest}`;
+    const place = t("{score} of {highest}", { score: answer.score.toFixed(1), highest });
     return level ? `${level} (${place})` : place;
 }
 

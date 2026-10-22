@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { type Message, t } from "./i18n";
 import { newId } from "./ids";
 import { checkerFetch } from "./session";
 import type { ListedWord } from "./vocabulary";
@@ -79,7 +80,7 @@ export const keepLabels = {
     "seen:least": "the least seen",
     "total:most": "the most used or seen",
     "total:least": "the least used or seen",
-} as const;
+} as const satisfies Record<string, Message>;
 
 export type Keep = keyof typeof keepLabels;
 
@@ -259,10 +260,10 @@ async function send(path: string, language: string, init?: RequestInit): Promise
     try {
         response = await checkerFetch(`/vocabulary/sets${path}?language=${encodeURIComponent(language)}`, init);
     } catch {
-        throw new Error("The server cannot be reached. Is `just dev` running?");
+        throw new Error(t("The server cannot be reached. Is `just dev` running?"));
     }
     if (!response.ok) {
-        throw new Error(`The server answered ${response.status}.`);
+        throw new Error(t("The server answered {status}.", { status: response.status }));
     }
     return response;
 }

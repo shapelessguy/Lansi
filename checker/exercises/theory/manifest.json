@@ -1,5 +1,37 @@
 {
     "title": "Theory",
     "description": "Read the lesson page by page, and ask about it in a chat as you go. Nothing is answered or logged.",
-    "theory": true
+    "theory": true,
+    "messages": {
+        "German": {
+            "Page {number}": "Seite {number}",
+            "Pages": "Seiten",
+            "Back": "Zurück",
+            "Done": "Fertig",
+            "Next": "Weiter",
+            "Page {at} of {total}": "Seite {at} von {total}",
+            "Ask about the lesson": "Frag zur Lektion",
+            "Ask anything that is not clear, or write your answers to the exercise at the end of a page to have them checked.": "Frag alles, was nicht klar ist, oder schreib deine Antworten zur Übung am Ende einer Seite, um sie prüfen zu lassen.",
+            "Thinking…": "Denkt nach…",
+            "Your question (Enter to send, Shift+Enter for a new line)": "Deine Frage (Enter zum Senden, Umschalt+Enter für eine neue Zeile)",
+            "Ask": "Fragen",
+            "Theory": "Theorie",
+            "Read the lesson page by page, and ask about it in a chat as you go. Nothing is answered or logged.": "Lies die Lektion Seite für Seite und frag nebenbei in einem Chat danach. Es wird nichts beantwortet oder festgehalten."
+        },
+        "Italian": {
+            "Page {number}": "Pagina {number}",
+            "Pages": "Pagine",
+            "Back": "Indietro",
+            "Done": "Fatto",
+            "Next": "Avanti",
+            "Page {at} of {total}": "Pagina {at} di {total}",
+            "Ask about the lesson": "Chiedi sulla lezione",
+            "Ask anything that is not clear, or write your answers to the exercise at the end of a page to have them checked.": "Chiedi tutto ciò che non è chiaro, o scrivi le tue risposte all'esercizio in fondo a una pagina per farle controllare.",
+            "Thinking…": "Sta pensando…",
+            "Your question (Enter to send, Shift+Enter for a new line)": "La tua domanda (Invio per inviare, Maiusc+Invio per andare a capo)",
+            "Ask": "Chiedi",
+            "Theory": "Teoria",
+            "Read the lesson page by page, and ask about it in a chat as you go. Nothing is answered or logged.": "Leggi la lezione pagina per pagina, e fai domande in una chat man mano. Non si risponde a niente e non si registra niente."
+        }
+    }
 }

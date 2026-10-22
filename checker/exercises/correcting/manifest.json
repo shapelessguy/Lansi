@@ -8,5 +8,17 @@
             "label": "Text",
             "texts": true
         }
+    },
+    "messages": {
+        "German": {
+            "Correct my text": "Meinen Text korrigieren",
+            "Correct one of your texts, such as your homework, at once: each mistake is marked with its correction and why, the text is shown with its corrections from then on, and it is locked. Nothing is asked of the learner; the log is written as for any exercise.": "Korrigiert einen deiner Texte, etwa deine Hausaufgaben, auf einmal: Jeder Fehler wird mit seiner Korrektur und dem Grund markiert, der Text wird von da an mit seinen Korrekturen gezeigt und gesperrt. Du musst nichts beantworten; der Bericht wird wie bei jeder Übung geschrieben.",
+            "No mistakes.": "Keine Fehler."
+        },
+        "Italian": {
+            "Correct my text": "Correggi il mio testo",
+            "Correct one of your texts, such as your homework, at once: each mistake is marked with its correction and why, the text is shown with its corrections from then on, and it is locked. Nothing is asked of the learner; the log is written as for any exercise.": "Corregge in una volta uno dei tuoi testi, come i compiti: ogni errore è segnato con la correzione e il perché, da allora il testo viene mostrato con le correzioni ed è bloccato. Non ti viene chiesto niente; il resoconto viene scritto come per ogni esercizio.",
+            "No mistakes.": "Nessun errore."
+        }
     }
 }

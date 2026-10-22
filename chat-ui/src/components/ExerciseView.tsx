@@ -5,8 +5,9 @@ import { useEffect, useRef, useState } from "react";
 
 import { ankiMediaUrl } from "../lib/anki";
 import type { ProfileUsage } from "../lib/checker";
+import { t } from "../lib/i18n";
 import type { Where } from "../lib/logs";
-import { exerciseKit, type Learner, loadInterface, stepExercise } from "../lib/practice";
+import { exerciseKit, knowExercises, type Learner, loadInterface, stepExercise } from "../lib/practice";
 
 interface Props {
     sessionId: string;
@@ -55,7 +56,8 @@ export function ExerciseView(
         setRendered(false);
         // the interface is loaded while the backend makes the exercise
         Promise.all([
-            loadInterface(exercise),
+            // what it shows in the language of the interface, which the kit has it say
+            knowExercises().then(() => loadInterface(exercise)),
             stepExercise(sessionId, exercise, "start", null, latest.current.learner).then(({ show, usage }) => {
                 latest.current.onUsage(usage);
                 return show;
@@ -80,6 +82,7 @@ export function ExerciseView(
                 () => latest.current.onFinish(),
                 (text, number) => latest.current.onReadAloud(text, number),
                 ankiMediaUrl,
+                exercise,
             );
             unmount = ui.mount(root, kit);
             show(first);
@@ -102,11 +105,11 @@ export function ExerciseView(
             {!rendered && !error && (
                 <div className="exercise-waiting" style={{ minHeight: WAITING_HEIGHT }} role="status">
                     <span className="exercise-spinner" aria-hidden="true" />
-                    {theory ? <strong>Opening the lesson…</strong> : (
+                    {theory ? <strong>{t("Opening the lesson…")}</strong> : (
                         <>
-                            <strong>Making the exercise…</strong>
+                            <strong>{t("Making the exercise…")}</strong>
                             <span className="practice-detail">
-                                The model is writing it for you. This takes a few seconds.
+                                {t("The model is writing it for you. This takes a few seconds.")}
                             </span>
                         </>
                     )}
@@ -114,9 +117,9 @@ export function ExerciseView(
             )}
             {error && (
                 <div className="exercise-waiting error" style={{ minHeight: WAITING_HEIGHT }} role="alert">
-                    <strong>The exercise could not be made.</strong>
+                    <strong>{t("The exercise could not be made.")}</strong>
                     <span>{error}</span>
-                    <button onClick={() => setAttempt((count) => count + 1)}>Try again</button>
+                    <button onClick={() => setAttempt((count) => count + 1)}>{t("Try again")}</button>
                 </div>
             )}
             <div

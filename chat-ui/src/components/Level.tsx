@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "../lib/i18n";
 import { LEVELS } from "../lib/settings";
 
 /** The class that gives a level its colour, the same wherever it is shown. */
@@ -11,7 +12,7 @@ function levelClass(level: string): string {
 /** A level, such as A1, in a small circle of its colour. */
 export function LevelBadge({ level }: { level: string }) {
     return (
-        <span className={levelClass(level)} title={`Level ${level}`}>
+        <span className={levelClass(level)} title={t("Level {level}", { level })}>
             {level}
         </span>
     );

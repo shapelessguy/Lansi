@@ -19,6 +19,7 @@ import {
     startEvaluation,
     startPart,
 } from "../lib/evaluations";
+import { interfaceLanguage, languageName, plural, t } from "../lib/i18n";
 import { type ExerciseInfo, fetchExercises, fetchSession, type Learner, type PracticeSession } from "../lib/practice";
 import type { Settings } from "../lib/settings";
 import type { BackgroundTask } from "../lib/tasks";
@@ -71,6 +72,8 @@ export function Evaluations(
         fetchEvaluations().then(setHistory, () => undefined);
     }, []);
     useEffect(loadHistory, [loadHistory, evaluation?.id, ended]);
+    // the exercises are listed again in the language of the interface when it changes
+    const shownIn = interfaceLanguage();
     useEffect(() => {
         setLevels({ status: "loading" });
         fetchLevels(language).then(
@@ -78,7 +81,7 @@ export function Evaluations(
             (failed: Error) => setLevels({ status: "error", message: failed.message }),
         );
         fetchExercises().then(setExercises, () => undefined);
-    }, [language]);
+    }, [language, shownIn]);
 
     const exam = levels.status === "ready" ? levels.items.find((each) => each.level === level) ?? null : null;
     const unfinished = evaluation ? null : history.find((each) => each.status === "running") ?? null;
@@ -207,8 +210,8 @@ export function Evaluations(
                         {part && (
                             <>
                                 {" · "}
-                                {moduleTitle(evaluation.plan.modules, part.module)} {part.title} ({at! + 1} of{" "}
-                                {evaluation.parts.length})
+                                {moduleTitle(evaluation.plan.modules, part.module)} {part.title}{" "}
+                                {t("({at} of {count})", { at: at! + 1, count: evaluation.parts.length })}
                             </>
                         )}
                     </span>
@@ -226,23 +229,23 @@ export function Evaluations(
                         {running && (
                             <button
                                 disabled={busy}
-                                title="Hand in this part as it is and go on. What you answered is kept."
+                                title={t("Hand in this part as it is and go on. What you answered is kept.")}
                                 onClick={() => finish(evaluation, at!)}
                             >
-                                Next part
+                                {t("Next part")}
                             </button>
                         )}
                         <button
                             disabled={busy}
-                            title="Stop the evaluation here. What you answered is scored."
+                            title={t("Stop the evaluation here. What you answered is scored.")}
                             onClick={() => end(evaluation)}
                         >
-                            End evaluation
+                            {t("End evaluation")}
                         </button>
                     </span>
                 </div>
                 {error && <p className="practice-note error">{error}</p>}
-                <ol className="evaluation-parts" aria-label="Parts">
+                <ol className="evaluation-parts" aria-label={t("Parts")}>
                     {evaluation.parts.map((each, number) => (
                         <li
                             key={number}
@@ -278,13 +281,14 @@ export function Evaluations(
                                 </h2>
                                 <p>{part.instructions}</p>
                                 <p className="practice-detail">
-                                    {titleOf(part.exercise)} · {part.instances}{" "}
-                                    {part.instances === 1 ? "task" : "tasks"} · {evaluation.timed
-                                        ? `${part.minutes} min, timed from when it is shown`
-                                        : `about ${part.minutes} min`}
+                                    {titleOf(part.exercise)} · {plural(part.instances, "{count} task", "{count} tasks")}
+                                    {" · "}
+                                    {evaluation.timed
+                                        ? t("{minutes} min, timed from when it is shown", { minutes: part.minutes })
+                                        : t("about {minutes} min", { minutes: part.minutes })}
                                 </p>
                                 <button className="primary" disabled={busy} onClick={() => openPart(evaluation, at!)}>
-                                    {busy ? "Starting…" : part.status === "running" ? "Continue" : "Start"}
+                                    {busy ? t("Starting…") : part.status === "running" ? t("Continue") : t("Start")}
                                 </button>
                             </section>
                         )}
@@ -304,43 +308,52 @@ export function Evaluations(
                         {/* what was not right is told only now, as an exam does */}
                         <EvaluationReview evaluation={ended} />
                         <p className="practice-detail">
-                            The log of the evaluation is being written, with these scores.
+                            {t("The log of the evaluation is being written, with these scores.")}
                         </p>
                     </section>
                 )}
                 {unfinished && (
                     <div className="practice-resume">
                         <span>
-                            <strong>Not finished:</strong> {unfinished.plan.exam}
+                            <strong>{t("Not finished:")}</strong> {unfinished.plan.exam}
                             <span className="practice-detail">
                                 {" · "}
-                                {unfinished.parts.filter((part) => part.status === "done").length} of{" "}
-                                {unfinished.parts.length} parts done
+                                {t("{done} of {count} parts done", {
+                                    done: unfinished.parts.filter((part) => part.status === "done").length,
+                                    count: unfinished.parts.length,
+                                })}
                             </span>
                         </span>
                         <span className="practice-actions">
-                            <button className="primary" onClick={() => resume(unfinished)}>Continue</button>
-                            <button disabled={busy} onClick={() => end(unfinished)}>End it</button>
+                            <button className="primary" onClick={() => resume(unfinished)}>{t("Continue")}</button>
+                            <button disabled={busy} onClick={() => end(unfinished)}>{t("End it")}</button>
                         </span>
                     </div>
                 )}
                 {!canAsk(learner.model, learner.apiKey) && (
                     <p className="practice-note">
-                        The parts are made by a model. <button onClick={onOpenSettings}>Add your OpenRouter key</button>
+                        {t("The parts are made by a model.")}{" "}
+                        <button onClick={onOpenSettings}>{t("Add your OpenRouter key")}</button>
                     </p>
                 )}
                 <section className="evaluation-start">
                     <h2>
-                        Evaluation <LevelBadge level={level} />
+                        {t("Evaluation")} <LevelBadge level={level} />
                     </h2>
-                    {levels.status === "loading" && <p className="practice-note">Loading the exams…</p>}
+                    {levels.status === "loading" && <p className="practice-note">{t("Loading the exams…")}</p>}
                     {levels.status === "error" && <p className="practice-note error">{levels.message}</p>}
                     {levels.status === "ready" && !exam && (
                         <p className="practice-note">
-                            There is no exam of {language} at {level} yet
                             {levels.items.length > 0
-                                && ` (there is at ${levels.items.map((each) => each.level).join(", ")})`}.{" "}
-                            <button onClick={onOpenSettings}>Change your level</button>
+                                ? t("There is no exam of {language} at {level} yet (there is at {levels}).", {
+                                    language: languageName(language),
+                                    level,
+                                    levels: levels.items.map((each) => each.level).join(", "),
+                                })
+                                : t("There is no exam of {language} at {level} yet.", {
+                                    language: languageName(language),
+                                    level,
+                                })} <button onClick={onOpenSettings}>{t("Change your level")}</button>
                         </p>
                     )}
                     {exam && (
@@ -349,11 +362,12 @@ export function Evaluations(
                                 <strong>{exam.exam}</strong>
                                 <span className="practice-detail">
                                     {" · "}
-                                    {exam.modules.map((module) => module.title).join(", ")} · {exam.minutes} min in full
+                                    {exam.modules.map((module) => module.title).join(", ")} ·{" "}
+                                    {t("{minutes} min in full", { minutes: exam.minutes })}
                                 </span>
                             </p>
                             <label className="exercise-setting">
-                                <span>Length</span>
+                                <span>{t("Length")}</span>
                                 <span className="evaluation-length">
                                     <input
                                         type="range"
@@ -371,7 +385,7 @@ export function Evaluations(
                                 </span>
                             </label>
                             <label className="exercise-setting">
-                                <span>Timed</span>
+                                <span>{t("Timed")}</span>
                                 <span>
                                     <input
                                         type="checkbox"
@@ -379,18 +393,21 @@ export function Evaluations(
                                         onChange={(event) =>
                                             onChangeSettings({ ...settings, evaluationTimed: event.target.checked })}
                                     />{" "}
-                                    <span className="practice-detail">each part in its time, as in the exam</span>
+                                    <span className="practice-detail">
+                                        {t("each part in its time, as in the exam")}
+                                    </span>
                                 </span>
                             </label>
                             <p className="practice-detail">
-                                Your level is set in the settings. What you write in an evaluation is not taken into
-                                your vocabulary.
+                                {t(
+                                    "Your level is set in the settings. What you write in an evaluation is not taken into your vocabulary.",
+                                )}
                             </p>
                         </>
                     )}
                     {error && <p className="practice-note error">{error}</p>}
                     <button className="primary" disabled={busy || !exam} onClick={begin}>
-                        {busy ? "Starting…" : "Start the evaluation"}
+                        {busy ? t("Starting…") : t("Start the evaluation")}
                     </button>
                 </section>
             </div>

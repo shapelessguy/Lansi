@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { t } from "../lib/i18n";
 import { type BackgroundTask, describeTask, mentioned, taskName } from "../lib/tasks";
 import { Icon } from "./Icon";
 
@@ -43,8 +44,8 @@ export function TaskSign({ tasks }: Props) {
                 aria-pressed={open}
                 aria-haspopup="true"
                 onClick={() => setOpen(!open)}
-                aria-label="Tasks"
-                title={running > 0 ? "Work is being done in the background" : "What was done in the background"}
+                aria-label={t("Tasks")}
+                title={running > 0 ? t("Work is being done in the background") : t("What was done in the background")}
             >
                 {running > 0 ? <span className="spinner" aria-hidden="true" /> : <Icon name="tasks" />}
                 {running > 0 && <span className="count">{running}</span>}
@@ -52,7 +53,7 @@ export function TaskSign({ tasks }: Props) {
                 <span className="caret" aria-hidden="true">▾</span>
             </button>
             {open && (
-                <ul className="task-list" aria-label="Background tasks">
+                <ul className="task-list" aria-label={t("Background tasks")}>
                     {tasks.map((task) => (
                         <li key={task.id} className={`task ${task.state}`}>
                             <span className="task-kind">{taskName(task)}</span>

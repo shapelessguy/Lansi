@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
 import { checkerFetch } from "./session";
 
 /**
@@ -31,7 +32,7 @@ export interface Text {
 export async function fetchTexts(): Promise<Text[]> {
     const response = await checkerFetch("/texts");
     if (!response.ok) {
-        throw new Error("The texts could not be listed.");
+        throw new Error(t("The texts could not be listed."));
     }
     return (await response.json()).texts;
 }
@@ -39,7 +40,7 @@ export async function fetchTexts(): Promise<Text[]> {
 export async function fetchText(id: string): Promise<Text> {
     const response = await checkerFetch(`/texts/${encodeURIComponent(id)}`);
     if (!response.ok) {
-        throw new Error("The text could not be found.");
+        throw new Error(t("The text could not be found."));
     }
     return response.json();
 }

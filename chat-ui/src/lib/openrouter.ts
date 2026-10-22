@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
 import { errorMessage, type ModelChoice, sendChat } from "./models";
 
 export interface ChatMessage {
@@ -49,7 +50,7 @@ export function parseStream(buffer: string): StreamParse {
         }
         const event = JSON.parse(data);
         if (event.error) {
-            throw new Error(event.error.message ?? "The model returned an error.");
+            throw new Error(event.error.message ?? t("The model returned an error."));
         }
         text += event.choices?.[0]?.delta?.content ?? "";
         if (event.usage) {

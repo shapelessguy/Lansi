@@ -3,6 +3,7 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 
+import { t } from "../lib/i18n";
 import { iconOf, matchesTopic, type Topic } from "../lib/topics";
 
 interface Props {
@@ -69,8 +70,8 @@ export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, o
                 <input
                     type="search"
                     className="topic-search"
-                    placeholder="Search topics"
-                    aria-label="Search topics"
+                    placeholder={t("Search topics")}
+                    aria-label={t("Search topics")}
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     onKeyDown={(event) => event.key === "Escape" && setQuery("")}
@@ -95,16 +96,16 @@ export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, o
                         <span className="topic-actions">
                             <button
                                 className="icon-button"
-                                title="Make the icon again"
-                                aria-label={`Make the icon of ${topic.title} again`}
+                                title={t("Make the icon again")}
+                                aria-label={t("Make the icon of {name} again", { name: topic.title })}
                                 onClick={() => onRemakeIcon(topic.id)}
                             >
                                 ↻
                             </button>
                             <button
                                 className="icon-button"
-                                title="Delete"
-                                aria-label={`Delete ${topic.title}`}
+                                title={t("Delete")}
+                                aria-label={t("Delete {name}", { name: topic.title })}
                                 onClick={() => onDelete(topic.id)}
                             >
                                 ×
@@ -113,10 +114,10 @@ export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, o
                     </li>
                 ))}
             </ul>
-            {topics.length > 0 && shown.length === 0 && <p className="practice-note">No topic is about that.</p>}
+            {topics.length > 0 && shown.length === 0 && <p className="practice-note">{t("No topic is about that.")}</p>}
             {topics.length === 0 && (
                 <p className="practice-note">
-                    Add a topic to talk about. Without one, exercises are about everyday life.
+                    {t("Add a topic to talk about. Without one, exercises are about everyday life.")}
                 </p>
             )}
             {open
@@ -128,28 +129,28 @@ export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, o
                     >
                         <input
                             type="text"
-                            placeholder="Title, such as Beim Arzt"
-                            aria-label="Title of the new topic"
+                            placeholder={t("Title, such as At the doctor's")}
+                            aria-label={t("Title of the new topic")}
                             autoFocus
                             value={title}
                             onChange={(event) => setTitle(event.target.value)}
                         />
                         <input
                             type="text"
-                            placeholder="What it is about (optional)"
-                            aria-label="What the new topic is about"
+                            placeholder={t("What it is about (optional)")}
+                            aria-label={t("What the new topic is about")}
                             value={description}
                             onChange={(event) => setDescription(event.target.value)}
                         />
                         <span className="topic-form-actions">
-                            <button type="submit" className="primary" disabled={!title.trim()}>Add</button>
-                            <button type="button" onClick={close}>Cancel</button>
+                            <button type="submit" className="primary" disabled={!title.trim()}>{t("Add")}</button>
+                            <button type="button" onClick={close}>{t("Cancel")}</button>
                         </span>
                     </form>
                 )
                 : (
                     <button className="topic-new" disabled={adding} onClick={() => setOpen(true)}>
-                        {adding ? "Adding topic…" : "+ New topic"}
+                        {adding ? t("Adding topic…") : t("+ New topic")}
                     </button>
                 )}
         </>

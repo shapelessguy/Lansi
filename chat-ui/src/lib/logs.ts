@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { type Message, t } from "./i18n";
 import { checkerFetch } from "./session";
 
 /**
@@ -29,13 +30,13 @@ export type Where =
     | { kind: "exercise"; session: string; exercise: string }
     | { kind: "evaluation"; evaluation: string; level: string };
 
-/** What the logs are of. */
+/** What the logs are of, by what they are called, to be shown with `t`. */
 export const LOG_KINDS = {
     exercise: "Exercise",
     translation: "Translation",
     question: "Question",
     evaluation: "Evaluation",
-} as const;
+} as const satisfies Record<string, Message>;
 export type LogKind = keyof typeof LOG_KINDS;
 
 /**
@@ -140,16 +141,17 @@ export function byDay(logs: Log[], locale?: string): { day: string; logs: Log[] 
 export function describeSource(log: Log): string {
     const { source } = log;
     if (source.kind === "book") {
-        return `${source.title || "a book"}${typeof source.page === "number" ? `, p. ${source.page + 1}` : ""}`;
+        const title = source.title || t("a book");
+        return typeof source.page === "number" ? t("{title}, p. {page}", { title, page: source.page + 1 }) : title;
     }
     if (source.kind === "chat") {
-        return "a chat";
+        return t("a chat");
     }
     if (source.kind === "exercise" || log.kind === "exercise") {
-        return "practice";
+        return t("practice");
     }
     if (source.kind === "evaluation" || log.kind === "evaluation") {
-        return `an evaluation${source.level ? ` at ${source.level}` : ""}`;
+        return source.level ? t("an evaluation at {level}", { level: source.level }) : t("an evaluation");
     }
     return "";
 }

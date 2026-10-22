@@ -11,5 +11,45 @@
     },
     "once": true,
     "first": true,
-    "own_tool": true
+    "own_tool": true,
+    "messages": {
+        "German": {
+            "Review Anki cards": "Anki-Karten wiederholen",
+            "Review the cards of a deck of your Anki collection, and its subdecks, as Anki does: each card is shown, then its answer, and you choose Again, Hard, Good or Easy. Each answer is a review in Anki, scheduled by the options of the deck and synced to your other devices. It goes on until nothing more is due today, or you leave it.": "Wiederhole die Karten eines Stapels deiner Anki-Sammlung und seiner Unterstapel wie in Anki: Jede Karte wird gezeigt, dann ihre Antwort, und du wählst Nochmal, Schwer, Gut oder Einfach. Jede Antwort ist eine Wiederholung in Anki, geplant nach den Optionen des Stapels und mit deinen anderen Geräten synchronisiert. Es geht weiter, bis heute nichts mehr fällig ist oder du aufhörst.",
+            "Deck": "Stapel",
+            "Play": "Abspielen",
+            "Again": "Nochmal",
+            "Hard": "Schwer",
+            "Good": "Gut",
+            "Easy": "Einfach",
+            "{count} card reviewed: {ratings}.": "{count} Karte wiederholt: {ratings}.",
+            "{count} cards reviewed: {ratings}.": "{count} Karten wiederholt: {ratings}.",
+            "{count} card reviewed.": "{count} Karte wiederholt.",
+            "{count} cards reviewed.": "{count} Karten wiederholt.",
+            "Nothing more is due in this deck today.": "In diesem Stapel ist heute nichts mehr fällig.",
+            "Your answers are synced to Anki.": "Deine Antworten werden mit Anki synchronisiert.",
+            "Finish": "Beenden",
+            "Show answer": "Antwort zeigen",
+            "{count} reviewed": "{count} wiederholt"
+        },
+        "Italian": {
+            "Review Anki cards": "Ripassa le carte di Anki",
+            "Review the cards of a deck of your Anki collection, and its subdecks, as Anki does: each card is shown, then its answer, and you choose Again, Hard, Good or Easy. Each answer is a review in Anki, scheduled by the options of the deck and synced to your other devices. It goes on until nothing more is due today, or you leave it.": "Ripassa le carte di un mazzo della tua collezione Anki, e dei suoi sottomazzi, come fa Anki: viene mostrata ogni carta, poi la risposta, e scegli Ripeti, Difficile, Buono o Facile. Ogni risposta è un ripasso in Anki, programmato secondo le opzioni del mazzo e sincronizzato con gli altri tuoi dispositivi. Continua finché oggi non c'è più niente in scadenza, o finché non smetti.",
+            "Deck": "Mazzo",
+            "Play": "Riproduci",
+            "Again": "Ripeti",
+            "Hard": "Difficile",
+            "Good": "Buono",
+            "Easy": "Facile",
+            "{count} card reviewed: {ratings}.": "{count} carta ripassata: {ratings}.",
+            "{count} cards reviewed: {ratings}.": "{count} carte ripassate: {ratings}.",
+            "{count} card reviewed.": "{count} carta ripassata.",
+            "{count} cards reviewed.": "{count} carte ripassate.",
+            "Nothing more is due in this deck today.": "Oggi non c'è più niente in scadenza in questo mazzo.",
+            "Your answers are synced to Anki.": "Le tue risposte vengono sincronizzate con Anki.",
+            "Finish": "Termina",
+            "Show answer": "Mostra risposta",
+            "{count} reviewed": "{count} ripassate"
+        }
+    }
 }

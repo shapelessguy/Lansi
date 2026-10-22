@@ -20,16 +20,17 @@ function marked(part) {
  * that the correction is kept and the log written.
  */
 export function mount(root, exercise) {
+    const t = exercise.t;
     let finished = false;
     exercise.onShow((show) => {
         root.replaceChildren(
-            element("h3", { textContent: show.title || "Untitled" }),
+            element("h3", { textContent: show.title || t("Untitled") }),
             element(
                 "div",
                 { className: "card corrected" },
                 ...show.parts.map((part) => ("text" in part ? document.createTextNode(part.text) : marked(part))),
             ),
-            show.parts.some((part) => "wrong" in part) ? null : element("p", { textContent: "No mistakes." }),
+            show.parts.some((part) => "wrong" in part) ? null : element("p", { textContent: t("No mistakes.") }),
         );
         if (!finished) {
             finished = true;

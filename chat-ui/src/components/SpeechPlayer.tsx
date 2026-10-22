@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { t } from "../lib/i18n";
 import {
     audioPlayer,
     fetchSentenceAudio,
@@ -268,13 +269,13 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
 
     const status = error
         ?? (!reading
-            ? "Getting the sentences…"
+            ? t("Getting the sentences…")
             : failed !== null
-            ? `Could not be read: ${failed}`
+            ? t("Could not be read: {why}", { why: failed })
             : !clip
-            ? "Making the audio…"
+            ? t("Making the audio…")
             : held
-            ? "The browser did not let the audio start by itself. Press play."
+            ? t("The browser did not let the audio start by itself. Press play.")
             : null);
 
     // Beside a reply there is the reply to read, so the sentence is not
@@ -292,15 +293,15 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                 ? (spot ? { left: spot.left, top: spot.top } : { left: 0, top: 0, visibility: "hidden" })
                 : undefined}
             role="region"
-            aria-label="Reading aloud"
+            aria-label={t("Reading aloud")}
         >
             <div className="speech-controls">
                 <button
                     className="icon-button"
                     onClick={() => go(-1)}
                     disabled={index === 0}
-                    title="Previous sentence"
-                    aria-label="Previous sentence"
+                    title={t("Previous sentence")}
+                    aria-label={t("Previous sentence")}
                 >
                     ⏮
                 </button>
@@ -308,8 +309,8 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                     className="icon-button"
                     onClick={toggle}
                     disabled={!clip || failed !== null}
-                    title={playing ? "Pause" : "Play"}
-                    aria-label={playing ? "Pause" : "Play"}
+                    title={playing ? t("Pause") : t("Play")}
+                    aria-label={playing ? t("Pause") : t("Play")}
                 >
                     {reading && !clip && !error ? <span className="spinner" aria-hidden="true" /> : playing ? "⏸" : "▶"}
                 </button>
@@ -317,12 +318,12 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                     className="icon-button"
                     onClick={() => go(1)}
                     disabled={!reading || last}
-                    title="Next sentence"
-                    aria-label="Next sentence"
+                    title={t("Next sentence")}
+                    aria-label={t("Next sentence")}
                 >
                     ⏭
                 </button>
-                <button className="icon-button" onClick={onClose} title="Stop" aria-label="Stop">⏹</button>
+                <button className="icon-button" onClick={onClose} title={t("Stop")} aria-label={t("Stop")}>⏹</button>
                 <select
                     className="speech-speed"
                     value={speed}
@@ -331,8 +332,8 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                         setSpeed(chosen);
                         saveSpeed(chosen);
                     }}
-                    title="Speed"
-                    aria-label="Speed"
+                    title={t("Speed")}
+                    aria-label={t("Speed")}
                 >
                     {SPEEDS.map((each) => <option key={each} value={each}>{each}×</option>)}
                 </select>

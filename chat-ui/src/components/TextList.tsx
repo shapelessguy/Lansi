@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { locale, plural, t } from "../lib/i18n";
 import type { Text } from "../lib/texts";
 
 interface Props {
@@ -23,12 +24,12 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
     return (
         <>
             <div className="sidebar-controls">
-                <button className="primary" onClick={onNew}>New text</button>
+                <button className="primary" onClick={onNew}>{t("New text")}</button>
             </div>
             {typeof texts === "string" && <p className="sidebar-note error">{texts}</p>}
             {typeof texts !== "string" && own.length === 0 && (
                 <p className="sidebar-note">
-                    Write your homework, or any text, here. The tutor can open one in an exercise that corrects it.
+                    {t("Write your homework, or any text, here. The tutor can open one in an exercise that corrects it.")}
                 </p>
             )}
             <ul className="text-list">
@@ -39,17 +40,17 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
                             aria-pressed={text.id === selectedId}
                             onClick={() => onSelect(text.id)}
                         >
-                            <span className="text-title">{text.title || "Untitled"}</span>
+                            <span className="text-title">{text.title || t("Untitled")}</span>
                             <span className="text-meta">
-                                {text.words ?? 0} words · {day(text.updatedAt)}
-                                {text.lockedAt !== null && " · corrected"}
+                                {plural(text.words ?? 0, "{count} word", "{count} words")} · {day(text.updatedAt)}
+                                {text.lockedAt !== null && ` · ${t("corrected")}`}
                             </span>
                         </button>
                         <button
                             className="icon-button"
                             onClick={() => onDelete(text)}
-                            title="Delete"
-                            aria-label={`Delete ${text.title || "the text"}`}
+                            title={t("Delete")}
+                            aria-label={t("Delete {name}", { name: text.title || t("the text") })}
                         >
                             ×
                         </button>
@@ -61,5 +62,5 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
 }
 
 function day(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleDateString(undefined, { dateStyle: "medium" });
+    return new Date(seconds * 1000).toLocaleDateString(locale(), { dateStyle: "medium" });
 }

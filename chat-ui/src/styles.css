@@ -272,12 +272,20 @@ a {
 
 .sort-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
-.sort-row select {
-    flex: 1;
+/* labels run longer in some languages than in others, so the buttons go below when there is no room */
+.sort-row select,
+.sort-row input {
+    flex: 1 1 9em;
     min-width: 0;
+}
+
+.sort-row button {
+    flex: none;
+    white-space: nowrap;
 }
 
 .sidebar-note {
@@ -4650,4 +4658,74 @@ div.book-cover {
     border-color: var(--danger);
     background: var(--danger-bg);
     color: var(--danger);
+}
+
+/* the name of a setting, with the question mark beside it, on one line even in a toggle */
+span.setting-name {
+    display: block;
+}
+
+/* what a setting is about, behind a question mark beside its name */
+span.help {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15em;
+    height: 1.15em;
+    margin-left: 6px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1;
+    vertical-align: middle;
+    cursor: help;
+}
+
+span.help:hover,
+span.help:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+    outline: none;
+}
+
+.help-popup {
+    position: fixed;
+    z-index: 1000;
+    width: max-content;
+    max-width: min(280px, calc(100vw - 16px));
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 18%);
+    color: var(--text);
+    font-size: 0.87rem;
+    font-weight: 400;
+    line-height: 1.4;
+    text-align: left;
+    white-space: normal;
+    pointer-events: none;
+}
+
+/* a choice and what goes with it, side by side, such as the language learned and the level in it */
+.setting-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.setting-row select {
+    flex: 1 1 8em;
+    min-width: 0;
+}
+
+/* a list in a row of its own, such as the language of the Anki words, at the end of it */
+.toggle select {
+    flex: none;
+    width: auto;
+    max-width: 50%;
 }

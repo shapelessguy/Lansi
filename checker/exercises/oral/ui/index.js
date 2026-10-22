@@ -11,6 +11,7 @@ function cardOf(task) {
 }
 
 export function mount(root, exercise) {
+    const t = exercise.t;
     const error = element("p", { className: "error" });
 
     function send(message, button, busyText, fields = []) {
@@ -28,30 +29,31 @@ export function mount(root, exercise) {
     }
 
     function progress(at, total) {
-        return element("div", { className: "progress", textContent: `Task ${Math.min(at + 1, total)} of ${total}` });
+        return element("div", { className: "progress", textContent: t("Task {at} of {total}", { at: Math.min(at + 1, total), total }),
+        });
     }
 
     function speaking(show) {
         const whole = show.task.prompts.length === 1;
         const fields = show.task.prompts.map(() =>
-            element("textarea", { placeholder: "What you say", spellcheck: false, rows: whole ? 6 : 2 })
+            element("textarea", { placeholder: t("What you say"), spellcheck: false, rows: whole ? 6 : 2 })
         );
         // in an exam, nothing is rated before the end: it goes on to the next
         const last = show.at + 1 >= show.total;
         const done = element("button", {
             className: "primary",
-            textContent: show.exam ? (last ? "Done" : "Next") : "Hand in",
+            textContent: show.exam ? (last ? t("Done") : t("Next")) : t("Hand in"),
         });
         done.onclick = () => {
             if (fields.some((field) => field.value.trim())) {
-                send({ answers: fields.map((field) => field.value) }, done, show.exam ? "Next…" : "Rating…", fields);
+                send({ answers: fields.map((field) => field.value) }, done, show.exam ? t("Next…") : t("Rating…"), fields);
             }
         };
         // what is left out, such as a card a task has not, is null
         root.replaceChildren(
             ...[
                 progress(show.at, show.total),
-                element("p", { className: "muted", textContent: "Type what you would say, as you would say it." }),
+                element("p", { className: "muted", textContent: t("Type what you would say, as you would say it.") }),
                 cardOf(show.task),
                 element(
                     "ol",
@@ -67,8 +69,8 @@ export function mount(root, exercise) {
     }
 
     function reviewing(show) {
-        const go = element("button", { className: "primary", textContent: show.more ? "Next task" : "Done" });
-        go.onclick = show.more ? () => send({ next: true }, go, "Making the next task…") : () => exercise.finish();
+        const go = element("button", { className: "primary", textContent: show.more ? t("Next task") : t("Done") });
+        go.onclick = show.more ? () => send({ next: true }, go, t("Making the next task…")) : () => exercise.finish();
         const feedback = show.feedback;
         // what is left out, such as a card a task has not, is null
         root.replaceChildren(
@@ -77,8 +79,8 @@ export function mount(root, exercise) {
                 element(
                     "div",
                     { className: `feedback ${feedback.result}` },
-                    element("strong", { textContent: LABELS[feedback.result] }),
-                    ratingsOf(feedback.ratings),
+                    element("strong", { textContent: t(LABELS[feedback.result]) }),
+                    ratingsOf(feedback.ratings, t),
                     feedback.note ? element("p", { textContent: feedback.note }) : null,
                 ),
                 cardOf(show.task),
@@ -90,8 +92,10 @@ export function mount(root, exercise) {
                             "li",
                             { className: "card" },
                             element("div", { className: "muted", textContent: turn.prompt }),
-                            element("strong", { textContent: turn.answer || "(nothing said)" }),
-                            turn.correction ? element("div", { textContent: `Better: ${turn.correction}` }) : null,
+                            element("strong", { textContent: turn.answer || t("(nothing said)") }),
+                            turn.correction
+                                ? element("div", { textContent: t("Better: {text}", { text: turn.correction }) })
+                                : null,
                         )
                     ),
                 ),
@@ -110,7 +114,7 @@ export function mount(root, exercise) {
      * the part is handed in at once, or, if more is to come, it goes on to it.
      */
     function withheld(show) {
-        root.replaceChildren(element("p", { className: "muted", textContent: "Handing in…" }), error);
+        root.replaceChildren(element("p", { className: "muted", textContent: t("Handing in…") }), error);
         const going = show.more ? exercise.act({ next: true }) : Promise.resolve(exercise.finish());
         going.catch((failed) => {
             error.textContent = failed.message;

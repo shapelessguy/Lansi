@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
 import { type ModelChoice, modelRequest } from "./models";
 import { checkerFetch } from "./session";
 import type { BackgroundTask } from "./tasks";
@@ -26,7 +27,7 @@ async function call<Reply>(path: string, init: RequestInit = {}, apiKey = ""): P
             headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {},
         });
     } catch {
-        throw new Error("The server cannot be reached.");
+        throw new Error(t("The server cannot be reached."));
     }
     const reply = await response.json().catch(() => ({}));
     if (!response.ok) {

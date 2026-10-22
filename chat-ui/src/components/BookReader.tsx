@@ -21,6 +21,7 @@ import {
     shownSize,
     SPACINGS,
 } from "../lib/books";
+import { t } from "../lib/i18n";
 import type { Where } from "../lib/logs";
 import { SPOKEN_EVENT } from "./SpeechPlayer";
 
@@ -235,7 +236,7 @@ export function BookReader({ bookId, active }: Props) {
         return (
             <section className="reader">
                 <p className="reader-note">
-                    Add an EPUB book under Books in the library, and choose it to read it here.
+                    {t("Add an EPUB book under Books in the library, and choose it to read it here.")}
                 </p>
             </section>
         );
@@ -253,26 +254,26 @@ export function BookReader({ bookId, active }: Props) {
                     {/* where the player of what is read aloud goes */}
                     <span className="speech-dock" data-speech-dock="book" />
                     {trail.length > 0 && (
-                        <button onClick={goBack} title="Back to where the link was">
-                            ↩ Back
+                        <button onClick={goBack} title={t("Back to where the link was")}>
+                            ↩ {t("Back")}
                         </button>
                     )}
                     <button
                         className="icon-button"
                         onClick={() => turnTo(page - 1)}
                         disabled={!book || page === 0}
-                        title="Previous page"
-                        aria-label="Previous page"
+                        title={t("Previous page")}
+                        aria-label={t("Previous page")}
                     >
                         ‹
                     </button>
-                    <span className="count" title="Page">{book ? `${page + 1} / ${pages}` : ""}</span>
+                    <span className="count" title={t("Page")}>{book ? `${page + 1} / ${pages}` : ""}</span>
                     <button
                         className="icon-button"
                         onClick={() => turnTo(page + 1)}
                         disabled={!book || page >= pages - 1}
-                        title="Next page"
-                        aria-label="Next page"
+                        title={t("Next page")}
+                        aria-label={t("Next page")}
                     >
                         ›
                     </button>
@@ -280,8 +281,8 @@ export function BookReader({ bookId, active }: Props) {
                         className="icon-button"
                         aria-pressed={optionsOpen}
                         onClick={() => setOptionsOpen(!optionsOpen)}
-                        title="How the book looks"
-                        aria-label="How the book looks"
+                        title={t("How the book looks")}
+                        aria-label={t("How the book looks")}
                     >
                         Aa
                     </button>
@@ -289,60 +290,60 @@ export function BookReader({ bookId, active }: Props) {
                 {optionsOpen && (
                     <div className="reader-options">
                         <label>
-                            Size
+                            {t("Size")}
                             <button
                                 className="icon-button"
                                 onClick={() => changeLook({ fontSize: resized(look.fontSize, -1) })}
                                 disabled={look.fontSize <= MIN_FONT_SIZE}
-                                title="Smaller text"
-                                aria-label="Smaller text"
+                                title={t("Smaller text")}
+                                aria-label={t("Smaller text")}
                             >
                                 A−
                             </button>
-                            <span className="count" title="Size of the text, in pixels">{look.fontSize}</span>
+                            <span className="count" title={t("Size of the text, in pixels")}>{look.fontSize}</span>
                             <button
                                 className="icon-button"
                                 onClick={() => changeLook({ fontSize: resized(look.fontSize, 1) })}
                                 disabled={look.fontSize >= MAX_FONT_SIZE}
-                                title="Larger text"
-                                aria-label="Larger text"
+                                title={t("Larger text")}
+                                aria-label={t("Larger text")}
                             >
                                 A+
                             </button>
                         </label>
                         <label>
-                            Font
+                            {t("Font")}
                             <select
                                 value={look.font}
                                 onChange={(event) => changeLook({ font: event.target.value as Reading["font"] })}
                             >
                                 {Object.entries(FONTS).map(([id, font]) => (
                                     <option key={id} value={id} style={{ fontFamily: font.family }}>
-                                        {font.label}
+                                        {t(font.label)}
                                     </option>
                                 ))}
                             </select>
                         </label>
                         <label>
-                            Lines
+                            {t("Lines")}
                             <select
                                 value={look.spacing}
                                 onChange={(event) => changeLook({ spacing: event.target.value as Reading["spacing"] })}
                             >
                                 {Object.entries(SPACINGS).map(([id, spacing]) => (
-                                    <option key={id} value={id}>{spacing.label}</option>
+                                    <option key={id} value={id}>{t(spacing.label)}</option>
                                 ))}
                             </select>
                         </label>
-                        <div className="swatches" role="radiogroup" aria-label="Background">
+                        <div className="swatches" role="radiogroup" aria-label={t("Background")}>
                             {Object.entries(PAPERS).map(([id, each]) => (
                                 <button
                                     key={id}
                                     role="radio"
                                     aria-checked={look.paper === id}
                                     className="swatch"
-                                    title={each.label}
-                                    aria-label={`Background: ${each.label}`}
+                                    title={t(each.label)}
+                                    aria-label={t("Background: {name}", { name: t(each.label) })}
                                     style={{
                                         background: each.background || "var(--bg)",
                                         color: each.color || "var(--text)",
@@ -356,11 +357,11 @@ export function BookReader({ bookId, active }: Props) {
                     </div>
                 )}
             </div>
-            {state.status === "loading" && <p className="reader-note">Loading the book…</p>}
+            {state.status === "loading" && <p className="reader-note">{t("Loading the book…")}</p>}
             {state.status === "error" && (
                 <div className="reader-note error">
                     <p>{state.message}</p>
-                    <button onClick={() => setAttempt(attempt + 1)}>Try again</button>
+                    <button onClick={() => setAttempt(attempt + 1)}>{t("Try again")}</button>
                 </div>
             )}
             {book && (

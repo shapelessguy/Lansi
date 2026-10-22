@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { type Message, t } from "./i18n";
 import { checkerFetch } from "./session";
 
 /** A word of the vocabulary as it is listed: without what is known about it. */
@@ -24,7 +25,12 @@ export interface ListedWord {
 
 /** How often a word was used and seen, in a few words; nothing if neither. */
 export function describeUses(word: Pick<ListedWord, "used" | "seen">): string {
-    return [word.used > 0 && `used ${word.used}×`, word.seen > 0 && `seen ${word.seen}×`].filter(Boolean).join(" · ");
+    return [
+        word.used > 0 && t("used {count}×", { count: word.used }),
+        word.seen > 0 && t("seen {count}×", { count: word.seen }),
+    ]
+        .filter(Boolean)
+        .join(" · ");
 }
 
 /**
@@ -69,10 +75,10 @@ async function request<T>(path: string): Promise<T> {
     try {
         response = await checkerFetch(path);
     } catch {
-        throw new Error("The checker server cannot be reached. Is `just checker` running?");
+        throw new Error(t("The checker server cannot be reached. Is `just checker` running?"));
     }
     if (!response.ok) {
-        throw new Error(`The checker server answered ${response.status}.`);
+        throw new Error(t("The checker server answered {status}.", { status: response.status }));
     }
     return await response.json();
 }
@@ -94,14 +100,14 @@ export interface CategoryGroup {
     words: ListedWord[];
 }
 
-/** The orders the words of a category can be shown in. */
+/** The orders the words of a category can be shown in, by what they are called, to be shown with `t`. */
 export const sortLabels = {
     word: "A–Z",
     newest: "Newest first",
     used: "Most used by you",
     seen: "Most seen",
     lastUsed: "Last used",
-} as const;
+} as const satisfies Record<string, Message>;
 
 export type SortKey = keyof typeof sortLabels;
 
@@ -198,7 +204,7 @@ export function detailRows(details: Record<string, unknown>): DetailRow[] {
 
 function describe(value: unknown): string {
     if (typeof value === "boolean") {
-        return value ? "yes" : "no";
+        return value ? t("yes") : t("no");
     }
     if (Array.isArray(value)) {
         return value.map(describe).filter(Boolean).join(", ");

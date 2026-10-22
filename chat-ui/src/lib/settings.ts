@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { INTERFACE_LANGUAGES, type Message, t } from "./i18n";
 import { type ModelChoice, onOpenRouter, readModelChoice } from "./models";
 import { defaultQuestions, isQuestion, type ProfileQuestion, upToDateQuestions } from "./questions";
 import { checkerFetch } from "./session";
@@ -86,7 +87,11 @@ export interface Settings {
     evaluationTimed: boolean;
 }
 
-export const THEMES = { system: "As the system", light: "Light", dark: "Dark" } as const;
+/** What each look of the app is called, to be shown with `t`. */
+export const THEMES = { system: "As the system", light: "Light", dark: "Dark" } as const satisfies Record<
+    string,
+    Message
+>;
 
 /** The colours to choose from for what stands out, each as it is on a light and on a dark app. */
 export const ACCENTS = {
@@ -96,7 +101,7 @@ export const ACCENTS = {
     orange: { label: "Orange", light: "#b85c00", dark: "#f0a04b" },
     rose: { label: "Rose", light: "#c2255c", dark: "#f783ac" },
     purple: { label: "Purple", light: "#6b4fd8", dark: "#a594f9" },
-} as const;
+} as const satisfies Record<string, { label: Message; [other: string]: unknown }>;
 
 /** How large the app can be written, in pixels. */
 export const TEXT_SIZES = {
@@ -104,7 +109,7 @@ export const TEXT_SIZES = {
     normal: { label: "Normal", px: 15 },
     large: { label: "Large", px: 16.5 },
     larger: { label: "Larger", px: 18 },
-} as const;
+} as const satisfies Record<string, { label: Message; [other: string]: unknown }>;
 
 /** Has the page look as the settings say. */
 export function applyAppearance(settings: Pick<Settings, "theme" | "accent" | "textSize">): void {
@@ -138,39 +143,17 @@ export const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
 
 /**
  * The languages that can be learned, by their English names: those the
- * checker server has a spelling dictionary for. The forms of words are
- * stored by the rules of a language where the checker has any, and by
- * general ones otherwise.
+ * interface is written in, which the checker server has a spelling
+ * dictionary for. The forms of words are stored by the rules of a language
+ * where the checker has any, and by general ones otherwise.
  */
-export const LANGUAGES = [
-    "German",
-    "Arabic",
-    "Basque",
-    "Dutch",
-    "English",
-    "French",
-    "Italian",
-    "Latvian",
-    "Persian",
-    "Portuguese",
-    "Russian",
-    "Spanish",
-] as const;
+export const LANGUAGES = INTERFACE_LANGUAGES;
 
-/** The languages what is selected can be translated into, by their English names. */
-export const TRANSLATION_LANGUAGES = [
-    ...LANGUAGES,
-    "Chinese",
-    "Greek",
-    "Hindi",
-    "Japanese",
-    "Korean",
-    "Polish",
-    "Romanian",
-    "Swedish",
-    "Turkish",
-    "Ukrainian",
-].sort();
+/**
+ * The languages what is selected can be translated into, by their English
+ * names: those the interface is written in, which is shown in the one chosen.
+ */
+export const TRANSLATION_LANGUAGES = INTERFACE_LANGUAGES;
 
 const STORAGE_KEY = "chat-ui.settings";
 
@@ -265,7 +248,7 @@ export function normalizeSettings(stored: unknown): Settings {
         ? candidate.defaultContextId!
         : contexts[0].id;
     // settings saved before a field existed, or left blank where a value is needed, get the default
-    const text = (key: "speechVoice" | "translateInto") =>
+    const text = (key: "speechVoice") =>
         typeof candidate[key] === "string" && candidate[key].trim() ? candidate[key] : defaults[key];
     // one that must name a model, which gets the usual one if it names none
     const model = (
@@ -279,7 +262,9 @@ export function normalizeSettings(stored: unknown): Settings {
         language: LANGUAGES.find((language) => language === candidate.language) ?? defaults.language,
         ankiLanguage: LANGUAGES.find((language) => language === candidate.ankiLanguage) ?? defaults.ankiLanguage,
         level: LEVELS.find((level) => level === candidate.level) ?? defaults.level,
-        translateInto: text("translateInto"),
+        // one of the languages the interface is not written in, as could be chosen once, is English
+        translateInto: TRANSLATION_LANGUAGES.find((language) => language === candidate.translateInto)
+            ?? defaults.translateInto,
         // left empty on purpose, for the tutor's own way of talking
         tutorTone: typeof candidate.tutorTone === "string" ? candidate.tutorTone : defaults.tutorTone,
         activeSets: typeof candidate.activeSets === "object" && candidate.activeSets !== null
@@ -401,7 +386,7 @@ export function withoutKey(settings: Settings): Omit<Settings, "apiKey"> {
 export async function fetchSettings(): Promise<Settings> {
     const response = await checkerFetch("/settings");
     if (!response.ok) {
-        throw new Error(`The server answered ${response.status}.`);
+        throw new Error(t("The server answered {status}.", { status: response.status }));
     }
     const { settings: kept }: { settings: unknown } = await response.json();
     if (kept === null) {

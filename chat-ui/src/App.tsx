@@ -51,6 +51,7 @@ import {
 import type { ProfileUsage } from "./lib/checker";
 import { ask, tell } from "./lib/dialogs";
 import { type Evaluation, evaluationUsage, startEvaluation, USAGE_ID as EVALUATION_USAGE_ID } from "./lib/evaluations";
+import { interfaceLanguageOf, setInterfaceLanguage, t } from "./lib/i18n";
 import { newId } from "./lib/ids";
 import { type Activity, type LibraryTab, loadLayout, type LogsTab, type Panel, saveLayout } from "./lib/layout";
 import { LOGGED_EVENT } from "./lib/logs";
@@ -117,6 +118,8 @@ const TASK_CATEGORIES: Record<string, UsageCategory> = {
 
 export function App({ user, initialSettings, initialChats }: Props) {
     const [settings, setSettings] = useState<Settings>(initialSettings);
+    // all that is rendered is in the language of the interface the settings say
+    setInterfaceLanguage(interfaceLanguageOf(settings.translateInto));
     // the panel on the left, with the words and the books
     const [libraryOpen, setLibraryOpen] = useState(() => loadLayout().libraryOpen);
     // the logs, which take the place of the library on the left while they are open
@@ -604,7 +607,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     setOpeningEvaluation({ evaluation, nonce: Date.now() });
                     setActivity("evaluations");
                 },
-                (failed: Error) => void tell("The mock exam could not be started.", failed.message),
+                (failed: Error) => void tell(t("The mock exam could not be started."), failed.message),
             );
         },
         [settings.language],
@@ -634,7 +637,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 setActivity("practice");
                 setLogsRevision((revision) => revision + 1);
             },
-            (failed: Error) => void tell("The exercise could not be done again.", failed.message),
+            (failed: Error) => void tell(t("The exercise could not be done again."), failed.message),
         );
     }
 
@@ -653,7 +656,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
             <div className="app">
                 <aside className="side-panel left" hidden={!logsOpen}>
                     <SidePanel
-                        title="Logs"
+                        title={t("Logs")}
                         // the logs take the place of the library, and closing them closes the left side
                         onClose={() => {
                             setLogsOpen(false);
@@ -667,35 +670,35 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     aria-selected={logsTab === "logs"}
                                     onClick={() => setLogsTab("logs")}
                                 >
-                                    Logs
+                                    {t("Logs")}
                                 </button>
                                 <button
                                     role="tab"
                                     aria-selected={logsTab === "memories"}
                                     onClick={() => setLogsTab("memories")}
                                 >
-                                    Memories
+                                    {t("Memories")}
                                 </button>
                                 <button
                                     role="tab"
                                     aria-selected={logsTab === "exercises"}
                                     onClick={() => setLogsTab("exercises")}
                                 >
-                                    Exercises
+                                    {t("Exercises")}
                                 </button>
                                 <button
                                     role="tab"
                                     aria-selected={logsTab === "sessions"}
                                     onClick={() => setLogsTab("sessions")}
                                 >
-                                    Practices
+                                    {t("Practices")}
                                 </button>
                                 <button
                                     role="tab"
                                     aria-selected={logsTab === "evaluations"}
                                     onClick={() => setLogsTab("evaluations")}
                                 >
-                                    Evaluations
+                                    {t("Evaluations")}
                                 </button>
                             </div>
                         }
@@ -736,7 +739,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 </aside>
                 <aside className="side-panel left" hidden={!libraryOpen || logsOpen}>
                     <SidePanel
-                        title="Library"
+                        title={t("Library")}
                         onClose={() => setLibraryOpen(false)}
                         flush
                         tabs={
@@ -746,7 +749,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     aria-selected={sidebarTab === "vocabulary"}
                                     onClick={() => setSidebarTab("vocabulary")}
                                 >
-                                    Words
+                                    {t("Words")}
                                     <span className="count">
                                         {vocabularyCount ?? (vocabulary && countWords(vocabulary.words))}
                                     </span>
@@ -768,7 +771,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     aria-selected={sidebarTab === "books"}
                                     onClick={() => setSidebarTab("books")}
                                 >
-                                    Books
+                                    {t("Books")}
                                     <span className="count">
                                         {booksState.status === "ready" && booksState.books.length > 0
                                             && booksState.books.length}
@@ -822,7 +825,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     }
                     <header className="topbar">
                         <div className="topbar-side">
-                            <div className="switch" role="group" aria-label="Panel on the left">
+                            <div className="switch" role="group" aria-label={t("Panel on the left")}>
                                 <button
                                     className="icon-only"
                                     aria-pressed={libraryOpen && !logsOpen}
@@ -830,8 +833,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                         setLibraryOpen(logsOpen || !libraryOpen);
                                         setLogsOpen(false);
                                     }}
-                                    title="Library"
-                                    aria-label="Library"
+                                    title={t("Library")}
+                                    aria-label={t("Library")}
                                 >
                                     <Icon name="library" />
                                 </button>
@@ -839,63 +842,63 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     className="icon-only"
                                     aria-pressed={logsOpen}
                                     onClick={() => setLogsOpen(!logsOpen)}
-                                    title="Logs"
-                                    aria-label="Logs"
+                                    title={t("Logs")}
+                                    aria-label={t("Logs")}
                                 >
                                     <Icon name="logs" />
                                 </button>
                             </div>
                             <TaskSign tasks={tasks} />
                         </div>
-                        <div className="switch activities" role="tablist" aria-label="Activity">
+                        <div className="switch activities" role="tablist" aria-label={t("Activity")}>
                             <button
                                 role="tab"
                                 aria-selected={activity === "tutor"}
                                 onClick={() => setActivity("tutor")}
                             >
-                                Tutor
+                                {t("Tutor")}
                             </button>
                             <button role="tab" aria-selected={activity === "chat"} onClick={() => setActivity("chat")}>
-                                Chat
+                                {t("Chat")}
                             </button>
                             <button
                                 role="tab"
                                 aria-selected={activity === "books"}
                                 onClick={() => setActivity("books")}
                             >
-                                Books
+                                {t("Books")}
                             </button>
                             <button
                                 role="tab"
                                 aria-selected={activity === "texts"}
                                 onClick={() => setActivity("texts")}
                             >
-                                Texts
+                                {t("Texts")}
                             </button>
                             <button
                                 role="tab"
                                 aria-selected={activity === "practice"}
                                 onClick={() => setActivity("practice")}
                             >
-                                Practice
+                                {t("Practice")}
                             </button>
                             <button
                                 role="tab"
                                 aria-selected={activity === "evaluations"}
                                 onClick={() => setActivity("evaluations")}
                             >
-                                Evaluations
+                                {t("Evaluations")}
                             </button>
                         </div>
                         <div className="topbar-side end">
-                            <div className="switch" role="group" aria-label="Panel on the right">
+                            <div className="switch" role="group" aria-label={t("Panel on the right")}>
                                 {CHECKED_ACTIVITIES.includes(activity) && (
                                     <button
                                         className="icon-only"
                                         aria-pressed={panel === "checks"}
                                         onClick={() => togglePanel("checks")}
-                                        title="Checks"
-                                        aria-label="Checks"
+                                        title={t("Checks")}
+                                        aria-label={t("Checks")}
                                     >
                                         <Icon name="checks" />
                                     </button>
@@ -904,8 +907,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     className="icon-only"
                                     aria-pressed={panel === "usage"}
                                     onClick={() => togglePanel("usage")}
-                                    title="Usage"
-                                    aria-label="Usage"
+                                    title={t("Usage")}
+                                    aria-label={t("Usage")}
                                 >
                                     <Icon name="usage" />
                                 </button>
@@ -913,8 +916,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     className="icon-only"
                                     aria-pressed={panel === "settings"}
                                     onClick={() => togglePanel("settings")}
-                                    title="Settings"
-                                    aria-label="Settings"
+                                    title={t("Settings")}
+                                    aria-label={t("Settings")}
                                 >
                                     <Icon name="settings" />
                                 </button>
@@ -922,8 +925,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             <button
                                 className="log-out icon-only"
                                 onClick={logOut}
-                                title={`Log out (logged in as ${user})`}
-                                aria-label="Log out"
+                                title={t("Log out (logged in as {user})", { user })}
+                                aria-label={t("Log out")}
                             >
                                 <Icon name="log-out" />
                             </button>
@@ -1001,7 +1004,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         />
                     </div>
                     <div className="pane texts-pane" hidden={activity !== "texts"}>
-                        <SideList label="Texts">
+                        <SideList label={t("Texts")}>
                             <TextList
                                 texts={texts}
                                 selectedId={textId}
@@ -1014,13 +1017,15 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     });
                                 }}
                                 onDelete={(text) => {
-                                    void ask(`Delete “${text.title || "Untitled"}”?`).then(async (agreed) => {
-                                        if (agreed) {
-                                            await deleteText(text.id);
-                                            setTextsRevision((revision) => revision + 1);
-                                            setTextId((open) => (open === text.id ? null : open));
-                                        }
-                                    });
+                                    void ask(t("Delete “{name}”?", { name: text.title || t("Untitled") })).then(
+                                        async (agreed) => {
+                                            if (agreed) {
+                                                await deleteText(text.id);
+                                                setTextsRevision((revision) => revision + 1);
+                                                setTextId((open) => (open === text.id ? null : open));
+                                            }
+                                        },
+                                    );
                                 }}
                             />
                         </SideList>
@@ -1050,8 +1055,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             )
                             : (
                                 <div className="empty">
-                                    <h2>No text open</h2>
-                                    <p>Open one of your texts, or start a new one.</p>
+                                    <h2>{t("No text open")}</h2>
+                                    <p>{t("Open one of your texts, or start a new one.")}</p>
                                 </div>
                             )}
                     </div>
@@ -1105,14 +1110,14 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         <UsagePanel
                             revision={usageRevision}
                             currentLabel={activity === "tutor"
-                                ? "Tutor"
+                                ? t("Tutor")
                                 : activity === "books" || activity === "texts"
                                 ? null
                                 : activity === "practice"
-                                ? "Practice"
+                                ? t("Practice")
                                 : activity === "evaluations"
-                                ? "Evaluations"
-                                : "This chat"}
+                                ? t("Evaluations")
+                                : t("This chat")}
                             chatId={activity === "tutor"
                                 ? TUTOR_USAGE_ID
                                 : activity === "practice"
@@ -1139,7 +1144,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 </aside>
                 {/* floats over the page, which keeps its width */}
                 {panel === "subchat" && asked && (
-                    <section className="floating-window" aria-label="Ask about it">
+                    <section className="floating-window" aria-label={t("Ask about it")}>
                         <SubChat
                             key={asked.nonce}
                             translated={asked.translated}

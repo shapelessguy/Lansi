@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
 import { newId } from "./ids";
 import type { ChatMessage } from "./openrouter";
 import { checkerFetch } from "./session";
@@ -39,10 +40,10 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     try {
         response = await checkerFetch(path, init);
     } catch {
-        throw new Error("The server cannot be reached. Is `just dev` running?");
+        throw new Error(t("The server cannot be reached. Is `just dev` running?"));
     }
     if (!response.ok) {
-        throw new Error(`The server answered ${response.status}.`);
+        throw new Error(t("The server answered {status}.", { status: response.status }));
     }
     return response;
 }
@@ -104,7 +105,7 @@ export function chatTitle(chat: StoredChat): string {
     const first = chat.messages.find((message) => message.role === "user")?.content ?? "";
     const line = first.trim().replace(/\s+/g, " ");
     if (!line) {
-        return "New chat";
+        return t("New chat");
     }
     return line.length > TITLE_LENGTH ? `${line.slice(0, TITLE_LENGTH).trimEnd()}…` : line;
 }

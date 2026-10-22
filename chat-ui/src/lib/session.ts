@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
 /** Who is logged in, and the token the checker server gave them to say so. */
 export interface Session {
     user: string;
@@ -65,13 +66,13 @@ export async function logIn(user: string, password: string): Promise<void> {
     try {
         response = await fetch(`${BASE}/login`, { method: "POST", body: JSON.stringify({ user, password }) });
     } catch {
-        throw new Error("The server cannot be reached.");
+        throw new Error(t("The server cannot be reached."));
     }
     if (response.status === 401 || response.status === 400) {
-        throw new Error("Wrong name or password.");
+        throw new Error(t("Wrong name or password."));
     }
     if (!response.ok) {
-        throw new Error("The server cannot be reached. Is `just dev` running?");
+        throw new Error(t("The server cannot be reached. Is `just dev` running?"));
     }
     setSession(normalizeSession(await response.json()));
 }

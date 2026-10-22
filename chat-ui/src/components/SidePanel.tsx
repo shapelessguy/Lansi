@@ -3,6 +3,8 @@
 
 import type { ReactNode } from "react";
 
+import { t } from "../lib/i18n";
+
 interface Props {
     title: string;
     onClose: () => void;
@@ -23,7 +25,12 @@ export function SidePanel({ title, onClose, tabs, flush, children }: Props) {
         <>
             <header className="panel-header">
                 <h2>{title}</h2>
-                <button className="icon-button" onClick={onClose} title="Close" aria-label={`Close ${title}`}>
+                <button
+                    className="icon-button"
+                    onClick={onClose}
+                    title={t("Close")}
+                    aria-label={t("Close {name}", { name: title })}
+                >
                     ×
                 </button>
             </header>

@@ -7,10 +7,11 @@ import Markdown from "react-markdown";
 import { isAtEnd } from "../lib/chats";
 import type { ProfileUsage } from "../lib/checker";
 import { ask as askLearner } from "../lib/dialogs";
+import { locale, plural, t } from "../lib/i18n";
 import { newId } from "../lib/ids";
 import { begun, EMPTY_TRACE, fetchLastRequest, type Trace, traced } from "../lib/inspect";
 import { canAsk } from "../lib/models";
-import { endSession, type Learner, type PracticeSession, stepExercise } from "../lib/practice";
+import { endSession, exerciseText, type Learner, type PracticeSession, stepExercise } from "../lib/practice";
 import type { WordLists } from "../lib/sets";
 import type { Settings } from "../lib/settings";
 import { allowPlaying, speakMark } from "../lib/speaking";
@@ -42,6 +43,7 @@ import { CheckedTextarea } from "./CheckedTextarea";
 import { ContextRing } from "./ContextRing";
 import { ExerciseView } from "./ExerciseView";
 import { Inspector } from "./Inspector";
+import { T } from "./T";
 
 /** What the server says of a session that cannot be finished, as it is over already or gone. */
 const SESSION_OVER = /no such (session|exercise)|session has ended|exercise is finished/;
@@ -284,7 +286,9 @@ export function Tutor(
         ]);
         setError(null);
         setBusy(true);
-        setTrace((current) => begun(current, wrote ?? `How “${practised?.exercise}” went`, Date.now()));
+        setTrace((current) =>
+            begun(current, wrote ?? t("How “{exercise}” went", { exercise: practised?.exercise ?? "" }), Date.now())
+        );
         try {
             const done = await askTutor(
                 asked,
@@ -423,27 +427,27 @@ export function Tutor(
     return (
         <section className="chat tutor">
             <header className="chat-header">
-                <h2 className="tutor-title">Tutor</h2>
+                <h2 className="tutor-title">{t("Tutor")}</h2>
                 <ContextRing trace={trace} onOpen={() => setInspecting(true)} />
-                <label className="check" title="Reads each answer aloud once it has arrived. The audio is kept.">
+                <label className="check" title={t("Reads each answer aloud once it has arrived. The audio is kept.")}>
                     <input
                         type="checkbox"
                         checked={speakReplies}
                         onChange={(event) => onSpeakReplies(event.target.checked)}
                     />
-                    Speak replies
+                    {t("Speak replies")}
                 </label>
                 {chats.length > 0 && (
                     <select
-                        aria-label="Chats with the tutor"
+                        aria-label={t("Chats with the tutor")}
                         value={chats.some((chat) => chat.id === chatId) ? chatId : ""}
                         onChange={(event) => void open(event.target.value)}
                         disabled={occupied}
                     >
-                        {!chats.some((chat) => chat.id === chatId) && <option value="">This chat</option>}
+                        {!chats.some((chat) => chat.id === chatId) && <option value="">{t("This chat")}</option>}
                         {chats.map((chat) => (
                             <option key={chat.id} value={chat.id}>
-                                {new Date(chat.updatedAt * 1000).toLocaleString(undefined, {
+                                {new Date(chat.updatedAt * 1000).toLocaleString(locale(), {
                                     dateStyle: "short",
                                     timeStyle: "short",
                                 })} · {chat.first.slice(0, 40) || "…"}
@@ -453,7 +457,7 @@ export function Tutor(
                 )}
                 <button
                     onClick={() => {
-                        void askLearner("Delete this chat with the tutor?").then(async (agreed) => {
+                        void askLearner(t("Delete this chat with the tutor?")).then(async (agreed) => {
                             if (agreed) {
                                 await deleteTutorChat(chatId);
                                 setChats((current) => current.filter((chat) => chat.id !== chatId));
@@ -463,9 +467,9 @@ export function Tutor(
                     }}
                     disabled={occupied || !chats.some((chat) => chat.id === chatId)}
                 >
-                    Delete
+                    {t("Delete")}
                 </button>
-                <button onClick={startOver} disabled={shown.length === 0 || occupied}>New chat</button>
+                <button onClick={startOver} disabled={shown.length === 0 || occupied}>{t("New chat")}</button>
             </header>
             <div
                 className="messages"
@@ -503,10 +507,11 @@ export function Tutor(
             >
                 {shown.length === 0 && (
                     <div className="empty">
-                        <h2>Your tutor</h2>
+                        <h2>{t("Your tutor")}</h2>
                         <p>
-                            Ask what to work on next, or how you are doing. The tutor looks at your lessons, your
-                            practice and your logs before it answers, and offers you exercises to do here.
+                            {t(
+                                "Ask what to work on next, or how you are doing. The tutor looks at your lessons, your practice and your logs before it answers, and offers you exercises to do here.",
+                            )}
                         </p>
                     </div>
                 )}
@@ -534,9 +539,9 @@ export function Tutor(
                                                     if (state?.status !== "running") {
                                                         return;
                                                     }
-                                                    void askLearner("End this exercise now?", {
-                                                        detail: "What you did of it is kept.",
-                                                        confirm: "End it",
+                                                    void askLearner(t("End this exercise now?"), {
+                                                        detail: t("What you did of it is kept."),
+                                                        confirm: t("End it"),
                                                     }).then(async (agreed) => {
                                                         if (agreed) {
                                                             await finish(index, place, state.sessionId, offer, true);
@@ -580,15 +585,23 @@ export function Tutor(
             </div>
             {closed && (
                 <div className="notice">
-                    This chat is over, and what the tutor is to remember of it has been kept.{" "}
-                    <button className="link" onClick={startOver}>Start a new chat</button> to talk with the tutor.
+                    {t("This chat is over, and what the tutor is to remember of it has been kept.")}{" "}
+                    <T
+                        message="{start} to talk with the tutor."
+                        values={{
+                            start: <button className="link" onClick={startOver}>{t("Start a new chat")}</button>,
+                        }}
+                    />
                 </div>
             )}
             {!usable && (
                 <div className="notice">
-                    Add your OpenRouter API key in <button className="link" onClick={onOpenSettings}>Settings</button>
-                    {" "}
-                    to talk with the tutor.
+                    <T
+                        message="Add your OpenRouter API key in {settings} to talk with the tutor."
+                        values={{
+                            settings: <button className="link" onClick={onOpenSettings}>{t("Settings")}</button>,
+                        }}
+                    />
                 </div>
             )}
             <form
@@ -601,12 +614,12 @@ export function Tutor(
                 <CheckedTextarea
                     className="composer-input"
                     rows={2}
-                    placeholder={closed ? "This chat is over" : "Ask your tutor"}
+                    placeholder={closed ? t("This chat is over") : t("Ask your tutor")}
                     disabled={closed}
-                    aria-label="Message to the tutor"
+                    aria-label={t("Message to the tutor")}
                     title={enterSends
-                        ? "Enter sends the message, and Shift+Enter starts a new line"
-                        : "Enter starts a new line, and Shift+Enter sends the message"}
+                        ? t("Enter sends the message, and Shift+Enter starts a new line")
+                        : t("Enter starts a new line, and Shift+Enter sends the message")}
                     value={draft}
                     onChange={setDraft}
                     onKeyDown={onKeyDown}
@@ -622,14 +635,14 @@ export function Tutor(
                 />
                 <div className="composer-send">
                     {busy
-                        ? <button type="button" onClick={() => request.current?.abort()}>Stop</button>
+                        ? <button type="button" onClick={() => request.current?.abort()}>{t("Stop")}</button>
                         : (
                             <button
                                 type="submit"
                                 className="primary"
                                 disabled={!draft.trim() || occupied || !usable || closed}
                             >
-                                Send
+                                {t("Send")}
                             </button>
                         )}
                 </div>
@@ -666,6 +679,8 @@ function TurnView(
 ) {
     const doing = doingNow(turn);
     const about = doing === "Thinking" ? thinkingAbout(turn.thinking) : "";
+    // what the tutor does itself is told here, and what a tool does by the server
+    const doingShown = doing === "Thinking" || doing === "Writing" ? t(doing) : doing;
     return (
         <div className="message assistant tutor-turn">
             {/* to the left of the answer, as in the chat; one that is still arriving is not read yet */}
@@ -674,8 +689,8 @@ function TurnView(
                 data-speak={speakMark}
                 onClick={onSpeak}
                 disabled={!turn.text.trim() || turn.busy}
-                title="Read aloud"
-                aria-label="Read this answer aloud"
+                title={t("Read aloud")}
+                aria-label={t("Read this answer aloud")}
             >
                 🔊
             </button>
@@ -683,9 +698,9 @@ function TurnView(
                 {(turn.thinking || turn.steps.length > 0) && (
                     <details className="tutor-trace">
                         <summary>
-                            {turn.busy ? "Working" : "Worked"}
+                            {turn.busy ? t("Working") : t("Worked")}
                             {turn.steps.length > 0
-                                && ` · ${turn.steps.length} ${turn.steps.length === 1 ? "step" : "steps"}`}
+                                && ` · ${plural(turn.steps.length, "{count} step", "{count} steps")}`}
                         </summary>
                         {turn.steps.length > 0 && (
                             <ul className="tutor-steps">
@@ -711,7 +726,7 @@ function TurnView(
                 {doing && (
                     <div className="tutor-doing" role="status">
                         <span className="tutor-pulse" aria-hidden="true" />
-                        <span className="tutor-doing-what">{doing}…</span>
+                        <span className="tutor-doing-what">{doingShown}…</span>
                         {about && <span className="tutor-doing-about">{about}</span>}
                     </div>
                 )}
@@ -739,31 +754,39 @@ function OfferCard(
             ? ""
             : offer.lesson
             ? offer.lesson_title || offer.lesson
-            : "Review of the lessons practised last",
-        offer.theory || offer.instances === 1 ? "" : `${offer.instances} times`,
+            : t("Review of the lessons practised last"),
+        offer.theory || offer.instances === 1 ? "" : t("{count} times", { count: offer.instances }),
         offer.topic_titles?.length ? offer.topic_titles.join(", ") : "",
-        ...Object.entries(offer.options).map(([name, value]) => `${name}: ${offer.labels?.[name] ?? value}`),
+        ...Object.entries(offer.options).map(([name, value]) =>
+            `${name}: ${offer.labels?.[name] ? exerciseText(offer.exercise, offer.labels[name]) : value}`
+        ),
     ].filter(Boolean);
     return (
         <div className="tutor-offer">
             <div className="tutor-offer-about">
-                <strong>{offer.title}</strong>
+                <strong>{exerciseText(offer.exercise, offer.title)}</strong>
                 <div className="tutor-offer-what">{said.join(" · ")}</div>
-                {offer.focus && <div className="tutor-offer-focus">Aimed at: {offer.focus}</div>}
+                {offer.focus && (
+                    <div className="tutor-offer-focus">{t("Aimed at: {focus}", { focus: offer.focus })}</div>
+                )}
                 {offer.words && offer.words.length > 0 && (
-                    <div className="tutor-offer-what">With the words: {offer.words.join(", ")}</div>
+                    <div className="tutor-offer-what">
+                        {t("With the words: {words}", { words: offer.words.join(", ") })}
+                    </div>
                 )}
             </div>
-            {state === undefined && <button className="primary" disabled={disabled} onClick={onStart}>Start</button>}
-            {state?.status === "starting" && <span className="tutor-offer-state">Preparing…</span>}
+            {state === undefined && (
+                <button className="primary" disabled={disabled} onClick={onStart}>{t("Start")}</button>
+            )}
+            {state?.status === "starting" && <span className="tutor-offer-state">{t("Preparing…")}</span>}
             {state?.status === "running" && (
-                <button onClick={onEnd} title="End the exercise here, without doing the rest of it">
-                    End exercise
+                <button onClick={onEnd} title={t("End the exercise here, without doing the rest of it")}>
+                    {t("End exercise")}
                 </button>
             )}
-            {state?.status === "finishing" && <span className="tutor-offer-state">Finishing…</span>}
+            {state?.status === "finishing" && <span className="tutor-offer-state">{t("Finishing…")}</span>}
             {state?.status === "done" && (
-                <span className="tutor-offer-state">{state.abandoned ? "Ended early" : "Done ✓"}</span>
+                <span className="tutor-offer-state">{state.abandoned ? t("Ended early") : t("Done ✓")}</span>
             )}
         </div>
     );
@@ -776,17 +799,17 @@ function ExamCard({ exam, disabled, onStart }: { exam: EvaluationOffer; disabled
     return (
         <div className="tutor-offer">
             <div className="tutor-offer-about">
-                <strong>Mock exam: {exam.exam}</strong>
+                <strong>{t("Mock exam: {exam}", { exam: exam.exam })}</strong>
                 <div className="tutor-offer-what">
                     {[
                         exam.level,
-                        hours < 1 ? "half an hour" : `${hours} ${hours === 1 ? "hour" : "hours"}`,
-                        exam.timed ? "timed" : "untimed",
+                        hours < 1 ? t("half an hour") : plural(hours, "{count} hour", "{count} hours"),
+                        exam.timed ? t("timed") : t("untimed"),
                     ].join(" · ")}
                 </div>
             </div>
             {started
-                ? <span className="tutor-offer-state">Started in Evaluations</span>
+                ? <span className="tutor-offer-state">{t("Started in Evaluations")}</span>
                 : (
                     <button
                         className="primary"
@@ -796,7 +819,7 @@ function ExamCard({ exam, disabled, onStart }: { exam: EvaluationOffer; disabled
                             onStart();
                         }}
                     >
-                        Start
+                        {t("Start")}
                     </button>
                 )}
         </div>

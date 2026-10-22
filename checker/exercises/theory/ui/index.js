@@ -5,6 +5,7 @@ import { element } from "../../kit.js";
 import { render as markdownOf } from "./markdown.js";
 
 export function mount(root, exercise) {
+    const t = exercise.t;
     root.classList.add("theory");
     // the page on show, which is turned here alone, without the backend
     let page = null;
@@ -24,7 +25,7 @@ export function mount(root, exercise) {
     function titleOf(text, number) {
         const heading = text.match(/^\s*#{1,6}\s+(.*)$/m);
         if (!heading) {
-            return `Page ${number + 1}`;
+            return t("Page {number}", { number: number + 1 });
         }
         return heading[1].replace(/\{[a-z]:([^{}]+)\}/g, "$1").replace(/[*_~`]/g, "").trim();
     }
@@ -57,7 +58,7 @@ export function mount(root, exercise) {
     }
 
     function contents() {
-        const list = element("ol", { className: "contents", ariaLabel: "Pages" });
+        const list = element("ol", { className: "contents", ariaLabel: t("Pages") });
         shown.pages.forEach((text, number) => {
             const go = element(
                 "button",
@@ -90,26 +91,28 @@ export function mount(root, exercise) {
 
     function navigation() {
         const last = page === shown.pages.length - 1;
-        const back = element("button", { textContent: "← Back", disabled: page === 0 });
+        const back = element("button", { textContent: `← ${t("Back")}`, disabled: page === 0 });
         back.onclick = () => turnTo(page - 1);
-        const forward = element("button", { className: "primary", textContent: last ? "Done" : "Next →" });
+        const forward = element("button", { className: "primary", textContent: last ? t("Done") : `${t("Next")} →` });
         forward.onclick = () => (last ? exercise.finish() : turnTo(page + 1));
         return element(
             "div",
             { className: "nav" },
             back,
-            element("span", { className: "progress", textContent: `Page ${page + 1} of ${shown.pages.length}` }),
+            element("span", { className: "progress", textContent: t("Page {at} of {total}", { at: page + 1, total: shown.pages.length }) }),
             forward,
         );
     }
 
     function chat() {
         const box = element("section", { className: "chat" });
-        box.append(element("h2", { textContent: "Ask about the lesson" }));
+        box.append(element("h2", { textContent: t("Ask about the lesson") }));
         if (shown.chat.length === 0) {
             box.append(element("p", {
                 className: "muted",
-                textContent: "Ask anything that is not clear, or write your answers to the exercise at the end of a page to have them checked.",
+                textContent: t(
+                    "Ask anything that is not clear, or write your answers to the exercise at the end of a page to have them checked.",
+                ),
             }));
         }
         for (const turn of shown.chat) {
@@ -119,18 +122,18 @@ export function mount(root, exercise) {
                 element(
                     "div",
                     { className: "question" },
-                    element("span", { className: "on", textContent: `Page ${turn.page + 1}` }),
+                    element("span", { className: "on", textContent: t("Page {number}", { number: turn.page + 1 }) }),
                     turn.question,
                 ),
                 markdown(turn.answer, "answer"),
             ));
         }
         if (asking) {
-            box.append(element("p", { className: "muted", textContent: "Thinking…" }));
+            box.append(element("p", { className: "muted", textContent: t("Thinking…") }));
         }
         const input = element("textarea", {
             value: draft,
-            placeholder: "Your question (Enter to send, Shift+Enter for a new line)",
+            placeholder: t("Your question (Enter to send, Shift+Enter for a new line)"),
             disabled: asking,
         });
         // questions about the lesson may be asked in any language, so their spelling is not checked
@@ -142,7 +145,7 @@ export function mount(root, exercise) {
                 ask(input.value);
             }
         };
-        const send = element("button", { className: "primary", textContent: "Ask", disabled: asking });
+        const send = element("button", { className: "primary", textContent: t("Ask"), disabled: asking });
         send.onclick = () => ask(input.value);
         box.append(input, element("div", { className: "actions" }, send));
         if (error) {

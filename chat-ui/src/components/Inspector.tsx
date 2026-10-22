@@ -3,6 +3,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { locale, type Message, t } from "../lib/i18n";
+
 import {
     amount,
     byKind as tokensByKind,
@@ -47,9 +49,9 @@ export function Inspector({ trace, onClose }: { trace: Trace; onClose: () => voi
             className="inspector-overlay"
             onPointerDown={(event) => event.target === event.currentTarget && onClose()}
         >
-            <section className="inspector" role="dialog" aria-modal="true" aria-label="Inspector">
+            <section className="inspector" role="dialog" aria-modal="true" aria-label={t("Inspector")}>
                 <header className="chat-header inspector-header">
-                    <h2 className="tutor-title">Inspector</h2>
+                    <h2 className="tutor-title">{t("Inspector")}</h2>
                     <dl className="inspector-totals">
                         <Fact name="Requests" value={amount(totals.requests)} />
                         <Fact name="Tools run" value={amount(totals.tools)} />
@@ -60,25 +62,26 @@ export function Inspector({ trace, onClose }: { trace: Trace; onClose: () => voi
                         <Fact name="Cost" value={dollars(totals.cost)} />
                         <Fact name="Time" value={duration(totals.ms)} />
                     </dl>
-                    <button className="inspector-close" onClick={onClose}>Close</button>
+                    <button className="inspector-close" onClick={onClose}>{t("Close")}</button>
                 </header>
                 {calls.length === 0
                     ? (
                         <div className="empty">
-                            <h2>Nothing asked yet</h2>
+                            <h2>{t("Nothing asked yet")}</h2>
                             <p>
-                                Each request the tutor sends to its model is shown here as it goes: the prompt, the
-                                messages and the tools it was given, what came back, and the tokens and time of each.
+                                {t(
+                                    "Each request the tutor sends to its model is shown here as it goes: the prompt, the messages and the tools it was given, what came back, and the tokens and time of each.",
+                                )}
                             </p>
                         </div>
                     )
                     : (
                         <div className="inspector-body">
-                            <nav className="inspector-list" aria-label="Requests">
+                            <nav className="inspector-list" aria-label={t("Requests")}>
                                 {trace.exchanges.map((exchange, place) => (
                                     <div key={place} className="inspector-exchange">
                                         <div className="inspector-exchange-label" title={exchange.label}>
-                                            {new Date(exchange.at).toLocaleTimeString()} · {exchange.label}
+                                            {new Date(exchange.at).toLocaleTimeString(locale())} · {exchange.label}
                                         </div>
                                         {exchange.calls.map((call) => {
                                             const usage = usageOf(call.reply);
@@ -92,13 +95,15 @@ export function Inspector({ trace, onClose }: { trace: Trace; onClose: () => voi
                                                     onClick={() => setChosen(key)}
                                                 >
                                                     <span>
-                                                        Request {call.id}
+                                                        {t("Request {id}", { id: call.id })}
                                                         {call.reply === null && " …"}
                                                         {call.reply?.error && " ✗"}
                                                     </span>
                                                     <span className="inspector-call-numbers">
-                                                        {amount(usage.input)} in · {amount(usage.output)} out ·{" "}
-                                                        {duration(call.reply?.total_ms ?? null)}
+                                                        {t("{in} in · {out} out", {
+                                                            in: amount(usage.input),
+                                                            out: amount(usage.output),
+                                                        })} · {duration(call.reply?.total_ms ?? null)}
                                                     </span>
                                                     {call.tools.length > 0 && (
                                                         <span className="inspector-call-tools">
@@ -119,10 +124,10 @@ export function Inspector({ trace, onClose }: { trace: Trace; onClose: () => voi
     );
 }
 
-function Fact({ name, value }: { name: string; value: string }) {
+function Fact({ name, value }: { name: Message; value: string }) {
     return (
         <div>
-            <dt>{name}</dt>
+            <dt>{t(name)}</dt>
             <dd>{value}</dd>
         </div>
     );
@@ -154,14 +159,14 @@ function CallView({ call }: { call: TracedCall }) {
         <div className="inspector-call-view">
             {reply?.error && <p className="message error">{reply.error}</p>}
             <section>
-                <h3>Overview</h3>
+                <h3>{t("Overview")}</h3>
                 <dl className="inspector-facts">
                     <Fact name="Model asked" value={request.model} />
                     <Fact name="Model that answered" value={reply?.model ?? "—"} />
                     <Fact name="Provider" value={reply?.provider ?? "—"} />
                     <Fact name="Generation" value={reply?.generation ?? "—"} />
-                    <Fact name="Finished because" value={reply?.finish_reason ?? (reply ? "—" : "still running")} />
-                    <Fact name="Sent at" value={new Date(call.at).toLocaleTimeString()} />
+                    <Fact name="Finished because" value={reply?.finish_reason ?? (reply ? "—" : t("still running"))} />
+                    <Fact name="Sent at" value={new Date(call.at).toLocaleTimeString(locale())} />
                     <Fact name="First token after" value={duration(reply?.first_ms ?? null)} />
                     <Fact name="Whole answer after" value={duration(reply?.total_ms ?? null)} />
                     <Fact name="Input tokens" value={amount(usage.input)} />
@@ -171,39 +176,51 @@ function CallView({ call }: { call: TracedCall }) {
                     <Fact name="Cost" value={dollars(usage.cost)} />
                     <Fact
                         name="Context window"
-                        value={window ? `${amount(counted)} of ${amount(window)} (${percent(counted, window)})` : "—"}
+                        value={window
+                            ? t("{used} of {window} ({percent})", {
+                                used: amount(counted),
+                                window: amount(window),
+                                percent: percent(counted, window),
+                            })
+                            : "—"}
                     />
                     <Fact name="Most output" value={amount(facts?.maxOutput ?? null)} />
                     <Fact
                         name="Price per million"
                         value={facts?.promptPrice !== null && facts
-                            ? `${dollars((facts.promptPrice ?? 0) * 1e6)} in · ${
-                                dollars((facts.completionPrice ?? 0) * 1e6)
-                            } out`
+                            ? t("{in} in · {out} out", {
+                                in: dollars((facts.promptPrice ?? 0) * 1e6),
+                                out: dollars((facts.completionPrice ?? 0) * 1e6),
+                            })
                             : "—"}
                     />
                 </dl>
                 {window !== null && (
-                    <div className="inspector-window" title="How much of the context window this request took">
+                    <div className="inspector-window" title={t("How much of the context window this request took")}>
                         <span style={{ width: `${Math.min(100, (counted / window) * 100)}%` }} />
                     </div>
                 )}
             </section>
 
             <section>
-                <h3>Context, {amount(counted)} tokens</h3>
+                <h3>{t("Context, {count} tokens", { count: amount(counted) })}</h3>
                 <p className="inspector-note">
                     {usage.input === null
-                        ? `The model has not said how many tokens it was given yet: each part is counted as a token for every ${4} characters.`
-                        : "The model said how many tokens it was given in all; each part is given its share of them by its length, so the parts are close, not exact."}
+                        ? t(
+                            "The model has not said how many tokens it was given yet: each part is counted as a token for every {count} characters.",
+                            { count: 4 },
+                        )
+                        : t(
+                            "The model said how many tokens it was given in all; each part is given its share of them by its length, so the parts are close, not exact.",
+                        )}
                 </p>
-                <div className="inspector-bar" role="img" aria-label="The context by kind">
+                <div className="inspector-bar" role="img" aria-label={t("The context by kind")}>
                     {byKind.map((each) => (
                         <span
                             key={each.kind}
                             className={`part-${each.kind}`}
                             style={{ flexGrow: each.tokens }}
-                            title={`${PART_KINDS[each.kind]}: ${amount(each.tokens)}`}
+                            title={`${t(PART_KINDS[each.kind])}: ${amount(each.tokens)}`}
                         />
                     ))}
                 </div>
@@ -211,17 +228,17 @@ function CallView({ call }: { call: TracedCall }) {
                     {byKind.map((each) => (
                         <li key={each.kind}>
                             <span className={`inspector-swatch part-${each.kind}`} aria-hidden="true" />
-                            {PART_KINDS[each.kind]} {amount(each.tokens)} ({percent(each.tokens, counted)})
+                            {t(PART_KINDS[each.kind])} {amount(each.tokens)} ({percent(each.tokens, counted)})
                         </li>
                     ))}
                 </ul>
                 <table className="inspector-parts">
                     <thead>
                         <tr>
-                            <th>Part</th>
-                            <th>Characters</th>
-                            <th>≈ Tokens</th>
-                            <th>Share</th>
+                            <th>{t("Part")}</th>
+                            <th>{t("Characters")}</th>
+                            <th>≈ {t("Tokens")}</th>
+                            <th>{t("Share")}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -233,11 +250,13 @@ function CallView({ call }: { call: TracedCall }) {
             </section>
 
             <section>
-                <h3>Answer</h3>
-                {reply === null && <p className="inspector-note">Still coming.</p>}
+                <h3>{t("Answer")}</h3>
+                {reply === null && <p className="inspector-note">{t("Still coming.")}</p>}
                 {reply?.reasoning && (
                     <details>
-                        <summary>Reasoning, {amount(reply.reasoning.length)} characters</summary>
+                        <summary>
+                            {t("Reasoning, {count} characters", { count: amount(reply.reasoning.length) })}
+                        </summary>
                         <pre className="inspector-text">{reply.reasoning}</pre>
                     </details>
                 )}
@@ -247,8 +266,10 @@ function CallView({ call }: { call: TracedCall }) {
                         <summary>
                             {tool.failed ? "✗" : tool.content === null ? "…" : "✓"}{" "}
                             {tool.name}({tool.arguments || "{}"}) · {duration(tool.ms)} ·{" "}
-                            {amount(tool.content?.length ?? null)} characters, ≈{" "}
-                            {amount(tool.content === null ? null : Math.ceil(tool.content.length / 4))} tokens
+                            {t("{chars} characters, ≈ {tokens} tokens", {
+                                chars: amount(tool.content?.length ?? null),
+                                tokens: amount(tool.content === null ? null : Math.ceil(tool.content.length / 4)),
+                            })}
                         </summary>
                         <pre className="inspector-text">{prettyJson(tool.content ?? "")}</pre>
                     </details>
@@ -256,18 +277,18 @@ function CallView({ call }: { call: TracedCall }) {
             </section>
 
             <section>
-                <h3>Settings of the request</h3>
+                <h3>{t("Settings of the request")}</h3>
                 <pre className="inspector-text">{JSON.stringify(settings, null, 2)}</pre>
             </section>
 
             <section>
-                <h3>Raw</h3>
+                <h3>{t("Raw")}</h3>
                 <details>
-                    <summary>The request as it was sent</summary>
+                    <summary>{t("The request as it was sent")}</summary>
                     <pre className="inspector-text">{JSON.stringify(request, null, 2)}</pre>
                 </details>
                 <details>
-                    <summary>What came back</summary>
+                    <summary>{t("What came back")}</summary>
                     <pre className="inspector-text">{JSON.stringify(reply, null, 2)}</pre>
                 </details>
             </section>

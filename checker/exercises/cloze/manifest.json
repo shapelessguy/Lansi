@@ -45,5 +45,37 @@
         "required": [
             "items"
         ]
+    },
+    "messages": {
+        "German": {
+            "Fill the gaps": "Lücken füllen",
+            "Fill in the gaps of sentences that practise the lesson. Each instance is a set of sentences, checked together.": "Füll die Lücken in Sätzen, die die Lektion üben. Jede Runde ist eine Gruppe von Sätzen, die zusammen geprüft werden.",
+            "Sentences in a set": "Sätze pro Gruppe",
+            "Right": "Richtig",
+            "Almost": "Fast",
+            "Not quite": "Nicht ganz",
+            "Correct: {answer}": "Richtig: {answer}",
+            "Set {at} of {total}": "Gruppe {at} von {total}",
+            "Check": "Prüfen",
+            "Checking…": "Wird geprüft…",
+            "Done": "Fertig",
+            "Next": "Weiter",
+            "Making the next sentences…": "Nächste Sätze werden erstellt…"
+        },
+        "Italian": {
+            "Fill the gaps": "Riempi gli spazi",
+            "Fill in the gaps of sentences that practise the lesson. Each instance is a set of sentences, checked together.": "Riempi gli spazi di frasi che esercitano la lezione. Ogni turno è un gruppo di frasi, corrette insieme.",
+            "Sentences in a set": "Frasi per gruppo",
+            "Right": "Giusto",
+            "Almost": "Quasi",
+            "Not quite": "Non proprio",
+            "Correct: {answer}": "Corretto: {answer}",
+            "Set {at} of {total}": "Gruppo {at} di {total}",
+            "Check": "Controlla",
+            "Checking…": "Controllo…",
+            "Done": "Fatto",
+            "Next": "Avanti",
+            "Making the next sentences…": "Creazione delle frasi successive…"
+        }
     }
 }

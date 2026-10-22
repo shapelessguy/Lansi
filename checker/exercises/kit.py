@@ -77,6 +77,16 @@ An exercise whose manifest has `"lesson": false` practises no lesson, such
 as one that corrects a text: a session of such exercises alone has none,
 and its `lesson` in the context is empty.
 
+The `messages` of a manifest are what the exercise shows in each language
+the app is shown in but English, by the English name of the language and
+then by what it says in English: its title, its description, the labels of
+its options and their choices, and what its interface says, which the
+interface has from `exercise.t`, as kit.js describes. What it lacks is
+shown as the app has it, if it does, and in English otherwise:
+
+    "messages": {"German": {"Then": "Danach", "Retell it": "Nacherzählen"},
+                 "Italian": {"Then": "Poi", "Retell it": "Riraccontala"}}
+
 An exercise whose manifest has `"theory": true` teaches rather than asks:
 it is listed first and done first in a session, is not done a number of
 times, and is graded on nothing.

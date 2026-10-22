@@ -70,7 +70,12 @@ test("a stored language that cannot be learned gives the usual one", () => {
 
 test("the Anki words are taken to be German unless another language is stored", () => {
     expect(normalizeSettings({}).ankiLanguage).toBe("German");
-    expect(normalizeSettings({ ankiLanguage: "Spanish" }).ankiLanguage).toBe("Spanish");
+    expect(normalizeSettings({ ankiLanguage: "Italian" }).ankiLanguage).toBe("Italian");
+});
+
+test("a language that can no longer be learned or translated into is stored as the usual one", () => {
+    const stored = normalizeSettings({ language: "Spanish", ankiLanguage: "French", translateInto: "Polish" });
+    expect([stored.language, stored.ankiLanguage, stored.translateInto]).toEqual(["German", "German", "English"]);
 });
 
 test("the placeholder is replaced by the level of the learner", () => {

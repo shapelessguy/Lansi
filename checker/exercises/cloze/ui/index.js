@@ -6,12 +6,12 @@ import { element } from "../../kit.js";
 const LABELS = { right: "Right", partial: "Almost", wrong: "Not quite" };
 const MARKS = { right: "✓", partial: "~", wrong: "✗" };
 
-/** How one sentence of a set went. */
-function feedbackOf(feedback) {
+/** How one sentence of a set went, told with `t`. */
+function feedbackOf(feedback, t) {
     const box = element("li", { className: `feedback ${feedback.result}` });
     box.append(element("strong", { textContent: `${MARKS[feedback.result]} ${feedback.answer}` }));
     if (feedback.result !== "right") {
-        box.append(element("div", { textContent: `Correct: ${feedback.correct}` }));
+        box.append(element("div", { textContent: t("Correct: {answer}", { answer: feedback.correct }) }));
     }
     if (feedback.note) {
         box.append(element("div", { className: "muted", textContent: feedback.note }));
@@ -20,6 +20,7 @@ function feedbackOf(feedback) {
 }
 
 export function mount(root, exercise) {
+    const t = exercise.t;
     const error = element("p", { className: "error" });
 
     /** Has the backend do `message`, saying on `button` that it is busy, or why it could not. */
@@ -36,7 +37,8 @@ export function mount(root, exercise) {
     }
 
     function progress(at, total) {
-        return element("div", { className: "progress", textContent: `Set ${Math.min(at + 1, total)} of ${total}` });
+        return element("div", { className: "progress", textContent: t("Set {at} of {total}", { at: Math.min(at + 1, total), total }),
+        });
     }
 
     function answering(show) {
@@ -69,8 +71,9 @@ export function mount(root, exercise) {
                 item.translation ? element("div", { className: "muted", textContent: item.translation }) : null,
             ));
         }
-        const check = element("button", { className: "primary", textContent: "Check" });
-        const submit = () => send({ answers: inputs.map((own) => own.map((input) => input.value)) }, check, "Checking…");
+        const check = element("button", { className: "primary", textContent: t("Check") });
+        const submit = () =>
+            send({ answers: inputs.map((own) => own.map((input) => input.value)) }, check, t("Checking…"));
         check.onclick = submit;
         all.forEach((input, number) =>
             input.addEventListener("keydown", (event) => {
@@ -91,17 +94,22 @@ export function mount(root, exercise) {
 
     function reviewing(show) {
         const right = show.feedback.filter((each) => each.result === "right").length;
-        const summary = element("p", {}, element("strong", { textContent: LABELS[show.result] }), ` · ${right} of ${show.feedback.length} right`);
-        const go = element("button", { className: "primary", textContent: show.more ? "Next" : "Done" });
+        const summary = element(
+            "p",
+            {},
+            element("strong", { textContent: t(LABELS[show.result]) }),
+            ` · ${t("{right} of {count} right", { right, count: show.feedback.length })}`,
+        );
+        const go = element("button", { className: "primary", textContent: show.more ? t("Next") : t("Done") });
         if (show.more) {
-            go.onclick = () => send({ next: true }, go, "Making the next sentences…");
+            go.onclick = () => send({ next: true }, go, t("Making the next sentences…"));
         } else {
             go.onclick = () => exercise.finish();
         }
         root.replaceChildren(
             progress(show.at - 1, show.total),
             summary,
-            element("ol", { className: "sentences" }, ...show.feedback.map(feedbackOf)),
+            element("ol", { className: "sentences" }, ...show.feedback.map((each) => feedbackOf(each, t))),
             element("div", { className: "actions" }, go),
             error,
         );

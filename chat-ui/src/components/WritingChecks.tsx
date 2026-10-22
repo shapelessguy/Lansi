@@ -26,6 +26,7 @@ import {
     type SpellingIssue,
     spellingIssues,
 } from "../lib/checker";
+import { t } from "../lib/i18n";
 import { askedOf, checkedBox, checkText, mirrorStyle, type Profiling, type Sent, worthSending } from "../lib/writing";
 
 /** What a panel that registered a text box of its own is told, and asked. */
@@ -507,13 +508,13 @@ export function WritingChecks({ language, children }: { language: string; childr
                     // nor may a click on it take the caret out of the box
                     onMouseDown={(event) => event.preventDefault()}
                 >
-                    {hintIssue.suggestions.length === 0 && <span>Not in the dictionary</span>}
+                    {hintIssue.suggestions.length === 0 && <span>{t("Not in the dictionary")}</span>}
                     {hintIssue.suggestions.map((suggestion) => (
                         <button
                             key={suggestion}
                             type="button"
                             onClick={() => fix(hint.watch, hintIssue, suggestion)}
-                            title={`Replace “${hintIssue.word}” with “${suggestion}”`}
+                            title={t("Replace “{word}” with “{suggestion}”", { word: hintIssue.word, suggestion })}
                         >
                             {suggestion}
                         </button>

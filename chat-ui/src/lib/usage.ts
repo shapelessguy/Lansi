@@ -2,9 +2,10 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import type { ProfileUsage } from "./checker";
+import type { Message } from "./i18n";
 import { checkerFetch } from "./session";
 
-/** The kinds of work requests to the models are made for, which the usage is added up by. */
+/** The kinds of work requests to the models are made for, which the usage is added up by, as `t` shows them. */
 export const USAGE_CATEGORIES = {
     chat: "Chat replies",
     checking: "Sentence checks",
@@ -14,7 +15,7 @@ export const USAGE_CATEGORIES = {
     vocabulary: "Vocabulary",
     practice: "Practice",
     tutor: "Tutor",
-} as const;
+} as const satisfies Record<string, Message>;
 
 export type UsageCategory = keyof typeof USAGE_CATEGORIES;
 
@@ -59,14 +60,14 @@ export interface UsageSummary {
 /** The usage of a category and a model in a bin of time, which starts at `at`. */
 export type UsageBin = UsageTotals & { at: number; category: string; model: string };
 
-/** The stretches of time the usage is shown for. */
+/** The stretches of time the usage is shown for, as `t` shows them. */
 export const PERIODS = {
     today: "Today",
     week: "7 days",
     month: "This month",
     days30: "30 days",
     all: "Everything",
-} as const;
+} as const satisfies Record<string, Message>;
 
 export type Period = keyof typeof PERIODS;
 

@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
 import { checkerFetch } from "./session";
 
 /**
@@ -76,7 +77,11 @@ export async function fetchOpenRouterModels(kind: ModelKind | "all"): Promise<Li
     const response = await checkerFetch(`/models/openrouter?kind=${kind}`);
     const reply = await response.json();
     if (!response.ok) {
-        throw new Error(typeof reply.error === "string" ? reply.error : `The server answered ${response.status}.`);
+        throw new Error(
+            typeof reply.error === "string"
+                ? reply.error
+                : t("The server answered {status}.", { status: response.status }),
+        );
     }
     return reply.models;
 }
@@ -86,7 +91,11 @@ export async function fetchModelsAt(url: string, key: string): Promise<string[]>
     const response = await checkerFetch("/models", { method: "POST", body: JSON.stringify({ url, key }) });
     const reply = await response.json();
     if (!response.ok) {
-        throw new Error(typeof reply.error === "string" ? reply.error : `The server answered ${response.status}.`);
+        throw new Error(
+            typeof reply.error === "string"
+                ? reply.error
+                : t("The server answered {status}.", { status: response.status }),
+        );
     }
     return reply.models;
 }

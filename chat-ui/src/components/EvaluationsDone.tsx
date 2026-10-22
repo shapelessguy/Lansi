@@ -12,6 +12,7 @@ import {
     moduleTitle,
     shownScores,
 } from "../lib/evaluations";
+import { locale, t } from "../lib/i18n";
 import { fetchSession, type Grade } from "../lib/practice";
 import { GradeRound } from "./GradeRound";
 import { LevelBadge } from "./Level";
@@ -25,14 +26,14 @@ interface Props {
 
 /** Whether it was passed, in a word. */
 export function passedOf(result: EvaluationResult): string {
-    return result.passed === null ? "not every module done" : result.passed ? "passed" : "not passed";
+    return result.passed === null ? t("not every module done") : result.passed ? t("passed") : t("not passed");
 }
 
 /** The scores of an evaluation, each with a bar. */
 export function ScoreTable({ result, modules }: { result: EvaluationResult; modules: ExamModule[] }) {
     const shown = shownScores(result, modules);
     if (shown.length === 0) {
-        return <p className="practice-detail">Nothing was scored.</p>;
+        return <p className="practice-detail">{t("Nothing was scored.")}</p>;
     }
     return (
         <dl className="evaluation-scores">
@@ -52,7 +53,7 @@ export function ScoreTable({ result, modules }: { result: EvaluationResult; modu
 }
 
 function dayOf(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleDateString(undefined, {
+    return new Date(seconds * 1000).toLocaleDateString(locale(), {
         weekday: "short",
         day: "numeric",
         month: "short",
@@ -93,10 +94,10 @@ export function EvaluationsDone({ active, revision }: Props) {
         return <p className="sidebar-note error">{error}</p>;
     }
     if (!evaluations) {
-        return <p className="sidebar-note">Loading…</p>;
+        return <p className="sidebar-note">{t("Loading…")}</p>;
     }
     if (evaluations.length === 0) {
-        return <p className="sidebar-note">No evaluation is over yet.</p>;
+        return <p className="sidebar-note">{t("No evaluation is over yet.")}</p>;
     }
     return (
         <div className="log-list evaluations-done">
@@ -115,7 +116,7 @@ export function EvaluationsDone({ active, revision }: Props) {
                                     </span>
                                     <span className="log-where">
                                         {dayOf(each.started_at)} · {describeLength(each.length)}
-                                        {each.timed ? ", timed" : ""} · {passedOf(each.result)}
+                                        {each.timed ? `, ${t("timed")}` : ""} · {passedOf(each.result)}
                                     </span>
                                 </span>
                             </summary>
@@ -164,15 +165,21 @@ export function EvaluationReview({ evaluation }: { evaluation: Evaluation }) {
                         <h4>
                             {moduleTitle(evaluation.plan.modules, part.module)} · {part.title}
                         </h4>
-                        {!part.session && <p className="sidebar-note">Not done.</p>}
-                        {got === "failed" && <p className="sidebar-note error">What was answered could not be had.</p>}
+                        {!part.session && <p className="sidebar-note">{t("Not done.")}</p>}
+                        {got === "failed" && (
+                            <p className="sidebar-note error">{t("What was answered could not be had.")}</p>
+                        )}
                         {Array.isArray(got) && rounds.length === 0 && (
-                            <p className="sidebar-note">Nothing was answered.</p>
+                            <p className="sidebar-note">{t("Nothing was answered.")}</p>
                         )}
                         {rounds.length > 0 && (
                             <ol className="done-rounds">
                                 {rounds.map((grade, round) => (
-                                    <GradeRound key={round} grade={grade} label={`Task ${round + 1}`} />
+                                    <GradeRound
+                                        key={round}
+                                        grade={grade}
+                                        label={t("Task {number}", { number: round + 1 })}
+                                    />
                                 ))}
                             </ol>
                         )}

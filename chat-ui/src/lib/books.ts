@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { type Message, t } from "./i18n";
 import { checkerFetch } from "./session";
 
 /** A book as it is listed, without what it says. */
@@ -70,7 +71,7 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     try {
         response = await checkerFetch(BASE + path, init);
     } catch {
-        throw new Error("The server cannot be reached. Is `just dev` running?");
+        throw new Error(t("The server cannot be reached. Is `just dev` running?"));
     }
     if (response.status === 400) {
         // the server says what is wrong with what it was sent
@@ -78,7 +79,7 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
         throw new Error(sentence(reply.error ?? "the book cannot be read"));
     }
     if (!response.ok) {
-        throw new Error(`The server answered ${response.status}.`);
+        throw new Error(t("The server answered {status}.", { status: response.status }));
     }
     return response;
 }
@@ -148,6 +149,12 @@ export function pageOf(left: number, width: number, gap: number): number {
     return Math.max(0, Math.floor((left + 1) / (width + gap)));
 }
 
+/** What each look of a book is called, to be shown with `t`. */
+interface Labelled {
+    label: Message;
+    [other: string]: unknown;
+}
+
 /** The colours a book is read in, as in a reading app: the page and the text on it. */
 export const PAPERS = {
     app: { label: "App", background: "", color: "" },
@@ -156,7 +163,7 @@ export const PAPERS = {
     dusk: { label: "Dusk", background: "#33363b", color: "#d5d5d0" },
     night: { label: "Night", background: "#121212", color: "#bdbdb8" },
     console: { label: "Console", background: "#000000", color: "#3ddc84" },
-} as const;
+} as const satisfies Record<string, Labelled>;
 
 /** The fonts a book is read in. Each is one most machines have, with others to fall back on. */
 export const FONTS = {
@@ -166,14 +173,14 @@ export const FONTS = {
     cambria: { label: "Cambria", family: "Cambria, \"Hoefler Text\", \"Liberation Serif\", serif" },
     verdana: { label: "Verdana", family: "Verdana, \"DejaVu Sans\", sans-serif" },
     mono: { label: "Monospace", family: "Consolas, \"Cascadia Mono\", Menlo, monospace" },
-} as const;
+} as const satisfies Record<string, Labelled>;
 
 /** How far apart the lines of a book are, as a multiple of the size of the text. */
 export const SPACINGS = {
-    close: { label: "Close", lineHeight: 1.35 },
+    close: { label: "Tight", lineHeight: 1.35 },
     normal: { label: "Normal", lineHeight: 1.6 },
     wide: { label: "Wide", lineHeight: 1.9 },
-} as const;
+} as const satisfies Record<string, Labelled>;
 
 /** How a book is read: how its text looks, and how far each book has been read. */
 export interface Reading {

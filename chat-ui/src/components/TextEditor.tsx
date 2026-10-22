@@ -3,6 +3,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 
+import { locale, plural, t } from "../lib/i18n";
 import type { WordLists } from "../lib/sets";
 import type { Settings } from "../lib/settings";
 import { blocksOf, fetchText, type Inline, saveText, type Text } from "../lib/texts";
@@ -119,7 +120,7 @@ export function TextEditor(
         return <p className="practice-note error">{error}</p>;
     }
     if (!text) {
-        return <p className="practice-note">Loading…</p>;
+        return <p className="practice-note">{t("Loading…")}</p>;
     }
     if (text.kind === "correction") {
         return (
@@ -133,9 +134,11 @@ export function TextEditor(
         // corrected, it is shown with its corrections and their comments worked in
         return (
             <section className="text-editor">
-                <h2 className="text-corrected-title">{text.title || "Untitled"}</h2>
+                <h2 className="text-corrected-title">{text.title || t("Untitled")}</h2>
                 <p className="practice-note">
-                    Corrected on {new Date((text.lockedAt as number) * 1000).toLocaleDateString()}
+                    {t("Corrected on {day}", {
+                        day: new Date((text.lockedAt as number) * 1000).toLocaleDateString(locale()),
+                    })}
                 </p>
                 <Correction markdown={correction} />
             </section>
@@ -146,23 +149,24 @@ export function TextEditor(
             <input
                 className="text-title-input"
                 value={text.title}
-                placeholder="Title"
-                aria-label="Title"
+                placeholder={t("Title")}
+                aria-label={t("Title")}
                 readOnly={locked}
                 onChange={(event) => change(event.target.value, text.content ?? "")}
             />
             {locked && (
                 <p className="practice-note">
-                    Corrected on{" "}
-                    {new Date((text.lockedAt as number) * 1000).toLocaleDateString()}: it stays as it was handed in.
+                    {t("Corrected on {day}: it stays as it was handed in.", {
+                        day: new Date((text.lockedAt as number) * 1000).toLocaleDateString(locale()),
+                    })}
                 </p>
             )}
             {/* made only once the text is there, as the box is registered for its sentences when it is made */}
             <CheckedTextarea
                 className="text-body"
                 value={text.content ?? ""}
-                placeholder="Write here"
-                aria-label="Text"
+                placeholder={t("Write here")}
+                aria-label={t("Text")}
                 readOnly={locked}
                 onChange={(content) => change(text.title, content)}
                 settings={settings}
@@ -176,8 +180,9 @@ export function TextEditor(
                 onEditQuestions={onEditQuestions}
             />
             <div className="text-status">
-                {(text.content ?? "").split(/\s+/).filter(Boolean).length} words
-                {!locked && ` · ${state === "saved" ? "Saved" : state === "saving" ? "Saving…" : "Not saved yet"}`}
+                {plural((text.content ?? "").split(/\s+/).filter(Boolean).length, "{count} word", "{count} words")}
+                {!locked
+                    && ` · ${state === "saved" ? t("Saved") : state === "saving" ? t("Saving…") : t("Not saved yet")}`}
                 {error && <span className="error">· {error}</span>}
             </div>
         </section>

@@ -421,6 +421,30 @@ def test_the_options_of_an_exercise_are_listed_without_those_that_are_not_option
     }
 
 
+def test_what_an_exercise_shows_in_other_languages_is_listed_without_what_is_not_text(
+    directory: Path,
+) -> None:
+    (directory / "echo" / "manifest.json").write_text(
+        '{"title": "Echo", "messages": {"German": {"Echo": "Echo auf Deutsch",'
+        ' "Broken": 3}, "Italian": ["not", "a", "map"]}}',
+        encoding="utf-8",
+    )
+
+    (echo,) = exercises(directory)
+
+    assert echo.messages == {"German": {"Echo": "Echo auf Deutsch"}}
+
+
+def test_the_exercises_that_are_kept_say_their_title_in_each_language_of_the_app() -> (
+    None
+):
+    for manifest in exercises():
+        for language in ("German", "Italian"):
+            assert manifest.title in manifest.messages.get(language, {}), (
+                f"{manifest.id} has no title in {language}"
+            )
+
+
 def test_an_exercise_is_told_the_options_it_was_chosen_with_or_else_the_first(
     practice: Practice, directory: Path
 ) -> None:

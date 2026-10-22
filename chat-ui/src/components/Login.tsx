@@ -3,6 +3,7 @@
 
 import { type FormEvent, useState } from "react";
 
+import { t } from "../lib/i18n";
 import { logIn } from "../lib/session";
 
 /** Asks for a name and a password. Shown until someone is logged in. */
@@ -32,7 +33,7 @@ export function Login() {
                     Lansi
                 </h1>
                 <label className="field">
-                    <span>Name</span>
+                    <span>{t("Name")}</span>
                     <input
                         type="text"
                         autoComplete="username"
@@ -43,7 +44,7 @@ export function Login() {
                     />
                 </label>
                 <label className="field">
-                    <span>Password</span>
+                    <span>{t("Password")}</span>
                     <input
                         type="password"
                         autoComplete="current-password"
@@ -53,7 +54,7 @@ export function Login() {
                 </label>
                 {error && <p className="error">{error}</p>}
                 <button className="primary" disabled={busy || !user.trim() || !password}>
-                    {busy ? "Logging in…" : "Log in"}
+                    {busy ? t("Logging in…") : t("Log in")}
                 </button>
             </form>
         </main>

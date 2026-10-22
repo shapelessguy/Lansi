@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ModelChoice } from "../lib/models";
 
+import { type Message, t } from "../lib/i18n";
 import { readWhere, type Where, WHERE_ATTRIBUTE } from "../lib/logs";
 import { markedAncestor, regionOf, selectableShadowRoots, selectedRange } from "../lib/selection";
 import { type BookSelection, bookSelection } from "../lib/speaking";
@@ -43,7 +44,7 @@ const BAR = { width: 360, room: 48 };
 const BOX = { width: 380, room: 150 };
 
 /** What can be done with a selection, and what each is called on its button. */
-const TASKS = { translate: "Translate", words: "Add to vocabulary" } as const;
+const TASKS = { translate: "Translate", words: "Add to vocabulary" } as const satisfies Record<string, Message>;
 type Task = keyof typeof TASKS;
 
 /** What was selected, and where on the window. */
@@ -203,13 +204,13 @@ export function SelectionTools(
                 <div
                     className="selection-bar"
                     role="toolbar"
-                    aria-label="Selected text"
+                    aria-label={t("Selected text")}
                     style={placed(anchorFor(found.rect, window.innerWidth, BAR.width, BAR.room))}
                     // a click on a button must not drop the selection the button is for
                     onMouseDown={(event) => event.preventDefault()}
                 >
                     {(Object.keys(TASKS) as Task[]).map((task) => (
-                        <button key={task} onClick={() => start(task, found)}>{TASKS[task]}</button>
+                        <button key={task} onClick={() => start(task, found)}>{t(TASKS[task])}</button>
                     ))}
                     {found.book && (
                         <button
@@ -217,9 +218,9 @@ export function SelectionTools(
                                 onPlay(found.book!);
                                 setFound(null);
                             }}
-                            title="Read the selected sentences aloud"
+                            title={t("Read the selected sentences aloud")}
                         >
-                            ▶ Play
+                            ▶ {t("Play")}
                         </button>
                     )}
                 </div>
@@ -228,17 +229,17 @@ export function SelectionTools(
                 <div
                     className="selection-box"
                     role="dialog"
-                    aria-label={TASKS[box.task]}
+                    aria-label={t(TASKS[box.task])}
                     style={placed(anchorFor(box.found.rect, window.innerWidth, BOX.width, BOX.room))}
                 >
                     <p className="selection-source">{box.found.picked.selection.trim()}</p>
-                    {box.status === "loading" && <p className="typing">Translating…</p>}
+                    {box.status === "loading" && <p className="typing">{t("Translating…")}</p>}
                     {box.status === "error" && (
                         <>
                             <p className="selection-error" role="alert">{box.message}</p>
                             <div className="selection-actions">
-                                <button onClick={() => start(box.task, box.found)}>Try again</button>
-                                <button onClick={close}>Close</button>
+                                <button onClick={() => start(box.task, box.found)}>{t("Try again")}</button>
+                                <button onClick={close}>{t("Close")}</button>
                             </div>
                         </>
                     )}
@@ -252,11 +253,11 @@ export function SelectionTools(
                                         onChat(box.translated);
                                         close();
                                     }}
-                                    title="Ask about this in a chat at the side"
+                                    title={t("Ask about this in a chat at the side")}
                                 >
-                                    Chat
+                                    {t("Chat")}
                                 </button>
-                                <button onClick={close}>Close</button>
+                                <button onClick={close}>{t("Close")}</button>
                             </div>
                         </>
                     )}

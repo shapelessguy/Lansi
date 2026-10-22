@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { ask } from "../lib/dialogs";
+import { locale, t } from "../lib/i18n";
 import { deleteMemory, fetchMemories, type Memory } from "../lib/tutor";
 
 interface Props {
@@ -39,16 +40,18 @@ export function MemoryList({ revision }: Props) {
     useEffect(load, [load, revision]);
 
     function forget(memory: Memory) {
-        void ask("Have the tutor forget this?", { detail: memory.content, confirm: "Forget" }).then(async (agreed) => {
-            if (agreed) {
-                await deleteMemory(memory.id);
-                load();
-            }
-        });
+        void ask(t("Have the tutor forget this?"), { detail: memory.content, confirm: t("Forget") }).then(
+            async (agreed) => {
+                if (agreed) {
+                    await deleteMemory(memory.id);
+                    load();
+                }
+            },
+        );
     }
 
     if (loaded.status === "loading") {
-        return <p className="sidebar-note">Loading…</p>;
+        return <p className="sidebar-note">{t("Loading…")}</p>;
     }
     if (loaded.status === "error") {
         return <p className="sidebar-note error">{loaded.message}</p>;
@@ -73,15 +76,15 @@ export function MemoryList({ revision }: Props) {
                     <div className="memory-meta">
                         <span>
                             {memory.day
-                                ? memory.day === today ? "Today" : dayOf(memory.day)
+                                ? memory.day === today ? t("Today") : dayOf(memory.day)
                                 : day(memory.createdAt)}
                         </span>
                         <button
                             className="link"
                             onClick={() => forget(memory)}
-                            title="Have the tutor forget this"
+                            title={t("Have the tutor forget this")}
                         >
-                            Forget
+                            {t("Forget")}
                         </button>
                     </div>
                 </li>
@@ -91,56 +94,65 @@ export function MemoryList({ revision }: Props) {
     return (
         <div className="panel-body memories">
             <details className="memory-group" open>
-                <summary>General</summary>
+                <summary>{t("General")}</summary>
                 {facts.length === 0
                     ? (
                         <p className="sidebar-note">
-                            The tutor remembers nothing yet. When you start a new chat with the tutor, the one before is
-                            closed, and what matters of it for the next lessons is kept here.
+                            {t(
+                                "The tutor remembers nothing yet. When you start a new chat with the tutor, the one before is closed, and what matters of it for the next lessons is kept here.",
+                            )}
                         </p>
                     )
                     : listed([...facts].reverse())}
             </details>
             <details className="memory-group" open>
-                <summary>Strategy</summary>
+                <summary>{t("Strategy")}</summary>
                 {strategies.length === 0
                     ? (
                         <p className="sidebar-note">
-                            You and the tutor have not agreed yet on how to hold the lessons, such as Anki first, then a
-                            chapter of a book. The tutor will ask you, and what you agree on is kept here.
+                            {t(
+                                "You and the tutor have not agreed yet on how to hold the lessons, such as Anki first, then a chapter of a book. The tutor will ask you, and what you agree on is kept here.",
+                            )}
                         </p>
                     )
                     : listed([...strategies].reverse())}
             </details>
             <details className="memory-group" open>
-                <summary>Calendar</summary>
+                <summary>{t("Calendar")}</summary>
                 {calendar.length === 0
                     ? (
                         <p className="sidebar-note">
-                            Nothing is planned. When you and the tutor agree to do something on a day, such as a mock
-                            exam, it is put here.
+                            {t(
+                                "Nothing is planned. When you and the tutor agree to do something on a day, such as a mock exam, it is put here.",
+                            )}
                         </p>
                     )
                     : listed(calendar)}
             </details>
             {recaps.length > 0 && (
                 <details className="memory-group">
-                    <summary>Recaps of the lessons</summary>
+                    <summary>{t("Recaps of the lessons")}</summary>
                     {listed([...recaps].reverse())}
                 </details>
             )}
             {loaded.removed.length > 0 && (
                 <details className="memory-group">
-                    <summary>Forgotten</summary>
+                    <summary>{t("Forgotten")}</summary>
                     <ul className="memory-list">
                         {[...loaded.removed].reverse().map((memory) => (
                             <li key={memory.id} className="memory removed">
                                 <p>{memory.content}</p>
                                 <div className="memory-meta">
                                     <span>
-                                        {day(memory.createdAt)} – {memory.removedAt ? day(memory.removedAt) : ""}, by
-                                        {" "}
-                                        {memory.removedBy === "learner" ? "you" : "the tutor"}
+                                        {t(
+                                            memory.removedBy === "learner"
+                                                ? "{from} – {to}, by you"
+                                                : "{from} – {to}, by the tutor",
+                                            {
+                                                from: day(memory.createdAt),
+                                                to: memory.removedAt ? day(memory.removedAt) : "",
+                                            },
+                                        )}
                                         {memory.removedWhy && `: ${memory.removedWhy}`}
                                     </span>
                                 </div>
@@ -154,13 +166,13 @@ export function MemoryList({ revision }: Props) {
 }
 
 function day(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleDateString(undefined, { dateStyle: "medium" });
+    return new Date(seconds * 1000).toLocaleDateString(locale(), { dateStyle: "medium" });
 }
 
 /** A day given as YYYY-MM-DD, as the learner reads dates. */
 function dayOf(iso: string): string {
     const [year, month, date] = iso.split("-").map(Number);
-    return new Date(year, month - 1, date).toLocaleDateString(undefined, { dateStyle: "medium" });
+    return new Date(year, month - 1, date).toLocaleDateString(locale(), { dateStyle: "medium" });
 }
 
 /** The day of `moment` where the learner is, as YYYY-MM-DD. */

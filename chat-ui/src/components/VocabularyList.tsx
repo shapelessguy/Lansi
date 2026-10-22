@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { ImportStatus } from "../lib/ankiImport";
+import { languageName, plural, t } from "../lib/i18n";
 import type { WordSet } from "../lib/sets";
 import {
     countWords,
@@ -50,18 +51,18 @@ interface Props {
 
 /** What the import is doing, in a line. */
 function describeImport(importing: ImportStatus): string {
-    const left = importing.remaining === null ? "" : `${importing.remaining} left`;
+    const left = importing.remaining === null ? "" : t("{count} left", { count: importing.remaining });
     switch (importing.state) {
         case "off":
-            return "off.";
+            return t("off.");
         case "no-key":
-            return "Waiting for an OpenRouter key.";
+            return t("Waiting for an OpenRouter key.");
         case "unavailable":
             return importing.message;
         case "importing":
-            return `Importing… ${left}`;
+            return `${t("Importing…")} ${left}`;
         default:
-            return importing.remaining === 0 ? "Every Anki word is in." : left;
+            return importing.remaining === 0 ? t("Every Anki word is in.") : left;
     }
 }
 
@@ -169,7 +170,7 @@ export function VocabularyList(
                         {[
                             flat && word.category,
                             describeUses(word),
-                            `${word.forms} ${word.forms === 1 ? "form" : "forms"}`,
+                            plural(word.forms, "{count} form", "{count} forms"),
                         ]
                             .filter(Boolean).join(" · ")}
                     </span>
@@ -185,58 +186,69 @@ export function VocabularyList(
                 <div className="sort-row">
                     <input
                         type="search"
-                        placeholder="Filter words"
-                        aria-label="Filter vocabulary"
+                        placeholder={t("Filter words")}
+                        aria-label={t("Filter vocabulary")}
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                     />
                     <select
-                        aria-label="Sort by"
+                        aria-label={t("Sort by")}
                         value={sort}
                         onChange={(event) => setSort(event.target.value as SortKey)}
                     >
-                        {Object.entries(sortLabels).map(([key, label]) => <option key={key} value={key}>{label}
-                        </option>)}
+                        {Object.entries(sortLabels).map(([key, label]) => (
+                            <option key={key} value={key}>{t(label)}</option>
+                        ))}
                     </select>
-                    <button className="icon-button" onClick={load} title="Reload" aria-label="Reload vocabulary">
+                    <button
+                        className="icon-button"
+                        onClick={load}
+                        title={t("Reload")}
+                        aria-label={t("Reload vocabulary")}
+                    >
                         ↻
                     </button>
                 </div>
                 <label className="vocabulary-flat">
                     <input type="checkbox" checked={flat} onChange={(event) => changeFlat(event.target.checked)} />
-                    One list, without categories
+                    {t("One list, without categories")}
                 </label>
                 <div className="sort-row">
                     <select
-                        aria-label="The set of words given to the model"
-                        title="The words that {{words}} stands for in your prompts"
+                        aria-label={t("The set of words given to the model")}
+                        title={t("The words that {{words}} stands for in your prompts")}
                         value={activeSet?.id ?? ""}
                         onChange={(event) => onActiveSet(event.target.value)}
                     >
-                        <option value="">Set in use: every word</option>
-                        {sets.map((set) => <option key={set.id} value={set.id}>Set in use: {set.name}</option>)}
+                        <option value="">{t("Set in use: every word")}</option>
+                        {sets.map((set) => (
+                            <option key={set.id} value={set.id}>{t("Set in use: {name}", { name: set.name })}</option>
+                        ))}
                     </select>
-                    <button disabled={!activeSet} onClick={() => activeSet && onEditSet(activeSet)}>Edit</button>
-                    <button onClick={() => onEditSet(null)}>New set</button>
+                    <button disabled={!activeSet} onClick={() => activeSet && onEditSet(activeSet)}>{t("Edit")}</button>
+                    <button onClick={() => onEditSet(null)}>{t("New set")}</button>
                 </div>
                 {importing && (
                     <small
                         className={importing.state === "unavailable" ? "import-status error" : "import-status"}
                         title={importing.message}
                     >
-                        Anki import ({ankiLanguage}): {describeImport(importing)}
+                        {t("Anki import ({language}): {state}", {
+                            language: languageName(ankiLanguage),
+                            state: describeImport(importing),
+                        })}
                     </small>
                 )}
             </div>
-            {state.status === "loading" && <p className="sidebar-note">Loading vocabulary…</p>}
+            {state.status === "loading" && <p className="sidebar-note">{t("Loading vocabulary…")}</p>}
             {state.status === "error" && (
                 <div className="sidebar-note error">
                     <p>{state.message}</p>
-                    <button onClick={load}>Try again</button>
+                    <button onClick={load}>{t("Try again")}</button>
                 </div>
             )}
             {vocabulary && groups.length === 0 && listed.length === 0 && (
-                <p className="sidebar-note">{query ? "No words match." : "No words are stored yet."}</p>
+                <p className="sidebar-note">{query ? t("No words match.") : t("No words are stored yet.")}</p>
             )}
             <div className="vocabulary">
                 {groups.map(({ category, words }) => (
@@ -260,7 +272,7 @@ export function VocabularyList(
 
 function Entry({ state, tables }: { state: EntryState; tables: FormTables }) {
     if (state.status === "loading") {
-        return <p className="entry sidebar-note">Loading…</p>;
+        return <p className="entry sidebar-note">{t("Loading…")}</p>;
     }
     if (state.status === "error") {
         return <p className="entry sidebar-note error">{state.message}</p>;
@@ -277,7 +289,7 @@ function Entry({ state, tables }: { state: EntryState; tables: FormTables }) {
                     </div>
                 ))}
                 <div>
-                    <dt>stored</dt>
+                    <dt>{t("stored")}</dt>
                     <dd>{entry.created_at}</dd>
                 </div>
             </dl>

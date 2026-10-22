@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import type { ProfileUsage } from "./checker";
+import { t } from "./i18n";
 import type { Log, Where } from "./logs";
 import { type ModelChoice, modelRequest } from "./models";
 import type { ChatMessage } from "./openrouter";
@@ -160,7 +161,7 @@ async function ask<Reply>(path: string, body: object, asking: Asking, signal?: A
         if (signal?.aborted) {
             throw error;
         }
-        throw new Error("The server cannot be reached.");
+        throw new Error(t("The server cannot be reached."));
     }
     const reply = await response.json().catch(() => ({}));
     if (!response.ok) {

@@ -6,6 +6,7 @@ import { element } from "../../kit.js";
 const RESULTS = { right: "right", partial: "almost", wrong: "wrong" };
 
 export function mount(root, exercise) {
+    const t = exercise.t;
     // the point being labelled, which stays open across what is shown
     let open = null;
     const error = element("p", { className: "error" });
@@ -45,11 +46,11 @@ export function mount(root, exercise) {
         const input = element("input", {
             autocomplete: "off",
             spellcheck: false,
-            placeholder: "What is it?",
+            placeholder: t("What is it?"),
             value: point.label,
-            "aria-label": "What the point is on",
+            "aria-label": t("What the point is on"),
         });
-        const ok = element("button", { className: "primary", textContent: "OK" });
+        const ok = element("button", { className: "primary", textContent: t("OK") });
         const box = element("div", { className: "ask" }, input, ok);
         // beside the point, on whichever side there is room
         if (point.x < 600) {
@@ -110,9 +111,9 @@ export function mount(root, exercise) {
             const item = element("li");
             item.append(
                 element("span", { className: "number", textContent: `${index + 1}.` }),
-                element("strong", { className: feedback.result, textContent: RESULTS[feedback.result] }),
+                element("strong", { className: feedback.result, textContent: t(RESULTS[feedback.result]) }),
                 " ",
-                point.label ? element("span", { textContent: point.label }) : element("em", { className: "muted", textContent: "nothing" }),
+                point.label ? element("span", { textContent: point.label }) : element("em", { className: "muted", textContent: t("nothing") }),
             );
             if (feedback.result !== "right") {
                 item.append(" → ", element("strong", { textContent: feedback.correct }));
@@ -133,12 +134,19 @@ export function mount(root, exercise) {
         if (!show.judged) {
             return element("span", {
                 className: "muted",
-                textContent: `${labelled} of ${show.points.length} labelled. Click a point to label it, and check when you are done.`,
+                textContent: t(
+                    "{labelled} of {count} labelled. Click a point to label it, and check when you are done.",
+                    { labelled, count: show.points.length },
+                ),
             });
         }
         const count = (result) => show.points.filter((point) => point.feedback.result === result).length;
         return element("span", {
-            textContent: `${count("right")} right · ${count("partial")} almost · ${count("wrong")} wrong`,
+            textContent: t("{right} right · {partial} almost · {wrong} wrong", {
+                right: count("right"),
+                partial: count("partial"),
+                wrong: count("wrong"),
+            }),
         });
     }
 
@@ -147,7 +155,9 @@ export function mount(root, exercise) {
         if (show.judged || (open !== null && !show.points[open])) {
             open = null;
         }
-        const progress = show.pictures > 1 ? `picture ${show.picture} of ${show.pictures}` : "";
+        const progress = show.pictures > 1
+            ? t("picture {at} of {total}", { at: show.picture, total: show.pictures })
+            : "";
         root.append(
             element(
                 "div",
@@ -157,13 +167,13 @@ export function mount(root, exercise) {
             ),
         );
         const stage = element("div", { className: "stage" });
-        stage.append(element("img", { src: show.image, alt: "A picture with points to label" }));
+        stage.append(element("img", { src: show.image, alt: t("A picture with points to label") }));
         show.points.forEach((point, index) => {
             const state = point.feedback?.result ?? (point.label ? "labelled" : "");
             const dot = element("button", {
                 className: `dot ${state} ${open === index ? "open" : ""}`,
-                title: point.label || `Point ${index + 1}`,
-                "aria-label": point.label ? `${index + 1}: ${point.label}` : `Point ${index + 1}`,
+                title: point.label || t("Point {number}", { number: index + 1 }),
+                "aria-label": point.label ? `${index + 1}: ${point.label}` : t("Point {number}", { number: index + 1 }),
                 disabled: show.judged,
             });
             Object.assign(dot.style, { left: `${point.x / 10}%`, top: `${point.y / 10}%` });
@@ -183,34 +193,34 @@ export function mount(root, exercise) {
         const actions = element("div", { className: "actions" });
         if (show.lost) {
             // the picture is kept: only where the things are is asked again
-            const again = element("button", { className: "primary", textContent: "Look again" });
+            const again = element("button", { className: "primary", textContent: t("Look again") });
             again.onclick = () =>
-                send({ look: true }, again, "Looking…").then((shown) => {
+                send({ look: true }, again, t("Looking…")).then((shown) => {
                     open = nextBlank(shown);
                     render(shown);
                 }, () => undefined);
             actions.append(
-                element("span", { className: "error", textContent: "No thing could be found on the picture." }),
+                element("span", { className: "error", textContent: t("No thing could be found on the picture.") }),
                 again,
             );
             root.append(actions, element("p", { className: "muted", textContent: show.lost }), error);
             return;
         }
         if (!show.judged) {
-            const check = element("button", { className: "primary", textContent: "Check labels" });
+            const check = element("button", { className: "primary", textContent: t("Check labels") });
             check.disabled = !show.points.some((point) => point.label);
-            check.onclick = () => send({ check: true }, check, "Checking…").then(render, () => undefined);
+            check.onclick = () => send({ check: true }, check, t("Checking…")).then(render, () => undefined);
             actions.append(check);
         } else if (show.more) {
-            const next = element("button", { className: "primary", textContent: "Next picture" });
+            const next = element("button", { className: "primary", textContent: t("Next picture") });
             next.onclick = () =>
-                send({ next: true }, next, "Drawing the next picture…").then((shown) => {
+                send({ next: true }, next, t("Drawing the next picture…")).then((shown) => {
                     open = nextBlank(shown);
                     render(shown);
                 }, () => undefined);
             actions.append(next);
         } else {
-            const done = element("button", { className: "primary", textContent: "Done" });
+            const done = element("button", { className: "primary", textContent: t("Done") });
             done.onclick = () => exercise.finish();
             actions.append(done);
         }

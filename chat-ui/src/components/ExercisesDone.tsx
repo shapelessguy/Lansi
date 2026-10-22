@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 
+import { interfaceLanguage, locale, t } from "../lib/i18n";
 import {
     type ExerciseInfo,
     type ExerciseProgress,
@@ -65,7 +66,7 @@ function doneOf(sessions: PracticeSession[]): Done[] {
 }
 
 function dayOf(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleDateString(undefined, {
+    return new Date(seconds * 1000).toLocaleDateString(locale(), {
         weekday: "short",
         day: "numeric",
         month: "short",
@@ -74,7 +75,7 @@ function dayOf(seconds: number): string {
 }
 
 function timeOf(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return new Date(seconds * 1000).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 /**
@@ -102,6 +103,8 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
         });
     }
 
+    // listed again in the language of the interface when it changes
+    const shownIn = interfaceLanguage();
     useEffect(() => {
         if (!active) {
             return;
@@ -121,7 +124,7 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
         return () => {
             current = false;
         };
-    }, [active, language, revision]);
+    }, [active, language, revision, shownIn]);
 
     function open(sessionId: string) {
         if (opened[sessionId] && opened[sessionId] !== "failed") {
@@ -139,16 +142,16 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
         return <p className="sidebar-note error">{error}</p>;
     }
     if (!listed) {
-        return <p className="sidebar-note">Loading…</p>;
+        return <p className="sidebar-note">{t("Loading…")}</p>;
     }
     const done = doneOf(listed.sessions);
     if (done.length === 0) {
-        return <p className="sidebar-note">No exercise done yet.</p>;
+        return <p className="sidebar-note">{t("No exercise done yet.")}</p>;
     }
     const lessonTitle = (id: string) => listed.lessons.find((lesson) => lesson.id === id)?.title || id;
     const info = (id: string) => listed.exercises.find((each) => each.id === id);
     const exerciseTitle = (id: string) => info(id)?.title || id;
-    const topicTitle = (id: string) => listed.topics.find((topic) => topic.id === id)?.title || "a topic";
+    const topicTitle = (id: string) => listed.topics.find((topic) => topic.id === id)?.title || t("a topic");
     // a session of no lesson, such as a review of the Anki cards, is told by its exercise
     const ofSession = (session: PracticeSession) =>
         session.lesson || session.lessons?.length ? sessionTitleOf(session, lessonTitle, exerciseTitle) : "";
@@ -177,12 +180,12 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
             <div className="sidebar-controls">
                 <input
                     type="search"
-                    placeholder="Search the exercises"
-                    aria-label="Search the exercises"
+                    placeholder={t("Search the exercises")}
+                    aria-label={t("Search the exercises")}
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                 />
-                <div className="log-kinds" role="group" aria-label="Which exercises are shown">
+                <div className="log-kinds" role="group" aria-label={t("Which exercises are shown")}>
                     {kinds.map((exercise) => (
                         <button
                             key={exercise.id}
@@ -195,7 +198,7 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
                 </div>
             </div>
             <div className="log-list exercises-done">
-                {shown.length === 0 && <p className="sidebar-note">No exercise is like that.</p>}
+                {shown.length === 0 && <p className="sidebar-note">{t("No exercise is like that.")}</p>}
                 {days.map(({ day, items }) => (
                     <section key={day} className="log-day">
                         <h3>{day}</h3>
@@ -237,7 +240,7 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
                                                         {[
                                                             of,
                                                             ...session.topics.map(topicTitle),
-                                                            progress.replays ? "done again" : "",
+                                                            progress.replays ? t("done again") : "",
                                                         ].filter(Boolean).join(" · ")}
                                                     </span>
                                                     <span className="done-foot">
@@ -256,9 +259,11 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
                                                                             event.preventDefault();
                                                                             onReplay(session, exercise);
                                                                         }}
-                                                                        title="Do it again exactly as it was, with nothing made anew"
+                                                                        title={t(
+                                                                            "Do it again exactly as it was, with nothing made anew",
+                                                                        )}
                                                                     >
-                                                                        ↻ Same
+                                                                        ↻ {t("Same")}
                                                                     </button>
                                                                 )}
                                                                 <button
@@ -267,21 +272,25 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
                                                                         event.preventDefault();
                                                                         onReplay(session, exercise, true);
                                                                     }}
-                                                                    title="Do it again with the same lesson, topics and settings, made anew"
+                                                                    title={t(
+                                                                        "Do it again with the same lesson, topics and settings, made anew",
+                                                                    )}
                                                                 >
-                                                                    ✦ New
+                                                                    ✦ {t("New")}
                                                                 </button>
                                                             </span>
                                                         )}
                                                     </span>
                                                 </span>
                                             </summary>
-                                            {got === "loading" && <p className="sidebar-note">Loading…</p>}
+                                            {got === "loading" && <p className="sidebar-note">{t("Loading…")}</p>}
                                             {got === "failed" && (
-                                                <p className="sidebar-note error">What was done could not be had.</p>
+                                                <p className="sidebar-note error">
+                                                    {t("What was done could not be had.")}
+                                                </p>
                                             )}
                                             {typeof got === "object" && grades.length === 0 && (
-                                                <p className="sidebar-note">Nothing was answered.</p>
+                                                <p className="sidebar-note">{t("Nothing was answered.")}</p>
                                             )}
                                             {grades.length > 0 && (
                                                 // each round of the exercise, as a card of its own
@@ -290,14 +299,14 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
                                                         <GradeRound
                                                             key={number}
                                                             grade={grade}
-                                                            label={`Round ${number + 1}`}
+                                                            label={t("Round {number}", { number: number + 1 })}
                                                         />
                                                     ))}
                                                 </ol>
                                             )}
                                             {log && (
                                                 <details className="done-log">
-                                                    <summary>Log</summary>
+                                                    <summary>{t("Log")}</summary>
                                                     <p>{log}</p>
                                                 </details>
                                             )}
@@ -321,7 +330,7 @@ function Results({ progress }: { progress: ExerciseProgress }) {
         return null;
     }
     const part = (count: number) => `${(100 * count) / total}%`;
-    const told = `${right} right · ${partial} almost · ${wrong} wrong`;
+    const told = t("{right} right · {partial} almost · {wrong} wrong", { right, partial, wrong });
     return (
         <span className="done-results" title={told} aria-label={told}>
             <span className="history-bar" aria-hidden="true">

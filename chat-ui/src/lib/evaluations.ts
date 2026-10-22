@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import type { ProfileUsage } from "./checker";
+import { type Message, t } from "./i18n";
 import { call, type Learner, posting, type PracticeSession } from "./practice";
 import type { BackgroundTask } from "./tasks";
 import { profileUsage, type UsageEntry } from "./usage";
@@ -72,14 +73,14 @@ export const LENGTHS = { min: 1, max: 8 } as const;
 export const USAGE_ID = "evaluations";
 
 /** The skills an exam is made of, which are its modules, with what each is called. */
-export const MODULES: Record<string, string> = {
+export const MODULES: Record<string, Message> = {
     listening: "Listening",
     reading: "Reading",
     writing: "Writing",
     speaking: "Speaking",
 };
 /** How what is written or said is rated, with what each criterion is called. */
-const CRITERIA: Record<string, string> = {
+const CRITERIA: Record<string, Message> = {
     task: "task",
     coherence: "coherence",
     vocabulary: "vocabulary",
@@ -113,9 +114,9 @@ export function currentPart(evaluation: Evaluation): number | null {
     return next === -1 ? null : next;
 }
 
-/** What a module is called in the exam of its `modules`, or else in English. */
+/** What a module is called in the exam of its `modules`, or else in the language of the interface. */
 export function moduleTitle(modules: ExamModule[], id: string): string {
-    return modules.find((module) => module.id === id)?.title ?? MODULES[id] ?? id;
+    return modules.find((module) => module.id === id)?.title ?? (MODULES[id] ? t(MODULES[id]) : id);
 }
 
 /**
@@ -133,9 +134,9 @@ export function shownScores(
         }
         const [module, criterion] = name.split("_");
         const label = name === "total"
-            ? "Total"
+            ? t("Total")
             : criterion
-            ? `${moduleTitle(modules, module)}: ${CRITERIA[criterion] ?? criterion}`
+            ? `${moduleTitle(modules, module)}: ${CRITERIA[criterion] ? t(CRITERIA[criterion]) : criterion}`
             : moduleTitle(modules, module);
         return [{ name, label, value }];
     });

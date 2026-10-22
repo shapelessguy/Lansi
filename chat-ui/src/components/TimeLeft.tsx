@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { t } from "../lib/i18n";
 import { clock, type PracticeSession, secondsLeft } from "../lib/practice";
 
 interface Props {
@@ -43,7 +44,7 @@ export function TimeLeft({ session, exercise, onUp }: Props) {
         <span
             className={left < LAST_MINUTE ? "time-left low" : "time-left"}
             role="timer"
-            title="Time left for this exercise"
+            title={t("Time left for this exercise")}
         >
             {clock(left)}
         </span>

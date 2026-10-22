@@ -72,7 +72,7 @@ function cardSide(exercise, card, html, side, onPlay) {
             (_, letter, number) =>
                 card.settings.hide_audio_play_buttons
                     ? ""
-                    : `<button class="replay" data-side="${letter}" data-number="${number}" title="Play">▶</button>`,
+                    : `<button class="replay" data-side="${letter}" data-number="${number}" title="${exercise.t("Play")}">▶</button>`,
         );
     for (const media of template.content.querySelectorAll("[src]")) {
         const source = media.getAttribute("src") ?? "";
@@ -112,6 +112,7 @@ function clock(millis) {
  * review is over.
  */
 export function mount(root, exercise) {
+    const t = exercise.t;
     let show = null;
     let revealed = false;
     let busy = false;
@@ -208,26 +209,31 @@ export function mount(root, exercise) {
     function summary() {
         const said = BUTTONS.map(([, name]) => [name, show.ratings[name] ?? 0])
             .filter(([, number]) => number)
-            .map(([name, number]) => `${name} ${number}`)
+            .map(([name, number]) => `${t(name)} ${number}`)
             .join(", ");
         return element(
             "div",
             { className: "card anki-over" },
             element("p", {
-                textContent: show.reviewed === 1
-                    ? `1 card reviewed${said ? `: ${said}` : ""}.`
-                    : `${show.reviewed} cards reviewed${said ? `: ${said}` : ""}.`,
+                textContent: said
+                    ? t(show.reviewed === 1 ? "{count} card reviewed: {ratings}." : "{count} cards reviewed: {ratings}.", {
+                        count: show.reviewed,
+                        ratings: said,
+                    })
+                    : t(show.reviewed === 1 ? "{count} card reviewed." : "{count} cards reviewed.", {
+                        count: show.reviewed,
+                    }),
             }),
             show.done_for_today
-                ? element("p", { className: "muted", textContent: "Nothing more is due in this deck today." })
+                ? element("p", { className: "muted", textContent: t("Nothing more is due in this deck today.") })
                 : null,
-            element("p", { className: "muted", textContent: "Your answers are synced to Anki." }),
+            element("p", { className: "muted", textContent: t("Your answers are synced to Anki.") }),
             element(
                 "div",
                 { className: "actions" },
                 element("button", {
                     className: "primary",
-                    textContent: "Finish",
+                    textContent: t("Finish"),
                     disabled: finished,
                     onclick: () => {
                         finished = true;
@@ -245,7 +251,7 @@ export function mount(root, exercise) {
             return element(
                 "div",
                 { className: "actions anki-buttons" },
-                element("button", { className: "primary", textContent: "Show answer", disabled: busy, onclick: reveal }),
+                element("button", { className: "primary", textContent: t("Show answer"), disabled: busy, onclick: reveal }),
             );
         }
         return element(
@@ -257,13 +263,13 @@ export function mount(root, exercise) {
                     {
                         className: `anki-button ${kind}`,
                         disabled: busy,
-                        title: `${name} (${rating})`,
+                        title: `${t(name)} (${rating})`,
                         onclick: () => answer(rating),
                     },
                     card.settings.show_intervals_on_buttons && card.labels[index]
                         ? element("span", { className: "anki-due", textContent: card.labels[index] })
                         : null,
-                    element("span", { textContent: name }),
+                    element("span", { textContent: t(name) }),
                 ),
             ),
         );
@@ -280,7 +286,9 @@ export function mount(root, exercise) {
                 { className: "anki-head" },
                 element("span", {
                     className: "progress",
-                    textContent: `${show.deck}${show.over || !show.reviewed ? "" : ` · ${show.reviewed} reviewed`}`,
+                    textContent: `${show.deck}${
+                        show.over || !show.reviewed ? "" : ` · ${t("{count} reviewed", { count: show.reviewed })}`
+                    }`,
                 }),
                 card?.settings.show_remaining_due_counts ? counts() : null,
                 card?.settings.show_timer ? timer : null,

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { BooksState } from "../App";
 import { fetchCover, type ListedBook } from "../lib/books";
 import { ask } from "../lib/dialogs";
+import { locale, t } from "../lib/i18n";
 
 interface Props {
     state: BooksState;
@@ -46,7 +47,7 @@ export function BookList(
     const fileInput = useRef<HTMLInputElement>(null);
 
     function confirmDelete(book: ListedBook) {
-        void ask(`Delete “${book.title}”?`, { detail: "This can't be undone." }).then((agreed) =>
+        void ask(t("Delete “{name}”?", { name: book.title }), { detail: t("This can't be undone.") }).then((agreed) =>
             agreed && onDelete(book.id)
         );
     }
@@ -55,7 +56,7 @@ export function BookList(
         <>
             <div className="sidebar-controls">
                 <button onClick={() => fileInput.current?.click()} disabled={adding}>
-                    {adding ? "Reading the book…" : "Add book"}
+                    {adding ? t("Reading the book…") : t("Add book")}
                 </button>
                 <input
                     ref={fileInput}
@@ -73,15 +74,15 @@ export function BookList(
                 />
             </div>
             {addError && <p className="sidebar-note error" role="alert">{addError}</p>}
-            {state.status === "loading" && <p className="sidebar-note">Loading books…</p>}
+            {state.status === "loading" && <p className="sidebar-note">{t("Loading books…")}</p>}
             {state.status === "error" && (
                 <div className="sidebar-note error">
                     <p>{state.message}</p>
-                    <button onClick={onReload}>Try again</button>
+                    <button onClick={onReload}>{t("Try again")}</button>
                 </div>
             )}
             {state.status === "ready" && state.books.length === 0 && (
-                <p className="sidebar-note">EPUB books you add are kept here, as their text.</p>
+                <p className="sidebar-note">{t("EPUB books you add are kept here, as their text.")}</p>
             )}
             <ul className="chat-list">
                 {state.status === "ready"
@@ -98,7 +99,7 @@ export function BookList(
                                 <span className="chat-detail">
                                     {[
                                         book.author,
-                                        new Date(book.addedAt).toLocaleDateString(undefined, {
+                                        new Date(book.addedAt).toLocaleDateString(locale(), {
                                             month: "short",
                                             day: "numeric",
                                         }),
@@ -109,8 +110,8 @@ export function BookList(
                                 className="icon-button chat-delete"
                                 onClick={() =>
                                     confirmDelete(book)}
-                                title="Delete book"
-                                aria-label={`Delete book: ${book.title}`}
+                                title={t("Delete book")}
+                                aria-label={t("Delete book: {name}", { name: book.title })}
                             >
                                 ×
                             </button>

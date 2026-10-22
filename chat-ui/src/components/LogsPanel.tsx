@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { locale, t } from "../lib/i18n";
 import {
     byDay,
     describeSource,
@@ -30,7 +31,7 @@ type State =
     | { status: "ready"; logs: Log[]; more: boolean };
 
 function time(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return new Date(seconds * 1000).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 /**
@@ -92,34 +93,34 @@ export function LogsPanel({ active, revision, onOpenBook }: Props) {
             <div className="sidebar-controls">
                 <input
                     type="search"
-                    placeholder="Search the logs"
-                    aria-label="Search the logs"
+                    placeholder={t("Search the logs")}
+                    aria-label={t("Search the logs")}
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                 />
-                <div className="log-kinds" role="group" aria-label="What the logs are of">
+                <div className="log-kinds" role="group" aria-label={t("What the logs are of")}>
                     {(Object.keys(LOG_KINDS) as LogKind[]).map((kind) => (
                         <button
                             key={kind}
                             aria-pressed={kinds.has(kind)}
                             onClick={() => toggle(kind)}
                         >
-                            {LOG_KINDS[kind]}
+                            {t(LOG_KINDS[kind])}
                         </button>
                     ))}
                 </div>
             </div>
-            {state.status === "loading" && <p className="sidebar-note">Loading the logs…</p>}
+            {state.status === "loading" && <p className="sidebar-note">{t("Loading the logs…")}</p>}
             {state.status === "error" && <p className="sidebar-note error">{state.message}</p>}
             {state.status === "ready" && state.logs.length === 0 && (
                 <p className="sidebar-note">
-                    What you do is logged here: the exercises you finish, what you translate and what you ask about it.
+                    {t("What you do is logged here: the exercises you finish, what you translate and what you ask about it.")}
                 </p>
             )}
             {state.status === "ready" && state.logs.length > 0 && (
                 <div className="log-list">
-                    {shown.length === 0 && <p className="sidebar-note">No log is like that.</p>}
-                    {byDay(shown).map(({ day, logs }) => (
+                    {shown.length === 0 && <p className="sidebar-note">{t("No log is like that.")}</p>}
+                    {byDay(shown, locale()).map(({ day, logs }) => (
                         <section key={day} className="log-day">
                             <h3>{day}</h3>
                             <ul>
@@ -134,7 +135,9 @@ export function LogsPanel({ active, revision, onOpenBook }: Props) {
                                             className={`log-entry ${log.kind}${whole ? " opened" : ""}`}
                                         >
                                             <div className="log-head">
-                                                <span className="log-kind">{LOG_KINDS[log.kind] ?? log.kind}</span>
+                                                <span className="log-kind">
+                                                    {LOG_KINDS[log.kind] ? t(LOG_KINDS[log.kind]) : log.kind}
+                                                </span>
                                                 <span className="log-subject" title={log.subject}>
                                                     {log.subject}
                                                 </span>
@@ -147,7 +150,7 @@ export function LogsPanel({ active, revision, onOpenBook }: Props) {
                                                     aria-expanded={whole}
                                                     onClick={() => toggleOpened(log.id)}
                                                 >
-                                                    {whole ? "Show less" : "Show more"}
+                                                    {whole ? t("Show less") : t("Show more")}
                                                 </button>
                                             )}
                                             {where && (
@@ -171,7 +174,7 @@ export function LogsPanel({ active, revision, onOpenBook }: Props) {
                         </section>
                     ))}
                     {state.more && (
-                        <button className="log-more" onClick={() => loadMore(state.logs)}>Older logs</button>
+                        <button className="log-more" onClick={() => loadMore(state.logs)}>{t("Older logs")}</button>
                     )}
                 </div>
             )}

@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 
+import { interfaceLanguage, t } from "../lib/i18n";
 import {
     type ExerciseInfo,
     fetchExercises,
@@ -42,6 +43,8 @@ export function PracticeSessions({ active, language, revision, onResume }: Props
     const [listed, setListed] = useState<Listed | null>(null);
     const [error, setError] = useState<string | null>(null);
 
+    // listed again in the language of the interface when it changes
+    const shownIn = interfaceLanguage();
     useEffect(() => {
         if (!active) {
             return;
@@ -59,16 +62,16 @@ export function PracticeSessions({ active, language, revision, onResume }: Props
         return () => {
             current = false;
         };
-    }, [active, language, revision]);
+    }, [active, language, revision, shownIn]);
 
     if (error) {
         return <p className="sidebar-note error">{error}</p>;
     }
     if (!listed) {
-        return <p className="sidebar-note">Loading…</p>;
+        return <p className="sidebar-note">{t("Loading…")}</p>;
     }
     if (listed.sessions.length === 0) {
-        return <p className="sidebar-note">No practice session yet.</p>;
+        return <p className="sidebar-note">{t("No practice session yet.")}</p>;
     }
     const lessonTitle = (id: string) => listed.lessons.find((lesson) => lesson.id === id)?.title || id;
     const exerciseTitle = (id: string) => listed.exercises.find((each) => each.id === id)?.title || id;
@@ -77,7 +80,7 @@ export function PracticeSessions({ active, language, revision, onResume }: Props
             <SessionHistory
                 sessions={listed.sessions}
                 sessionTitle={(session) => sessionTitleOf(session, lessonTitle, exerciseTitle)}
-                topicTitle={(id) => listed.topics.find((topic) => topic.id === id)?.title || "a topic"}
+                topicTitle={(id) => listed.topics.find((topic) => topic.id === id)?.title || t("a topic")}
                 exerciseTitle={exerciseTitle}
                 onResume={onResume}
             />

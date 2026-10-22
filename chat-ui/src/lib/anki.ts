@@ -1,6 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { t } from "./i18n";
 import { checkerFetch } from "./session";
 import type { Word } from "./words";
 
@@ -18,7 +19,7 @@ async function ankiReply<T>(asked: Promise<Response>): Promise<T> {
     try {
         response = await asked;
     } catch {
-        throw new Error("Could not reach the checker server. Is `just checker` running?");
+        throw new Error(t("Could not reach the checker server. Is `just checker` running?"));
     }
     if (!response.ok) {
         const detail = await response.json().then((reply: { error?: string }) => reply.error, () => undefined);
@@ -94,10 +95,10 @@ async function ankiFile(name: string): Promise<string> {
     try {
         response = await checkerFetch(`/anki/media/${encodeURIComponent(name)}`);
     } catch {
-        throw new Error("Could not reach the checker server. Is `just checker` running?");
+        throw new Error(t("Could not reach the checker server. Is `just checker` running?"));
     }
     if (!response.ok) {
-        throw new Error(`${name} is not in the media of Anki.`);
+        throw new Error(t("{name} is not in the media of Anki.", { name }));
     }
     return URL.createObjectURL(await response.blob());
 }
@@ -105,10 +106,10 @@ async function ankiFile(name: string): Promise<string> {
 /** What a linked Anki account is doing, in a line. */
 export function describeAnki(anki: AnkiState, locale?: string): string {
     if (anki.error) {
-        return `The last sync failed: ${anki.error}`;
+        return t("The last sync failed: {error}", { error: anki.error });
     }
     if (anki.last_sync === null) {
-        return "The first sync is running, which can take a minute.";
+        return t("The first sync is running, which can take a minute.");
     }
     const when = new Date(anki.last_sync * 1000).toLocaleString(locale, {
         month: "short",
@@ -116,7 +117,7 @@ export function describeAnki(anki: AnkiState, locale?: string): string {
         hour: "2-digit",
         minute: "2-digit",
     });
-    return `Last synced ${when}.`;
+    return t("Last synced {when}.", { when });
 }
 
 export interface Timing {
@@ -203,7 +204,7 @@ interface AnkiWords {
 export async function fetchKnownWords(): Promise<Word[]> {
     const { rows, timing, field_names: fieldNames } = await ankiReply<AnkiWords>(checkerFetch("/anki/words"))
         .catch((error: Error) => {
-            throw new Error(`Anki words: ${error.message}`);
+            throw new Error(t("Anki words: {error}", { error: error.message }));
         });
     const fieldNamesByNotetype = new Map(Object.entries(fieldNames).map(([ntid, names]) => [Number(ntid), names]));
     return wordsFromRows(rows, fieldNamesByNotetype, timing);

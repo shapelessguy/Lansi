@@ -27,10 +27,15 @@ function labelOf(options, place) {
 
 /** The button that has a text read aloud, as often as it may be. */
 function listenerOf(show, exercise) {
+    const t = exercise.t;
     let left = show.plays;
     const button = element("button", { className: "listen primary" });
     function label() {
-        button.textContent = show.plays === 0 ? "▶ Listen" : left > 0 ? `▶ Listen (${left} left)` : "Heard";
+        button.textContent = show.plays === 0
+            ? `▶ ${t("Listen")}`
+            : left > 0
+            ? `▶ ${t("Listen ({count} left)", { count: left })}`
+            : t("Heard");
         button.disabled = show.plays !== 0 && left <= 0;
     }
     button.onclick = () => {
@@ -42,19 +47,21 @@ function listenerOf(show, exercise) {
     return button;
 }
 
-/** How one answer went. */
-function feedbackOf(each) {
+/** How one answer went, told with `t`. */
+function feedbackOf(each, t) {
     const box = element("li", { className: `feedback ${each.result}` });
     box.append(element("div", { textContent: each.prompt }));
-    const chosen = each.chosen === null ? "(nothing chosen)" : labelOf(each.options, each.chosen);
+    const chosen = each.chosen === null ? t("(nothing chosen)") : labelOf(each.options, each.chosen);
     box.append(element("strong", { textContent: `${each.result === "right" ? "✓" : "✗"} ${chosen}` }));
     if (each.result !== "right") {
-        box.append(element("div", { className: "muted", textContent: `Right: ${labelOf(each.options, each.answer)}` }));
+        box.append(element("div", { className: "muted", textContent: t("Right: {answer}", { answer: labelOf(each.options, each.answer) }),
+        }));
     }
     return box;
 }
 
 export function mount(root, exercise) {
+    const t = exercise.t;
     const error = element("p", { className: "error" });
 
     function send(message, button, busyText) {
@@ -70,7 +77,8 @@ export function mount(root, exercise) {
     }
 
     function progress(at, total) {
-        return element("div", { className: "progress", textContent: `Text ${Math.min(at + 1, total)} of ${total}` });
+        return element("div", { className: "progress", textContent: t("Text {at} of {total}", { at: Math.min(at + 1, total), total }),
+        });
     }
 
     function answering(show) {
@@ -101,9 +109,9 @@ export function mount(root, exercise) {
         const last = show.at + 1 >= show.total;
         const check = element("button", {
             className: "primary",
-            textContent: show.exam ? (last ? "Done" : "Next") : "Check",
+            textContent: show.exam ? (last ? t("Done") : t("Next")) : t("Check"),
         });
-        check.onclick = () => send({ answers: chosen }, check, show.exam ? "Next…" : "Checking…");
+        check.onclick = () => send({ answers: chosen }, check, show.exam ? t("Next…") : t("Checking…"));
         // what is left out, such as what goes beside a text that has nothing beside it, is null
         root.replaceChildren(
             ...[
@@ -112,7 +120,7 @@ export function mount(root, exercise) {
                     ? element(
                         "div",
                         { className: "card heard" },
-                        element("p", { className: "muted", textContent: "Listen to the text, then answer." }),
+                        element("p", { className: "muted", textContent: t("Listen to the text, then answer.") }),
                         listenerOf(show, exercise),
                     )
                     : element("article", { className: "card text" }, ...textOf(show.text)),
@@ -125,20 +133,21 @@ export function mount(root, exercise) {
     }
 
     function reviewing(show) {
-        const go = element("button", { className: "primary", textContent: show.more ? "Next text" : "Done" });
-        go.onclick = show.more ? () => send({ next: true }, go, "Writing the next text…") : () => exercise.finish();
+        const go = element("button", { className: "primary", textContent: show.more ? t("Next text") : t("Done") });
+        go.onclick = show.more ? () => send({ next: true }, go, t("Writing the next text…")) : () => exercise.finish();
         const right = show.feedback.filter((each) => each.result === "right").length;
         // what is left out, such as what goes beside a text that has nothing beside it, is null
         root.replaceChildren(
             ...[
                 progress(show.at - 1, show.total),
-                element("p", {}, element("strong", { textContent: `${right} of ${show.feedback.length} right` })),
-                element("ol", { className: "sentences" }, ...show.feedback.map(feedbackOf)),
+                element("p", {}, element("strong", { textContent: t("{right} of {count} right", { right, count: show.feedback.length }) }),
+                ),
+                element("ol", { className: "sentences" }, ...show.feedback.map((each) => feedbackOf(each, t))),
                 element("div", { className: "actions" }, go),
                 element(
                     "details",
                     {},
-                    element("summary", { textContent: show.by === "listening" ? "What was said" : "The text" }),
+                    element("summary", { textContent: show.by === "listening" ? t("What was said") : t("The text") }),
                     element("article", { className: "card text" }, ...textOf(show.text)),
                     besideOf(show.text),
                 ),
@@ -157,7 +166,7 @@ export function mount(root, exercise) {
      * the part is handed in at once, or, if more is to come, it goes on to it.
      */
     function withheld(show) {
-        root.replaceChildren(element("p", { className: "muted", textContent: "Handing in…" }), error);
+        root.replaceChildren(element("p", { className: "muted", textContent: t("Handing in…") }), error);
         const going = show.more ? exercise.act({ next: true }) : Promise.resolve(exercise.finish());
         going.catch((failed) => {
             error.textContent = failed.message;

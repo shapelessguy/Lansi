@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { t } from "../lib/i18n";
 import {
     amount,
     arcsOf,
@@ -57,17 +58,21 @@ export function ContextRing({ trace, onOpen }: { trace: Trace; onOpen: () => voi
     }
     const told = [
         contextWindow
-            ? `${amount(counted)} of ${amount(contextWindow)} tokens of context (${Math.round((share ?? 0) * 100)}%)`
-            : `${amount(counted)} tokens of context`,
-        ...kinds.map((each) => `${PART_KINDS[each.kind]}: ${amount(each.tokens)}`),
+            ? t("{used} of {window} tokens of context ({percent}%)", {
+                used: amount(counted),
+                window: amount(contextWindow),
+                percent: Math.round((share ?? 0) * 100),
+            })
+            : t("{used} tokens of context", { used: amount(counted) }),
+        ...kinds.map((each) => `${t(PART_KINDS[each.kind])}: ${amount(each.tokens)}`),
     ].join("\n");
 
     return (
         <button
             className="context-ring"
             onClick={onOpen}
-            title={`${told}\n\nClick to inspect the requests`}
-            aria-label={`Inspector. ${told}`}
+            title={`${told}\n\n${t("Click to inspect the requests")}`}
+            aria-label={`${t("Inspector")}. ${told}`}
         >
             <svg viewBox="0 0 24 24" aria-hidden="true">
                 <circle className="context-ring-track" cx="12" cy="12" r={RADIUS} />
