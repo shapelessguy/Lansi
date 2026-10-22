@@ -75,8 +75,11 @@ from profiling import (
     Profiler,
     Questions,
     WordRating,
+    describe_usage,
     read_questions,
+    spent_by,
 )
+from relaying import Listing, Watched
 from sentences import Sentence
 from speaking import (
     MAX_SENTENCES,
@@ -129,6 +132,8 @@ HOST = "127.0.0.1"
 KEY_HEADER = "X-OpenRouter-Key"
 # how long a model at an address the chat passes a request on to may take
 RELAY_TIMEOUT_SECS = 120
+# the models OpenRouter has, as the chat is told them, shared by every user
+OPENROUTER_MODELS = Listing()
 # how long a server is given to list its models
 LIST_TIMEOUT_SECS = 10
 DEFAULT_PORT = 8092
@@ -259,17 +264,6 @@ def in_background(
     return start
 
 
-def describe_usage(profile: Profile) -> dict[str, object]:
-    """What one request to the model used, for whoever keeps count."""
-    return {
-        "id": profile.id,
-        "model": profile.model,
-        "input_tokens": profile.input_tokens,
-        "output_tokens": profile.output_tokens,
-        "cost": profile.cost,
-    }
-
-
 # The kinds of work the usage is added up by, as the app names them, by the
 # kind of each task; a task is counted under its kind, as the app adds up
 # apart what is counted under each id, such as that of a chat. What reading
@@ -282,6 +276,8 @@ TASK_CATEGORIES = {
     "questions": "translation",
     "memories": "tutor",
 }
+# the bins the usage over time is added up in, in milliseconds
+USAGE_BINS = {"hour": 3_600_000, "day": 86_400_000}
 # the longest id usage may be counted under, in characters
 MAX_USAGE_ID = 200
 
@@ -845,7 +841,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
             GET /usage?chat=ID&since=MS
                                       the totals of the usage of a chat, of
                                       that from a time on, and of
-                                      all of it, by category and model too
+                                      all of it, by category and model too;
+                                      with `&bin=hour|day&offset=MINUTES`,
+                                      the usage from that time on as a
+                                      `series` too, by category and model in
+                                      bins of an hour or a day, where the
+                                      learner is MINUTES ahead of UTC
             GET /logs?before=ID       the logs of everything the user did,
                                       the latest first, a hundred at a time
         """
@@ -874,7 +875,21 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 if not since.isdigit():
                     raise ValueError("since is a time in milliseconds")
                 chat_id = query.get("chat", [""])[0]
-                self._reply(HTTPStatus.OK, store.usage(chat_id, int(since)))
+                summary = store.usage(chat_id, int(since))
+                binned = query.get("bin", [""])[0]
+                if binned:
+                    if binned not in USAGE_BINS:
+                        raise ValueError(f"bin is one of {', '.join(USAGE_BINS)}")
+                    try:
+                        offset = int(query.get("offset", ["0"])[0])
+                    except ValueError:
+                        raise ValueError("offset is a number of minutes") from None
+                    if abs(offset) > 24 * 60:
+                        raise ValueError("offset is a number of minutes")
+                    summary["series"] = store.usage_series(
+                        int(since), USAGE_BINS[binned], offset * 60_000
+                    )
+                self._reply(HTTPStatus.OK, summary)
             elif method == "GET" and path == "/logs":
                 before = parse_qs(urlsplit(self.path).query).get("before", [""])[0]
                 if before and not before.isdigit():
@@ -1027,16 +1042,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                         look,
                     )
                     reply = {"show": show}
-                usage = [describe_usage(profile) for profile in used]
-                session_id = end.group(1) if end else step.group(1) if step else ""
-                kept_session = store.session(session_id) if store else None
-                count_usage(
-                    store,
-                    "practice",
-                    "evaluations"
-                    if kept_session and kept_session.get("kind") == "evaluation"
-                    else "practice",
-                    usage,
+                usage = self._count_practice(
+                    end.group(1) if end else step.group(1) if step else "", used
                 )
                 # the logs of the exercises it finished, being written
                 started = [
@@ -1050,10 +1057,30 @@ class CheckerHandler(BaseHTTPRequestHandler):
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
         except ExerciseError as error:
+            # what the models were asked before it failed is counted all the same
+            self._count_practice(
+                end.group(1) if end else step.group(1) if step else "",
+                spent_by(error),
+            )
             self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
         except GrammarError as error:
             self._reply(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
         return True
+
+    def _count_practice(
+        self, session_id: str, used: list[Profile]
+    ) -> list[dict[str, object]]:
+        """Count what the models asked in the session `session_id` used, as
+        practice, or under the evaluations for a part of one, and return it
+        as it is counted."""
+        store = self.account.store
+        usage = [describe_usage(profile) for profile in used]
+        kept = store.session(session_id) if store and session_id else None
+        evaluated = kept is not None and kept.get("kind") == "evaluation"
+        count_usage(
+            store, "practice", "evaluations" if evaluated else "practice", usage
+        )
+        return usage
 
     def _models(
         self, body: dict[str, Any], api_key: str | None
@@ -1174,6 +1201,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
         except ExerciseError as error:
+            count_usage(
+                self.account.store,
+                "practice",
+                "evaluations",
+                [describe_usage(profile) for profile in spent_by(error)],
+            )
             self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
         except (EvaluationError, GrammarError) as error:
             self._reply(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(error)})
@@ -1446,7 +1479,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         if not self._find_account() or self._kept("GET") or self._sets("GET"):
             return
-        if self._known():
+        if self._known() or self._openrouter_models():
             return
         if self._tutor_chats("GET") or self._texts("GET"):
             return
@@ -1514,7 +1547,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 pass
             elif self._practice("POST", api_key) or self._topics("POST", api_key):
                 pass
-            elif self._evaluating("POST", api_key) or self._relay():
+            elif self._evaluating("POST", api_key) or self._relay(api_key):
                 pass
             elif self.path == "/sentences":
                 self._check_sentences(api_key)
@@ -1539,38 +1572,46 @@ class CheckerHandler(BaseHTTPRequestHandler):
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
 
-    def _relay(self) -> bool:
-        """Answers a request that the chat has passed on to a server of
-        the learner's own, which a page may not be let to reach itself,
-        and returns whether the request was one.
+    def _relay(self, api_key: str | None) -> bool:
+        """Answers a request of the chat for a model, which the page never
+        asks itself, and returns whether the request was one.
 
             POST /models            the ids of the models the server at
                                     `{"url": ..., "key": ...}` has
             POST /models/chat       a chat request, with the reply as it
-                                    comes, streamed or not
+                                    comes, streamed or not; `usage_id` is
+                                    the chat its usage is counted under
 
-        The model of a chat request is named with its address, as a
-        request to the server names it, and the rest of the request goes
-        on as it is. Only one at an address is asked here: OpenRouter is
-        asked by the chat itself."""
+        The model of a chat request is named as a request to the server
+        names it, on OpenRouter with the key the request goes with, and the
+        rest of the request goes on as it is. What it used is counted as the
+        reply says; one that is cut off before it says is looked up on
+        OpenRouter."""
         path = urlsplit(self.path).path
         if path not in ("/models", "/models/chat"):
             return False
         body = self._read_body()
         if path == "/models":
-            body = {"model": {"model": "", **body}}
-        model = read_model(body.pop("model", None))
-        if model.on_openrouter:
-            raise ValueError("only a model at an address is asked here")
-        if path == "/models":
+            model = read_model({"model": "", **body})
+            if model.on_openrouter:
+                raise ValueError("the models of OpenRouter are listed with a GET")
             try:
                 self._reply(HTTPStatus.OK, {"models": list_models(model)})
             except ProfileError as error:
                 self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
             return True
+        model = read_model(body.pop("model", None), api_key or "")
+        usage_id = body.pop("usage_id", None)
+        usage_id = usage_id[:MAX_USAGE_ID] if isinstance(usage_id, str) else ""
+        problem = model.problem()
+        if problem:
+            self._reply(HTTPStatus.BAD_REQUEST, {"error": {"message": problem}})
+            return True
         request = urllib.request.Request(
             model.endpoint("chat/completions"),
-            data=json.dumps({**body, "model": model.name}).encode(),
+            data=json.dumps(
+                {**body, "model": model.name, "usage": {"include": True}}
+            ).encode(),
             headers={**model.headers(), "Content-Type": "application/json"},
             method="POST",
         )
@@ -1584,15 +1625,70 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 {"error": {"message": f"could not reach {model.where}: {error}"}},
             )
             return True
+        streamed = body.get("stream") is True
+        watched = Watched()
+        whole = b""
         with response:
             self.send_response(response.status)
             kind = response.headers.get("Content-Type") or "application/octet-stream"
             self.send_header("Content-Type", kind)
+            # for nginx, which would otherwise hold the reply back until its end
+            self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
             # passed on as it comes, for a reply that is streamed
-            while piece := response.read1(65536):
-                self.wfile.write(piece)
-                self.wfile.flush()
+            try:
+                while piece := response.read1(65536):
+                    if streamed:
+                        watched.feed(piece)
+                    else:
+                        whole += piece
+                    self.wfile.write(piece)
+                    self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                # the chat stopped the reply, which stops the model too
+                pass
+        if not streamed:
+            watched.whole(whole)
+        if response.status == HTTPStatus.OK:
+            self._count_chat(model, watched, usage_id)
+        return True
+
+    def _count_chat(self, model: Model, watched: Watched, usage_id: str) -> None:
+        """Count what a chat request used, as its reply said, or as
+        OpenRouter keeps it, looked up in the background, if the reply was
+        cut off before it said."""
+        store = self.account.store
+        used = watched.used(model)
+        if used is not None:
+            count_usage(store, "chat", usage_id, [describe_usage(used)])
+        elif watched.generation and model.on_openrouter:
+            threading.Thread(
+                target=lambda: count_usage(
+                    store,
+                    "chat",
+                    usage_id,
+                    [
+                        describe_usage(each)
+                        for each in generation_usages([watched.generation], model)
+                    ],
+                ),
+                daemon=True,
+            ).start()
+
+    def _openrouter_models(self) -> bool:
+        """Answers `GET /models/openrouter?kind=...`, the models OpenRouter
+        has of a kind, as relaying.py describes them, and returns whether
+        the request was one."""
+        url = urlsplit(self.path)
+        if url.path != "/models/openrouter":
+            return False
+        kind = parse_qs(url.query).get("kind", ["all"])[0]
+        try:
+            self._reply(HTTPStatus.OK, {"models": OPENROUTER_MODELS.models(kind)})
+        except ValueError as error:
+            self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+        except ProfileError as error:
+            self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
         return True
 
     def _translate(self, translator: Translator, api_key: str | None) -> None:
@@ -2078,6 +2174,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
         try:
             added, used = converse([*messages, *said], tools, model, told, emit)
         except TutorError as error:
+            # what the requests that were answered used is counted all the same
+            count_usage(
+                store,
+                "tutor",
+                "tutor",
+                [describe_usage(profile) for profile in spent_by(error)],
+            )
             emit({"type": "error", "error": str(error)})
             return
         finally:

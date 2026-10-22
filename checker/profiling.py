@@ -138,6 +138,35 @@ class ProfileError(Exception):
     """A profile could not be made. The message says why."""
 
 
+def describe_usage(profile: Profile) -> dict[str, object]:
+    """What one request to the model used, for whoever keeps count."""
+    return {
+        "id": profile.id,
+        "model": profile.model,
+        "input_tokens": profile.input_tokens,
+        "output_tokens": profile.output_tokens,
+        "cost": profile.cost,
+    }
+
+
+def spent(error: BaseException, used: list[Profile]) -> BaseException:
+    """`error`, which carries what the requests to the models made before it
+    used, `used` added to what it carried already, so that whoever keeps
+    count counts them though what they were for failed."""
+    had = spent_by(error)
+    error.used = [  # type: ignore[attr-defined]
+        *had,
+        *(each for each in used if all(each is not other for other in had)),
+    ]
+    return error
+
+
+def spent_by(error: BaseException) -> list[Profile]:
+    """What the requests to the models made before `error` used, as it
+    carries it."""
+    return list(getattr(error, "used", []))
+
+
 # Sends a request body to a model and returns the decoded response.
 Transport = Callable[[dict[str, Any], Model], dict[str, Any]]
 

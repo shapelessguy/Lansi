@@ -20,7 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from profiling import Profile
+from profiling import Profile, spent
 from prompts import PROMPTS
 
 # Asks a language model the messages given, and replies with what it said and
@@ -142,8 +142,8 @@ def write_log(
     grades: list[dict[str, str]],
     written: dict[str, list[str]],
 ) -> tuple[str, Profile]:
-    """The log of an exercise, with what asking for it used. Raises LogError
-    and TranslationError."""
+    """The log of an exercise, with what asking for it used. Raises LogError,
+    which carries what asking used, and TranslationError."""
     prompt = PROMPTS(
         "logs.writing",
         language=task.language,
@@ -154,7 +154,10 @@ def write_log(
         failed=MAX_FAILED,
     )
     said, used = ask([{"role": "user", "content": prompt}])
-    return format_log(read_log(said)), used
+    try:
+        return format_log(read_log(said)), used
+    except LogError as error:
+        raise spent(error, [used]) from None
 
 
 def read_json(said: str) -> Any:

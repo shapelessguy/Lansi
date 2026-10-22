@@ -2334,6 +2334,26 @@ class UserStore:
                 ],
             }
 
+    def usage_series(
+        self, since: int, bin_ms: int, offset_ms: int
+    ) -> list[dict[str, Any]]:
+        """The usage from `since` on, in milliseconds since the epoch, added
+        up for each category and model in bins of `bin_ms`, such as an hour
+        or a day, where the learner is `offset_ms` ahead of UTC, so that a
+        day is theirs. Each bin is told by when it starts, the earliest
+        first."""
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT ((at + ?) / ?) * ? - ?, category, model, {_TOTALS}"
+                " FROM usage WHERE at >= ?"
+                " GROUP BY 1, category, model ORDER BY 1, category, model",
+                (offset_ms, bin_ms, bin_ms, offset_ms, since),
+            ).fetchall()
+        return [
+            {"at": at, "category": category, "model": model, **_totals(rest)}
+            for at, category, model, *rest in rows
+        ]
+
     # settings
 
     def settings(self) -> dict[str, Any] | None:

@@ -6,6 +6,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from profiling import Profile, spent
 from tasks import KEPT, Tasks
 
 
@@ -68,3 +69,17 @@ def test_what_a_task_used_is_told_once_it_is_done_and_not_when_it_breaks() -> No
     tasks.start("words", "Der Hund", 1, broken)
 
     assert told == [("icon", [{"id": "gen-1"}])]
+
+
+def test_what_a_task_that_breaks_had_used_before_is_told_all_the_same() -> None:
+    told: list[tuple[str, list[Any]]] = []
+    tasks = Tasks(background=lambda job: job(), on_used=lambda *each: told.append(each))
+
+    def broken(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
+        raise spent(RuntimeError("gone"), [Profile({}, id="gen-2", model="m")])
+
+    task = tasks.start("memories", "Recap of the chat", 1, broken)
+
+    assert [each["id"] for each in told[0][1]] == ["gen-2"]
+    assert tasks.listing()[0]["id"] == task["id"]
+    assert tasks.listing()[0]["state"] == "failed"

@@ -15,6 +15,15 @@
     --user-bubble: color-mix(in srgb, var(--accent) 11%, var(--bg));
     --danger: #b3261e;
     --danger-bg: #fdecea;
+    /* the colours of the models in the bars of the usage, in the order they are given out */
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
     --done-bg: rgb(46 160 67 / 14%);
     --checking-bg: rgb(212 167 44 / 20%);
     --doubt: 215 58 73;
@@ -45,6 +54,14 @@
         --user-bubble: color-mix(in srgb, var(--accent) 24%, var(--bg));
         --danger: #f2b8b5;
         --danger-bg: #4a2523;
+        --series-1: #3987e5;
+        --series-2: #d95926;
+        --series-3: #199e70;
+        --series-4: #c98500;
+        --series-5: #d55181;
+        --series-6: #008300;
+        --series-7: #9085e9;
+        --series-8: #e66767;
         --done-bg: rgb(63 185 80 / 16%);
     --checking-bg: rgb(227 179 65 / 18%);
         --doubt: 248 81 73;
@@ -71,6 +88,14 @@
     --user-bubble: color-mix(in srgb, var(--accent) 24%, var(--bg));
     --danger: #f2b8b5;
     --danger-bg: #4a2523;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
     --done-bg: rgb(63 185 80 / 16%);
     --checking-bg: rgb(227 179 65 / 18%);
     --doubt: 248 81 73;
@@ -1600,11 +1625,11 @@ div.book-cover {
 .usage {
     display: grid;
     align-content: start;
-    gap: 18px;
+    gap: 20px;
 }
 
 .usage h3 {
-    margin: 0 0 4px;
+    margin: 0;
     color: var(--muted);
     font-size: 0.8rem;
     font-weight: 600;
@@ -1612,28 +1637,171 @@ div.book-cover {
     text-transform: uppercase;
 }
 
+/* the periods, and what the bars measure, each as one control of buttons side by side */
+.usage-periods,
+.usage-measure {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--panel);
+}
+
+.usage-periods button,
+.usage-measure button {
+    flex: 1;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 7px;
+    background: none;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.usage-measure button {
+    flex: none;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+}
+
+.usage-periods button[aria-checked="true"],
+.usage-measure button[aria-checked="true"] {
+    background: var(--bg);
+    color: var(--text);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+.usage-hero {
+    display: grid;
+    gap: 2px;
+}
+
 .usage-cost {
-    margin: 0 0 6px;
-    font-size: 1.5rem;
+    margin: 0 0 2px;
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.usage-facts {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.87rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.usage-section {
+    display: grid;
+    gap: 10px;
+}
+
+.usage-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.usage-chart {
+    position: relative;
+}
+
+.usage-chart svg {
+    display: block;
+    overflow: visible;
+}
+
+.usage-grid {
+    stroke: var(--border);
+    stroke-width: 1;
+}
+
+.usage-axis {
+    fill: var(--muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* a gap of the surface between the models stacked in a bar */
+.usage-bar rect:not(.usage-hit) {
+    stroke: var(--panel);
+    stroke-width: 1;
+}
+
+.usage-bar.hovered rect:not(.usage-hit) {
+    filter: brightness(1.15);
+}
+
+.usage-hit {
+    fill: transparent;
+}
+
+.usage-bar.hovered .usage-hit {
+    fill: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+/* by the pointer, over the whole page, where nothing cuts it off */
+.usage-tooltip {
+    position: fixed;
+    z-index: 1000;
+    width: 210px;
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.25);
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+.usage-tooltip-total {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
 
-.usage dl {
+.usage-tooltip ul,
+.usage-legend {
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 2px 12px;
-    margin: 0;
+    gap: 3px;
+    margin: 4px 0 0;
+    padding: 0;
+    list-style: none;
 }
 
-.usage dt {
+.usage-tooltip li,
+.usage-legend li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+}
+
+.usage-legend {
+    font-size: 0.85rem;
+}
+
+.usage-tooltip-model,
+.usage-legend-model {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.usage-legend-value {
     color: var(--muted);
 }
 
-.usage dd {
-    margin: 0;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
+.usage-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
 }
 
 .usage-note {
@@ -1642,46 +1810,71 @@ div.book-cover {
     font-size: 0.87rem;
 }
 
-/* all of the usage, a group of rows for each category and a row for each model */
-.usage-by-model {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.87rem;
-    table-layout: fixed;
+/* what the period cost by the kind of work, and each kind by model, as pies */
+.usage-pies {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    gap: 14px 8px;
 }
 
-.usage-by-model th,
-.usage-by-model td {
-    padding: 3px 0;
-    text-align: right;
+.usage-pie {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    margin: 0;
+}
+
+.usage-pie svg {
+    display: block;
+    overflow: visible;
+}
+
+.usage-pie path {
+    /* a gap of the surface between the parts */
+    stroke: var(--panel);
+    stroke-width: 2;
+    transition: opacity 0.1s;
+}
+
+.usage-pie path.dimmed {
+    opacity: 0.45;
+}
+
+.usage-pie-track {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 22;
+}
+
+.usage-pie-centre {
+    fill: var(--text);
+    font-size: 13px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
 }
 
-.usage-by-model th:first-child,
-.usage-by-model td:first-child {
-    text-align: left;
-}
-
-.usage-by-model thead th {
-    color: var(--muted);
-    font-weight: 400;
-}
-
-.usage-by-model thead th:first-child {
-    width: 55%;
-}
-
-.usage-by-model tbody th {
-    padding-top: 10px;
-    border-bottom: 1px solid var(--border);
-    font-weight: 600;
-}
-
-/* a long model name is cut short, and shown whole when hovered */
-.usage-by-model td:first-child {
+.usage-pie figcaption {
+    max-width: 100%;
     overflow: hidden;
+    color: var(--muted);
+    font-size: 0.82rem;
+    text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.usage-tooltip-head {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 6px;
+    overflow-wrap: anywhere;
+}
+
+.usage-categories-legend {
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 14px;
 }
 
 /* settings */

@@ -16,7 +16,7 @@ from logs import (
     read_log,
     write_log,
 )
-from profiling import Profile
+from profiling import Profile, spent_by
 
 LESSON = {
     "title": "Trennbare Verben",
@@ -133,3 +133,13 @@ def test_a_log_may_come_in_a_fenced_block_among_other_words() -> None:
 def test_a_log_that_is_not_as_asked_is_refused(said: str) -> None:
     with pytest.raises(LogError):
         format_log(read_log(said))
+
+
+def test_a_log_the_model_did_not_write_as_asked_carries_what_asking_used() -> None:
+    def ask(messages: list[dict[str, Any]]) -> tuple[str, Profile]:
+        return "No JSON here.", Profile({}, id="gen-1")
+
+    with pytest.raises(LogError) as raised:
+        write_log(ask, TASK, [grade("wrong", "aufstehe", "stehe; auf", "")], {})
+
+    assert [used.id for used in spent_by(raised.value)] == ["gen-1"]

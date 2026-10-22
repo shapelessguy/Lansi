@@ -22,6 +22,8 @@ from profiling import (
     post,
     read_profile,
     read_questions,
+    spent,
+    spent_by,
     weigh_ratings,
 )
 
@@ -469,3 +471,13 @@ def test_the_model_is_told_the_language_being_studied_once_it_is_known() -> None
         {"sentence": "Wie geht es?"},
         {"sentence": "Wie geht es?", "language": "German"},
     ]
+
+
+def test_an_error_carries_what_was_used_before_it_once_each() -> None:
+    first, second = Profile({}, id="gen-1"), Profile({}, id="gen-2")
+    error = spent(ValueError("no"), [first])
+
+    spent(error, [first, second])
+
+    assert spent_by(error) == [first, second]
+    assert spent_by(ValueError("never asked")) == []

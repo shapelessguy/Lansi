@@ -18,20 +18,8 @@ export interface ModelChoice {
     key: string;
 }
 
-/** The kinds of model there are, each with what OpenRouter lists them by. */
-const KINDS = {
-    text: "output_modalities=text",
-    reasoning: "output_modalities=text&supported_parameters=reasoning",
-    vision: "input_modalities=image&output_modalities=text",
-    decisions: "output_modalities=decisions",
-    speech: "output_modalities=speech",
-    image: "output_modalities=image",
-    embeddings: "output_modalities=embeddings",
-} as const;
-
-export type ModelKind = keyof typeof KINDS;
-
-export const OPENROUTER_URL = "https://openrouter.ai/api/v1";
+/** The kinds of model there are, which the checker server lists the models of OpenRouter by. */
+export type ModelKind = "text" | "reasoning" | "vision" | "decisions" | "speech" | "image" | "embeddings";
 
 /** A model on OpenRouter. */
 export function onOpenRouter(model: string): ModelChoice {
@@ -69,22 +57,28 @@ export function canAsk(choice: ModelChoice, apiKey: string): boolean {
     return Boolean(choice.url || apiKey);
 }
 
-/** A model OpenRouter has, with the voices it speaks in, if it speaks. */
+/**
+ * A model OpenRouter has, with the voices it speaks in, if it speaks, how
+ * much context it takes and what its tokens cost, in dollars each, with
+ * what is not known null.
+ */
 export interface ListedModel {
     id: string;
     voices: string[];
+    contextLength: number | null;
+    maxOutput: number | null;
+    promptPrice: number | null;
+    completionPrice: number | null;
 }
 
-/** The models OpenRouter has of a kind, by their ids. Needs no key. */
-export async function fetchOpenRouterModels(kind: ModelKind): Promise<ListedModel[]> {
-    const response = await fetch(`${OPENROUTER_URL}/models?${KINDS[kind]}`);
+/** The models OpenRouter has of a kind, or of every kind, by their ids, as the checker server lists them. */
+export async function fetchOpenRouterModels(kind: ModelKind | "all"): Promise<ListedModel[]> {
+    const response = await checkerFetch(`/models/openrouter?kind=${kind}`);
+    const reply = await response.json();
     if (!response.ok) {
-        throw new Error(`OpenRouter answered ${response.status}.`);
+        throw new Error(typeof reply.error === "string" ? reply.error : `The server answered ${response.status}.`);
     }
-    const models: { id: string; supported_voices?: string[] }[] = (await response.json()).data;
-    return models
-        .map((model) => ({ id: model.id, voices: model.supported_voices ?? [] }))
-        .sort((a, b) => a.id.localeCompare(b.id));
+    return reply.models;
 }
 
 /** The ids of the models the server at `url` has, as it lists them; asked through the checker server. */
@@ -101,11 +95,11 @@ export async function fetchModelsAt(url: string, key: string): Promise<string[]>
 export const NO_REASONING = { enabled: false };
 
 /**
- * Sends a chat request to `choice`: to OpenRouter with `apiKey`, or, for a
- * model at an address, by way of the checker server, which a page may reach
- * where it may not reach the address itself. A request that does not say
- * how the model is to reason has it answer without reasoning, and a model
- * that cannot but reason is asked again as the request was.
+ * Sends a chat request to `choice` by way of the checker server, which asks
+ * it, on OpenRouter with `apiKey`, and counts what it used under the chat
+ * `usageId`: the page never asks a model itself. A request that does not
+ * say how the model is to reason has it answer without reasoning, and a
+ * model that cannot but reason is asked again as the request was.
  */
 export async function sendChat(
     choice: ModelChoice,
@@ -126,17 +120,10 @@ function postChat(
     apiKey: string,
     signal?: AbortSignal,
 ): Promise<Response> {
-    if (choice.url) {
-        return checkerFetch("/models/chat", {
-            method: "POST",
-            body: JSON.stringify({ ...body, model: choice }),
-            signal,
-        });
-    }
-    return fetch(`${OPENROUTER_URL}/chat/completions`, {
+    return checkerFetch("/models/chat", {
         method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, model: choice.model }),
+        headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {},
+        body: JSON.stringify({ ...body, model: modelRequest(choice) }),
         signal,
     });
 }

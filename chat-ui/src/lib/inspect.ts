@@ -1,7 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { OPENROUTER_URL } from "./models";
+import { fetchOpenRouterModels, type ListedModel } from "./models";
 import { checkerFetch } from "./session";
 import type { ModelReply, ModelRequest, TutorEvent, TutorMessage } from "./tutor";
 
@@ -290,39 +290,19 @@ export function totalsOf(trace: Trace): Usage & { requests: number; ms: number; 
 }
 
 /** What OpenRouter says of a model: how much context it takes and what its tokens cost, in dollars each. */
-export interface ModelFacts {
-    contextLength: number | null;
-    maxOutput: number | null;
-    promptPrice: number | null;
-    completionPrice: number | null;
-}
+export type ModelFacts = Omit<ListedModel, "id" | "voices">;
 
 let listed: Promise<Map<string, ModelFacts>> | null = null;
 
-/** What OpenRouter says of the model `id`, or null if it lists no such model or cannot be reached. */
+/** What OpenRouter says of the model `id`, as the checker server lists it, or null if it lists no such model. */
 export async function modelFacts(id: string): Promise<ModelFacts | null> {
-    listed ??= fetch(`${OPENROUTER_URL}/models`)
-        .then((response) => response.json())
-        .then(({ data }: { data: Record<string, unknown>[] }) =>
-            new Map(data.map((model) => [String(model.id), factsOf(model)]))
-        )
+    listed ??= fetchOpenRouterModels("all")
+        .then((models) => new Map(models.map(({ id: listedId, voices: _, ...facts }) => [listedId, facts])))
         .catch(() => {
             listed = null;
             return new Map();
         });
     return (await listed).get(id) ?? null;
-}
-
-function factsOf(model: Record<string, unknown>): ModelFacts {
-    const pricing = (model.pricing ?? {}) as Record<string, unknown>;
-    const top = (model.top_provider ?? {}) as Record<string, unknown>;
-    const price = (value: unknown) => (typeof value === "string" && value !== "" ? Number(value) : null);
-    return {
-        contextLength: count(model.context_length),
-        maxOutput: count(top.max_completion_tokens),
-        promptPrice: price(pricing.prompt),
-        completionPrice: price(pricing.completion),
-    };
 }
 
 /** A whole number with its thousands marked, or a dash for one that is not known. */

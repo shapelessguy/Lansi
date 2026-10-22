@@ -989,6 +989,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             picked={activity === "chat" ? picked : null}
                             onOpenSettings={() => openSettings("general")}
                             onUsage={addUsageEntry}
+                            onReplied={() => setUsageRevision((revision) => revision + 1)}
                             onSpeak={speakMessage}
                             chat={chat}
                             onMessages={changeMessages}

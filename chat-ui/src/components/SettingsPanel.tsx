@@ -312,7 +312,9 @@ function GeneralTab(
                         {showKey ? "Hide" : "Show"}
                     </button>
                 </span>
-                <small>Kept in this browser only, and sent to openrouter.ai with each message.</small>
+                <small>
+                    Kept in this browser only, and sent with each request to the server, which asks OpenRouter with it.
+                </small>
             </label>
         </>
     );

@@ -1326,3 +1326,27 @@ def test_the_last_tutor_request_goes_with_its_chat_when_it_is_deleted(
 
     assert kept is not None
     assert store.last_tutor_request("chat-1") is None
+
+
+def test_the_usage_is_added_up_by_model_in_bins_of_the_learners_own_days(
+    store: UserStore,
+) -> None:
+    hour, day = 3_600_000, 86_400_000
+    store.add_usage(
+        [
+            # 23:30 UTC on the first day, which is the second day two hours ahead
+            used(at=day - hour // 2, cost=0.25),
+            used(at=day + hour, cost=0.5),
+            used(at=day + 2 * hour, model="google/gemini", cost=None),
+            used(at=0, cost=4.0),
+        ]
+    )
+
+    series = store.usage_series(hour, day, 2 * hour)
+
+    assert [(each["at"], each["model"], each["requests"]) for each in series] == [
+        (day - 2 * hour, "google/gemini", 1),
+        (day - 2 * hour, "openai/gpt-5", 2),
+    ]
+    assert series[0]["costIncomplete"] is True
+    assert series[1]["cost"] == 0.75

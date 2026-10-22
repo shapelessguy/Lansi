@@ -65,7 +65,7 @@ export function parseStream(buffer: string): StreamParse {
 }
 
 /**
- * Sends the conversation to `model`, wherever it is asked, and calls
+ * Sends the conversation to `model`, by way of the checker server, and calls
  * `onText` with each piece of the reply as it arrives. Returns what the
  * reply used, or null if that was not reported.
  */
@@ -74,11 +74,13 @@ export async function streamChat(options: {
     model: ModelChoice;
     messages: ChatMessage[];
     signal: AbortSignal;
+    /** The chat what the reply used is counted under, which the server counts. */
+    usageId: string;
     onText: (text: string) => void;
 }): Promise<ReplyUsage | null> {
     const response = await sendChat(
         options.model,
-        { messages: options.messages, stream: true, usage: { include: true } },
+        { messages: options.messages, stream: true, usage_id: options.usageId },
         options.apiKey,
         options.signal,
     );

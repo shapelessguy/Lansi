@@ -53,7 +53,7 @@ from intake import read_usage
 from languages import language_of
 from logs import LogError, Task, has_anything, write_log
 from models import Model
-from profiling import Profile, ProfileError
+from profiling import Profile, ProfileError, spent, spent_by
 from storage import UserStore
 from topics import (
     DEFAULT_EMBEDDING_MODEL,
@@ -493,22 +493,31 @@ class Runner:
             process.stdin.flush()
             reply = self._converse(process, ask, draw, look or ask, anki, used)
         except (OSError, ValueError) as error:
-            raise ExerciseError(f"the exercise failed: {error}") from None
+            raise spent(ExerciseError(f"the exercise failed: {error}"), used) from None
+        except ExerciseError as error:
+            raise spent(error, used) from None
         finally:
             timer.cancel()
             process.kill()
             process.wait()
             reader.join(timeout=1)
-        if timed_out.is_set():
-            raise ExerciseError(f"the exercise took more than {self._timeout:.0f} s")
-        if reply is None:
-            said = "".join(errors).strip().splitlines()
-            raise ExerciseError(
-                f"the exercise stopped without a reply{': ' + said[-1] if said else ''}"
-            )
-        if "error" in reply:
-            raise ExerciseError(str(reply["error"]))
-        return _read_reply(reply.get("reply")), used
+        # what the models it asked used is counted though the exercise failed
+        try:
+            if timed_out.is_set():
+                raise ExerciseError(
+                    f"the exercise took more than {self._timeout:.0f} s"
+                )
+            if reply is None:
+                said = "".join(errors).strip().splitlines()
+                raise ExerciseError(
+                    "the exercise stopped without a reply"
+                    f"{': ' + said[-1] if said else ''}"
+                )
+            if "error" in reply:
+                raise ExerciseError(str(reply["error"]))
+            return _read_reply(reply.get("reply")), used
+        except ExerciseError as error:
+            raise spent(error, used) from None
 
     def _converse(
         self,
@@ -1061,36 +1070,41 @@ class Practice:
             }
             anki = anki_asker(self._anki) if self._anki else None
             reply, used = self._runner.run(exercise, request, ask, draw, look, anki)
-            # the grades are kept first, as they are what matters most
+            # what the models it asked used is counted though what came of it is refused
             try:
-                self._store.add_grades(session_id, exercise, reply["graded"])
-                self._store.add_written(
-                    session_id, exercise, reply.get("written") or {}
+                # the grades are kept first, as they are what matters most
+                try:
+                    self._store.add_grades(session_id, exercise, reply["graded"])
+                    self._store.add_written(
+                        session_id, exercise, reply.get("written") or {}
+                    )
+                except ValueError as error:
+                    raise ExerciseError(str(error)) from None
+                self._keep_made(session, exercise, reply.get("made") or [])
+                if op != "finish":
+                    self._store.save_exercise_state(
+                        session_id, exercise, reply.get("state"), reply.get("show")
+                    )
+                    return reply.get("show"), used
+                self._store.finish_exercise(
+                    session_id, exercise, reply.get("results"), reply.get("scores")
                 )
-            except ValueError as error:
-                raise ExerciseError(str(error)) from None
-            self._keep_made(session, exercise, reply.get("made") or [])
-            if op != "finish":
-                self._store.save_exercise_state(
-                    session_id, exercise, reply.get("state"), reply.get("show")
-                )
-                return reply.get("show"), used
-            self._store.finish_exercise(
-                session_id, exercise, reply.get("results"), reply.get("scores")
-            )
-            self._take_texts(session, exercise, reply.get("results"))
-            if reply.get("log"):
-                # the exercise wrote its log itself
-                manifest = next(
-                    (each for each in self._manifests() if each.id == exercise), None
-                )
-                self._store.set_log(
-                    session_id,
-                    exercise,
-                    reply["log"],
-                    manifest.title if manifest else exercise,
-                )
-                return None, used
+                self._take_texts(session, exercise, reply.get("results"))
+                if reply.get("log"):
+                    # the exercise wrote its log itself
+                    manifest = next(
+                        (each for each in self._manifests() if each.id == exercise),
+                        None,
+                    )
+                    self._store.set_log(
+                        session_id,
+                        exercise,
+                        reply["log"],
+                        manifest.title if manifest else exercise,
+                    )
+                    return None, used
+            except ExerciseError as error:
+                raise spent(error, used) from None
         self._log_later(session, exercise, request["context"], ask)
         return None, used
 
@@ -1238,8 +1252,9 @@ class Practice:
             try:
                 content, used = write_log(ask, task, grades, written)
             except (LogError, TranslationError) as error:
-                raise ExerciseError(
-                    f"the log of {title} could not be written: {error}"
+                raise spent(
+                    ExerciseError(f"the log of {title} could not be written: {error}"),
+                    spent_by(error),
                 ) from None
             if scores:
                 content += "\n" + describe_scores(scores)
@@ -1281,9 +1296,10 @@ class Practice:
                         look,
                     )
                     used += finishing
-                except ExerciseError:
-                    # the grades it reported are kept all the same
-                    pass
+                except ExerciseError as error:
+                    # the grades it reported are kept all the same, and what
+                    # the models it asked used is counted
+                    used += spent_by(error)
             self._store.end_session(session_id, status)
         ended = self._store.session(session_id)
         assert ended

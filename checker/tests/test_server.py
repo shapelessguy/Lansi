@@ -1714,6 +1714,15 @@ def test_an_evaluation_of_a_level_with_no_exam_is_refused(with_users: str) -> No
 # a server of the learner's own, which the chat passes requests on to
 
 
+# a streamed reply, which says what it used in its last piece
+OWN_REPLY = (
+    b'data: {"id": "gen-1", "choices": []}\n\n'
+    b'data: {"id": "gen-1", "choices": [], "model": "local/clef",'
+    b' "usage": {"prompt_tokens": 7, "completion_tokens": 2, "cost": 0.25}}\n\n'
+    b"data: [DONE]\n\n"
+)
+
+
 class OwnServer(BaseHTTPRequestHandler):
     """Answers as a server that takes OpenAI's requests does, and keeps
     what it was sent."""
@@ -1727,7 +1736,7 @@ class OwnServer(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         self.received.append((self.path, self.headers.get("Authorization", ""), body))
-        self._send("text/event-stream", b'data: {"choices": []}\n\ndata: [DONE]\n\n')
+        self._send("text/event-stream", OWN_REPLY)
 
     def _send(self, kind: str, data: bytes) -> None:
         self.send_response(200)
@@ -1786,15 +1795,50 @@ def test_a_chat_request_is_passed_on_to_the_model_at_its_address(
         (
             "/v1/chat/completions",
             "",
-            {"messages": [], "stream": True, "model": "local/clef"},
+            {
+                "messages": [],
+                "stream": True,
+                "model": "local/clef",
+                "usage": {"include": True},
+            },
         )
     ]
 
 
-def test_a_model_on_openrouter_is_not_passed_on(url: str) -> None:
-    status, _, _ = relay(f"{url}/models/chat", {"model": "some/model"})
+def test_a_model_on_openrouter_is_not_asked_without_a_key(
+    url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    status, _, said = relay(f"{url}/models/chat", {"model": "some/model"})
 
     assert status == 400
+    assert json.loads(said)["error"]["message"] == "an OpenRouter key is needed"
+
+
+def test_what_a_chat_request_used_is_counted_under_its_chat_by_the_server(
+    with_users: str, own_server: str
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {
+        "model": {"model": "local/clef", "url": own_server},
+        "messages": [{"role": "user", "content": "Hallo"}],
+        "stream": True,
+        "usage_id": "chat-9",
+    }
+
+    status, reply, _ = send(
+        f"{with_users}/models/chat", "POST", ada, json.dumps(body).encode()
+    )
+    _, usage, _ = send(f"{with_users}/usage?chat=chat-9&since=0", "GET", ada)
+
+    assert (status, reply) == (200, OWN_REPLY)
+    # the chat's own id is not passed on to the model
+    passed_on = OwnServer.received[-1][2]
+    assert isinstance(passed_on, dict) and "usage_id" not in passed_on
+    counted = json.loads(usage)
+    assert counted["chat"]["requests"] == 1
+    assert counted["chat"]["cost"] == 0.25
 
 
 def test_the_tutor_streams_what_it_does_a_line_at_a_time_and_ends_with_what_was_added(

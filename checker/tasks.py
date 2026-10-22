@@ -18,6 +18,8 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from profiling import describe_usage, spent_by
+
 # how many tasks are remembered, the newest ones
 KEPT = 20
 
@@ -88,6 +90,10 @@ class Tasks:
             try:
                 result, usage = job(step)
             except Exception as error:
+                # what was asked of the models before it went wrong is counted all the same
+                failed = [describe_usage(each) for each in spent_by(error)]
+                if self._on_used is not None and failed:
+                    self._on_used(kind, failed)
                 # whatever went wrong is what the user is told
                 with self._lock:
                     task.state, task.error = (

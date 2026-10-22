@@ -16,7 +16,7 @@ import pytest
 from anki_import import AnkiUnavailable
 from known import known_words
 from models import Model
-from profiling import Profile, ProfileError
+from profiling import Profile, ProfileError, spent_by
 from storage import UserStore
 from tutor import (
     MAX_FOCUS,
@@ -590,6 +590,21 @@ def test_a_request_that_failed_is_told_with_why() -> None:
     assert events[-1]["error"] == "OpenRouter refused the request (500): down"
 
 
+def test_a_turn_that_fails_carries_what_the_requests_answered_before_used() -> None:
+    stream = FakeStream(
+        [
+            *called("echo", {"word": "Hund"}),
+            {"choices": [], "usage": {"prompt_tokens": 9, "completion_tokens": 3}},
+        ],
+        ProfileError("OpenRouter refused the request (500): down"),
+    )
+
+    with pytest.raises(TutorError) as raised:
+        converse(ASKED, [echo_tool()], MODEL, "", lambda _: None, stream)
+
+    assert [used.input_tokens for used in spent_by(raised.value)] == [9]
+
+
 # made at noon on 1 January 1971, which is that day wherever the tests run
 MADE_AT = 365 * 86400 + 12 * 3600
 MEMORIES = [
@@ -652,9 +667,11 @@ def test_a_recap_of_a_chat_is_what_the_model_wrote_however_long() -> None:
     assert "Learner: Can we do the dative?" in told[0][0]["content"]
 
 
-def test_a_recap_that_says_nothing_is_an_error() -> None:
-    with pytest.raises(TutorError):
-        recap([], "German", lambda _: ("  \n", Profile({})))
+def test_a_recap_that_says_nothing_is_an_error_that_carries_what_asking_used() -> None:
+    with pytest.raises(TutorError) as raised:
+        recap([], "German", lambda _: ("  \n", Profile({}, id="gen-1")))
+
+    assert [used.id for used in spent_by(raised.value)] == ["gen-1"]
 
 
 def test_the_tutor_is_told_how_many_recaps_and_entries_there_are_but_not_what_they_say() -> (

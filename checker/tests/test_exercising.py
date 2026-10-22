@@ -23,7 +23,7 @@ from exercising import (
     ui_file,
 )
 from models import Model
-from profiling import Profile
+from profiling import Profile, spent_by
 from storage import UserStore
 from test_topics import KEY, FakeOpenRouter
 from topics import DEFAULT_EMBEDDING_MODEL
@@ -59,6 +59,9 @@ def act(context, state, message, model):
     if message == "key":
         return Step(state=state, show=sorted(os.environ))
     if message == "crash":
+        raise RuntimeError("something broke")
+    if message == "ask then crash":
+        model.ask([{"role": "user", "content": "hi"}])
         raise RuntimeError("something broke")
     if message == "hang":
         import time
@@ -252,6 +255,22 @@ def test_a_backend_that_breaks_says_how_it_did(directory: Path) -> None:
 
     with pytest.raises(ExerciseError, match="something broke"):
         Runner(directory).run("echo", request, answering())
+
+
+def test_a_backend_that_breaks_carries_what_the_models_it_asked_used(
+    directory: Path,
+) -> None:
+    request = {
+        "op": "act",
+        "context": CONTEXT,
+        "state": {},
+        "message": "ask then crash",
+    }
+
+    with pytest.raises(ExerciseError) as raised:
+        Runner(directory).run("echo", request, answering())
+
+    assert [used.id for used in spent_by(raised.value)] == ["gen-1"]
 
 
 def test_a_backend_that_takes_too_long_is_stopped(directory: Path) -> None:

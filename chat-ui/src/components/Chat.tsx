@@ -31,6 +31,8 @@ interface Props {
     picked: { word: string; nonce: number } | null;
     onOpenSettings: () => void;
     onUsage: (entry: UsageEntry) => void;
+    /** Told when a reply is over, or was stopped, once the server has counted what it used. */
+    onReplied: () => void;
     /** Has a message of a chat read aloud: the one at that place among its messages, which says that. */
     onSpeak: (chatId: string, place: number, text: string) => void;
     /** The chat shown. Give the component this chat's id as its key, so a reply still arriving stops on a switch. */
@@ -54,6 +56,7 @@ export function Chat(
         picked,
         onOpenSettings,
         onUsage,
+        onReplied,
         onSpeak,
         chat,
         onMessages,
@@ -133,11 +136,12 @@ export function Chat(
             // a set is worked out from the counts as they are now; if they cannot be had, from the last ones
             const lists = context.prompt.includes("{{words") ? await loadWords().catch(() => words) : words;
             const system = expandPrompt(context.prompt, lists, settings.language, settings.level).trim();
-            const usage = await streamChat({
+            await streamChat({
                 apiKey: settings.apiKey,
                 model: settings.model,
                 messages: system ? [{ role: "system", content: system }, ...history] : history,
                 signal: controller.signal,
+                usageId: chatId,
                 onText: (piece) => {
                     reply += piece;
                     setMessages((current) => {
@@ -150,17 +154,6 @@ export function Chat(
             if (settings.speakReplies && reply.trim()) {
                 onSpeak(chatId, history.length, reply);
             }
-            if (usage) {
-                onUsage({
-                    at: Date.now(),
-                    category: "chat",
-                    chatId,
-                    model: usage.model ?? settings.model.model,
-                    promptTokens: usage.promptTokens,
-                    completionTokens: usage.completionTokens,
-                    cost: usage.cost,
-                });
-            }
         } catch (caught) {
             if (!controller.signal.aborted) {
                 setError(caught instanceof Error ? caught.message : String(caught));
@@ -169,6 +162,7 @@ export function Chat(
             // a reply that never started is not kept
             setMessages((current) => (current[current.length - 1]?.content === "" ? current.slice(0, -1) : current));
             setAbort(null);
+            onReplied();
         }
     }
 

@@ -66,7 +66,7 @@ from intake import CHAT_TIMEOUT_SECS, read_usage
 from known import ORDERS, Asked, Known
 from logs import describe_record, read_json
 from models import Model
-from profiling import Profile, ProfileError, error_message
+from profiling import Profile, ProfileError, error_message, spent
 from prompts import PROMPTS
 from storage import LOG_KINDS, read_day
 from translating import TranslationError
@@ -250,7 +250,7 @@ def recap(
     lines = [line.strip().lstrip("-*• ").strip() for line in reply.splitlines()]
     lines = [line for line in lines if line]
     if not lines:
-        raise TutorError("the model wrote no recap")
+        raise spent(TutorError("the model wrote no recap"), [used])
     return "\n".join(lines), used
 
 
@@ -291,7 +291,10 @@ def remember(
         raise TutorError(str(error)) from None
     found = read_json(reply)
     if not isinstance(found, dict):
-        raise TutorError("the model did not say what to remember as it was asked")
+        raise spent(
+            TutorError("the model did not say what to remember as it was asked"),
+            [used],
+        )
     added = found.get("add")
     removed = found.get("remove")
     have = {memory["id"] for memory in memories}
@@ -334,7 +337,7 @@ def converse(
     each event as it comes, as the module says. Returns the messages that
     were added, the calls of the tools and what they came to among them,
     the answer last, with what the requests to the model used. Raises
-    TutorError."""
+    TutorError, which carries what the requests made before it used."""
     problem = model.problem()
     if problem:
         raise TutorError(problem)
@@ -343,6 +346,28 @@ def converse(
     numbers = itertools.count(1)
     added: list[dict[str, Any]] = []
     used: list[Profile] = []
+    try:
+        return _converse(
+            messages, by_name, tools, model, told, emit, send, numbers, added, used
+        )
+    except TutorError as error:
+        # what the requests that were answered used is counted all the same
+        raise spent(error, used) from None
+
+
+def _converse(
+    messages: list[dict[str, Any]],
+    by_name: dict[str, Tool],
+    tools: list[Tool],
+    model: Model,
+    told: str,
+    emit: Emit,
+    send: Stream,
+    numbers: Iterator[int],
+    added: list[dict[str, Any]],
+    used: list[Profile],
+) -> tuple[list[dict[str, Any]], list[Profile]]:
+    """The turns of `converse`, which adds to `added` and `used` as it goes."""
     for turn in range(MAX_TURNS):
         body: dict[str, Any] = {
             "model": model.name,
