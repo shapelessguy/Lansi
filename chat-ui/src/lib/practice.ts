@@ -308,6 +308,19 @@ export interface Grade {
     answer: string;
     correction: string;
     note: string;
+    /** Each answer of an instance of several, such as the questions on a text, as it was graded; empty for one. */
+    parts?: GradePart[];
+    /** What the learner had to go on, such as the text the questions were on; empty if nothing. */
+    about?: string;
+}
+
+/** An answer of an instance of several, as it was graded. */
+export interface GradePart {
+    result: Grade["result"];
+    task: string;
+    answer: string;
+    correction: string;
+    note: string;
 }
 
 /**

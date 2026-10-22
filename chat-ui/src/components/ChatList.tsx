@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { chatTitle, type StoredChat } from "../lib/chats";
+import { ask } from "../lib/dialogs";
 
 interface Props {
     /** Most recent first. */
@@ -22,9 +23,9 @@ function when(at: number): string {
 
 export function ChatList({ chats, activeId, onSelect, onDelete, onNewChat }: Props) {
     function confirmDelete(chat: StoredChat) {
-        if (window.confirm(`Delete “${chatTitle(chat)}”? This can't be undone.`)) {
-            onDelete(chat.id);
-        }
+        void ask(`Delete “${chatTitle(chat)}”?`, { detail: "This can't be undone." }).then((agreed) =>
+            agreed && onDelete(chat.id)
+        );
     }
 
     return (

@@ -106,6 +106,7 @@ from translating import (
     read_messages,
 )
 from tutor import (
+    LastCall,
     TutorError,
     converse,
     data_tools,
@@ -1769,6 +1770,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                       and writes a recap of it, kept as a
                                       memory of the kind "recap"; the reply
                                       has the `tasks` it started
+            GET /tutor/chats/ID/request
+                                      the last request the tutor made to its
+                                      model, `{"request": {"label": ...,
+                                      "at": ..., "call": {...}}}`, as the
+                                      inspector shows it, or null if it was
+                                      made in another chat: one is kept
             GET /tutor/memories       the memories the tutor has, the oldest
                                       first, and those it `removed`
             DELETE /tutor/memories/N  have the tutor forget a memory, as the
@@ -1779,11 +1786,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
         one = re.fullmatch(r"/tutor/chats/([^/]+)", path)
         close = re.fullmatch(r"/tutor/chats/([^/]+)/close", path)
         offer = re.fullmatch(r"/tutor/chats/([^/]+)/offers", path)
+        last = re.fullmatch(r"/tutor/chats/([^/]+)/request", path)
         memory = re.fullmatch(r"/tutor/memories/(\d+)", path)
         if store is None or not (
             one
             or close
             or offer
+            or last
             or memory
             or path in ("/tutor/chats", "/tutor/memories")
         ):
@@ -1805,6 +1814,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 str(body.get("status") or ""),
             )
             self._reply(HTTPStatus.OK, {})
+        elif method == "GET" and last:
+            self._reply(
+                HTTPStatus.OK, {"request": store.last_tutor_request(last.group(1))}
+            )
         elif method == "GET" and path == "/tutor/memories":
             self._reply(
                 HTTPStatus.OK,
@@ -1925,7 +1938,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
     def _tutor(self, practice: Practice, api_key: str | None) -> None:
         """Has the tutor answer the last of the `messages` of a `{"messages":
-        [...], "model": ..., "language": ..., "into": ..., "level": ...,
+        [...], "model": ..., "language": ..., "level": ...,
         "tone": ...}` request, `tone` being how the tutor is to talk, as the
         learner set it: the chat so far as the tutor was told it, which the reply
         adds to. Nothing of the chat is kept here.
@@ -1966,7 +1979,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 'practised is {"session": ..., "exercise": ..., "tasks": [...]}'
             )
         messages = read_tutor_messages(body.get("messages"), to_answer=done is None)
-        language, into, model = self._read_translating(body, api_key)
+        language, _, model = self._read_translating(body, api_key)
         titles = {each["id"]: each["title"] for each in practice.exercises()}
         level = body.get("level")
         # how the tutor is to talk, as the learner set it
@@ -2004,7 +2017,6 @@ class CheckerHandler(BaseHTTPRequestHandler):
         ]
         told = instructions(
             language,
-            into,
             level if isinstance(level, str) else "",
             store.memories(),
             tone,
@@ -2018,8 +2030,15 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
         # what is shown of the turn, kept with the answer to be shown again
         turn: dict[str, Any] = {"thinking": "", "steps": [], "offers": [], "exams": []}
+        # the last request to the model, kept for the inspector of the chat
+        last = LastCall(
+            str(messages[-1].get("content") or "")
+            if done is None
+            else f"How “{done['exercise']}” went"
+        )
 
         def emit(event: dict[str, Any]) -> None:
+            last.follow(event)
             kind = event.get("type")
             if kind == "thinking":
                 turn["thinking"] += event["text"]
@@ -2061,6 +2080,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
         except TutorError as error:
             emit({"type": "error", "error": str(error)})
             return
+        finally:
+            record = last.record()
+            if chat_id is not None and record is not None:
+                store.save_last_tutor_request(chat_id, record)
         added = [*said, *added]
         if chat_id is not None:
             answer = "\n\n".join(

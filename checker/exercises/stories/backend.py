@@ -334,7 +334,9 @@ def _answered(
                     f"Answer a question on the story: {each['question']}",
                 )
                 for each in feedback
-            ]
+            ],
+            # the questions are not understood without the story
+            "\n\n".join(part for part in (story["title"], story["text"]) if part),
         )
         graded, result = [one], one["result"]
         said = written(
@@ -353,7 +355,10 @@ def _answered(
         verdict = judge_retelling(context, story, retelling, model)
         feedback = [verdict]
         task = f'Retell the story "{story["title"]}" in a few sentences'
-        graded, result = [grade(**verdict, task=task)], verdict["result"]
+        # a retelling is not understood without the story
+        about = "\n\n".join(part for part in (story["title"], story["text"]) if part)
+        graded = [{**grade(**verdict, task=task), "about": about}]
+        result = verdict["result"]
         said = written([retelling], [verdict["correction"]])
     elif mode == "read" and message.get("read"):
         feedback, result, said = [], "", {}

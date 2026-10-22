@@ -6,7 +6,9 @@ import Markdown from "react-markdown";
 
 import { isAtEnd } from "../lib/chats";
 import type { ProfileUsage } from "../lib/checker";
+import { ask as askLearner } from "../lib/dialogs";
 import { newId } from "../lib/ids";
+import { begun, EMPTY_TRACE, fetchLastRequest, type Trace, traced } from "../lib/inspect";
 import { canAsk } from "../lib/models";
 import { endSession, type Learner, type PracticeSession, stepExercise } from "../lib/practice";
 import type { WordLists } from "../lib/sets";
@@ -37,7 +39,12 @@ import {
 } from "../lib/tutor";
 import type { UsageEntry } from "../lib/usage";
 import { CheckedTextarea } from "./CheckedTextarea";
+import { ContextRing } from "./ContextRing";
 import { ExerciseView } from "./ExerciseView";
+import { Inspector } from "./Inspector";
+
+/** What the server says of a session that cannot be finished, as it is over already or gone. */
+const SESSION_OVER = /no such (session|exercise)|session has ended|exercise is finished/;
 
 interface Props {
     asking: TutorAsking;
@@ -61,11 +68,8 @@ interface Props {
     onStartEvaluation: (exam: EvaluationOffer) => void;
     /** Has an answer read aloud, by the chat and its place among what is said in it, as the chat's are. */
     onSpeak: (chatId: string, place: number, text: string) => void;
-    /** Told each request to the server as it starts, with what it was in a few words, and each of its events. */
-    onExchange: (label: string) => void;
+    /** Told each event of the requests to the server. */
     onTrace: (event: TutorEvent) => void;
-    /** Told when a new chat is started. */
-    onNewChat: () => void;
     /** What the sentences written to the tutor are checked by, as in the chat, and what changes it. */
     settings: Settings;
     onSettingsChange: (settings: Settings) => void;
@@ -114,9 +118,7 @@ export function Tutor(
         onSpeakReplies,
         onStartEvaluation,
         onSpeak,
-        onExchange,
         onTrace,
-        onNewChat,
         settings,
         words,
         onSettingsChange,
@@ -139,6 +141,12 @@ export function Tutor(
     const [draft, setDraft] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    // every request the tutor made to its model in the chat, for the inspector, which is
+    // the last one the server kept when the chat is taken up again
+    const [trace, setTrace] = useState<Trace>(EMPTY_TRACE);
+    const [inspecting, setInspecting] = useState(false);
+    // the chat shown, which tells the request kept of a chat that is still shown
+    const shownChat = useRef(chatId);
     const request = useRef<AbortController | null>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const usable = canAsk(asking.model, asking.apiKey);
@@ -171,6 +179,12 @@ export function Tutor(
         }
         request.current?.abort();
         setChatId(chat.id);
+        shownChat.current = chat.id;
+        setTrace(EMPTY_TRACE);
+        fetchLastRequest(chat.id).then(
+            (kept) => shownChat.current === chat.id && setTrace((current) => current.exchanges.length ? current : kept),
+            () => undefined,
+        );
         setClosed(chat.closedAt !== null);
         setMessages(keptMessages(chat.messages));
         setShown(
@@ -194,7 +208,6 @@ export function Tutor(
             ),
         ));
         setError(null);
-        onNewChat();
     }
     // What the chat keeps in view as what is in it grows, such as an exercise
     // as it loads: its end, the top of the exercise under way, or nothing
@@ -271,12 +284,13 @@ export function Tutor(
         ]);
         setError(null);
         setBusy(true);
-        onExchange(wrote ?? `How “${practised?.exercise}” went`);
+        setTrace((current) => begun(current, wrote ?? `How “${practised?.exercise}” went`, Date.now()));
         try {
             const done = await askTutor(
                 asked,
                 asking,
                 (event) => {
+                    setTrace((current) => traced(current, event));
                     onTrace(event);
                     if (event.type === "text") {
                         answer += event.text;
@@ -357,8 +371,15 @@ export function Tutor(
                 });
             }
         } catch (failed) {
+            const message = failed instanceof Error ? failed.message : String(failed);
+            // a session that is gone, or that ended elsewhere, such as when another was started, is over
+            if (SESSION_OVER.test(message)) {
+                setDoing((current) => ({ ...current, [key]: { status: "done", abandoned: true } }));
+                keepOffer(chatId, index, place, sessionId, "abandoned").catch(() => undefined);
+                return;
+            }
             setDoing((current) => ({ ...current, [key]: { status: "running", sessionId } }));
-            setError(failed instanceof Error ? failed.message : String(failed));
+            setError(message);
             return;
         }
         setDoing((current) => ({ ...current, [key]: { status: "done", abandoned } }));
@@ -382,12 +403,14 @@ export function Tutor(
         const now = Date.now() / 1000;
         setChats((current) => current.map((chat) => (open.includes(chat.id) ? { ...chat, closedAt: now } : chat)));
         setClosed(false);
-        setChatId(newId());
+        const id = newId();
+        setChatId(id);
+        shownChat.current = id;
+        setTrace(EMPTY_TRACE);
         setMessages([]);
         setShown([]);
         setDoing({});
         setError(null);
-        onNewChat();
     }
 
     function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -401,6 +424,7 @@ export function Tutor(
         <section className="chat tutor">
             <header className="chat-header">
                 <h2 className="tutor-title">Tutor</h2>
+                <ContextRing trace={trace} onOpen={() => setInspecting(true)} />
                 <label className="check" title="Reads each answer aloud once it has arrived. The audio is kept.">
                     <input
                         type="checkbox"
@@ -429,12 +453,13 @@ export function Tutor(
                 )}
                 <button
                     onClick={() => {
-                        if (window.confirm("Delete this chat with the tutor?")) {
-                            void deleteTutorChat(chatId).then(() => {
+                        void askLearner("Delete this chat with the tutor?").then(async (agreed) => {
+                            if (agreed) {
+                                await deleteTutorChat(chatId);
                                 setChats((current) => current.filter((chat) => chat.id !== chatId));
                                 startOver();
-                            });
-                        }
+                            }
+                        });
                     }}
                     disabled={occupied || !chats.some((chat) => chat.id === chatId)}
                 >
@@ -506,14 +531,17 @@ export function Tutor(
                                                 disabled={occupied || !usable || closed}
                                                 onStart={() => start(index, place, offer)}
                                                 onEnd={() => {
-                                                    if (
-                                                        state?.status === "running"
-                                                        && window.confirm(
-                                                            "End this exercise now? What you did of it is kept.",
-                                                        )
-                                                    ) {
-                                                        void finish(index, place, state.sessionId, offer, true);
+                                                    if (state?.status !== "running") {
+                                                        return;
                                                     }
+                                                    void askLearner("End this exercise now?", {
+                                                        detail: "What you did of it is kept.",
+                                                        confirm: "End it",
+                                                    }).then(async (agreed) => {
+                                                        if (agreed) {
+                                                            await finish(index, place, state.sessionId, offer, true);
+                                                        }
+                                                    });
                                                 }}
                                             />
                                             {state?.status === "running" && (
@@ -606,6 +634,7 @@ export function Tutor(
                         )}
                 </div>
             </form>
+            {inspecting && <Inspector trace={trace} onClose={() => setInspecting(false)} />}
         </section>
     );
 }

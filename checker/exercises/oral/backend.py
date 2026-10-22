@@ -185,9 +185,15 @@ def _show(context: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
         "total": context["instances"],
         "kind": kind_of(context),
         "task": task,
+        # in an exam, what is answered goes on to the next at once
+        "exam": bool(context.get("exam")),
     }
     if reviewing:
-        shown["feedback"] = done[-1]
+        # in an exam, how it went is told only once the evaluation is over
+        if context.get("exam"):
+            shown["withheld"] = True
+        else:
+            shown["feedback"] = done[-1]
         shown["more"] = len(done) < context["instances"]
         shown["prepared"] = len(state["tasks"]) > len(done)
     return shown
@@ -209,6 +215,27 @@ def start(context: dict[str, Any], model: Model) -> Step:
         state=state,
         show=_show(context, state),
         written=written([], _told(state)),
+        made=made,
+    )
+
+
+def _onward(
+    context: dict[str, Any], state: dict[str, Any], model: Model, step: Step
+) -> Step:
+    """In an exam, what was just answered goes on at once to the next task,
+    as an exam tells nothing of how it went: the step answered, with the
+    next task made and shown. Otherwise, and after the last, the step as it
+    is."""
+    if not context.get("exam") or len(state["done"]) >= context["instances"]:
+        return step
+    made = make_task(context, state, model)
+    state["reviewing"] = False
+    said = step.written or written()
+    return Step(
+        state=state,
+        show=_show(context, state),
+        graded=step.graded,
+        written=written(said.get("user"), [*said.get("assistant", []), *_told(state)]),
         made=made,
     )
 
@@ -265,8 +292,13 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
                 [answer for answer in answers if answer],
                 [turn["correction"] for turn in rated["turns"] if turn["correction"]],
             )
-            return Step(
-                state=state, show=_show(context, state), graded=[one], written=said
+            return _onward(
+                context,
+                state,
+                model,
+                Step(
+                    state=state, show=_show(context, state), graded=[one], written=said
+                ),
             )
     return Step(state=state, show=_show(context, state))
 

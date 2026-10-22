@@ -179,12 +179,12 @@ def test_an_instance_of_several_answers_is_graded_once(
 
 
 def test_the_grade_of_an_instance_keeps_its_tasks_apart_from_the_answers() -> None:
-    graded = grade_of(
-        [
-            grade("right", "stehe; auf", task="Ich ___ um 6 Uhr ___."),
-            grade("wrong", "", "ruft; an", "Left empty.", "Er ___ dich ___."),
-        ]
-    )
+    each = [
+        grade("right", "stehe; auf", task="Ich ___ um 6 Uhr ___."),
+        grade("wrong", "", "ruft; an", "Left empty.", "Er ___ dich ___."),
+    ]
+
+    graded = grade_of(each)
 
     assert graded == {
         "result": "partial",
@@ -192,6 +192,8 @@ def test_the_grade_of_an_instance_keeps_its_tasks_apart_from_the_answers() -> No
         "answer": "1. stehe; auf\n2. (nothing)",
         "correction": "1. (right)\n2. ruft; an",
         "note": "2. Left empty.",
+        # each answer as it was graded, to be shown on its own
+        "parts": each,
     }
 
 

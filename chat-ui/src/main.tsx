@@ -7,6 +7,7 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { DialogHost } from "./components/DialogHost";
 import { Login } from "./components/Login";
 import { fetchChats, type StoredChat } from "./lib/chats";
 import { currentSession, logOut, onSessionChange } from "./lib/session";
@@ -67,5 +68,6 @@ function Root() {
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <Root />
+        <DialogHost />
     </StrictMode>,
 );

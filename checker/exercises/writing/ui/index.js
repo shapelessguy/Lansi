@@ -49,7 +49,12 @@ export function mount(root, exercise) {
     }
 
     function writing(show) {
-        const done = element("button", { className: "primary", textContent: "Hand in" });
+        // in an exam, nothing is rated before the end: it goes on to the next
+        const last = show.at + 1 >= show.total;
+        const done = element("button", {
+            className: "primary",
+            textContent: show.exam ? (last ? "Done" : "Next") : "Hand in",
+        });
         let fields;
         let message;
         let parts;
@@ -75,7 +80,7 @@ export function mount(root, exercise) {
         }
         done.onclick = () => {
             if (fields.some((field) => field.value.trim())) {
-                send(message(), done, "Rating…", fields);
+                send(message(), done, show.exam ? "Next…" : "Rating…", fields);
             }
         };
         root.replaceChildren(
@@ -139,5 +144,17 @@ export function mount(root, exercise) {
         }
     }
 
-    exercise.onShow((show) => (show.feedback ? reviewing(show) : writing(show)));
+    /**
+     * In an exam, what was answered last, which tells nothing of how it went:
+     * the part is handed in at once, or, if more is to come, it goes on to it.
+     */
+    function withheld(show) {
+        root.replaceChildren(element("p", { className: "muted", textContent: "Handing in…" }), error);
+        const going = show.more ? exercise.act({ next: true }) : Promise.resolve(exercise.finish());
+        going.catch((failed) => {
+            error.textContent = failed.message;
+        });
+    }
+
+    exercise.onShow((show) => (show.withheld ? withheld(show) : show.feedback ? reviewing(show) : writing(show)));
 }

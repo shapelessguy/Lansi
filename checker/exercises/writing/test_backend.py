@@ -138,3 +138,14 @@ def test_a_task_done_again_is_taken_from_those_made_before_and_only_rated() -> N
     assert started.state["tasks"] == made
     # the only request is the one that rates what was written
     assert len(model.asked) == 1
+
+
+def test_in_an_exam_how_a_task_went_is_withheld_but_graded() -> None:
+    exam = {**CONTEXT, "exam": "Schreiben, Teil 1", "instances": 1}
+    model = FakeModel(TASK, RATED)
+    state = start(exam, model).state
+
+    step = act(exam, state, {"text": "Liebe Frau Schmidt"}, model)
+
+    assert step.show["withheld"] and "feedback" not in step.show
+    assert step.graded

@@ -3449,17 +3449,117 @@ div.book-cover {
     color: var(--muted);
 }
 
-/* The inspector: the requests of the tutor in a list on the left, and the
-   one chosen, all of it, on the right. */
+/* How much of the context window the last request of the tutor took, as a
+   ring by the title of the tutor, coloured as the inspector colours the
+   parts of the context. */
+.tutor-title:has(+ .context-ring) {
+    margin-right: 0;
+}
+
+.context-ring {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    /* just after the title, with what follows pushed to the right */
+    margin: 0 auto 0 -6px;
+    padding: 2px 4px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.context-ring:hover,
+.context-ring:focus-visible {
+    color: var(--text);
+}
+
+.context-ring:hover .context-ring-track,
+.context-ring:focus-visible .context-ring-track {
+    stroke: var(--muted);
+}
+
+.context-ring svg {
+    width: 18px;
+    height: 18px;
+    /* the arcs start at the top and go round clockwise */
+    transform: rotate(-90deg);
+}
+
+.context-ring circle {
+    fill: none;
+    stroke-width: 3;
+    background: none;
+}
+
+.context-ring .context-ring-track {
+    stroke: var(--border);
+}
+
+.context-ring .part-system {
+    stroke: var(--level-c1);
+}
+
+.context-ring .part-tools {
+    stroke: var(--level-b2);
+}
+
+.context-ring .part-user {
+    stroke: var(--level-b1);
+}
+
+.context-ring .part-assistant {
+    stroke: var(--level-a2);
+}
+
+.context-ring .part-reasoning {
+    stroke: var(--level-c2);
+}
+
+.context-ring .part-tool {
+    stroke: var(--level-a1);
+}
+
+/* The inspector, over the page: the requests of the tutor in a list on the
+   left, and the one chosen, all of it, on the right. */
+.inspector-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    padding: 32px;
+    background: rgb(0 0 0 / 0.5);
+}
+
 .inspector {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    box-shadow: 0 12px 40px rgb(0 0 0 / 0.35);
 }
 
 .inspector-header {
     flex-wrap: wrap;
+}
+
+.inspector-close {
+    margin-left: auto;
+}
+
+@media (max-width: 700px) {
+    .inspector-overlay {
+        padding: 0;
+    }
+
+    .inspector {
+        border-radius: 0;
+    }
 }
 
 .inspector-totals,
@@ -3738,6 +3838,151 @@ div.book-cover {
 
 /* The learner's texts: the list in the library, and one open to be
    written in, or a correction, in the main area. */
+/* The chats and the texts: a list of them in the empty space on the left of
+   the one open, over it, or a button that opens it where there is no room. */
+.chat-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    container: chat-body / inline-size;
+}
+
+.texts-pane {
+    position: relative;
+    container: texts / inline-size;
+}
+
+.side-list {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 5;
+    width: 250px;
+    max-height: calc(100% - 24px);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+}
+
+.side-list > * {
+    pointer-events: auto;
+}
+
+.side-list-toggle {
+    align-self: flex-start;
+}
+
+.side-list-body {
+    display: none;
+    min-height: 0;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.side-list.open .side-list-body {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+}
+
+.side-list .sidebar-controls {
+    border-bottom: none;
+}
+
+.side-list .text-list {
+    padding-top: 0;
+}
+
+/* what is open makes room for the button above it */
+.chat-body .messages,
+.texts-pane .text-editor {
+    padding-top: 56px;
+}
+
+@container chat-body (min-width: 1300px) {
+    .side-list-toggle {
+        display: none;
+    }
+
+    .side-list-body,
+    .side-list.open .side-list-body {
+        display: flex;
+        border: none;
+        background: none;
+        box-shadow: none;
+    }
+
+    .chat-body .messages {
+        padding-top: 20px;
+    }
+}
+
+@container texts (min-width: 1360px) {
+    .side-list-toggle {
+        display: none;
+    }
+
+    .side-list-body,
+    .side-list.open .side-list-body {
+        display: flex;
+        border: none;
+        background: none;
+        box-shadow: none;
+    }
+
+    .texts-pane .text-editor {
+        padding-top: 20px;
+    }
+}
+
+.text-list {
+    padding-top: 12px;
+}
+
+.texts-empty {
+    flex: 1;
+    padding: 24px;
+}
+
+@media (max-width: 700px) {
+    .listed-pane {
+        flex-direction: column;
+    }
+
+    .pane-list {
+        width: auto;
+        max-height: 35vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+}
+
+.text-list {
+    padding-top: 12px;
+}
+
+.texts-empty {
+    padding: 24px;
+}
+
+@media (max-width: 700px) {
+    .texts-pane {
+        flex-direction: column;
+    }
+
+    .text-sidebar {
+        width: auto;
+        max-height: 35vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+}
+
 .text-list {
     display: grid;
     gap: 6px;
@@ -4007,9 +4252,85 @@ div.book-cover {
 .done-round-head {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 6px;
     color: var(--muted);
     font-size: 0.85em;
+}
+
+/* what a round was on, such as a text, folded away until it is wanted */
+.round-about {
+    margin: 6px 0 2px;
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+
+.round-about summary {
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.round-about p {
+    margin: 6px 0 0;
+    white-space: pre-line;
+    line-height: 1.5;
+}
+
+/* the answers of a round of several, each under what it was asked */
+.round-parts {
+    display: grid;
+    gap: 8px;
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.round-parts > li + li {
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.done-round .round-task {
+    color: var(--muted);
+}
+
+.done-round .round-answer {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-weight: 600;
+}
+
+.round-mark {
+    flex: none;
+    width: 1em;
+    font-weight: 700;
+}
+
+.round-answer.right .round-mark {
+    color: rgb(46 160 67);
+}
+
+.round-answer.partial .round-mark {
+    color: rgb(224 160 32);
+}
+
+.round-answer.wrong .round-mark {
+    color: var(--danger);
+}
+
+/* the right answer, where the one given was not */
+.done-round .round-correct {
+    padding-left: calc(1em + 6px);
+    color: rgb(46 160 67);
+}
+
+.done-round .round-note {
+    padding-left: calc(1em + 6px);
+    color: var(--muted);
+    font-size: 0.92em;
 }
 
 .done-round-task {
@@ -4060,4 +4381,80 @@ div.book-cover {
 
 .done-again .chip.accent:hover {
     background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* An evaluation that is over, as it is reviewed: its scores, and each part
+   with what was answered in it. */
+.evaluations-done .log-day {
+    display: grid;
+    gap: 8px;
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.evaluation-review {
+    display: grid;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.evaluation-review-part h4 {
+    margin: 0;
+    font-size: 0.9em;
+}
+
+.evaluation-result .evaluation-review {
+    max-width: 720px;
+}
+
+/* A dialog of the app, over the page, that asks the learner to agree to
+   something, or tells them something, in place of those of the browser. */
+.dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgb(0 0 0 / 0.45);
+}
+
+.dialog {
+    width: min(420px, 100%);
+    display: grid;
+    gap: 10px;
+    padding: 18px 20px 16px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    box-shadow: 0 12px 40px rgb(0 0 0 / 0.35);
+}
+
+.dialog-message {
+    margin: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.dialog-detail {
+    max-height: 40vh;
+    margin: 0;
+    overflow-y: auto;
+    color: var(--muted);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.dialog-buttons .danger {
+    border-color: var(--danger);
+    background: var(--danger-bg);
+    color: var(--danger);
 }

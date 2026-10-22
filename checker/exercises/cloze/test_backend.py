@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from unittest.mock import ANY
 
 import pytest
 from kit import ModelError
@@ -245,6 +246,7 @@ def test_a_set_is_graded_once_on_what_went_into_the_gaps_apart_from_the_task() -
             "correction": "1. stehe; auf\n2. (right)\n3. (right)\n4. (right)"
             "\n5. (right)",
             "note": "",
+            "parts": ANY,
         }
     ]
     assert [each["result"] for each in step.show["feedback"]] == [

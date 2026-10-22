@@ -5,12 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
     amount,
+    byKind as tokensByKind,
     dollars,
     duration,
     type ModelFacts,
     modelFacts,
     type Part,
-    type PartKind,
+    PART_KINDS,
     partsOf,
     tokensOf,
     totalsOf,
@@ -19,23 +20,13 @@ import {
     usageOf,
 } from "../lib/inspect";
 
-/** What each kind of part of the context is called. */
-const KINDS: Record<PartKind, string> = {
-    system: "System prompt",
-    tools: "Tool definitions",
-    user: "Learner",
-    assistant: "Tutor",
-    reasoning: "Reasoning handed back",
-    tool: "Tool results",
-};
-
 /**
- * Every request the tutor made to its model in the chat, to be looked into:
- * what it was told, part by part with the tokens of each, what it answered
+ * Every request the tutor made to its model in the chat, over the page,
+ * to be looked into: what it was told, part by part with the tokens of each, what it answered
  * and reasoned, the tools it ran with what they gave back, and what each
  * request cost and how long it took.
  */
-export function Inspector({ trace }: { trace: Trace }) {
+export function Inspector({ trace, onClose }: { trace: Trace; onClose: () => void }) {
     const calls = useMemo(
         () => trace.exchanges.flatMap((exchange, place) => exchange.calls.map((call) => ({ place, call }))),
         [trace],
@@ -45,74 +36,86 @@ export function Inspector({ trace }: { trace: Trace }) {
     const keyOf = (place: number, call: TracedCall) => `${place}:${call.id}`;
     const shown = calls.find(({ place, call }) => keyOf(place, call) === chosen) ?? calls.at(-1) ?? null;
     const totals = totalsOf(trace);
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [onClose]);
 
     return (
-        <section className="inspector">
-            <header className="chat-header inspector-header">
-                <h2 className="tutor-title">Inspector</h2>
-                <dl className="inspector-totals">
-                    <Fact name="Requests" value={amount(totals.requests)} />
-                    <Fact name="Tools run" value={amount(totals.tools)} />
-                    <Fact name="Input" value={amount(totals.input)} />
-                    <Fact name="Cached" value={amount(totals.cached)} />
-                    <Fact name="Output" value={amount(totals.output)} />
-                    <Fact name="Reasoning" value={amount(totals.reasoning)} />
-                    <Fact name="Cost" value={dollars(totals.cost)} />
-                    <Fact name="Time" value={duration(totals.ms)} />
-                </dl>
-            </header>
-            {calls.length === 0
-                ? (
-                    <div className="empty">
-                        <h2>Nothing asked yet</h2>
-                        <p>
-                            Each request the tutor sends to its model is shown here as it goes: the prompt, the messages
-                            and the tools it was given, what came back, and the tokens and time of each.
-                        </p>
-                    </div>
-                )
-                : (
-                    <div className="inspector-body">
-                        <nav className="inspector-list" aria-label="Requests">
-                            {trace.exchanges.map((exchange, place) => (
-                                <div key={place} className="inspector-exchange">
-                                    <div className="inspector-exchange-label" title={exchange.label}>
-                                        {new Date(exchange.at).toLocaleTimeString()} · {exchange.label}
-                                    </div>
-                                    {exchange.calls.map((call) => {
-                                        const usage = usageOf(call.reply);
-                                        const key = keyOf(place, call);
-                                        return (
-                                            <button
-                                                key={key}
-                                                className="inspector-call"
-                                                aria-pressed={shown !== null && keyOf(shown.place, shown.call) === key}
-                                                onClick={() => setChosen(key)}
-                                            >
-                                                <span>
-                                                    Request {call.id}
-                                                    {call.reply === null && " …"}
-                                                    {call.reply?.error && " ✗"}
-                                                </span>
-                                                <span className="inspector-call-numbers">
-                                                    {amount(usage.input)} in · {amount(usage.output)} out ·{" "}
-                                                    {duration(call.reply?.total_ms ?? null)}
-                                                </span>
-                                                {call.tools.length > 0 && (
-                                                    <span className="inspector-call-tools">
-                                                        → {call.tools.map((tool) => tool.name).join(", ")}
+        <div
+            className="inspector-overlay"
+            onPointerDown={(event) => event.target === event.currentTarget && onClose()}
+        >
+            <section className="inspector" role="dialog" aria-modal="true" aria-label="Inspector">
+                <header className="chat-header inspector-header">
+                    <h2 className="tutor-title">Inspector</h2>
+                    <dl className="inspector-totals">
+                        <Fact name="Requests" value={amount(totals.requests)} />
+                        <Fact name="Tools run" value={amount(totals.tools)} />
+                        <Fact name="Input" value={amount(totals.input)} />
+                        <Fact name="Cached" value={amount(totals.cached)} />
+                        <Fact name="Output" value={amount(totals.output)} />
+                        <Fact name="Reasoning" value={amount(totals.reasoning)} />
+                        <Fact name="Cost" value={dollars(totals.cost)} />
+                        <Fact name="Time" value={duration(totals.ms)} />
+                    </dl>
+                    <button className="inspector-close" onClick={onClose}>Close</button>
+                </header>
+                {calls.length === 0
+                    ? (
+                        <div className="empty">
+                            <h2>Nothing asked yet</h2>
+                            <p>
+                                Each request the tutor sends to its model is shown here as it goes: the prompt, the
+                                messages and the tools it was given, what came back, and the tokens and time of each.
+                            </p>
+                        </div>
+                    )
+                    : (
+                        <div className="inspector-body">
+                            <nav className="inspector-list" aria-label="Requests">
+                                {trace.exchanges.map((exchange, place) => (
+                                    <div key={place} className="inspector-exchange">
+                                        <div className="inspector-exchange-label" title={exchange.label}>
+                                            {new Date(exchange.at).toLocaleTimeString()} · {exchange.label}
+                                        </div>
+                                        {exchange.calls.map((call) => {
+                                            const usage = usageOf(call.reply);
+                                            const key = keyOf(place, call);
+                                            return (
+                                                <button
+                                                    key={key}
+                                                    className="inspector-call"
+                                                    aria-pressed={shown !== null
+                                                        && keyOf(shown.place, shown.call) === key}
+                                                    onClick={() => setChosen(key)}
+                                                >
+                                                    <span>
+                                                        Request {call.id}
+                                                        {call.reply === null && " …"}
+                                                        {call.reply?.error && " ✗"}
                                                     </span>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            ))}
-                        </nav>
-                        {shown && <CallView key={keyOf(shown.place, shown.call)} call={shown.call} />}
-                    </div>
-                )}
-        </section>
+                                                    <span className="inspector-call-numbers">
+                                                        {amount(usage.input)} in · {amount(usage.output)} out ·{" "}
+                                                        {duration(call.reply?.total_ms ?? null)}
+                                                    </span>
+                                                    {call.tools.length > 0 && (
+                                                        <span className="inspector-call-tools">
+                                                            → {call.tools.map((tool) => tool.name).join(", ")}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ))}
+                            </nav>
+                            {shown && <CallView key={keyOf(shown.place, shown.call)} call={shown.call} />}
+                        </div>
+                    )}
+            </section>
+        </div>
     );
 }
 
@@ -144,12 +147,7 @@ function CallView({ call }: { call: TracedCall }) {
     const settings = Object.fromEntries(
         Object.entries(request).filter(([name]) => !["messages", "tools"].includes(name)),
     );
-    const byKind = (Object.keys(KINDS) as PartKind[])
-        .map((kind) => ({
-            kind,
-            tokens: parts.reduce((sum, each, index) => sum + (each.kind === kind ? tokens[index] : 0), 0),
-        }))
-        .filter((each) => each.tokens > 0);
+    const byKind = tokensByKind(parts, tokens);
     const window = facts?.contextLength ?? null;
 
     return (
@@ -205,7 +203,7 @@ function CallView({ call }: { call: TracedCall }) {
                             key={each.kind}
                             className={`part-${each.kind}`}
                             style={{ flexGrow: each.tokens }}
-                            title={`${KINDS[each.kind]}: ${amount(each.tokens)}`}
+                            title={`${PART_KINDS[each.kind]}: ${amount(each.tokens)}`}
                         />
                     ))}
                 </div>
@@ -213,7 +211,7 @@ function CallView({ call }: { call: TracedCall }) {
                     {byKind.map((each) => (
                         <li key={each.kind}>
                             <span className={`inspector-swatch part-${each.kind}`} aria-hidden="true" />
-                            {KINDS[each.kind]} {amount(each.tokens)} ({percent(each.tokens, counted)})
+                            {PART_KINDS[each.kind]} {amount(each.tokens)} ({percent(each.tokens, counted)})
                         </li>
                     ))}
                 </ul>

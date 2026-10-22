@@ -3,7 +3,7 @@
 
 import { expect, test } from "vitest";
 
-import { begun, EMPTY_TRACE, partsOf, tokensOf, totalsOf, traced, usageOf } from "./inspect";
+import { arcsOf, begun, byKind, EMPTY_TRACE, lastCall, partsOf, tokensOf, totalsOf, traced, usageOf } from "./inspect";
 import type { ModelRequest, TutorEvent } from "./tutor";
 
 const REQUEST: ModelRequest = {
@@ -81,4 +81,39 @@ test("a request, what came of it and the tools it ran are kept together", () => 
 
 test("events before any exchange has begun are left out", () => {
     expect(traced(EMPTY_TRACE, { type: "call", id: 1, at: 2, request: REQUEST })).toBe(EMPTY_TRACE);
+});
+
+test("the ring of a request goes round as far as the context window it took, a kind after the other", () => {
+    const arcs = arcsOf([{ kind: "system", tokens: 100 }, { kind: "user", tokens: 300 }], 1000);
+
+    expect(arcs).toEqual([
+        { kind: "system", start: 0, length: 0.1 },
+        { kind: "user", start: 0.1, length: 0.3 },
+    ]);
+});
+
+test("the ring of a request is full when the context window is not known", () => {
+    const arcs = arcsOf([{ kind: "system", tokens: 100 }, { kind: "user", tokens: 300 }], null);
+
+    expect(arcs.map((arc) => arc.length)).toEqual([0.25, 0.75]);
+});
+
+test("the tokens of a request are added up by kind, leaving out the kinds it has none of", () => {
+    const parts = partsOf(REQUEST);
+
+    const kinds = byKind(parts, parts.map(() => 1));
+
+    expect(kinds.map((each) => each.kind)).toEqual(["system", "tools", "user", "assistant", "reasoning", "tool"]);
+    expect(byKind(parts.slice(0, 1), [5])).toEqual([{ kind: "system", tokens: 5 }]);
+});
+
+test("the last call of a trace is that of its last exchange, and none before a request is made", () => {
+    const trace = traceOf(
+        { type: "call", id: 1, at: 1, request: REQUEST },
+        { type: "call", id: 2, at: 2, request: REQUEST },
+    );
+
+    expect(lastCall(trace)?.id).toBe(2);
+    expect(lastCall(begun(trace, "Again", 3000))?.id).toBe(2);
+    expect(lastCall(EMPTY_TRACE)).toBeNull();
 });

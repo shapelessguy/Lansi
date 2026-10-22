@@ -253,6 +253,8 @@ def _show(context: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
         "at": len(done),
         "total": context["instances"],
         "words": words_of(context),
+        # in an exam, what is answered goes on to the next at once
+        "exam": bool(context.get("exam")),
     }
     reviewing = state["reviewing"]
     task = state["tasks"][len(done) - 1 if reviewing else len(done)]
@@ -269,7 +271,11 @@ def _show(context: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
             "points": task["points"],
         }
     if reviewing:
-        shown["feedback"] = done[-1]
+        # in an exam, how it went is told only once the evaluation is over
+        if context.get("exam"):
+            shown["withheld"] = True
+        else:
+            shown["feedback"] = done[-1]
         shown["more"] = len(done) < context["instances"]
         shown["prepared"] = len(state["tasks"]) > len(done)
     return shown
@@ -354,6 +360,27 @@ def _answered(
     return Step(state=state, show=_show(context, state), graded=[one], written=said)
 
 
+def _onward(
+    context: dict[str, Any], state: dict[str, Any], model: Model, step: Step
+) -> Step:
+    """In an exam, what was just answered goes on at once to the next task,
+    as an exam tells nothing of how it went: the step answered, with the
+    next task made and shown. Otherwise, and after the last, the step as it
+    is."""
+    if not context.get("exam") or len(state["done"]) >= context["instances"]:
+        return step
+    made = make_task(context, state, model)
+    state["reviewing"] = False
+    said = step.written or written()
+    return Step(
+        state=state,
+        show=_show(context, state),
+        graded=step.graded,
+        written=written(said.get("user"), [*said.get("assistant", []), *_told(state)]),
+        made=made,
+    )
+
+
 def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step:
     """Rates what was written for the task on show, as `{"text": "..."}`, or
     checks a form, as `{"fields": [...]}`; makes the next task, as
@@ -375,7 +402,7 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
     if not state["reviewing"]:
         answered = _answered(context, state, message, model)
         if answered:
-            return answered
+            return _onward(context, state, model, answered)
     return Step(state=state, show=_show(context, state))
 
 

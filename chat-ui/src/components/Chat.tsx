@@ -1,7 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { canAsk } from "../lib/models";
 
@@ -13,8 +13,11 @@ import { expandPrompt, type Settings } from "../lib/settings";
 import { allowPlaying, speakMark } from "../lib/speaking";
 import type { UsageEntry } from "../lib/usage";
 import { CheckedTextarea } from "./CheckedTextarea";
+import { SideList } from "./SideList";
 
 interface Props {
+    /** The chats, shown in the empty space on the left of the messages. */
+    list: ReactNode;
     settings: Settings;
     onSettingsChange: (settings: Settings) => void;
     /** Where to show the panel with the sentence checks, or null while it is closed. */
@@ -40,6 +43,7 @@ interface Props {
 
 export function Chat(
     {
+        list,
         settings,
         onSettingsChange,
         checksSlot,
@@ -205,57 +209,60 @@ export function Chat(
                     <button onClick={onNewChat}>New chat</button>
                 </header>
 
-                <div
-                    className="messages"
-                    data-selectable
-                    data-where={JSON.stringify({ kind: "chat", id: chat.id } satisfies Where)}
-                    ref={listRef}
-                    onScroll={(event) => {
-                        const list = event.currentTarget;
-                        // nothing is shown, and so nothing scrolled, while another activity is
-                        if (list.clientHeight > 0) {
-                            atEnd.current = isAtEnd(list.scrollHeight, list.scrollTop, list.clientHeight);
-                        }
-                    }}
-                >
-                    {messages.length === 0 && (
-                        <div className="empty">
-                            <h2>{context.name}</h2>
-                            <p>
-                                This chat starts with the “{context.name}” context. Write a message below, or click a
-                                word on the left to add it.
-                            </p>
-                        </div>
-                    )}
-                    {messages.map((message, index) => (
-                        <div key={index} className={`message ${message.role}`}>
-                            {message.role === "assistant"
-                                ? (
-                                    <>
-                                        {/* to the left of the reply; one that is still arriving is not read yet */}
-                                        <button
-                                            className="icon-button message-speak"
-                                            data-speak={speakMark(chatId, index)}
-                                            onClick={() => onSpeak(chatId, index, message.content)}
-                                            disabled={!message.content || (busy && index === messages.length - 1)}
-                                            title="Read aloud"
-                                            aria-label="Read this reply aloud"
-                                        >
-                                            🔊
-                                        </button>
-                                        <div className="message-body">
-                                            <div className="message-text">
-                                                {message.content
-                                                    ? <Markdown>{message.content}</Markdown>
-                                                    : <span className="typing">…</span>}
+                <div className="chat-body">
+                    <SideList label="Chats">{list}</SideList>
+                    <div
+                        className="messages"
+                        data-selectable
+                        data-where={JSON.stringify({ kind: "chat", id: chat.id } satisfies Where)}
+                        ref={listRef}
+                        onScroll={(event) => {
+                            const list = event.currentTarget;
+                            // nothing is shown, and so nothing scrolled, while another activity is
+                            if (list.clientHeight > 0) {
+                                atEnd.current = isAtEnd(list.scrollHeight, list.scrollTop, list.clientHeight);
+                            }
+                        }}
+                    >
+                        {messages.length === 0 && (
+                            <div className="empty">
+                                <h2>{context.name}</h2>
+                                <p>
+                                    This chat starts with the “{context.name}” context. Write a message below, or click
+                                    a word on the left to add it.
+                                </p>
+                            </div>
+                        )}
+                        {messages.map((message, index) => (
+                            <div key={index} className={`message ${message.role}`}>
+                                {message.role === "assistant"
+                                    ? (
+                                        <>
+                                            {/* to the left of the reply; one that is still arriving is not read yet */}
+                                            <button
+                                                className="icon-button message-speak"
+                                                data-speak={speakMark(chatId, index)}
+                                                onClick={() => onSpeak(chatId, index, message.content)}
+                                                disabled={!message.content || (busy && index === messages.length - 1)}
+                                                title="Read aloud"
+                                                aria-label="Read this reply aloud"
+                                            >
+                                                🔊
+                                            </button>
+                                            <div className="message-body">
+                                                <div className="message-text">
+                                                    {message.content
+                                                        ? <Markdown>{message.content}</Markdown>
+                                                        : <span className="typing">…</span>}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </>
-                                )
-                                : message.content}
-                        </div>
-                    ))}
-                    {error && <div className="message error" role="alert">{error}</div>}
+                                        </>
+                                    )
+                                    : message.content}
+                            </div>
+                        ))}
+                        {error && <div className="message error" role="alert">{error}</div>}
+                    </div>
                 </div>
 
                 {!canAsk(settings.model, settings.apiKey) && (

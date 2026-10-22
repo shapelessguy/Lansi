@@ -142,6 +142,11 @@ they like. The app keeps the time: once it is up, the exercise is finished,
 and nothing the learner sends after is taken. It is told so that it can
 say so, and is best not made shorter or longer by the exercise.
 
+In an exam, `exam` not empty, an exercise tells nothing of how what was
+answered went until the evaluation is over, as an exam does not: once an
+instance is answered, it shows that it was, as `withheld`, and goes on; the
+grades are kept all the same, and shown with the results of the evaluation.
+
 `exam` is, when the exercise is a part of an evaluation, a mock exam of a
 level, what the exam says that part is: its instructions to the learner,
 what its texts and tasks are like, and an example of one, which the
@@ -444,7 +449,7 @@ class Model(Protocol):
 class Step:
     state: Any = None
     show: Any = None
-    graded: list[dict[str, str]] = field(default_factory=list)
+    graded: list[dict[str, Any]] = field(default_factory=list)
     results: Any = None
     written: dict[str, list[str]] = field(default_factory=dict)
     scores: dict[str, float] | None = None
@@ -493,12 +498,14 @@ def overall(results: list[str]) -> str:
     return "partial"
 
 
-def grade_of(grades: list[dict[str, str]]) -> dict[str, str]:
+def grade_of(grades: list[dict[str, str]], about: str = "") -> dict[str, Any]:
     """The one grade of an instance of several answers, each graded as
     `grade` grades one: its result `overall`, and the tasks, the answers
     and the correction of each, one to a line by their numbers, where each
     that was right is said to be, and the notes by the number of the
-    answer."""
+    answer; with each of the grades as its `parts`, as it is shown, and
+    what the learner had to go on, `about`, such as the text the questions
+    were on, without which what was answered is not understood."""
     result = overall([each["result"] for each in grades])
     corrected = [
         "(right)" if each["result"] == "right" else each["correction"]
@@ -509,7 +516,7 @@ def grade_of(grades: list[dict[str, str]]) -> dict[str, str]:
         for number, each in enumerate(grades, start=1)
         if each["note"]
     ]
-    return grade(
+    joined: dict[str, Any] = grade(
         result,
         numbered([each["answer"] or "(nothing)" for each in grades]),
         "" if result == "right" else numbered(corrected),
@@ -518,6 +525,11 @@ def grade_of(grades: list[dict[str, str]]) -> dict[str, str]:
         if any(each["task"] for each in grades)
         else "",
     )
+    # each answer as it was graded, so that it can be shown on its own
+    joined["parts"] = [dict(each) for each in grades]
+    if about:
+        joined["about"] = about
+    return joined
 
 
 def score_of(results: list[str]) -> float | None:

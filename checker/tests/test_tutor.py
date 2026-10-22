@@ -24,6 +24,7 @@ from tutor import (
     USUAL_KNOWN_WORDS,
     USUAL_RECAPS,
     Done,
+    LastCall,
     Remembered,
     Tool,
     ToolError,
@@ -527,6 +528,57 @@ def test_each_request_is_told_as_it_was_sent_and_with_what_came_of_it() -> None:
     }
 
 
+def test_the_last_call_is_the_last_request_of_the_turn_with_its_tools() -> None:
+    stream = FakeStream(
+        called("echo", {"word": "Hund"}),
+        [*called("echo", {"word": "Katze"}, "call-2"), {"choices": []}],
+        answered("Done."),
+    )
+    last = LastCall("What should I practise?")
+    second = LastCall("")
+    events: list[dict[str, Any]] = []
+
+    def emit(event: dict[str, Any]) -> None:
+        events.append(event)
+        last.follow(event)
+        # what the turn tells after its second request, which called a tool
+        if sum(each["type"] == "call" for each in events) == 2:
+            second.follow(event)
+
+    converse(ASKED, [echo_tool()], MODEL, "Be a tutor.", emit, stream)
+
+    record = last.record()
+    assert record is not None
+    assert record["label"] == "What should I practise?"
+    call = record["call"]
+    assert call["id"] == 3
+    assert call["request"]["messages"][-1]["role"] == "tool"
+    assert call["reply"]["message"] == {"role": "assistant", "content": "Done."}
+    assert call["reply"]["usage"] == {"prompt_tokens": 9, "completion_tokens": 3}
+    assert call["tools"] == []
+    kept = second.record()
+    assert kept is not None
+    assert kept["call"]["tools"] == [
+        {
+            "id": "call-2",
+            "name": "echo",
+            "doing": "Echoing",
+            "arguments": '{"word": "Katze"}',
+            "content": 'echoed {"word": "Katze"}',
+            "ms": ANY,
+            "failed": False,
+        }
+    ]
+
+
+def test_the_last_call_is_none_when_no_request_was_made() -> None:
+    last = LastCall("Hallo")
+
+    last.follow({"type": "tool", "id": "log", "name": "", "doing": "Writing the log"})
+
+    assert last.record() is None
+
+
 def test_a_request_that_failed_is_told_with_why() -> None:
     stream = FakeStream(ProfileError("OpenRouter refused the request (500): down"))
     events: list[dict[str, Any]] = []
@@ -577,10 +629,10 @@ def test_a_reply_that_says_nothing_of_what_to_remember_is_an_error() -> None:
 
 
 def test_the_tutor_is_told_the_memories_it_has() -> None:
-    told = instructions("German", "English", "B1", MEMORIES)
+    told = instructions("German", "B1", MEMORIES)
 
     assert "- [1971-01-01] Likes football." in told
-    assert "do not remember anything" in instructions("German", "English", "B1", [])
+    assert "do not remember anything" in instructions("German", "B1", [])
 
 
 def test_a_recap_of_a_chat_is_what_the_model_wrote_however_long() -> None:
@@ -637,7 +689,7 @@ def test_the_tutor_is_told_how_many_recaps_and_entries_there_are_but_not_what_th
         },
     ]
 
-    told = instructions("German", "English", "B1", memories)
+    told = instructions("German", "B1", memories)
 
     assert "- [1971-01-01] Likes football." in told
     for kept in ("Chat.", "Anki first.", "A mock exam of A2.", "Chapter 3 read."):
@@ -648,7 +700,7 @@ def test_the_tutor_is_told_how_many_recaps_and_entries_there_are_but_not_what_th
 
 
 def test_the_tutor_with_no_strategy_is_told_to_ask_the_learner_for_one() -> None:
-    told = instructions("German", "English", "B1", MEMORIES)
+    told = instructions("German", "B1", MEMORIES)
 
     assert "ask them what they would like to do in the lessons to come" in told
     assert "first lesson with your student" in told
@@ -740,9 +792,7 @@ def test_only_a_strategy_or_an_entry_of_the_calendar_is_crossed_out(
 
 
 def test_the_tutor_is_told_the_tone_set_last_with_its_memories_going_first() -> None:
-    told = instructions(
-        "German", "English", "B1", MEMORIES, "  Friendly,\n but   direct. "
-    )
+    told = instructions("German", "B1", MEMORIES, "  Friendly,\n but   direct. ")
 
     assert told.index("Likes football.") < told.index("Friendly, but direct.")
     assert "how much to write, in every message" in told
@@ -752,7 +802,7 @@ def test_the_tutor_is_told_the_tone_set_last_with_its_memories_going_first() -> 
 
 
 def test_the_tutor_is_told_no_tone_when_none_is_set() -> None:
-    told = instructions("German", "English", "B1", MEMORIES, " ")
+    told = instructions("German", "B1", MEMORIES, " ")
 
     assert "Your student set how you are to talk" not in told
     assert "\n\n\n" not in told

@@ -97,8 +97,13 @@ export function mount(root, exercise) {
                 element("div", { className: inline ? "options inline" : "options" }, ...options),
             );
         });
-        const check = element("button", { className: "primary", textContent: "Check" });
-        check.onclick = () => send({ answers: chosen }, check, "Checking…");
+        // in an exam, nothing is checked before the end: it goes on to the next
+        const last = show.at + 1 >= show.total;
+        const check = element("button", {
+            className: "primary",
+            textContent: show.exam ? (last ? "Done" : "Next") : "Check",
+        });
+        check.onclick = () => send({ answers: chosen }, check, show.exam ? "Next…" : "Checking…");
         // what is left out, such as what goes beside a text that has nothing beside it, is null
         root.replaceChildren(
             ...[
@@ -147,5 +152,17 @@ export function mount(root, exercise) {
         }
     }
 
-    exercise.onShow((show) => (show.feedback ? reviewing(show) : answering(show)));
+    /**
+     * In an exam, what was answered last, which tells nothing of how it went:
+     * the part is handed in at once, or, if more is to come, it goes on to it.
+     */
+    function withheld(show) {
+        root.replaceChildren(element("p", { className: "muted", textContent: "Handing in…" }), error);
+        const going = show.more ? exercise.act({ next: true }) : Promise.resolve(exercise.finish());
+        going.catch((failed) => {
+            error.textContent = failed.message;
+        });
+    }
+
+    exercise.onShow((show) => (show.withheld ? withheld(show) : show.feedback ? reviewing(show) : answering(show)));
 }

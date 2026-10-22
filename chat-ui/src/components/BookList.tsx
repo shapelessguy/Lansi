@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { BooksState } from "../App";
 import { fetchCover, type ListedBook } from "../lib/books";
+import { ask } from "../lib/dialogs";
 
 interface Props {
     state: BooksState;
@@ -45,9 +46,9 @@ export function BookList(
     const fileInput = useRef<HTMLInputElement>(null);
 
     function confirmDelete(book: ListedBook) {
-        if (window.confirm(`Delete “${book.title}”? This can't be undone.`)) {
-            onDelete(book.id);
-        }
+        void ask(`Delete “${book.title}”?`, { detail: "This can't be undone." }).then((agreed) =>
+            agreed && onDelete(book.id)
+        );
     }
 
     return (

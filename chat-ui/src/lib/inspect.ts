@@ -2,6 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { OPENROUTER_URL } from "./models";
+import { checkerFetch } from "./session";
 import type { ModelReply, ModelRequest, TutorEvent, TutorMessage } from "./tutor";
 
 /**
@@ -44,6 +45,32 @@ export interface TracedTool {
 }
 
 export const EMPTY_TRACE: Trace = { exchanges: [] };
+
+/** The last request the tutor made to its model, as the server keeps it: one for the user, of the chat it was made in. */
+interface KeptRequest {
+    label: string;
+    at: number;
+    call: TracedCall;
+}
+
+/**
+ * The trace of the chat with the tutor `chatId` as it is taken up again:
+ * the last request the tutor made in it, if it is the one the server kept,
+ * and nothing otherwise.
+ */
+export async function fetchLastRequest(chatId: string): Promise<Trace> {
+    const response = await checkerFetch(`/tutor/chats/${encodeURIComponent(chatId)}/request`);
+    if (!response.ok) {
+        return EMPTY_TRACE;
+    }
+    const { request } = await response.json() as { request: KeptRequest | null };
+    return request ? { exchanges: [{ label: request.label, at: request.at, calls: [request.call] }] } : EMPTY_TRACE;
+}
+
+/** The last request of `trace` to the model, if it made one. */
+export function lastCall(trace: Trace): TracedCall | null {
+    return trace.exchanges.flatMap((exchange) => exchange.calls).at(-1) ?? null;
+}
 
 /** `trace` with a new exchange begun, which the events after it belong to. */
 export function begun(trace: Trace, label: string, at: number): Trace {
@@ -101,6 +128,16 @@ export function traced(trace: Trace, event: TutorEvent): Trace {
 
 /** What a part of the context is, which it is coloured by. */
 export type PartKind = "system" | "tools" | "user" | "assistant" | "reasoning" | "tool";
+
+/** What each kind of part of the context is called. */
+export const PART_KINDS: Record<PartKind, string> = {
+    system: "System prompt",
+    tools: "Tool definitions",
+    user: "Learner",
+    assistant: "Tutor",
+    reasoning: "Reasoning handed back",
+    tool: "Tool results",
+};
 
 /** A part of what the model was given, with how long it is. */
 export interface Part {
@@ -169,6 +206,40 @@ export function tokensOf(parts: Part[], promptTokens: number | null): number[] {
         return parts.map((each) => Math.ceil(each.chars / CHARS_PER_TOKEN));
     }
     return parts.map((each) => Math.round((each.chars / chars) * promptTokens));
+}
+
+/** The tokens of the parts of each kind, in the order of `PART_KINDS`, leaving out the kinds there are none of. */
+export function byKind(parts: Part[], tokens: number[]): { kind: PartKind; tokens: number }[] {
+    return (Object.keys(PART_KINDS) as PartKind[])
+        .map((kind) => ({
+            kind,
+            tokens: parts.reduce((sum, each, index) => sum + (each.kind === kind ? tokens[index] : 0), 0),
+        }))
+        .filter((each) => each.tokens > 0);
+}
+
+/** An arc of a ring, as shares of the whole way round: where it starts and how long it is. */
+export interface Arc {
+    kind: PartKind;
+    start: number;
+    length: number;
+}
+
+/**
+ * The arcs of a ring that shows how much of the context window `window` a
+ * request took, a kind after the other, as `kinds` are. Without a window
+ * known, the ring is filled, and shows only how the context is made up.
+ */
+export function arcsOf(kinds: { kind: PartKind; tokens: number }[], window: number | null): Arc[] {
+    const counted = kinds.reduce((sum, each) => sum + each.tokens, 0);
+    const whole = window && window > 0 ? Math.max(window, counted) : counted;
+    let start = 0;
+    return kinds.map(({ kind, tokens }) => {
+        const length = whole > 0 ? tokens / whole : 0;
+        const arc = { kind, start, length };
+        start += length;
+        return arc;
+    });
 }
 
 /** The usage of a request, as numbers, with those the model did not report as null. */

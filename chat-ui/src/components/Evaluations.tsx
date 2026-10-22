@@ -10,21 +10,19 @@ import {
     describeLength,
     endEvaluation,
     type Evaluation,
-    type EvaluationResult,
     type ExamLevel,
-    type ExamModule,
     fetchEvaluations,
     fetchLevels,
     finishPart,
     LENGTHS,
     moduleTitle,
-    shownScores,
     startEvaluation,
     startPart,
 } from "../lib/evaluations";
 import { type ExerciseInfo, fetchExercises, fetchSession, type Learner, type PracticeSession } from "../lib/practice";
 import type { Settings } from "../lib/settings";
 import type { BackgroundTask } from "../lib/tasks";
+import { EvaluationReview, passedOf } from "./EvaluationsDone";
 import { ExerciseView } from "./ExerciseView";
 import { LevelBadge } from "./Level";
 import { TimeLeft } from "./TimeLeft";
@@ -43,38 +41,6 @@ interface Props {
     onEnded: () => void;
     /** An evaluation started elsewhere, such as one the tutor offered, to be taken up here, with a number that tells it from the one before. */
     opening?: { evaluation: Evaluation; nonce: number } | null;
-}
-
-function day(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-}
-
-/** Whether it was passed, in a word. */
-function passedOf(result: EvaluationResult): string {
-    return result.passed === null ? "not every module done" : result.passed ? "passed" : "not passed";
-}
-
-/** The scores of an evaluation, each with a bar. */
-function ScoreTable({ result, modules }: { result: EvaluationResult; modules: ExamModule[] }) {
-    const shown = shownScores(result, modules);
-    if (shown.length === 0) {
-        return <p className="practice-detail">Nothing was scored.</p>;
-    }
-    return (
-        <dl className="evaluation-scores">
-            {shown.map(({ name, label, value }) => (
-                <div key={name} className={name.includes("_") ? "evaluation-score criterion" : "evaluation-score"}>
-                    <dt>{label}</dt>
-                    <dd>
-                        <span className="evaluation-meter">
-                            <span className={value >= 60 ? "pass" : ""} style={{ width: `${value}%` }} />
-                        </span>
-                        <span>{Math.round(value)}</span>
-                    </dd>
-                </div>
-            ))}
-        </dl>
-    );
 }
 
 type Loaded<T> = { status: "loading" } | { status: "error"; message: string } | { status: "ready"; items: T[] };
@@ -100,7 +66,6 @@ export function Evaluations(
     const [error, setError] = useState<string | null>(null);
     // the evaluation that ended last, to say how it went
     const [ended, setEnded] = useState<Evaluation | null>(null);
-    const [opened, setOpened] = useState<string | null>(null);
 
     const loadHistory = useCallback(() => {
         fetchEvaluations().then(setHistory, () => undefined);
@@ -210,6 +175,26 @@ export function Evaluations(
             .finally(() => setBusy(false));
     }
 
+    // In an exam there is nothing to choose: each part is opened as soon as it
+    // is the one to do, the first as the evaluation starts and each other
+    // once the one before was handed in. One that failed to open waits for
+    // the learner to try again.
+    const opened = useRef("");
+    useEffect(() => {
+        if (!evaluation || busy || error) {
+            return;
+        }
+        const next = currentPart(evaluation);
+        const part = next === null ? null : evaluation.parts[next];
+        const shown = part && session && part.status === "running" && part.session === session.id;
+        const key = `${evaluation.id}:${next}`;
+        if (next === null || shown || opened.current === key) {
+            return;
+        }
+        opened.current = key;
+        openPart(evaluation, next);
+    });
+
     if (evaluation) {
         const at = currentPart(evaluation);
         const part = at === null ? null : evaluation.parts[at];
@@ -316,7 +301,8 @@ export function Evaluations(
                         <h2>
                             {ended.plan.exam}: {passedOf(ended.result)}
                         </h2>
-                        <ScoreTable result={ended.result} modules={ended.plan.modules} />
+                        {/* what was not right is told only now, as an exam does */}
+                        <EvaluationReview evaluation={ended} />
                         <p className="practice-detail">
                             The log of the evaluation is being written, with these scores.
                         </p>
@@ -407,37 +393,6 @@ export function Evaluations(
                         {busy ? "Starting…" : "Start the evaluation"}
                     </button>
                 </section>
-                {history.length > 0 && (
-                    <section className="history">
-                        <h2>Past evaluations</h2>
-                        <ul className="evaluation-history">
-                            {history.filter((each) => each.status !== "running").map((each) => (
-                                <li key={each.id}>
-                                    <button
-                                        className="practice-choice"
-                                        aria-expanded={opened === each.id}
-                                        onClick={() => setOpened(opened === each.id ? null : each.id)}
-                                    >
-                                        <LevelBadge level={each.level} />
-                                        <span className="practice-title">
-                                            {day(each.started_at)} · {describeLength(each.length)}
-                                            {each.timed ? ", timed" : ""}
-                                        </span>
-                                        <span className="practice-detail">
-                                            {typeof each.result.scores.total === "number"
-                                                ? `${Math.round(each.result.scores.total)} · `
-                                                : ""}
-                                            {passedOf(each.result)}
-                                        </span>
-                                    </button>
-                                    {opened === each.id && (
-                                        <ScoreTable result={each.result} modules={each.plan.modules} />
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
-                    </section>
-                )}
             </div>
         </div>
     );

@@ -164,7 +164,6 @@ class Tool:
 
 def instructions(
     language: str,
-    into: str,
     level: str,
     memories: list[dict[str, Any]],
     tone: str = "",
@@ -212,7 +211,6 @@ def instructions(
     told_all = PROMPTS(
         "tutor.system",
         language=language,
-        into=into,
         level=level or "unknown",
         today=today,
         tone=PROMPTS("tutor.tone", tone=" ".join(tone.split())) if tone.strip() else "",
@@ -423,6 +421,63 @@ class Took:
             return None if moment is None else round((moment - self.started) * 1000)
 
         return {"first_ms": since(self.first), "total_ms": since(time.monotonic())}
+
+
+class LastCall:
+    """The last request of a turn to the model, as the events of the turn
+    tell it: what it was sent, what came of it and the tools it called, as
+    the inspector of the chat shows a request, to be kept and looked into
+    again once the chat is taken up."""
+
+    def __init__(self, label: str) -> None:
+        # what the turn was, in a few words, and when it started, in
+        # milliseconds since the epoch, as the inspector has them
+        self.label = label
+        self.at = round(time.time() * 1000)
+        self.call: dict[str, Any] | None = None
+
+    def follow(self, event: dict[str, Any]) -> None:
+        kind = event.get("type")
+        if kind == "call":
+            self.call = {
+                "id": event["id"],
+                "at": round(event["at"] * 1000),
+                "request": event["request"],
+                "reply": None,
+                "tools": [],
+            }
+        elif self.call is None:
+            return
+        elif kind == "call_done":
+            self.call["reply"] = {
+                name: value
+                for name, value in event.items()
+                if name not in ("type", "id")
+            }
+        elif kind == "tool":
+            self.call["tools"].append(
+                {
+                    "id": event["id"],
+                    "name": event["name"],
+                    "doing": event["doing"],
+                    "arguments": event.get("arguments") or "",
+                    "content": None,
+                    "ms": None,
+                    "failed": False,
+                }
+            )
+        elif kind == "tool_done":
+            for tool in self.call["tools"]:
+                if tool["id"] == event["id"]:
+                    tool["content"] = event.get("content")
+                    tool["ms"] = event.get("ms")
+                    tool["failed"] = event["failed"]
+
+    def record(self) -> dict[str, Any] | None:
+        """The request with what the turn was, or None if none was made."""
+        if self.call is None:
+            return None
+        return {"label": self.label, "at": self.at, "call": self.call}
 
 
 def _gather(

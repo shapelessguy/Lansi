@@ -13,6 +13,7 @@ import {
 } from "../lib/anki";
 import { newId } from "../lib/ids";
 
+import { ask } from "../lib/dialogs";
 import { fetchOpenRouterModels, type ListedModel, type ModelKind } from "../lib/models";
 import { isAskable, newQuestion, type ProfileQuestion, type QuestionOption } from "../lib/questions";
 import type { WordSet } from "../lib/sets";
@@ -159,8 +160,10 @@ function AnkiAccount(
                         type="button"
                         disabled={busy}
                         onClick={() =>
-                            window.confirm("Unlink your Anki account? Its words stay in the vocabulary.")
-                            && settle(unlinkAnki())}
+                            void ask("Unlink your Anki account?", {
+                                detail: "Its words stay in the vocabulary.",
+                                confirm: "Unlink",
+                            }).then((agreed) => agreed && settle(unlinkAnki()))}
                     >
                         Unlink
                     </button>

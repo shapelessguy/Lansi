@@ -15,6 +15,8 @@ from storage import UserStore
 # was before: the instances the exercises made, what each replays, and
 # whether a session is hidden.
 BEFORE_INSTANCES = """
+ALTER TABLE grades DROP COLUMN about;
+ALTER TABLE grades DROP COLUMN parts;
 ALTER TABLE sessions DROP COLUMN hidden;
 DROP TABLE instances;
 ALTER TABLE session_exercises DROP COLUMN replay;
@@ -749,6 +751,34 @@ def test_a_picture_an_instance_holds_is_kept_as_a_file_beside_it(
     assert list(folder.iterdir()) == []
 
 
+def test_a_grade_of_several_answers_is_kept_with_each_as_it_was_graded(
+    store: UserStore,
+) -> None:
+    store.start_session("s1", "German", "dativ", [], {"comprehension": 1})
+    parts = [
+        {"result": "right", "task": "Wann?", "answer": "Samstag", "correction": ""},
+        {
+            "result": "wrong",
+            "task": "Wo?",
+            "answer": "",
+            "correction": "Im Park",
+            "note": "",
+        },
+    ]
+
+    store.add_grades(
+        "s1", "comprehension", [{"result": "partial", "answer": "x", "parts": parts}]
+    )
+
+    [kept] = store.grades("s1")
+    assert [(each["task"], each["result"], each["note"]) for each in kept["parts"]] == [
+        ("Wann?", "right", ""),
+        ("Wo?", "wrong", ""),
+    ]
+    with pytest.raises(ValueError):
+        store.add_grades("s1", "comprehension", [{"result": "right", "parts": [{}]}])
+
+
 def test_every_starter_topic_has_an_icon() -> None:
     assert all(starter_icon(title) for title, _ in STARTER_TOPICS)
 
@@ -1269,3 +1299,30 @@ def test_texts_can_be_kept_where_there_were_memories_before_them(
 
     assert [each["title"] for each in store.texts()] == ["Hallo"]
     assert [each["content"] for each in store.memories()] == ["Likes football."]
+
+
+def test_one_last_tutor_request_is_kept_and_is_of_the_chat_it_was_made_in(
+    store: UserStore,
+) -> None:
+    store.save_last_tutor_request("chat-1", {"label": "Hallo", "call": {"id": 1}})
+    store.save_last_tutor_request("chat-2", {"label": "Tschüss", "call": {"id": 2}})
+
+    assert store.last_tutor_request("chat-1") is None
+    assert store.last_tutor_request("chat-2") == {
+        "label": "Tschüss",
+        "call": {"id": 2},
+        "chat": "chat-2",
+    }
+
+
+def test_the_last_tutor_request_goes_with_its_chat_when_it_is_deleted(
+    store: UserStore,
+) -> None:
+    store.save_last_tutor_request("chat-1", {"label": "Hallo", "call": {"id": 1}})
+
+    store.delete_tutor_chat("chat-2")
+    kept = store.last_tutor_request("chat-1")
+    store.delete_tutor_chat("chat-1")
+
+    assert kept is not None
+    assert store.last_tutor_request("chat-1") is None

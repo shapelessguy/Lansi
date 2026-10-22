@@ -42,8 +42,8 @@ test("a stored layout is kept as it was left", () => {
     const stored = {
         libraryOpen: false,
         logsOpen: true,
-        libraryTab: "memories",
-        logsTab: "sessions",
+        libraryTab: "books",
+        logsTab: "memories",
         panel: "checks",
         activity: "texts",
         text: "t1",
@@ -51,8 +51,8 @@ test("a stored layout is kept as it was left", () => {
     expect(normalizeLayout(stored, 1600)).toEqual({
         libraryOpen: false,
         logsOpen: true,
-        libraryTab: "memories",
-        logsTab: "sessions",
+        libraryTab: "books",
+        logsTab: "memories",
         panel: "checks",
         activity: "texts",
         text: "t1",

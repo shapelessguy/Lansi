@@ -3,6 +3,7 @@
 
 import { useMemo, useState } from "react";
 
+import { ask } from "../lib/dialogs";
 import {
     type CategoryRule,
     dayOf,
@@ -125,7 +126,10 @@ export function SetEditor({ set: initial, kept, vocabulary, onSave, onDelete, on
                     <b>{countWords(members)}</b> of {countWords(vocabulary.words)} words
                 </span>
                 {kept && (
-                    <button onClick={() => window.confirm(`Delete the set “${initial.name}”?`) && onDelete()}>
+                    <button
+                        onClick={() =>
+                            void ask(`Delete the set “${initial.name}”?`).then((agreed) => agreed && onDelete())}
+                    >
                         Delete
                     </button>
                 )}

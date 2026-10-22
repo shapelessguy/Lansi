@@ -3,12 +3,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { ask } from "../lib/dialogs";
 import { deleteMemory, fetchMemories, type Memory } from "../lib/tutor";
 
 interface Props {
     /** Changes when memories may have been made or removed, so that they are listed again. */
     revision: number;
-    onCount: (count: number) => void;
 }
 
 type Loaded =
@@ -28,23 +28,23 @@ type Loaded =
  * day, the days gone by greyed. What was removed is listed apart, with why
  * and by whom.
  */
-export function MemoryList({ revision, onCount }: Props) {
+export function MemoryList({ revision }: Props) {
     const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
     const load = useCallback(() => {
         fetchMemories().then(
-            ({ memories, removed }) => {
-                setLoaded({ status: "ready", memories, removed });
-                onCount(memories.filter((memory) => memory.kind !== "recap").length);
-            },
+            ({ memories, removed }) => setLoaded({ status: "ready", memories, removed }),
             (failed: Error) => setLoaded({ status: "error", message: failed.message }),
         );
-    }, [onCount]);
+    }, []);
     useEffect(load, [load, revision]);
 
     function forget(memory: Memory) {
-        if (window.confirm(`Have the tutor forget this?\n\n${memory.content}`)) {
-            void deleteMemory(memory.id).then(load);
-        }
+        void ask("Have the tutor forget this?", { detail: memory.content, confirm: "Forget" }).then(async (agreed) => {
+            if (agreed) {
+                await deleteMemory(memory.id);
+                load();
+            }
+        });
     }
 
     if (loaded.status === "loading") {
@@ -91,7 +91,7 @@ export function MemoryList({ revision, onCount }: Props) {
     return (
         <div className="panel-body memories">
             <details className="memory-group" open>
-                <summary>General, {facts.length}</summary>
+                <summary>General</summary>
                 {facts.length === 0
                     ? (
                         <p className="sidebar-note">
@@ -102,7 +102,7 @@ export function MemoryList({ revision, onCount }: Props) {
                     : listed([...facts].reverse())}
             </details>
             <details className="memory-group" open>
-                <summary>Strategy, {strategies.length}</summary>
+                <summary>Strategy</summary>
                 {strategies.length === 0
                     ? (
                         <p className="sidebar-note">
@@ -113,7 +113,7 @@ export function MemoryList({ revision, onCount }: Props) {
                     : listed([...strategies].reverse())}
             </details>
             <details className="memory-group" open>
-                <summary>Calendar, {calendar.length}</summary>
+                <summary>Calendar</summary>
                 {calendar.length === 0
                     ? (
                         <p className="sidebar-note">
@@ -125,13 +125,13 @@ export function MemoryList({ revision, onCount }: Props) {
             </details>
             {recaps.length > 0 && (
                 <details className="memory-group">
-                    <summary>Recaps of the lessons, {recaps.length}</summary>
+                    <summary>Recaps of the lessons</summary>
                     {listed([...recaps].reverse())}
                 </details>
             )}
             {loaded.removed.length > 0 && (
                 <details className="memory-group">
-                    <summary>Forgotten, {loaded.removed.length}</summary>
+                    <summary>Forgotten</summary>
                     <ul className="memory-list">
                         {[...loaded.removed].reverse().map((memory) => (
                             <li key={memory.id} className="memory removed">

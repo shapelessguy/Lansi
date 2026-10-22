@@ -5,16 +5,16 @@
 export type Panel = "checks" | "usage" | "settings";
 
 /** What the main area shows, as the tabs at the top choose it. */
-export type Activity = "tutor" | "inspector" | "chat" | "books" | "texts" | "practice" | "evaluations";
+export type Activity = "tutor" | "chat" | "books" | "texts" | "practice" | "evaluations";
 
 /** Which panels are shown at the sides, and what the main area shows. */
 /** The tabs of the library, on the left. */
-export type LibraryTab = "words" | "vocabulary" | "memories" | "texts" | "chats" | "books";
+export type LibraryTab = "words" | "vocabulary" | "books";
 /** The tabs of the panel of the logs, on the left in place of the library. */
-export type LogsTab = "logs" | "exercises" | "sessions";
+export type LogsTab = "logs" | "memories" | "exercises" | "sessions" | "evaluations";
 
 export interface Layout {
-    /** Whether the panel on the left, with the words, the chats and the texts, is shown. */
+    /** Whether the panel on the left, with the words and the books, is shown. */
     libraryOpen: boolean;
     /** Whether the logs are shown on the left, in place of the library. */
     logsOpen: boolean;
@@ -32,9 +32,9 @@ export interface Layout {
 
 const STORAGE_KEY = "chat-ui.layout";
 const PANELS: readonly unknown[] = ["checks", "usage", "settings"];
-const LIBRARY_TABS: readonly unknown[] = ["words", "vocabulary", "memories", "texts", "chats", "books"];
-const LOGS_TABS: readonly unknown[] = ["logs", "exercises", "sessions"];
-const ACTIVITIES: readonly unknown[] = ["tutor", "inspector", "chat", "books", "texts", "practice", "evaluations"];
+const LIBRARY_TABS: readonly unknown[] = ["words", "vocabulary", "books"];
+const LOGS_TABS: readonly unknown[] = ["logs", "memories", "exercises", "sessions", "evaluations"];
+const ACTIVITIES: readonly unknown[] = ["tutor", "chat", "books", "texts", "practice", "evaluations"];
 
 /**
  * The layout for a window that wide, in pixels, when none has been chosen

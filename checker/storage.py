@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 25
+SCHEMA_VERSION = 27
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -496,6 +496,18 @@ ALTER TABLE session_exercises ADD COLUMN replay TEXT;
 _HIDDEN = """
 ALTER TABLE sessions ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
 """
+# What came with version 26: the parts of a grade of an instance of several
+# answers, such as a text with its questions, each graded as a grade is, in
+# JSON, so that each is shown as it was answered; empty for one of a single
+# answer.
+_GRADE_PARTS = """
+ALTER TABLE grades ADD COLUMN parts TEXT NOT NULL DEFAULT '[]';
+"""
+# What came with version 27: what the learner had to go on in what a grade
+# is of, such as the text the questions were on, which is shown with it.
+_GRADE_ABOUT = """
+ALTER TABLE grades ADD COLUMN about TEXT NOT NULL DEFAULT '';
+"""
 # how far an exercise the tutor offered got
 OFFER_STATUSES = ("running", "done", "abandoned")
 
@@ -585,6 +597,18 @@ def _pictures_in(value: Any, folder: Path) -> Any:
         data = base64.b64encode((folder / name).read_bytes()).decode()
         return f"data:{value['type']};base64,{data}"
     return {key: _pictures_in(each, folder) for key, each in value.items()}
+
+
+# what a grade says of what was answered, each text
+_GRADE_TEXTS = ("task", "answer", "correction", "note")
+
+
+def _check_grade(grade: object) -> None:
+    """Raises ValueError for what is not a grade."""
+    if not isinstance(grade, dict) or grade.get("result") not in RESULTS:
+        raise ValueError(f"the result of a grade is one of {', '.join(RESULTS)}")
+    if not all(isinstance(grade.get(name, ""), str) for name in _GRADE_TEXTS):
+        raise ValueError("the task, answer, correction and note of a grade are text")
 
 
 def read_day(value: object) -> str:
@@ -714,6 +738,8 @@ class UserStore:
         self._speech = self._directory / "speech"
         self._icons = self._directory / "topics"
         self._instances = self._directory / "exercises"
+        # the last request the tutor made to its model, for the inspector
+        self._last_request = self._directory / "tutor-request.json"
         self._now = now
         self._db = sqlite3.connect(
             str(self._directory / "app.db"), check_same_thread=False
@@ -772,6 +798,10 @@ class UserStore:
                 self._db.executescript(_INSTANCES)
             if version < 25:
                 self._db.executescript(_HIDDEN)
+            if version < 26:
+                self._db.executescript(_GRADE_PARTS)
+            if version < 27:
+                self._db.executescript(_GRADE_ABOUT)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -1189,13 +1219,45 @@ class UserStore:
             self._db.execute("DELETE FROM learner_texts WHERE id = ?", (text_id,))
 
     def delete_tutor_chat(self, chat_id: str) -> None:
-        """Remove a chat with the tutor, and the audio of what was read aloud
-        of it, which is kept as that of a chat is."""
+        """Remove a chat with the tutor, the audio of what was read aloud
+        of it, which is kept as that of a chat is, and its last request to
+        the model, if it is the one kept."""
         with self._lock, self._db:
             self._db.execute("DELETE FROM tutor_chats WHERE id = ?", (chat_id,))
             self._db.execute("DELETE FROM book_speech WHERE book_id = ?", (chat_id,))
+            if self._last_request_of(chat_id) is not None:
+                self._last_request.unlink(missing_ok=True)
         if is_id(chat_id):
             shutil.rmtree(self._speech / chat_id, ignore_errors=True)
+
+    def save_last_tutor_request(self, chat_id: str, record: dict[str, Any]) -> None:
+        """Keep `record`, the last request the tutor made to its model in
+        the chat `chat_id`, as the inspector shows it, in place of the one
+        kept before: one is kept for the user, of whatever chat."""
+        written = self._last_request.with_suffix(".tmp")
+        with self._lock:
+            written.write_text(
+                json.dumps({**record, "chat": chat_id}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            written.replace(self._last_request)
+
+    def last_tutor_request(self, chat_id: str) -> dict[str, Any] | None:
+        """The last request the tutor made to its model, if it was made in
+        the chat `chat_id`."""
+        with self._lock:
+            return self._last_request_of(chat_id)
+
+    def _last_request_of(self, chat_id: str) -> dict[str, Any] | None:
+        try:
+            record = json.loads(self._last_request.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return (
+            record
+            if isinstance(record, dict) and record.get("chat") == chat_id
+            else None
+        )
 
     # books
 
@@ -1778,30 +1840,46 @@ class UserStore:
         return json.loads(row[0]) if row and row[0] is not None else None
 
     def add_grades(
-        self, session_id: str, exercise: str, grades: list[dict[str, str]]
+        self, session_id: str, exercise: str, grades: list[dict[str, Any]]
     ) -> None:
         """Keep the grades an exercise reported, each a `{"result": ...,
-        "task": ..., "answer": ..., "correction": ..., "note": ...}`. Raises
+        "task": ..., "answer": ..., "correction": ..., "note": ...}`, with
+        the `parts` it is made of, each graded as a grade is, if any, and
+        what the learner had to go on, `about`, such as a text. Raises
         ValueError, and keeps none, if one is not a grade."""
         rows = []
         for grade in grades:
-            if grade.get("result") not in RESULTS:
-                raise ValueError(
-                    f"the result of a grade is one of {', '.join(RESULTS)}"
+            parts = grade.get("parts") or []
+            if not isinstance(parts, list):
+                raise ValueError("the parts of a grade are a list of grades")
+            for each in [grade, *parts]:
+                _check_grade(each)
+            about = grade.get("about", "")
+            if not isinstance(about, str):
+                raise ValueError("what a grade is about is text")
+            rows.append(
+                (
+                    session_id,
+                    exercise,
+                    grade["result"],
+                    *(grade.get(name, "") for name in _GRADE_TEXTS),
+                    json.dumps(
+                        [
+                            {
+                                "result": each["result"],
+                                **{name: each.get(name, "") for name in _GRADE_TEXTS},
+                            }
+                            for each in parts
+                        ],
+                        ensure_ascii=False,
+                    ),
+                    about,
                 )
-            parts = [
-                grade.get(name, "") for name in ("task", "answer", "correction", "note")
-            ]
-            if not all(isinstance(part, str) for part in parts):
-                raise ValueError(
-                    "the task, answer, correction and note of a grade are text"
-                )
-            rows.append((session_id, exercise, grade["result"], *parts))
+            )
         with self._lock, self._db:
             self._db.executemany(
-                "INSERT INTO grades"
-                " (session_id, exercise, result, task, answer, correction, note)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO grades (session_id, exercise, result, task, answer,"
+                " correction, note, parts, about) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
 
@@ -1849,13 +1927,14 @@ class UserStore:
 
     def grades(
         self, session_id: str, exercise: str | None = None
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """The grades of a session, or of one exercise of it, in the order
-        they were kept."""
+        they were kept, each with the `parts` it is made of."""
         with self._lock:
             rows = self._db.execute(
-                "SELECT session_id, exercise, result, task, answer, correction, note"
-                " FROM grades WHERE session_id = ? AND exercise = COALESCE(?, exercise)"
+                "SELECT session_id, exercise, result, task, answer, correction, note,"
+                " parts, about FROM grades"
+                " WHERE session_id = ? AND exercise = COALESCE(?, exercise)"
                 " ORDER BY id",
                 (session_id, exercise),
             ).fetchall()
@@ -1868,7 +1947,14 @@ class UserStore:
             "correction",
             "note",
         )
-        return [dict(zip(names, row)) for row in rows]
+        return [
+            {
+                **dict(zip(names, row[:-2])),
+                "parts": json.loads(row[-2]),
+                "about": row[-1],
+            }
+            for row in rows
+        ]
 
     def set_log(
         self, session_id: str, exercise: str, content: str, subject: str = ""

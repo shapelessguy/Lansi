@@ -901,9 +901,7 @@ class Practice:
         if not exam:
             # the session of practice left running, which this one ends, is
             # not kept if nothing was done in it
-            for left in self._store.sessions():
-                if left["status"] == "running" and self._left_untouched(left):
-                    self._drop(left)
+            self._hide_left_running()
         session = self._store.start_session(
             uuid.uuid4().hex,
             language,
@@ -1143,9 +1141,7 @@ class Practice:
         ids = [] if fresh else self._store.instance_ids(session_id, exercise)
         if not ids and not fresh:
             raise ValueError("nothing of that exercise was kept to do again")
-        for left in self._store.sessions():
-            if left["status"] == "running" and self._left_untouched(left):
-                self._drop(left)
+        self._hide_left_running()
         again = self._store.start_session(
             uuid.uuid4().hex,
             session["language"],
@@ -1296,6 +1292,14 @@ class Practice:
             self._drop(ended)
             ended = {**ended, "hidden": True}
         return ended, used
+
+    def _hide_left_running(self) -> None:
+        """Hide the session of practice left running, which one that starts
+        ends, if nothing was done in it. It is not forgotten, as what shows
+        it, such as an exercise the tutor offered, may still name it."""
+        for left in self._store.sessions():
+            if left["status"] == "running" and self._left_untouched(left):
+                self._store.hide_session(left["id"])
 
     def _drop(self, session: dict[str, Any]) -> None:
         """Forget a session left before anything was done in it; or, if its

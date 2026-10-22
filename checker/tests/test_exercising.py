@@ -316,6 +316,9 @@ def test_the_grades_of_a_step_are_kept_as_soon_as_it_is_made(
             "answer": "Ich stehe auf.",
             "correction": "",
             "note": "",
+            # one of a single answer is not made of parts
+            "parts": [],
+            "about": "",
         }
     ]
 
@@ -774,10 +777,10 @@ def test_a_session_in_which_nothing_was_done_is_not_kept_once_it_is_left(
     practice.end_session(read["id"], "finished", LEARNER, answering())
 
     assert ended["status"] == "abandoned"
-    # the one left running when another started is not kept either, but the
-    # theory that was read is
-    assert [each["id"] for each in practice._store.sessions()] == [read["id"]]
-    assert untouched["id"] not in [each["id"] for each in practice._store.sessions()]
+    # the one left running when another started is hidden, as what offered
+    # it may still name it, and the theory that was read is kept
+    listed = {each["id"]: each["hidden"] for each in practice._store.sessions()}
+    assert listed == {read["id"]: False, untouched["id"]: True}
 
 
 def test_logs_that_are_not_logs_are_refused_and_none_is_kept(

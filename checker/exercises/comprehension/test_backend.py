@@ -183,3 +183,29 @@ def test_a_text_done_again_is_taken_from_those_written_before_and_no_model_asked
     assert (model.asked, started.made) == ([], [])
     assert started.show["text"]["text"] == TEXT["text"]
     assert [each["result"] for each in step.show["feedback"]] == ["right", "wrong"]
+
+
+def test_in_an_exam_a_text_answered_goes_on_to_the_next_at_once_but_is_graded() -> None:
+    exam = {**CONTEXT, "exam": "Lesen, Teil 1"}
+    model = FakeModel(TEXT, TEXT)
+    state = start(exam, model).state
+
+    step = act(exam, state, {"answers": [1, 0]}, model)
+    last = act(exam, step.state, {"answers": [1, 1]}, model)
+
+    assert step.show["exam"] and "questions" in step.show and step.show["at"] == 1
+    assert step.graded[0]["result"] == "partial"
+    assert len(step.made) == 1
+    # how the last went is withheld too, and the part is handed in
+    assert last.show["withheld"] and not last.show["more"]
+    assert "feedback" not in last.show
+
+
+def test_the_grade_of_a_text_says_the_text_the_questions_were_on() -> None:
+    model = FakeModel(TEXT)
+    state = start(CONTEXT, model).state
+
+    step = act(CONTEXT, state, {"answers": [1, 0]}, model)
+
+    assert step.graded[0]["about"] == f"E-Mail\n\n{TEXT['text']}"
+    assert [part["result"] for part in step.graded[0]["parts"]] == ["right", "wrong"]

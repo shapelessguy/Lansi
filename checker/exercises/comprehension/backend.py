@@ -229,12 +229,18 @@ def _show(context: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
         "by": by_of(context),
         "plays": plays_of(context),
         "minutes": context.get("minutes") or 0,
+        # in an exam, what is answered goes on to the next at once
+        "exam": bool(context.get("exam")),
     }
     if state["reviewing"]:
         text = state["texts"][len(done) - 1]
         shown["text"] = {key: text[key] for key in ("title", "shown", "text")}
         shown["number"] = len(done) - 1
-        shown["feedback"] = done[-1]["feedback"]
+        # in an exam, how it went is told only once the evaluation is over
+        if context.get("exam"):
+            shown["withheld"] = True
+        else:
+            shown["feedback"] = done[-1]["feedback"]
         shown["more"] = len(done) < context["instances"]
         shown["prepared"] = len(state["texts"]) > len(done)
     else:
@@ -272,6 +278,27 @@ def start(context: dict[str, Any], model: Model) -> Step:
     )
 
 
+def _onward(
+    context: dict[str, Any], state: dict[str, Any], model: Model, step: Step
+) -> Step:
+    """In an exam, what was just answered goes on at once to the next text,
+    as an exam tells nothing of how it went: the step answered, with the
+    next text made and shown. Otherwise, and after the last, the step as it
+    is."""
+    if not context.get("exam") or len(state["done"]) >= context["instances"]:
+        return step
+    made = make_text(context, state, model)
+    state["reviewing"] = False
+    said = step.written or written()
+    return Step(
+        state=state,
+        show=_show(context, state),
+        graded=step.graded,
+        written=written(said.get("user"), [*said.get("assistant", []), *_told(state)]),
+        made=made,
+    )
+
+
 def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step:
     """Checks the answers chosen for the text on show, as `{"answers":
     [...]}`, each the place of the option chosen, or null for none; writes
@@ -304,11 +331,20 @@ def act(context: dict[str, Any], state: Any, message: Any, model: Model) -> Step
                     f"{each['prompt']} ({' / '.join(each['options'])})",
                 )
                 for each in feedback
-            ]
+            ],
+            # the questions are not understood without the text
+            "\n\n".join(
+                part for part in (text["title"], text["text"], text["shown"]) if part
+            ),
         )
         state["done"].append({"feedback": feedback, "result": one["result"]})
         state["reviewing"] = True
-        return Step(state=state, show=_show(context, state), graded=[one])
+        return _onward(
+            context,
+            state,
+            model,
+            Step(state=state, show=_show(context, state), graded=[one]),
+        )
     return Step(state=state, show=_show(context, state))
 
 

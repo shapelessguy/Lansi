@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from unittest.mock import ANY
 
 import pytest
 from kit import ModelError
@@ -127,6 +128,7 @@ def test_a_set_is_judged_in_one_request_and_graded_once_with_its_tasks() -> None
             "correction": "1. Ich stehe um sechs auf.\n2. (right)"
             "\n3. Er kauft heute ein.\n4. (right)\n5. (right)",
             "note": "1. The prefix goes to the end.",
+            "parts": ANY,
         }
     ]
     # what was left empty is wrong, and is not sent to be judged

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from unittest.mock import ANY
 
 import pytest
 from kit import ModelError
@@ -128,6 +129,9 @@ def test_the_answers_are_judged_together_and_logged_once_with_what_was_written()
             "answer": "1. Um sieben.\n2. (nothing)",
             "correction": "1. Um sechs.\n2. Den Arzt.",
             "note": "1. Read again.",
+            "parts": ANY,
+            # the questions are shown with the story they are on
+            "about": "Ein langer Morgen\n\nAnna steht um sechs auf.\n\nSie ruft den Arzt an.",
         }
     ]
     # what was left empty is wrong, and is not sent to be judged
@@ -166,6 +170,7 @@ def test_a_retelling_is_judged_and_logged_with_its_correction() -> None:
             "answer": "Anna aufsteht.",
             "correction": "Anna steht auf.",
             "note": "n",
+            "about": "T\n\nAnna steht auf.",
         }
     ]
     assert step.written == {

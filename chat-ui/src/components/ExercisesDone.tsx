@@ -17,6 +17,7 @@ import {
     sessionTitleOf,
 } from "../lib/practice";
 import { fetchTopics, type Topic } from "../lib/topics";
+import { GradeRound } from "./GradeRound";
 
 interface Props {
     /** Whether the tab is shown, which is when the exercises are listed. */
@@ -48,8 +49,6 @@ interface Done {
 
 /** What was done in a session that was opened: the grades of its exercises and their logs. */
 type Opened = { grades: Grade[]; logs: Record<string, string> } | "loading" | "failed";
-
-const RESULT = { right: "✓", partial: "~", wrong: "✗" } as const;
 
 /** The exercises done, the latest first: each that was started, of every session of practice. */
 function doneOf(sessions: PracticeSession[]): Done[] {
@@ -288,26 +287,11 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
                                                 // each round of the exercise, as a card of its own
                                                 <ol className="done-rounds">
                                                     {grades.map((grade, number) => (
-                                                        <li key={number} className={`done-round ${grade.result}`}>
-                                                            <span className="done-round-head">
-                                                                <span className="history-result" title={grade.result}>
-                                                                    {RESULT[grade.result]}
-                                                                </span>
-                                                                Round {number + 1}
-                                                            </span>
-                                                            {grade.task && (
-                                                                <p className="done-round-task">{grade.task}</p>
-                                                            )}
-                                                            <p className="done-round-answer">{grade.answer}</p>
-                                                            {grade.correction && (
-                                                                <p className="history-correction">
-                                                                    → {grade.correction}
-                                                                </p>
-                                                            )}
-                                                            {grade.note && (
-                                                                <p className="practice-detail">{grade.note}</p>
-                                                            )}
-                                                        </li>
+                                                        <GradeRound
+                                                            key={number}
+                                                            grade={grade}
+                                                            label={`Round ${number + 1}`}
+                                                        />
                                                     ))}
                                                 </ol>
                                             )}

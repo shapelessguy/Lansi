@@ -9,9 +9,9 @@ import { BookReader } from "./components/BookReader";
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
 import { Evaluations } from "./components/Evaluations";
+import { EvaluationsDone } from "./components/EvaluationsDone";
 import { ExercisesDone } from "./components/ExercisesDone";
 import { Icon } from "./components/Icon";
-import { Inspector } from "./components/Inspector";
 import { LogsPanel } from "./components/LogsPanel";
 import { MemoryList } from "./components/MemoryList";
 import { Practice } from "./components/Practice";
@@ -19,6 +19,7 @@ import { PracticeSessions } from "./components/PracticeSessions";
 import { SelectionTools } from "./components/SelectionTools";
 import { SetEditor } from "./components/SetEditor";
 import { SettingsPanel, type SettingsTab } from "./components/SettingsPanel";
+import { SideList } from "./components/SideList";
 import { SidePanel } from "./components/SidePanel";
 import { SpeechPlayer } from "./components/SpeechPlayer";
 import { SubChat } from "./components/SubChat";
@@ -48,9 +49,9 @@ import {
     updateChat,
 } from "./lib/chats";
 import type { ProfileUsage } from "./lib/checker";
+import { ask, tell } from "./lib/dialogs";
 import { type Evaluation, evaluationUsage, startEvaluation, USAGE_ID as EVALUATION_USAGE_ID } from "./lib/evaluations";
 import { newId } from "./lib/ids";
-import { begun, EMPTY_TRACE, type Trace, traced } from "./lib/inspect";
 import { type Activity, type LibraryTab, loadLayout, type LogsTab, type Panel, saveLayout } from "./lib/layout";
 import { LOGGED_EVENT } from "./lib/logs";
 import type { ChatMessage } from "./lib/openrouter";
@@ -116,13 +117,13 @@ const TASK_CATEGORIES: Record<string, UsageCategory> = {
 
 export function App({ user, initialSettings, initialChats }: Props) {
     const [settings, setSettings] = useState<Settings>(initialSettings);
-    // the panel on the left, with the words, the chats and the books
+    // the panel on the left, with the words and the books
     const [libraryOpen, setLibraryOpen] = useState(() => loadLayout().libraryOpen);
     // the logs, which take the place of the library on the left while they are open
     const [logsOpen, setLogsOpen] = useState(() => loadLayout().logsOpen);
     // tells the logs from those before something more was logged
     const [logsRevision, setLogsRevision] = useState(0);
-    // which of the logs and the practice sessions the panel of the logs shows
+    // which of the logs, the memories and the practice sessions the panel of the logs shows
     const [logsTab, setLogsTab] = useState<LogsTab>(() => loadLayout().logsTab);
     // a session left unfinished taken up from the practice sessions, for Practice to go on with
     const [resuming, setResuming] = useState<{ session: PracticeSession; nonce: number } | null>(null);
@@ -177,14 +178,11 @@ export function App({ user, initialSettings, initialChats }: Props) {
     useEffect(() => {
         fetchTexts().then(setTexts, (failed: Error) => setTexts(failed.message));
     }, [textsRevision]);
-    // how many memories the tutor has, and what has them listed again once more may have been made
-    const [memoryCount, setMemoryCount] = useState<number | null>(null);
+    // what has the memories of the tutor listed again once more may have been made
     const [memoriesRevision, setMemoriesRevision] = useState(0);
     // how many words the vocabulary has, once it has been listed
     const [vocabularyCount, setVocabularyCount] = useState<number | null>(null);
 
-    // every request the tutor made in its chat, for the inspector
-    const [trace, setTrace] = useState<Trace>(EMPTY_TRACE);
     const [booksState, setBooksState] = useState<BooksState>({ status: "loading" });
     // the book in the reader, which is the one that was read last
     const [bookId, setBookId] = useState<string | null>(() => loadReading().bookId);
@@ -606,7 +604,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     setOpeningEvaluation({ evaluation, nonce: Date.now() });
                     setActivity("evaluations");
                 },
-                (failed: Error) => window.alert(`The mock exam could not be started: ${failed.message}`),
+                (failed: Error) => void tell("The mock exam could not be started.", failed.message),
             );
         },
         [settings.language],
@@ -636,7 +634,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 setActivity("practice");
                 setLogsRevision((revision) => revision + 1);
             },
-            (failed: Error) => window.alert(failed.message),
+            (failed: Error) => void tell("The exercise could not be done again.", failed.message),
         );
     }
 
@@ -673,6 +671,13 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 </button>
                                 <button
                                     role="tab"
+                                    aria-selected={logsTab === "memories"}
+                                    onClick={() => setLogsTab("memories")}
+                                >
+                                    Memories
+                                </button>
+                                <button
+                                    role="tab"
                                     aria-selected={logsTab === "exercises"}
                                     onClick={() => setLogsTab("exercises")}
                                 >
@@ -683,7 +688,14 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     aria-selected={logsTab === "sessions"}
                                     onClick={() => setLogsTab("sessions")}
                                 >
-                                    Practice sessions
+                                    Practices
+                                </button>
+                                <button
+                                    role="tab"
+                                    aria-selected={logsTab === "evaluations"}
+                                    onClick={() => setLogsTab("evaluations")}
+                                >
+                                    Evaluations
                                 </button>
                             </div>
                         }
@@ -695,6 +707,9 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 onOpenBook={openBook}
                             />
                         </div>
+                        <div className="tab-panel" role="tabpanel" hidden={logsTab !== "memories"}>
+                            <MemoryList revision={memoriesRevision} />
+                        </div>
                         <div className="tab-panel" role="tabpanel" hidden={logsTab !== "exercises"}>
                             <ExercisesDone
                                 active={logsOpen && logsTab === "exercises"}
@@ -702,6 +717,9 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 revision={logsRevision}
                                 onReplay={replay}
                             />
+                        </div>
+                        <div className="tab-panel" role="tabpanel" hidden={logsTab !== "evaluations"}>
+                            <EvaluationsDone active={logsOpen && logsTab === "evaluations"} revision={logsRevision} />
                         </div>
                         <div className="tab-panel" role="tabpanel" hidden={logsTab !== "sessions"}>
                             <PracticeSessions
@@ -747,33 +765,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 )}
                                 <button
                                     role="tab"
-                                    aria-selected={sidebarTab === "memories"}
-                                    onClick={() => setSidebarTab("memories")}
-                                >
-                                    Memories
-                                    <span className="count">{memoryCount || ""}</span>
-                                </button>
-                                <button
-                                    role="tab"
-                                    aria-selected={sidebarTab === "texts"}
-                                    onClick={() => setSidebarTab("texts")}
-                                >
-                                    Texts
-                                    <span className="count">
-                                        {typeof texts !== "string"
-                                                && texts.filter((text) => text.kind === "text").length || ""}
-                                    </span>
-                                </button>
-                                <button
-                                    role="tab"
-                                    aria-selected={sidebarTab === "chats"}
-                                    onClick={() => setSidebarTab("chats")}
-                                >
-                                    Chats
-                                    <span className="count">{chats.length > 0 && chats.length}</span>
-                                </button>
-                                <button
-                                    role="tab"
                                     aria-selected={sidebarTab === "books"}
                                     onClick={() => setSidebarTab("books")}
                                 >
@@ -808,50 +799,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 onEditSet={(set) => setEditedSet(set ?? newSet())}
                                 onCount={setVocabularyCount}
                                 importing={ankiWords ? importing : null}
-                            />
-                        </div>
-                        <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "memories"}>
-                            <MemoryList revision={memoriesRevision} onCount={setMemoryCount} />
-                        </div>
-                        <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "texts"}>
-                            <TextList
-                                texts={texts}
-                                selectedId={activity === "texts" ? textId : null}
-                                onSelect={(id) => {
-                                    setTextId(id);
-                                    setActivity("texts");
-                                }}
-                                onNew={() => {
-                                    const id = newId();
-                                    void saveText(id, "", "", settings.language).then(() => {
-                                        setTextsRevision((revision) => revision + 1);
-                                        setTextId(id);
-                                        setActivity("texts");
-                                    });
-                                }}
-                                onDelete={(text) => {
-                                    if (window.confirm(`Delete “${text.title || "Untitled"}”?`)) {
-                                        void deleteText(text.id).then(() => {
-                                            setTextsRevision((revision) => revision + 1);
-                                            setTextId((open) => (open === text.id ? null : open));
-                                        });
-                                    }
-                                }}
-                            />
-                        </div>
-                        <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "chats"}>
-                            <ChatList
-                                chats={chats}
-                                activeId={chat.id}
-                                onSelect={(id) => {
-                                    setChatStore((store) => selectChat(store, id));
-                                    setActivity("chat");
-                                }}
-                                onDelete={(id) =>
-                                    setChatStore((store) =>
-                                        deleteChat(store, id, settings.defaultContextId, settings.language)
-                                    )}
-                                onNewChat={newChat}
                             />
                         </div>
                         <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "books"}>
@@ -908,13 +855,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             >
                                 Tutor
                             </button>
-                            <button
-                                role="tab"
-                                aria-selected={activity === "inspector"}
-                                onClick={() => setActivity("inspector")}
-                            >
-                                Inspector
-                            </button>
                             <button role="tab" aria-selected={activity === "chat"} onClick={() => setActivity("chat")}>
                                 Chat
                             </button>
@@ -924,6 +864,13 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 onClick={() => setActivity("books")}
                             >
                                 Books
+                            </button>
+                            <button
+                                role="tab"
+                                aria-selected={activity === "texts"}
+                                onClick={() => setActivity("texts")}
+                            >
+                                Texts
                             </button>
                             <button
                                 role="tab"
@@ -1002,15 +949,12 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             speakReplies={settings.speakReplies}
                             onSpeakReplies={(speakReplies) => updateSettings({ ...settings, speakReplies })}
                             onSpeak={speakMessage}
-                            onExchange={(label) => setTrace((current) => begun(current, label, Date.now()))}
                             onTrace={(event) => {
-                                setTrace((current) => traced(current, event));
                                 // the tutor may have written down a strategy or an entry of its calendar
                                 if (event.type === "done") {
                                     setMemoriesRevision((revision) => revision + 1);
                                 }
                             }}
-                            onNewChat={() => setTrace(EMPTY_TRACE)}
                             settings={settings}
                             onSettingsChange={updateSettings}
                             words={words}
@@ -1020,11 +964,20 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             onCheckingUsage={addUsageEntry}
                         />
                     </div>
-                    <div className="pane" hidden={activity !== "inspector"}>
-                        <Inspector trace={trace} />
-                    </div>
                     <div className="pane" hidden={activity !== "chat"}>
                         <Chat
+                            list={
+                                <ChatList
+                                    chats={chats}
+                                    activeId={chat.id}
+                                    onSelect={(id) => setChatStore((store) => selectChat(store, id))}
+                                    onDelete={(id) =>
+                                        setChatStore((store) =>
+                                            deleteChat(store, id, settings.defaultContextId, settings.language)
+                                        )}
+                                    onNewChat={newChat}
+                                />
+                            }
                             key={chat.id}
                             settings={settings}
                             onSettingsChange={updateSettings}
@@ -1046,7 +999,30 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             onNewChat={newChat}
                         />
                     </div>
-                    <div className="pane" hidden={activity !== "texts"}>
+                    <div className="pane texts-pane" hidden={activity !== "texts"}>
+                        <SideList label="Texts">
+                            <TextList
+                                texts={texts}
+                                selectedId={textId}
+                                onSelect={setTextId}
+                                onNew={() => {
+                                    const id = newId();
+                                    void saveText(id, "", "", settings.language).then(() => {
+                                        setTextsRevision((revision) => revision + 1);
+                                        setTextId(id);
+                                    });
+                                }}
+                                onDelete={(text) => {
+                                    void ask(`Delete “${text.title || "Untitled"}”?`).then(async (agreed) => {
+                                        if (agreed) {
+                                            await deleteText(text.id);
+                                            setTextsRevision((revision) => revision + 1);
+                                            setTextId((open) => (open === text.id ? null : open));
+                                        }
+                                    });
+                                }}
+                            />
+                        </SideList>
                         {textId
                             ? (
                                 <TextEditor
@@ -1071,7 +1047,12 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     onSaved={() => setTextsRevision((revision) => revision + 1)}
                                 />
                             )
-                            : <p className="practice-note">Open a text from the Texts tab of the library.</p>}
+                            : (
+                                <div className="empty">
+                                    <h2>No text open</h2>
+                                    <p>Open one of your texts, or start a new one.</p>
+                                </div>
+                            )}
                     </div>
                     <div className="pane" hidden={activity !== "books"}>
                         <BookReader bookId={bookId} active={activity === "books"} />
@@ -1122,7 +1103,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     {panel === "usage" && (
                         <UsagePanel
                             revision={usageRevision}
-                            currentLabel={activity === "tutor" || activity === "inspector"
+                            currentLabel={activity === "tutor"
                                 ? "Tutor"
                                 : activity === "books" || activity === "texts"
                                 ? null
@@ -1131,7 +1112,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 : activity === "evaluations"
                                 ? "Evaluations"
                                 : "This chat"}
-                            chatId={activity === "tutor" || activity === "inspector"
+                            chatId={activity === "tutor"
                                 ? TUTOR_USAGE_ID
                                 : activity === "practice"
                                 ? PRACTICE_USAGE_ID

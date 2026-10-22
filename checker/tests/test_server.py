@@ -1945,8 +1945,11 @@ def test_the_tutor_keeps_its_answers_with_all_the_model_was_told_and_was_shown(
     send(f"{with_users}/tutor/chat", "POST", ada, json.dumps(body).encode())
     _, listed, _ = send(f"{with_users}/tutor/chats", "GET", ada)
     _, kept, _ = send(f"{with_users}/tutor/chats/chat-1", "GET", ada)
+    _, request, _ = send(f"{with_users}/tutor/chats/chat-1/request", "GET", ada)
+    _, elsewhere, _ = send(f"{with_users}/tutor/chats/chat-2/request", "GET", ada)
     deleted, _, _ = send(f"{with_users}/tutor/chats/chat-1", "DELETE", ada)
     gone, _, _ = send(f"{with_users}/tutor/chats/chat-1", "GET", ada)
+    _, forgotten, _ = send(f"{with_users}/tutor/chats/chat-1/request", "GET", ada)
 
     assert [chat["first"] for chat in json.loads(listed)["chats"]] == ["Hallo"]
     learner, answer = json.loads(kept)["messages"]
@@ -1966,7 +1969,13 @@ def test_the_tutor_keeps_its_answers_with_all_the_model_was_told_and_was_shown(
         ("Looking at the lessons", "done")
     ]
     assert (answer["turn"]["offers"], answer["turn"]["exams"]) == ([], [])
+    # the last request to the model is kept for the inspector, of this chat alone
+    last = json.loads(request)["request"]
+    assert (last["chat"], last["label"], last["call"]["id"]) == ("chat-1", "Hallo", 2)
+    assert last["call"]["reply"]["message"]["content"] == "Read the first lesson."
+    assert json.loads(elsewhere)["request"] is None
     assert (deleted, gone) == (200, 404)
+    assert json.loads(forgotten)["request"] is None
 
 
 RECAP = "Talked about the exam.\nAgreed to practise the dative."
