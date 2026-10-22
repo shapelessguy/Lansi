@@ -25,13 +25,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from languages import language_of
+from languages import SHARED_TABLES, language_of
 from prompts import PROMPTS
-from vocabulary import Form
+from vocabulary import Described, Form
 
 Schema = dict[str, Any]
-# What is known about a word beyond its forms, and its forms.
-Description = tuple[dict[str, Any], list[Form]]
+# A word as it is described: its variants, as vocabulary.py describes them,
+# each with what is known about it, its translations and its forms.
+Description = list[Described]
 
 TEXT: Schema = {"type": "string"}
 FLAG: Schema = {"type": "boolean"}
@@ -77,20 +78,8 @@ class Category:
 MEANINGS = several(TEXT)
 
 # The names of the categories, which are the same for every language, in the
-# order they are shown in.
-CATEGORIES = (
-    "noun",
-    "verb",
-    "adjective",
-    "adverb",
-    "pronoun",
-    "article",
-    "preposition",
-    "conjunction",
-    "particle",
-    "numeral",
-    "interjection",
-)
+# order they are shown in, as languages/tables.json has them.
+CATEGORIES: tuple[str, ...] = tuple(SHARED_TABLES["categories"])
 
 # The categories whose words practice is best built on, unless a language
 # says otherwise: those a learner has to learn one by one. The words of the
@@ -124,7 +113,7 @@ GENERIC_SCHEMA = shape(
 
 def read_generic(reply: dict[str, Any]) -> Description:
     forms = [Form(form["form"], form["tags"].strip()) for form in reply["forms"]]
-    return {"meanings": reply["meanings"]}, present(forms)
+    return [Described({}, reply["meanings"], present(forms))]
 
 
 GENERIC: dict[str, Category] = {
@@ -157,6 +146,24 @@ def dictionary_form(lemma: str, category: str, language: str) -> str:
 # What a word can be found to be that is not stored, as the decision model is
 # told to recognise it.
 NOT_STORED = {name: _told(f"not_stored.{name}") for name in ("name", "other")}
+
+
+def unknown_details(details: dict[str, Any], known: dict[str, list[str]]) -> list[str]:
+    """What `details` has that `known`, the details of a language as
+    `Language.details` gives them, does not: a name it does not have, or a
+    value a name cannot have. What a detail holds, if it is an object or a
+    list of them, is looked into in the same way."""
+    unknown = []
+    for name, value in details.items():
+        if name not in known:
+            unknown.append(name)
+            continue
+        for item in value if isinstance(value, list) else [value]:
+            if isinstance(item, dict):
+                unknown += unknown_details(item, known)
+            elif known[name] and item not in known[name]:
+                unknown.append(f"{name}: {item}")
+    return unknown
 
 
 def spellings(text: str) -> list[str]:

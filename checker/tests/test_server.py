@@ -37,6 +37,7 @@ from test_translating import FakeModel
 from translating import Translator
 from users import Users, user_directory
 from vocabulary import Form, Vocabularies, Vocabulary
+from word_translations import WordTranslator
 
 # the importer of each server that is running, by the server's address
 IMPORTERS: dict[str, AnkiImporter] = {}
@@ -65,7 +66,7 @@ def url() -> Iterator[str]:
         background=lambda job: job(),
     )
     vocabulary = Vocabulary()
-    vocabulary.save("noun", "Hund", {"genders": []}, [Form("Hunde", "plural")])
+    vocabulary.save("noun", "Hund", {}, [Form("Hunde", "plural")], ["dog"], "English")
     chat = FakeChat()
     chat.judged("Katzze", "reject", reason="misspelt")
     intake = Intake(vocabulary, FakeProfiler({"Claudio": "name"}), chat)
@@ -521,7 +522,8 @@ def test_a_word_of_the_vocabulary_is_given_with_everything_stored_of_it(
 
     assert status == 200
     assert (word["lemma"], word["category"]) == ("Hund", "noun")
-    assert word["details"] == {"genders": []}
+    (variant,) = word["variants"]
+    assert variant["translations"] == {"English": ["dog"]}
     assert [(form["form"], form["tags"]) for form in word["forms"]] == [
         ("Hunde", "plural"),
         ("Hund", ""),
@@ -592,6 +594,19 @@ def test_the_words_of_a_language_come_with_how_its_forms_are_laid_out(
     assert italian["tables"] == {}
 
 
+def test_the_words_of_a_language_come_with_their_names_in_the_apps_languages(
+    url: str,
+) -> None:
+    _, german = get(f"{url}/vocabulary/words?language=German")
+    _, italian = get(f"{url}/vocabulary/words?language=Italian")
+
+    assert german["details"]["reflexive"] == ["never", "sometimes", "always"]
+    assert german["labels"]["reflexive"]["Italian"] == "riflessivo"
+    assert german["labels"]["noun"]["German"] == "Substantiv"
+    assert "reflexive" not in italian["labels"]
+    assert italian["labels"]["translations"]["Italian"] == "traduzioni"
+
+
 def test_the_import_is_told_which_language_the_anki_words_are_of(url: str) -> None:
     settings = json.dumps(
         {"enabled": True, "language": "Arabic", "anki_language": "German"}
@@ -617,6 +632,47 @@ def test_the_import_stays_off_for_a_user_without_anki() -> None:
 
     assert isinstance(after, dict)
     assert (after["state"], after["taken"]) == ("off", 0)
+
+
+def test_the_words_without_translations_in_a_language_are_counted_and_translated() -> (
+    None
+):
+    vocabulary = Vocabulary()
+    vocabulary.save("noun", "Hund", {}, [], ["dog"], "English")
+    chat = FakeChat()
+    chat.translations["Hund"] = [["cane"]]
+    intake = Intake(vocabulary, FakeProfiler(), chat)
+    account = Account(LiveChecker(Speller(language=None)), intake)
+    account.words = WordTranslator(intake)
+    asked = {"language": "German", "into": "Italian", "model": "some/model"}
+
+    def meanings(url: str, start: bool = False) -> dict[str, Any]:
+        _, reply = post(
+            f"{url}/vocabulary/translations",
+            json.dumps({**asked, "start": start}).encode(),
+            key="the-key" if start else None,
+        )
+        assert isinstance(reply, dict)
+        return reply
+
+    with server_of(account) as url:
+        before = meanings(url)
+        usage = meanings(url, start=True)["usage"]
+        for _ in range(200):
+            after = meanings(url)
+            usage += after["usage"]
+            if after["state"] != "translating":
+                break
+            time.sleep(0.01)
+        _, entry = get(f"{url}/vocabulary/words/1?language=German")
+
+    assert (before["state"], before["remaining"]) == ("idle", 1)
+    assert (after["state"], after["remaining"], after["translated"]) == ("idle", 0, 1)
+    assert len(usage) == 1
+    assert entry["variants"][0]["translations"] == {
+        "English": ["dog"],
+        "Italian": ["cane"],
+    }
 
 
 @contextmanager

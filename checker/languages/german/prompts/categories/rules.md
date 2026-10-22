@@ -8,4 +8,4 @@ Leave a text empty where the word has no such form. Where a form has two accepte
 
 ## Prompt: listing
 
-List every form the word is declined into as one of `forms`, each with `tags` that say which it is, in small letters, as case, then gender or `plural`: `dativ maskulin`, `akkusativ plural`. Give a spelling once for every case and gender it serves.
+List every form the word is declined into as one of `forms`, each with `tags` that say which it is, in small letters and in German, as case, then gender or `plural`: `dativ maskulin`, `akkusativ plural`, `genitiv neutrum` (never `neuter`). Give a spelling once for every case and gender it serves.

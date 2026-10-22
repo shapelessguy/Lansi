@@ -9,7 +9,7 @@ Variables:
 
 ## Prompt: noun
 
-List every gender the noun is used with as one of `genders`: der Band, das Band and die Band are three. For each give the article, the meanings it has with that gender, and the noun, without the article, in the four cases of the singular and of the plural. $empty_rule $meanings_rule
+List every variant of the noun as one of `variants`: a variant of its own wherever the article or the forms differ, and nowhere else. der Band, das Band and die Band are three; die Bank with the plural Banken and die Bank with the plural Bänke are two; der Absatz, which is a heel, a paragraph and a landing alike, is one. For each give the article, all the meanings of that variant, and the noun, without the article, in the four cases of the singular and of the plural. $empty_rule $meanings_rule
 
 ## Prompt: verb
 

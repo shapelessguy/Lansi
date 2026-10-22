@@ -83,6 +83,7 @@ import {
 } from "./lib/usage";
 import { countWords, fetchVocabulary, type Vocabulary } from "./lib/vocabulary";
 import type { Word } from "./lib/words";
+import { useWordTranslations } from "./lib/wordTranslations";
 
 export type WordsState =
     | { status: "loading" }
@@ -339,16 +340,27 @@ export function App({ user, initialSettings, initialChats }: Props) {
     useEffect(loadWords, [loadWords]);
 
     // Whether an Anki account is linked is asked once, and again every few
-    // seconds while its first sync runs.
+    // seconds while its first sync runs, or until the checker server answers,
+    // as it may still be starting when the page is opened.
     const firstSync = ankiWords && anki?.last_sync === null && !anki.error;
     useEffect(() => {
         let stopped = false;
-        const ask = () => fetchAnkiState().then((state) => stopped || setAnki(state), () => undefined);
+        let retry: ReturnType<typeof setTimeout> | undefined;
+        const ask = () =>
+            fetchAnkiState().then(
+                (state) => stopped || setAnki(state),
+                () => {
+                    if (!stopped) {
+                        retry = setTimeout(ask, 5000);
+                    }
+                },
+            );
         ask();
         const timer = firstSync ? setInterval(ask, 5000) : undefined;
         return () => {
             stopped = true;
             clearInterval(timer);
+            clearTimeout(retry);
         };
     }, [firstSync]);
 
@@ -431,6 +443,17 @@ export function App({ user, initialSettings, initialChats }: Props) {
             [addUsageEntry],
         ),
         onImported: useCallback(() => setVocabularyRevision((revision) => revision + 1), []),
+    });
+    const wordTranslations = useWordTranslations({
+        active: libraryOpen && sidebarTab === "vocabulary",
+        apiKey: settings.apiKey,
+        model: settings.model,
+        language: settings.language,
+        into: settings.translateInto,
+        onUsage: useCallback(
+            (used) => addUsageEntry(profileUsage(used, Date.now(), "vocabulary")),
+            [addUsageEntry],
+        ),
     });
 
     // What the server does in the background is asked after while any of
@@ -794,6 +817,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             <VocabularyList
                                 active={libraryOpen && sidebarTab === "vocabulary"}
                                 language={settings.language}
+                                into={settings.translateInto}
+                                translations={wordTranslations}
                                 ankiLanguage={settings.ankiLanguage}
                                 revision={vocabularyRevision}
                                 sets={sets}

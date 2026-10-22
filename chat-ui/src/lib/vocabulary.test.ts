@@ -1,24 +1,34 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
+import { setInterfaceLanguage } from "./i18n";
 import {
     countWords,
     describeUses,
     detailRows,
+    formsOf,
     type FormTables,
     groupWords,
+    labelOf,
     layOutForms,
     listWords,
+    shownIn,
+    translationRow,
     type Vocabulary,
+    type VocabularyEntry,
     type WordForm,
 } from "./vocabulary";
+
+afterEach(() => setInterfaceLanguage("English"));
 
 const unused = { created_at: "2026-10-13 12:00:00", used: 0, seen: 0, first_used: null, last_used: null };
 
 const vocabulary: Vocabulary = {
     categories: ["noun", "verb", "adjective"],
+    details: {},
+    labels: {},
     tables: {},
     words: [
         { id: 3, category: "verb", lemma: "gehen", forms: 30, ...unused },
@@ -87,16 +97,97 @@ describe("detailRows", () => {
             { label: "genders", value: "article: das · meanings: ribbon, tape" },
         ]);
     });
+
+    it("names the attributes, and the values they are limited to, in the language of the interface", () => {
+        setInterfaceLanguage("Italian");
+        const names = {
+            details: { meanings: [], reflexive: ["never", "always"], genders: [], article: ["der"] },
+            labels: {
+                meanings: { Italian: "significati" },
+                reflexive: { Italian: "riflessivo" },
+                always: { Italian: "sempre" },
+                article: { Italian: "articolo" },
+                der: {},
+            },
+        };
+
+        const rows = detailRows({
+            meanings: ["always"],
+            reflexive: "always",
+            genders: [{ article: "der", meanings: ["dog"] }],
+            zu_infinitive: "zu gehen",
+        }, names);
+
+        expect(rows).toEqual([
+            { label: "significati", value: "always" },
+            { label: "riflessivo", value: "sempre" },
+            { label: "genders", value: "articolo: der · significati: dog" },
+            { label: "zu infinitive", value: "zu gehen" },
+        ]);
+    });
+});
+
+describe("the variants of a word", () => {
+    // die Bank, a bank with the plural Banken and a bench with Bänke
+    const bank: Pick<VocabularyEntry, "variants" | "forms"> = {
+        variants: [
+            { id: 1, details: {}, translations: { English: ["bank"], Italian: ["banca"] } },
+            { id: 2, details: {}, translations: { English: ["bench"] } },
+        ],
+        forms: [
+            { id: 1, form: "Banken", tags: "die nominativ plural", variant: 1 },
+            { id: 2, form: "Bänke", tags: "die nominativ plural", variant: 2 },
+            { id: 3, form: "bank", tags: "", variant: 0 },
+        ],
+    };
+
+    it("are translated into the language asked for, or else into one the word has", () => {
+        expect(shownIn(bank, "Italian")).toBe("Italian");
+        expect(shownIn(bank, "German")).toBe("English");
+        expect(shownIn({ variants: [] }, "German")).toBe("German");
+    });
+
+    it("give their translations as a row, saying the language where it is not the one asked for", () => {
+        expect(translationRow(bank.variants[0], "Italian", "Italian", {})).toEqual({
+            label: "translations",
+            value: "banca",
+        });
+        expect(translationRow(bank.variants[1], "English", "German", {})).toEqual({
+            label: "translations",
+            value: "bench",
+            language: "English",
+        });
+        expect(translationRow(bank.variants[1], "Italian", "Italian", {})).toBeNull();
+    });
+
+    it("each have their own forms, and those of the whole word only where there is one variant", () => {
+        expect(formsOf(bank, bank.variants[1]).map((form) => form.form)).toEqual(["Bänke"]);
+        const alone = { variants: [bank.variants[0]], forms: bank.forms };
+        expect(formsOf(alone, bank.variants[0]).map((form) => form.form)).toEqual(["Banken", "bank"]);
+    });
+});
+
+describe("labelOf", () => {
+    it("gives a name as it is where it has no text in the language of the interface", () => {
+        setInterfaceLanguage("German");
+        const labels = { noun: { German: "Substantiv" }, der: {} };
+
+        expect([labelOf("noun", labels), labelOf("der", labels), labelOf("idiom", labels)]).toEqual([
+            "Substantiv",
+            "der",
+            "idiom",
+        ]);
+    });
 });
 
 function forms(...pairs: [tags: string, form: string][]): WordForm[] {
-    return pairs.map(([tags, form], index) => ({ id: index + 1, tags, form }));
+    return pairs.map(([tags, form], index) => ({ id: index + 1, tags, form, variant: 0 }));
 }
 
 // tables of German, as the checker server tells them
 const PERSONS = ["ich", "du", "er", "wir", "ihr", "sie"];
 const CASES = ["nominativ", "genitiv", "dativ", "akkusativ"];
-const NEBENSATZ = { tags: "{column} {row} nebensatz", title: "At the end of a subordinate clause" };
+const NEBENSATZ = { tags: "{column} {row} nebensatz", title: "im Nebensatz" };
 const TABLES: FormTables = {
     verb: [
         {
@@ -237,9 +328,8 @@ describe("groupWords, in an order", () => {
         { ...unused, id: 4, category: "noun", lemma: "Ärger", forms: 1 },
     ];
     const lemmas = (sort: Parameters<typeof groupWords>[2]) =>
-        groupWords({ categories: ["noun"], tables: {}, words: [...words] }, "", sort)[0].words.map((word) =>
-            word.lemma
-        );
+        groupWords({ categories: ["noun"], details: {}, labels: {}, tables: {}, words: [...words] }, "", sort)[0].words
+            .map((word) => word.lemma);
 
     it("goes by the alphabet unless told otherwise, with ä next to a", () => {
         expect(lemmas(undefined)).toEqual(["Apfel", "Ärger", "Hund", "Zug"]);

@@ -24,7 +24,7 @@ from typing import Any
 
 # Raised with every change to the tables, so that a file written by an older
 # version can be told and brought up to date.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 
 # What each version added to the one before it, from the first on.
 _SCHEMA_STEPS = [
@@ -101,6 +101,95 @@ CREATE TABLE sets (
     body TEXT NOT NULL
 );
 """,
+    """
+-- What a word means, in each language it was translated into, apart from
+-- what else is known about it, which is the same in every language.
+CREATE TABLE IF NOT EXISTS meanings (
+    entry_id INTEGER NOT NULL REFERENCES entries (id) ON DELETE CASCADE,
+    -- Which of the senses of the word they are of, where its senses are told
+    -- apart by what goes with it, such as the article of a noun that has
+    -- more than one; '' for a word that is not.
+    sense TEXT NOT NULL DEFAULT '',
+    -- the language they are written in, by its English name
+    language TEXT NOT NULL,
+    -- a JSON list, the most common first
+    meanings TEXT NOT NULL,
+    PRIMARY KEY (entry_id, sense, language)
+);
+-- They were kept with what else is known about a word, and in English.
+INSERT OR IGNORE INTO meanings (entry_id, sense, language, meanings)
+    SELECT id, '', 'English', json_extract(details, '$.meanings') FROM entries
+    WHERE json_type(details, '$.meanings') = 'array';
+UPDATE entries SET details = json_remove(details, '$.meanings');
+""",
+    """
+-- A word is made of variants: as many as there are ways it differs in what
+-- is known of it, such as die Bank with the plural Banken and die Bank with
+-- Bänke, and most words have one. Each has what is known of it and its
+-- forms, which are the same in every language, and its translations into
+-- each language it was translated into.
+CREATE TABLE variants (
+    id INTEGER PRIMARY KEY,
+    entry_id INTEGER NOT NULL REFERENCES entries (id) ON DELETE CASCADE,
+    -- what else is known about it, as a JSON object
+    details TEXT NOT NULL DEFAULT '{}',
+    sense TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX variants_entry ON variants (entry_id);
+CREATE TABLE translations (
+    variant_id INTEGER NOT NULL REFERENCES variants (id) ON DELETE CASCADE,
+    -- by its English name
+    language TEXT NOT NULL,
+    -- a JSON list, the most common first
+    translations TEXT NOT NULL,
+    PRIMARY KEY (variant_id, language)
+);
+-- Each sense the meanings were kept by is a variant, with what else was
+-- known of the word, and a word that had none has one.
+INSERT INTO variants (entry_id, details, sense)
+    SELECT meanings.entry_id, entries.details, meanings.sense FROM meanings
+    JOIN entries ON entries.id = meanings.entry_id
+    GROUP BY meanings.entry_id, meanings.sense
+    ORDER BY meanings.entry_id, MIN(meanings.rowid);
+INSERT INTO variants (entry_id, details)
+    SELECT id, details FROM entries
+    WHERE id NOT IN (SELECT entry_id FROM meanings) ORDER BY id;
+INSERT INTO translations (variant_id, language, translations)
+    SELECT variants.id, meanings.language, meanings.meanings FROM meanings
+    JOIN variants ON variants.entry_id = meanings.entry_id
+        AND variants.sense = meanings.sense;
+CREATE TABLE forms_of_variants (
+    id INTEGER PRIMARY KEY,
+    entry_id INTEGER NOT NULL REFERENCES entries (id) ON DELETE CASCADE,
+    -- the variant it is a form of, or 0 if it is of the word as a whole,
+    -- such as a spelling it was met in that it was not described with
+    variant_id INTEGER NOT NULL DEFAULT 0,
+    form TEXT NOT NULL,
+    -- the form in small letters, which is what words are looked up by
+    folded TEXT NOT NULL,
+    -- which form it is, such as "present 1st singular". One spelling can be several.
+    tags TEXT NOT NULL DEFAULT '',
+    UNIQUE (entry_id, variant_id, form, tags)
+);
+-- A sense was what the tags of the forms of the word in it start with, such
+-- as an article; a form of a word of one variant is of that one.
+INSERT INTO forms_of_variants (id, entry_id, variant_id, form, folded, tags)
+    SELECT forms.id, forms.entry_id, COALESCE(
+        (SELECT variants.id FROM variants
+         WHERE variants.entry_id = forms.entry_id AND variants.sense <> ''
+             AND (forms.tags = variants.sense OR forms.tags LIKE variants.sense || ' %')
+         ORDER BY variants.id LIMIT 1),
+        (SELECT MIN(variants.id) FROM variants
+         WHERE variants.entry_id = forms.entry_id HAVING COUNT(*) = 1),
+        0
+    ), forms.form, forms.folded, forms.tags FROM forms;
+DROP TABLE forms;
+ALTER TABLE forms_of_variants RENAME TO forms;
+CREATE INDEX forms_folded ON forms (folded);
+ALTER TABLE variants DROP COLUMN sense;
+DROP TABLE meanings;
+ALTER TABLE entries DROP COLUMN details;
+""",
 ]
 
 
@@ -158,6 +247,30 @@ class Form:
     # which form of the word it is, if that is known
     tags: str = ""
     id: int = 0
+    # the variant it is a form of, by its id, or 0 if of the word as a whole
+    variant: int = 0
+
+
+@dataclass
+class Variant:
+    """One of the variants a word is made of, as the variants table
+    describes them."""
+
+    id: int
+    # what is known about it beyond its forms and its translations
+    details: dict[str, Any] = field(default_factory=dict)
+    # its translations, in each language it was translated into
+    translations: dict[str, list[str]] = field(default_factory=dict)
+
+
+@dataclass
+class Described:
+    """A variant of a word as it is described, to be stored."""
+
+    details: dict[str, Any]
+    # in the language it was described in
+    translations: list[str]
+    forms: list[Form]
 
 
 @dataclass
@@ -165,10 +278,27 @@ class Entry:
     id: int
     category: str
     lemma: str
-    details: dict[str, Any] = field(default_factory=dict)
+    # every form of each variant, and of the word as a whole
     forms: list[Form] = field(default_factory=list)
     # when it was stored, in UTC
     created_at: str = ""
+    variants: list[Variant] = field(default_factory=list)
+
+    def shown_in(self, language: str) -> str:
+        """The language its translations are best given in: `language` if it
+        has any there, or else the first other one it has any in."""
+        languages = [lang for variant in self.variants for lang in variant.translations]
+        return language if language in languages or not languages else languages[0]
+
+    def translations_into(self, language: str) -> list[str]:
+        """The translations of every variant, in the language `shown_in`
+        gives for `language`."""
+        shown = self.shown_in(language)
+        return [
+            translation
+            for variant in self.variants
+            for translation in variant.translations.get(shown, [])
+        ]
 
 
 @dataclass
@@ -282,7 +412,7 @@ class Vocabulary:
         with self._lock:
             rows = self._db.execute(
                 "SELECT entries.id, category, lemma, entries.created_at,"
-                " COUNT(forms.id) FROM entries"
+                " COUNT(DISTINCT forms.form || ' ' || forms.tags) FROM entries"
                 " LEFT JOIN forms ON forms.entry_id = entries.id"
                 " GROUP BY entries.id"
             ).fetchall()
@@ -407,12 +537,29 @@ class Vocabulary:
         lemma: str,
         details: dict[str, Any],
         forms: list[Form],
+        translations: list[str] | None = None,
+        language: str = "",
     ) -> tuple[Entry, bool]:
-        """Store a word with its forms, and return its entry and whether it
-        is a new one. If the word is stored already, which it may be when
+        """Store a word of one variant, as `save_variants` does."""
+        return self.save_variants(
+            category, lemma, [Described(details, translations or [], forms)], language
+        )
+
+    def save_variants(
+        self,
+        category: str,
+        lemma: str,
+        variants: list[Described],
+        language: str = "",
+        forms: list[Form] | None = None,
+    ) -> tuple[Entry, bool]:
+        """Store a word with its variants, their translations in `language`,
+        and `forms` of the word as a whole, and return its entry and whether
+        it is a new one. If the word is stored already, which it may be when
         two of its forms were taken in at the same time, the forms it lacks
-        are added to it and what is known about it is left as it is. The
-        dictionary form is always one of the forms."""
+        are added to it as forms of the word as a whole and what is known
+        about it is left as it is. The dictionary form is always one of the
+        forms."""
         with self._lock, self._db:
             row = self._db.execute(
                 "SELECT id FROM entries WHERE category = ? AND lemma = ?",
@@ -420,17 +567,67 @@ class Vocabulary:
             ).fetchone()
             if row:
                 entry_id = row[0]
+                described = [
+                    Form(form.form, form.tags)
+                    for each in variants
+                    for form in each.forms
+                ]
+                self._add_forms(entry_id, described)
             else:
                 cursor = self._db.execute(
-                    "INSERT INTO entries (category, lemma, details) VALUES (?, ?, ?)",
-                    (category, lemma, json.dumps(details, ensure_ascii=False)),
+                    "INSERT INTO entries (category, lemma) VALUES (?, ?)",
+                    (category, lemma),
                 )
                 assert cursor.lastrowid is not None
                 entry_id = cursor.lastrowid
-            self._add_forms(entry_id, forms)
+                for each in variants:
+                    variant_id = self._add_variant(entry_id, each.details)
+                    if each.translations:
+                        self._set_translations(variant_id, language, each.translations)
+                    self._add_forms(
+                        entry_id,
+                        [
+                            Form(form.form, form.tags, variant=variant_id)
+                            for form in each.forms
+                        ],
+                    )
+            self._add_forms(entry_id, forms or [])
             if not self._has_form(entry_id, lemma):
                 self._add_forms(entry_id, [Form(lemma)])
             return self._entry(entry_id), row is None
+
+    def set_translations(
+        self, entry_id: int, language: str, translations: list[list[str]]
+    ) -> Entry:
+        """Store the translations of each variant of an entry in `language`,
+        in the order of its variants, in place of those they had there, and
+        return the entry."""
+        with self._lock, self._db:
+            variants = [
+                variant_id
+                for (variant_id,) in self._db.execute(
+                    "SELECT id FROM variants WHERE entry_id = ? ORDER BY id",
+                    (entry_id,),
+                )
+            ]
+            if len(variants) != len(translations):
+                raise ValueError("the translations are not those of every variant")
+            for variant_id, listed in zip(variants, translations, strict=True):
+                self._set_translations(variant_id, language, listed)
+            return self._entry(entry_id)
+
+    def lacking_translations(self, language: str) -> list[int]:
+        """The entries that have a variant without translations in
+        `language`, in the order they were stored in."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT DISTINCT variants.entry_id FROM variants"
+                " WHERE NOT EXISTS (SELECT 1 FROM translations"
+                " WHERE variant_id = variants.id AND language = ?)"
+                " ORDER BY variants.entry_id",
+                (language,),
+            ).fetchall()
+        return [entry_id for (entry_id,) in rows]
 
     def add_forms(self, entry_id: int, forms: list[Form]) -> Entry:
         """Add the forms an entry lacks, and return the entry."""
@@ -462,6 +659,7 @@ class Vocabulary:
                     )
                     by_lemma[new] = entry_id
                     continue
+                # as forms of the twin as a whole, as its variants are its own
                 self._db.execute(
                     "INSERT OR IGNORE INTO forms (entry_id, form, folded, tags)"
                     " SELECT ?, form, folded, tags FROM forms WHERE entry_id = ?",
@@ -538,10 +736,38 @@ class Vocabulary:
     # the rest is called with the lock held
 
     def _add_forms(self, entry_id: int, forms: list[Form]) -> None:
+        """Add the forms an entry lacks. One of the word as a whole is one it
+        lacks only if none of its variants has it either."""
+        stored = set(
+            self._db.execute(
+                "SELECT form, tags FROM forms WHERE entry_id = ?", (entry_id,)
+            ).fetchall()
+        )
         self._db.executemany(
-            "INSERT OR IGNORE INTO forms (entry_id, form, folded, tags)"
-            " VALUES (?, ?, ?, ?)",
-            [(entry_id, form.form, fold(form.form), form.tags) for form in forms],
+            "INSERT OR IGNORE INTO forms (entry_id, variant_id, form, folded, tags)"
+            " VALUES (?, ?, ?, ?, ?)",
+            [
+                (entry_id, form.variant, form.form, fold(form.form), form.tags)
+                for form in forms
+                if form.variant or (form.form, form.tags) not in stored
+            ],
+        )
+
+    def _add_variant(self, entry_id: int, details: dict[str, Any]) -> int:
+        cursor = self._db.execute(
+            "INSERT INTO variants (entry_id, details) VALUES (?, ?)",
+            (entry_id, json.dumps(details, ensure_ascii=False)),
+        )
+        assert cursor.lastrowid is not None
+        return cursor.lastrowid
+
+    def _set_translations(
+        self, variant_id: int, language: str, translations: list[str]
+    ) -> None:
+        self._db.execute(
+            "INSERT OR REPLACE INTO translations (variant_id, language, translations)"
+            " VALUES (?, ?, ?)",
+            (variant_id, language, json.dumps(translations, ensure_ascii=False)),
         )
 
     def _renumber_sets(self, merged: dict[int, int]) -> None:
@@ -565,21 +791,35 @@ class Vocabulary:
         return row is not None
 
     def _entry(self, entry_id: int) -> Entry:
-        category, lemma, details, created_at = self._db.execute(
-            "SELECT category, lemma, details, created_at FROM entries WHERE id = ?",
+        category, lemma, created_at = self._db.execute(
+            "SELECT category, lemma, created_at FROM entries WHERE id = ?",
             (entry_id,),
         ).fetchone()
         forms = self._db.execute(
-            "SELECT form, tags, id FROM forms WHERE entry_id = ? ORDER BY id",
+            "SELECT form, tags, id, variant_id FROM forms WHERE entry_id = ? ORDER BY id",
             (entry_id,),
         ).fetchall()
+        variants = {
+            variant_id: Variant(variant_id, json.loads(details))
+            for variant_id, details in self._db.execute(
+                "SELECT id, details FROM variants WHERE entry_id = ? ORDER BY id",
+                (entry_id,),
+            )
+        }
+        for variant_id, language, listed in self._db.execute(
+            "SELECT variant_id, language, translations FROM translations"
+            " JOIN variants ON variants.id = variant_id WHERE entry_id = ?"
+            " ORDER BY translations.rowid",
+            (entry_id,),
+        ):
+            variants[variant_id].translations[language] = json.loads(listed)
         return Entry(
             entry_id,
             category,
             lemma,
-            json.loads(details),
-            [Form(form, tags, form_id) for form, tags, form_id in forms],
+            [Form(*row) for row in forms],
             created_at,
+            list(variants.values()),
         )
 
 

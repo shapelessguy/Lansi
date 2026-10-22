@@ -1,0 +1,14 @@
+{
+    "noun": { "English": "noun", "German": "Substantiv", "Italian": "sostantivo" },
+    "verb": { "English": "verb", "German": "Verb", "Italian": "verbo" },
+    "adjective": { "English": "adjective", "German": "Adjektiv", "Italian": "aggettivo" },
+    "adverb": { "English": "adverb", "German": "Adverb", "Italian": "avverbio" },
+    "pronoun": { "English": "pronoun", "German": "Pronomen", "Italian": "pronome" },
+    "article": { "English": "article", "German": "Artikel", "Italian": "articolo" },
+    "preposition": { "English": "preposition", "German": "Präposition", "Italian": "preposizione" },
+    "conjunction": { "English": "conjunction", "German": "Konjunktion", "Italian": "congiunzione" },
+    "particle": { "English": "particle", "German": "Partikel", "Italian": "particella" },
+    "numeral": { "English": "numeral", "German": "Numerale", "Italian": "numerale" },
+    "interjection": { "English": "interjection", "German": "Interjektion", "Italian": "interiezione" },
+    "translations": { "English": "translations", "German": "Übersetzungen", "Italian": "traduzioni" }
+}

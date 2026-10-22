@@ -1,7 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { type Message, t } from "./i18n";
+import { type InterfaceLanguage, interfaceLanguage, languageName, type Message, t } from "./i18n";
 import { checkerFetch } from "./session";
 
 /** A word of the vocabulary as it is listed: without what is known about it. */
@@ -42,8 +42,23 @@ export function countWords(words: Pick<ListedWord, "lemma">[]): number {
     return new Set(words.map((word) => word.lemma.toLowerCase())).size;
 }
 
+/** Each name a word is stored with, in the languages the interface is shown in that it has a text of its own in. */
+export type Labels = Record<string, Partial<Record<InterfaceLanguage, string>>>;
+
+/** The names a word of a language is stored with, as the checker server tells them. */
+export interface StoredNames {
+    /** The names of what is known about a word, each with the values it can have, which are names too, or none if it can have any. */
+    details: Record<string, string[]>;
+    labels: Labels;
+}
+
+/** A name a word is stored with, such as a category or "translations", in the language of the interface, or as it is if it has no text in it. */
+export function labelOf(name: string, labels: Labels): string {
+    return labels[name]?.[interfaceLanguage()] ?? name;
+}
+
 /** Every word the checker server has stored. */
-export interface Vocabulary {
+export interface Vocabulary extends StoredNames {
     /** The categories, in the order they are to be shown in. */
     categories: string[];
     /** How the forms of a word of each category are laid out, as the language has it. */
@@ -56,6 +71,21 @@ export interface WordForm {
     form: string;
     /** Which form of the word it is, such as "present 1st singular". May be empty. */
     tags: string;
+    /** The variant it is a form of, by its id, or 0 if it is of the word as a whole. */
+    variant: number;
+}
+
+/**
+ * One of the variants a word is made of: as many as there are ways it differs
+ * in what is known of it, such as die Bank with the plural Banken and die Bank
+ * with Bänke. Most words have one.
+ */
+export interface WordVariant {
+    id: number;
+    /** What is known about it beyond its forms and translations, which is the same whatever it is translated into. */
+    details: Record<string, unknown>;
+    /** Its translations, in each language it was translated into, by its English name. */
+    translations: Record<string, string[]>;
 }
 
 /** A word of the vocabulary with everything that is stored of it. */
@@ -63,8 +93,8 @@ export interface VocabularyEntry {
     id: number;
     category: string;
     lemma: string;
-    /** What is known about the word beyond its forms. Which attributes there are depends on the category. */
-    details: Record<string, unknown>;
+    variants: WordVariant[];
+    /** The forms of every variant, and of the word as a whole. */
     forms: WordForm[];
     /** When it was stored, in UTC. */
     created_at: string;
@@ -179,21 +209,61 @@ export function saveFlat(flat: boolean): void {
 export interface DetailRow {
     label: string;
     value: string;
+    /** The language the value is in, where it is not the one asked for. */
+    language?: string;
 }
 
 /**
- * What is known about a word as rows of text. The attributes differ by
- * category and more will be added, so they are shown whatever they are:
- * a list of several things, such as the genders of a noun, gets a row for
- * each. Attributes that are empty are left out.
+ * The language the translations of a word are shown in: `into` if it has
+ * any there, or else the first other one it has any in, while it has none
+ * in `into` yet.
  */
-export function detailRows(details: Record<string, unknown>): DetailRow[] {
+export function shownIn(entry: Pick<VocabularyEntry, "variants">, into: string): string {
+    const languages = entry.variants.flatMap((variant) => Object.keys(variant.translations));
+    return languages.includes(into) || languages.length === 0 ? into : languages[0];
+}
+
+/** The translations of a variant as a row, in `language`, saying which language that is where it is not `into`. */
+export function translationRow(
+    variant: WordVariant,
+    language: string,
+    into: string,
+    labels: Labels,
+): DetailRow | null {
+    const translations = variant.translations[language] ?? [];
+    if (translations.length === 0) {
+        return null;
+    }
+    return {
+        label: labelOf("translations", labels),
+        value: translations.join(", "),
+        ...(language === into ? {} : { language: languageName(language) }),
+    };
+}
+
+/** The forms of one variant of a word, with those of the word as a whole where it has no other variant. */
+export function formsOf(entry: Pick<VocabularyEntry, "variants" | "forms">, variant: WordVariant): WordForm[] {
+    const alone = entry.variants.length === 1;
+    return entry.forms.filter((form) => form.variant === variant.id || (alone && form.variant === 0));
+}
+
+/**
+ * What is known about a word as rows of text, each attribute by its name in
+ * the language of the interface, and so each value that is a name too. The
+ * attributes differ by category and more will be added, so they are shown
+ * whatever they are: a list of several things, such as the genders of a
+ * noun, gets a row for each. Attributes that are empty are left out.
+ */
+export function detailRows(
+    details: Record<string, unknown>,
+    names: StoredNames = { details: {}, labels: {} },
+): DetailRow[] {
     const rows: DetailRow[] = [];
     for (const [name, value] of Object.entries(details)) {
-        const label = name.replaceAll("_", " ");
+        const label = nameOf(name, names);
         const several = Array.isArray(value) && value.some((item) => typeof item === "object" && item !== null);
         for (const item of several ? (value as unknown[]) : [value]) {
-            const text = describe(item);
+            const text = describe(item, name, names);
             if (text) {
                 rows.push({ label, value: text });
             }
@@ -202,21 +272,31 @@ export function detailRows(details: Record<string, unknown>): DetailRow[] {
     return rows;
 }
 
-function describe(value: unknown): string {
+/** The name of an attribute as it is shown: in the language of the interface, if it has a text in it. */
+function nameOf(name: string, names: StoredNames): string {
+    return name in names.labels ? labelOf(name, names.labels) : name.replaceAll("_", " ");
+}
+
+function describe(value: unknown, name: string, names: StoredNames): string {
     if (typeof value === "boolean") {
         return value ? t("yes") : t("no");
     }
     if (Array.isArray(value)) {
-        return value.map(describe).filter(Boolean).join(", ");
+        return value.map((item) => describe(item, name, names)).filter(Boolean).join(", ");
     }
     if (typeof value === "object" && value !== null) {
         return Object.entries(value)
-            .map(([name, inner]) => [name.replaceAll("_", " "), describe(inner)])
+            .map(([inner, item]) => [nameOf(inner, names), describe(item, inner, names)])
             .filter(([, text]) => text)
-            .map(([name, text]) => `${name}: ${text}`)
+            .map(([label, text]) => `${label}: ${text}`)
             .join(" · ");
     }
-    return value === null || value === undefined ? "" : String(value);
+    if (value === null || value === undefined) {
+        return "";
+    }
+    // only a value the attribute is limited to is a name; a translation is not
+    const text = String(value);
+    return names.details[name]?.includes(text) ? labelOf(text, names.labels) : text;
 }
 
 /** A form in a table, with the other shape it takes, if it has one. */
@@ -300,7 +380,7 @@ export function layOutForms(
     const others = entry.forms
         .filter((form) => !placed.has(form.tags))
         .map((form) => ({
-            label: form.tags || (form.form === entry.lemma ? "dictionary form" : "–"),
+            label: form.tags || (form.form === entry.lemma ? t("dictionary form") : "–"),
             form: form.form,
         }));
     return { tables: laidOut, others };

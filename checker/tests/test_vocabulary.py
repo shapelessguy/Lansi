@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 import vocabulary as vocabulary_module
-from vocabulary import Form, Listed, Rejection, Vocabularies, Vocabulary
+from vocabulary import Described, Form, Listed, Rejection, Vocabularies, Vocabulary
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def test_a_word_is_found_by_any_of_its_forms_however_it_is_capitalised(
     found = vocabulary.find("verb", "Ging")
 
     assert found == saved
-    assert (found.lemma, found.details) == ("gehen", {"auxiliary": "sein"})
+    assert (found.lemma, found.variants[0].details) == ("gehen", {"auxiliary": "sein"})
 
 
 def test_a_word_is_found_by_its_dictionary_form_though_it_was_not_among_the_forms(
@@ -79,7 +79,7 @@ def test_saving_a_stored_word_again_adds_the_forms_it_lacks_and_keeps_the_rest(
 
     assert (new, new_again) == (True, False)
     assert again.id == first.id
-    assert again.details == {"auxiliary": "sein"}
+    assert again.variants[0].details == {"auxiliary": "sein"}
     assert [form.form for form in again.forms] == ["ging", "gehen", "gehst"]
 
 
@@ -156,7 +156,7 @@ def test_the_words_are_still_there_when_the_file_is_opened_again(
 ) -> None:
     path = tmp_path / "data" / "vocabulary.db"
     first = Vocabulary(path)
-    first.save("noun", "Hund", {"genders": []}, [Form("Hunde", "der nominativ plural")])
+    first.save("noun", "Hund", {}, [Form("Hunde", "der nominativ plural")])
     first.close()
 
     found = Vocabulary(path).find("noun", "hunde")
@@ -218,6 +218,135 @@ def test_a_file_of_an_older_version_is_brought_up_to_date(tmp_path: Path) -> Non
 
     assert vocabulary.entry("noun", "Hund") is not None
     assert vocabulary.not_taken(["Hund", "Katze"]) == ["Katze"]
+
+
+def older(path: Path, version: int, *statements: str) -> None:
+    """A file of that version of the tables, with what `statements` put in."""
+    old = sqlite3.connect(path)
+    for step in vocabulary_module._SCHEMA_STEPS[:version]:
+        old.executescript(step)
+    for statement in statements:
+        old.execute(statement)
+    old.execute(f"PRAGMA user_version = {version}")
+    old.commit()
+    old.close()
+
+
+def test_a_word_kept_with_its_meanings_in_its_details_becomes_one_variant(
+    tmp_path: Path,
+) -> None:
+    older(
+        tmp_path / "vocabulary.db",
+        4,
+        "INSERT INTO entries (category, lemma, details) VALUES"
+        """ ('verb', 'gehen', '{"meanings": ["to go"], "auxiliary": "sein"}')""",
+        "INSERT INTO forms (entry_id, form, folded, tags)"
+        " VALUES (1, 'ging', 'ging', 'präteritum ich')",
+    )
+
+    entry = Vocabulary(tmp_path / "vocabulary.db").entry("verb", "gehen")
+
+    assert entry is not None
+    (variant,) = entry.variants
+    assert variant.details == {"auxiliary": "sein"}
+    assert variant.translations == {"English": ["to go"]}
+    assert [form.variant for form in entry.forms] == [variant.id]
+
+
+def test_each_sense_a_word_was_kept_by_becomes_a_variant_with_its_forms(
+    tmp_path: Path,
+) -> None:
+    older(
+        tmp_path / "vocabulary.db",
+        5,
+        "INSERT INTO entries (category, lemma) VALUES ('noun', 'Band')",
+        "INSERT INTO meanings VALUES (1, 'der', 'English', '[\"volume\"]')",
+        "INSERT INTO meanings VALUES (1, 'das', 'English', '[\"ribbon\"]')",
+        "INSERT INTO forms (entry_id, form, folded, tags)"
+        " VALUES (1, 'Bände', 'bände', 'der nominativ plural'),"
+        " (1, 'Bänder', 'bänder', 'das nominativ plural'), (1, 'band', 'band', '')",
+    )
+
+    entry = Vocabulary(tmp_path / "vocabulary.db").entry("noun", "Band")
+
+    assert entry is not None
+    der, das = entry.variants
+    assert (der.translations, das.translations) == (
+        {"English": ["volume"]},
+        {"English": ["ribbon"]},
+    )
+    by_form = {form.form: form.variant for form in entry.forms}
+    assert by_form == {"Bände": der.id, "Bänder": das.id, "band": 0}
+
+
+def test_a_word_is_stored_with_the_translations_of_each_of_its_variants(
+    vocabulary: Vocabulary,
+) -> None:
+    bank, _ = vocabulary.save_variants(
+        "noun",
+        "Bank",
+        [
+            Described({}, ["bank"], [Form("Banken", "die nominativ plural")]),
+            Described({}, ["bench"], [Form("Bänke", "die nominativ plural")]),
+        ],
+        "English",
+    )
+
+    vocabulary.set_translations(bank.id, "Italian", [["banca"], ["panca"]])
+    bank = vocabulary.set_translations(bank.id, "Italian", [["banca"], ["panchina"]])
+
+    assert [variant.translations for variant in bank.variants] == [
+        {"English": ["bank"], "Italian": ["banca"]},
+        {"English": ["bench"], "Italian": ["panchina"]},
+    ]
+    of_the_bank, of_the_bench = (form for form in bank.forms if form.tags)
+    assert (of_the_bank.variant, of_the_bench.variant) == (
+        bank.variants[0].id,
+        bank.variants[1].id,
+    )
+    assert bank.shown_in("German") == "English"
+    assert bank.translations_into("Italian") == ["banca", "panchina"]
+
+
+def test_the_translations_of_a_word_are_stored_only_for_every_variant(
+    vocabulary: Vocabulary,
+) -> None:
+    hund, _ = vocabulary.save("noun", "Hund", {}, [], ["dog"], "English")
+
+    with pytest.raises(ValueError, match="every variant"):
+        vocabulary.set_translations(hund.id, "Italian", [["cane"], ["altro"]])
+
+
+def test_the_words_without_translations_in_a_language_are_those_lacking_them(
+    vocabulary: Vocabulary,
+) -> None:
+    hund, _ = vocabulary.save("noun", "Hund", {}, [], ["dog"], "English")
+    katze, _ = vocabulary.save("noun", "Katze", {}, [], ["gatto"], "Italian")
+    leer, _ = vocabulary.save("adjective", "leer", {}, [])
+
+    assert vocabulary.lacking_translations("Italian") == [hund.id, leer.id]
+    assert vocabulary.lacking_translations("English") == [katze.id, leer.id]
+
+
+def test_a_word_merged_into_its_twin_gives_it_its_forms_as_forms_of_the_whole(
+    vocabulary: Vocabulary,
+) -> None:
+    vocabulary.save("noun", "hund", {}, [Form("hunden", "der dativ plural")], ["hound"])
+    vocabulary.save(
+        "noun", "Hund", {}, [Form("Hunde", "der nominativ plural")], ["dog"]
+    )
+
+    vocabulary.respell("noun", lambda lemma: lemma.capitalize())
+
+    merged = vocabulary.entry("noun", "Hund")
+    assert merged is not None
+    (variant,) = merged.variants
+    assert {form.form: form.variant for form in merged.forms} == {
+        "Hunde": variant.id,
+        "Hund": 0,
+        "hunden": 0,
+        "hund": 0,
+    }
 
 
 def test_the_first_part_of_a_separated_verb_is_found_when_the_rest_comes_later(

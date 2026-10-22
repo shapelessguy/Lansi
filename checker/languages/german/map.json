@@ -1,0 +1,15 @@
+{
+    "auxiliary": { "English": "auxiliary", "German": "Hilfsverb", "Italian": "ausiliare" },
+    "separable": { "English": "separable", "German": "trennbar", "Italian": "separabile" },
+    "reflexive": { "English": "reflexive", "German": "reflexiv", "Italian": "riflessivo" },
+    "cases": { "English": "cases", "German": "Kasus", "Italian": "casi" },
+    "haben": {},
+    "sein": {},
+    "haben or sein": { "English": "haben or sein", "German": "haben oder sein", "Italian": "haben o sein" },
+    "never": { "English": "never", "German": "nie", "Italian": "mai" },
+    "sometimes": { "English": "sometimes", "German": "manchmal", "Italian": "a volte" },
+    "always": { "English": "always", "German": "immer", "Italian": "sempre" },
+    "akkusativ": { "English": "accusative", "German": "Akkusativ", "Italian": "accusativo" },
+    "dativ": { "English": "dative", "German": "Dativ", "Italian": "dativo" },
+    "genitiv": { "English": "genitive", "German": "Genitiv", "Italian": "genitivo" }
+}

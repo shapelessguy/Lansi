@@ -26,7 +26,13 @@ from categories import (
     spellings,
 )
 from prompts import PROMPTS, Prompts
-from vocabulary import Form
+from vocabulary import Described, Form
+
+from languages.german import LANGUAGE
+
+# The names of what is stored of a word, with the values each can have, as
+# tables.json has them: nothing else is stored.
+DETAILS = LANGUAGE.details()
 
 # what the models are told of German
 GERMAN_PROMPTS = Prompts(Path(__file__).resolve().with_name("prompts"))
@@ -64,13 +70,14 @@ def _german(
 
 # nouns
 
+ARTICLES = ("der", "die", "das")
 CASES = ("nominativ", "genitiv", "dativ", "akkusativ")
 _DECLENSION = shape(**dict.fromkeys(CASES, TEXT))
 
 NOUN_SCHEMA = shape(
-    genders=several(
+    variants=several(
         shape(
-            article=one_of("der", "die", "das"),
+            article=one_of(*ARTICLES),
             meanings=MEANINGS,
             singular=_DECLENSION,
             plural=_DECLENSION,
@@ -80,21 +87,19 @@ NOUN_SCHEMA = shape(
 
 
 def read_noun(reply: dict[str, Any]) -> Description:
-    genders = []
-    forms = []
-    for gender in reply["genders"]:
-        article = gender["article"]
-        genders.append(
-            {
-                "article": article,
-                "meanings": gender["meanings"],
-                "plural": gender["plural"]["nominativ"],
-            }
-        )
-        for number in ("singular", "plural"):
-            for case in CASES:
-                forms.append(Form(gender[number][case], f"{article} {case} {number}"))
-    return {"genders": genders}, present(forms)
+    """A noun has a variant for each article and plural it is used with,
+    which its forms say: der, das and die Band are three, and so are die
+    Bank with the plural Banken and die Bank with Bänke."""
+    variants = []
+    for variant in reply["variants"]:
+        article = variant["article"]
+        forms = [
+            Form(variant[number][case], f"{article} {case} {number}")
+            for number in ("singular", "plural")
+            for case in CASES
+        ]
+        variants.append(Described({}, variant["meanings"], present(forms)))
+    return variants
 
 
 NOUN = _german("noun", NOUN_SCHEMA, read_noun)
@@ -113,9 +118,9 @@ TENSES = {
 
 VERB_SCHEMA = shape(
     meanings=MEANINGS,
-    auxiliary=one_of("haben", "sein", "haben or sein"),
+    auxiliary=one_of(*DETAILS["auxiliary"]),
     separable=FLAG,
-    reflexive=one_of("never", "sometimes", "always"),
+    reflexive=one_of(*DETAILS["reflexive"]),
     zu_infinitive=TEXT,
     partizip_1=TEXT,
     partizip_2=TEXT,
@@ -125,10 +130,7 @@ VERB_SCHEMA = shape(
 
 
 def read_verb(reply: dict[str, Any]) -> Description:
-    details = {
-        name: reply[name]
-        for name in ("meanings", "auxiliary", "separable", "reflexive")
-    }
+    details = {name: reply[name] for name in ("auxiliary", "separable", "reflexive")}
     forms = [
         Form(reply["zu_infinitive"], "zu-infinitiv"),
         Form(reply["partizip_1"], "partizip I"),
@@ -144,7 +146,7 @@ def read_verb(reply: dict[str, Any]) -> Description:
                     forms.append(Form(parts[1] + parts[0], f"{tag} {person} nebensatz"))
     for person in ("du", "ihr"):
         forms.append(Form(reply["imperativ"][person], f"imperativ {person}"))
-    return details, present(forms)
+    return [Described(details, reply["meanings"], present(forms))]
 
 
 VERB = _german("verb", VERB_SCHEMA, read_verb)
@@ -177,7 +179,7 @@ def read_adjective(reply: dict[str, Any]) -> Description:
                 ]
             else:
                 forms.append(Form(inflected, tag))
-    return {"meanings": reply["meanings"]}, present(forms)
+    return [Described({}, reply["meanings"], present(forms))]
 
 
 ADJECTIVE = _german("adjective", ADJECTIVE_SCHEMA, read_adjective)
@@ -193,7 +195,7 @@ def read_adverb(reply: dict[str, Any]) -> Description:
         forms.append(Form(superlative, "superlativ"))
         # "am liebsten" is met as "liebsten" when words are taken one by one
         forms.append(Form(superlative.removeprefix("am "), "superlativ"))
-    return {"meanings": reply["meanings"]}, present(forms)
+    return [Described({}, reply["meanings"], present(forms))]
 
 
 ADVERB = _german("adverb", ADVERB_SCHEMA, read_adverb)
@@ -208,7 +210,7 @@ DECLINED_SCHEMA = shape(
 
 def read_listed(reply: dict[str, Any]) -> Description:
     forms = [Form(form["form"], form["tags"].strip()) for form in reply["forms"]]
-    return {"meanings": reply["meanings"]}, present(forms)
+    return [Described({}, reply["meanings"], present(forms))]
 
 
 PRONOUN = _german("pronoun", DECLINED_SCHEMA, read_listed)
@@ -219,14 +221,16 @@ ARTICLE = _german("article", DECLINED_SCHEMA, read_listed)
 
 PREPOSITION_SCHEMA = shape(
     meanings=MEANINGS,
-    cases=several(one_of("akkusativ", "dativ", "genitiv")),
+    cases=several(one_of(*DETAILS["cases"])),
     contractions=several(TEXT),
 )
 
 
 def read_preposition(reply: dict[str, Any]) -> Description:
-    details = {"meanings": reply["meanings"], "cases": reply["cases"]}
-    return details, present([Form(c, "contraction") for c in reply["contractions"]])
+    contractions = [Form(c, "kontraktion") for c in reply["contractions"]]
+    return [
+        Described({"cases": reply["cases"]}, reply["meanings"], present(contractions))
+    ]
 
 
 PREPOSITION = _german("preposition", PREPOSITION_SCHEMA, read_preposition)
@@ -237,7 +241,7 @@ PLAIN_SCHEMA = shape(meanings=MEANINGS)
 
 
 def read_plain(reply: dict[str, Any]) -> Description:
-    return {"meanings": reply["meanings"]}, []
+    return [Described({}, reply["meanings"], [])]
 
 
 CONJUNCTION = _german("conjunction", PLAIN_SCHEMA, read_plain, "plain")

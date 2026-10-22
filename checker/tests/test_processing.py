@@ -10,7 +10,7 @@ import pytest
 from intake import Intake, Word
 from processing import MAX_TRIES, Processor, words_in, words_of
 from storage import UserStore
-from test_intake import CHAT, DECIDER, FakeChat, FakeProfiler, savable
+from test_intake import CHAT, DECIDER, FakeChat, FakeProfiler, noun, savable
 from vocabulary import Form, Vocabularies
 
 
@@ -153,7 +153,7 @@ def test_a_new_word_of_a_message_is_taken_into_the_vocabulary_and_counted(
     clock: Clock,
 ) -> None:
     chat.judged("Katze", "new", "Katze")
-    chat.descriptions["Katze"] = {"genders": []}
+    chat.descriptions["Katze"] = noun("die", "Katze", "Katzen", "cat")
     keep_chat(store, "Katze")
     clock.now += 6
 

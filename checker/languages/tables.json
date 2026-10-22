@@ -1,0 +1,16 @@
+{
+    "categories": [
+        "noun",
+        "verb",
+        "adjective",
+        "adverb",
+        "pronoun",
+        "article",
+        "preposition",
+        "conjunction",
+        "particle",
+        "numeral",
+        "interjection"
+    ],
+    "details": {}
+}

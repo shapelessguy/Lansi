@@ -4,4 +4,4 @@ Rules that the descriptions of the categories of every language share, in descri
 
 ## Prompt: meanings
 
-`meanings` are short English translations, one for each distinct meaning of the word, the most common first.
+`meanings` are short translations into the language the instructions name for them, one for each distinct meaning of the word, the most common first.

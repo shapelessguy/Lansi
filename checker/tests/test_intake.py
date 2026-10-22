@@ -14,7 +14,7 @@ from intake import Intake, Outcome, Word, category_questions, read_words, send_c
 from languages.german.test_categories import verb
 from models import Model
 from profiling import Answer, Profile, ProfileError, Profiler, Questions
-from vocabulary import Form, Rejection, Vocabularies, Vocabulary
+from vocabulary import Described, Entry, Form, Rejection, Vocabularies, Vocabulary
 
 KEY = "the-key"
 MODEL = "some/chat-model"
@@ -53,6 +53,20 @@ class FakeProfiler(Profiler):
 NOT_SAVABLE = {"savable": False, "category": "", "lemma": "", "reason": "no word"}
 
 
+def noun(
+    article: str, singular: str, plural: str, *meanings: str
+) -> dict[str, list[dict[str, object]]]:
+    """The description of a noun of one variant, whose cases are all alike."""
+    cases = ("nominativ", "genitiv", "dativ", "akkusativ")
+    variant: dict[str, object] = {
+        "article": article,
+        "meanings": list(meanings),
+        "singular": dict.fromkeys(cases, singular),
+        "plural": dict.fromkeys(cases, plural),
+    }
+    return {"variants": [variant]}
+
+
 def savable(category: str, lemma: str) -> dict[str, object]:
     return {"savable": True, "category": category, "lemma": lemma, "reason": ""}
 
@@ -67,6 +81,8 @@ class FakeChat:
         # what is answered when a word that could not be placed is asked
         # about again; a word that is not here is said not to be savable
         self.rescues: dict[str, dict[str, object]] = {}
+        # the translations of each variant of a stored word, by its dictionary form
+        self.translations: dict[str, list[list[str]]] = {}
         self.bodies: list[dict[str, Any]] = []
         self._lock = threading.Lock()
 
@@ -104,6 +120,13 @@ class FakeChat:
             answer: object = self.verdicts[given["word"]]
         elif name == "rescue":
             answer = self.rescues.get(given["word"], NOT_SAVABLE)
+        elif name == "translations":
+            answer = {
+                f"variant_{number}": translations
+                for number, translations in enumerate(
+                    self.translations[given["lemma"]], start=1
+                )
+            }
         else:
             answer = self.descriptions[given["lemma"]]
         return {
@@ -166,12 +189,99 @@ def test_a_new_word_is_stored_under_its_dictionary_form_with_all_its_forms(
     assert (outcome.status, outcome.category) == ("added", "verb")
     stored = vocabulary.find("verb", "gegangen")
     assert stored is not None and stored == outcome.entry
-    assert (stored.lemma, stored.details["auxiliary"]) == ("gehen", "sein")
+    assert (stored.lemma, stored.variants[0].details["auxiliary"]) == ("gehen", "sein")
     assert chat.asked_for("verb") == [{"lemma": "gehen"}]
     # none of its forms needs to be asked about again
     assert [found.status for found in take(intake, "gehst", "ging", "gehen")] == [
         "known"
     ] * 3
+
+
+def test_a_new_word_is_translated_into_the_language_translated_into_at_the_time(
+    vocabulary: Vocabulary, profiler: FakeProfiler, chat: FakeChat
+) -> None:
+    intake = Intake(vocabulary, profiler, chat, into=lambda: "Italian")
+    chat.judged("ging", "new", "gehen")
+
+    (outcome,) = take(intake, "ging")
+
+    assert outcome.entry is not None
+    assert outcome.entry.variants[0].translations == {"Italian": ["to go", "to walk"]}
+    assert "Write the meanings in Italian." in chat.bodies[-1]["messages"][0]["content"]
+
+
+def test_a_new_word_is_stored_with_every_variant_it_was_described_with(
+    intake: Intake, vocabulary: Vocabulary, chat: FakeChat
+) -> None:
+    chat.judged("Bänke", "new", "Bank")
+    bank_noun = noun("die", "Bank", "Banken", "bank")
+    bench_noun = noun("die", "Bank", "Bänke", "bench", "workbench")
+    chat.descriptions["Bank"] = {
+        "variants": bank_noun["variants"] + bench_noun["variants"]
+    }
+
+    (outcome,), _ = intake.take([Word("Bänke")], CHAT, DECIDER)
+
+    assert outcome.entry is not None
+    bank, bench = outcome.entry.variants
+    assert bench.translations == {"English": ["bench", "workbench"]}
+    plurals = {
+        form.form: form.variant
+        for form in outcome.entry.forms
+        if form.tags == "die nominativ plural"
+    }
+    assert plurals == {"Banken": bank.id, "Bänke": bench.id}
+
+
+def bank(vocabulary: Vocabulary) -> Entry:
+    """die Bank, which is a bank with the plural Banken and a bench with Bänke."""
+    entry, _ = vocabulary.save_variants(
+        "noun",
+        "Bank",
+        [
+            Described({}, ["bank"], [Form("Banken", "die nominativ plural")]),
+            Described({}, ["bench"], [Form("Bänke", "die nominativ plural")]),
+        ],
+        "English",
+    )
+    return entry
+
+
+def test_a_stored_word_is_translated_variant_by_variant(
+    intake: Intake, vocabulary: Vocabulary, chat: FakeChat
+) -> None:
+    chat.translations["Bank"] = [["banca"], ["panchina"]]
+
+    translated = intake.translate("German", bank(vocabulary), "Italian", CHAT, [])
+
+    assert [variant.translations["Italian"] for variant in translated.variants] == [
+        ["banca"],
+        ["panchina"],
+    ]
+    assert chat.asked_for("translations") == [
+        {
+            "lemma": "Bank",
+            "variants": {
+                "variant_1": {"English": ["bank"]},
+                "variant_2": {"English": ["bench"]},
+            },
+        }
+    ]
+    # the answer is held to one list for each variant, by its name
+    schema = chat.bodies[-1]["response_format"]["json_schema"]["schema"]
+    assert schema["required"] == ["variant_1", "variant_2"]
+
+
+def test_a_translation_that_is_not_of_every_variant_is_not_stored(
+    intake: Intake, vocabulary: Vocabulary, chat: FakeChat
+) -> None:
+    stored = bank(vocabulary)
+    chat.translations["Bank"] = [["banca"]]
+
+    with pytest.raises(intake_module.IntakeError):
+        intake.translate("German", stored, "Italian", CHAT, [])
+
+    assert vocabulary.lacking_translations("Italian") == [stored.id]
 
 
 def test_the_language_model_is_held_to_the_shape_of_the_category(
@@ -198,9 +308,7 @@ def test_a_new_word_is_judged_against_the_stored_words_spelt_most_like_it(
 ) -> None:
     for number in range(12):
         vocabulary.save("noun", f"Wort{number}", {}, [])
-    vocabulary.save(
-        "noun", "Hund", {"genders": [{"article": "der", "meanings": ["dog"]}]}, []
-    )
+    vocabulary.save("noun", "Hund", {}, [], ["dog"], "English")
     vocabulary.save("verb", "hunden", {}, [])
     chat.judged("Hunds", "form", "Hund")
 
@@ -233,7 +341,7 @@ def test_a_new_noun_is_stored_with_a_capital_letter_when_the_model_gave_none(
     intake: Intake, vocabulary: Vocabulary, chat: FakeChat
 ) -> None:
     chat.judged("hand", "new", "hand")
-    chat.descriptions["Hand"] = {"genders": []}
+    chat.descriptions["Hand"] = noun("die", "hand", "hände", "hand")
 
     (outcome,), _ = intake.take([Word("hand", "Gib mir die hand.")], CHAT, DECIDER)
 

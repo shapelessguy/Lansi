@@ -46,7 +46,7 @@ def test_a_language_without_rules_of_its_own_has_the_general_ones() -> None:
 
 
 def test_a_word_of_a_language_without_rules_is_stored_with_the_forms_listed() -> None:
-    details, forms = GENERIC["verb"].read(
+    (variant,) = GENERIC["verb"].read(
         {
             "meanings": ["to speak"],
             "forms": [
@@ -57,8 +57,8 @@ def test_a_word_of_a_language_without_rules_is_stored_with_the_forms_listed() ->
         }
     )
 
-    assert details == {"meanings": ["to speak"]}
-    assert forms == [
+    assert (variant.details, variant.translations) == ({}, ["to speak"])
+    assert variant.forms == [
         Form("parlo", "present 1st singular"),
         Form("parli", "present 2nd singular"),
     ]

@@ -19,7 +19,7 @@ import {
     withWord,
     type WordSet,
 } from "../lib/sets";
-import { countWords, type ListedWord, type Vocabulary } from "../lib/vocabulary";
+import { countWords, labelOf, type ListedWord, type Vocabulary } from "../lib/vocabulary";
 import { T } from "./T";
 
 interface Props {
@@ -99,7 +99,7 @@ export function SetEditor({ set: initial, kept, vocabulary, onSave, onDelete, on
                 type="number"
                 min={0}
                 disabled={!rule.included}
-                aria-label={`${category}: ${t(label)}`}
+                aria-label={`${labelOf(category, vocabulary.labels)}: ${t(label)}`}
                 placeholder={placeholder}
                 value={rule[key] === empty ? "" : rule[key] ?? ""}
                 onChange={(event) =>
@@ -171,7 +171,7 @@ export function SetEditor({ set: initial, kept, vocabulary, onSave, onDelete, on
                                         onChange={(event) =>
                                             setSet(withRule(set, category, { included: event.target.checked }))}
                                     />
-                                    {category}
+                                    {labelOf(category, vocabulary.labels)}
                                 </label>
                                 <span className="range">
                                     {count(category, rule, "minUsed", "used at least", 0, "0")}
@@ -186,7 +186,9 @@ export function SetEditor({ set: initial, kept, vocabulary, onSave, onDelete, on
                                 {count(category, rule, "limit", "words at most", 0, t("all"))}
                                 <select
                                     disabled={!rule.included}
-                                    aria-label={t("{category}: which words are kept", { category })}
+                                    aria-label={t("{category}: which words are kept", {
+                                        category: labelOf(category, vocabulary.labels),
+                                    })}
                                     value={keepOf(rule)}
                                     onChange={(event) =>
                                         setSet(withRule(set, category, ruleKeeping(event.target.value as Keep)))}
@@ -288,7 +290,9 @@ export function SetEditor({ set: initial, kept, vocabulary, onSave, onDelete, on
                                                 )}
                                             </td>
                                             <td>
-                                                <span className="pill">{word.category}</span>
+                                                <span className="pill">
+                                                    {labelOf(word.category, vocabulary.labels)}
+                                                </span>
                                             </td>
                                             <td className="num">{word.used || ""}</td>
                                             <td className="num">{word.seen || ""}</td>

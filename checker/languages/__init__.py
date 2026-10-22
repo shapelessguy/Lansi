@@ -14,13 +14,21 @@ holds everything that is of that language and nothing else has:
                     own way
     prompts/        what the models are told of it, as checker/prompts.py
                     describes
-    tables.json     how the forms of its words are laid out, as
-                    `Language.form_tables` describes
+    tables.json     the names its words are stored with, as
+                    `Language.details` describes, and how their forms are
+                    laid out, as `Language.form_tables` does
+    map.json        each of those names in the languages the app is shown
+                    in, as `Language.labels` describes
     grammar/        its lessons, as grammar.py reads them
     evaluations/    its mock exams, as evaluating.py reads them
 
 A language that has no directory here is learned all the same, by the
 rules that fit every language.
+
+What every language stores its words with is in tables.json and map.json
+here, which those of a language add to: the names of the categories and of
+what is known about a word. What is stored or shown of a word is named only
+by those, and `check_labels` makes sure that each has its entry in a map.
 """
 
 from __future__ import annotations
@@ -38,6 +46,27 @@ if TYPE_CHECKING:
 LANGUAGES_DIRECTORY = Path(__file__).resolve().parent
 # The language that is learned unless another is said.
 DEFAULT_LANGUAGE = "German"
+# The language what is read is translated into unless another is said.
+DEFAULT_INTO = "English"
+
+# A name a word is stored with, in each language the app is shown in that it
+# has a text of its own in. Where it has none, the name itself is shown.
+Labels = dict[str, dict[str, str]]
+
+
+def _json_of(directory: Path | None, name: str) -> dict[str, Any]:
+    """The JSON file of `directory` of that name, or nothing if there is none."""
+    path = directory / name if directory else None
+    if path is None or not path.is_file():
+        return {}
+    read: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return read
+
+
+# What every language stores its words with: the names of the categories,
+# which are the same for all of them, and of what is known about a word.
+SHARED_TABLES = _json_of(LANGUAGES_DIRECTORY, "tables.json")
+SHARED_LABELS: Labels = _json_of(LANGUAGES_DIRECTORY, "map.json")
 
 
 class Language:
@@ -85,10 +114,26 @@ class Language:
             return lemma[:1].upper() + lemma[1:]
         return lemma
 
+    def _tables(self) -> dict[str, Any]:
+        """The tables.json of the directory of the language."""
+        return _json_of(self.directory, "tables.json")
+
+    def details(self) -> dict[str, list[str]]:
+        """The names of what is known about a word, of every category: those
+        of every language and those of `details` in its tables.json. A
+        name that can only have some values, each a name too, has them;
+        one that can have any has none. A category can store only these."""
+        return {**SHARED_TABLES["details"], **self._tables().get("details", {})}
+
+    def labels(self) -> Labels:
+        """Each name a word is stored with, in the languages the app is
+        shown in: map.json here, with that of its directory over it."""
+        return {**SHARED_LABELS, **_json_of(self.directory, "map.json")}
+
     def form_tables(self) -> dict[str, list[dict[str, Any]]]:
         """How the app lays out the forms of a word in tables, for each
-        category that has any: `tables.json` of the directory of the
-        language. A table is
+        category that has any: `tables` of tables.json of the directory
+        of the language. A table is
 
             {"title": ..., "columns": [...], "rows": [...],
              "tags": "{column} {row}",
@@ -97,15 +142,18 @@ class Language:
         where `tags` are those of the form that goes where a column and a
         row meet, and `also`, if there is one, those of another form shown
         beside it, with what that form is. A form that fits no table is
-        listed with its tags."""
-        directory = self.directory
-        path = directory / "tables.json" if directory else None
-        if path is None or not path.is_file():
-            return {}
-        tables: dict[str, list[dict[str, Any]]] = json.loads(
-            path.read_text(encoding="utf-8")
-        )
+        listed with its tags. The tags, and so the tables, are written in
+        the language itself, and are shown as they are."""
+        tables: dict[str, list[dict[str, Any]]] = self._tables().get("tables", {})
         return tables
+
+    def names(self) -> list[str]:
+        """Every name its words are stored with: the categories, and what is
+        known about a word with the values it can have."""
+        names = list(SHARED_TABLES["categories"])
+        for detail, values in self.details().items():
+            names += [detail, *values]
+        return names
 
 
 def directory_of(name: str, root: Path = LANGUAGES_DIRECTORY) -> Path | None:
@@ -140,3 +188,17 @@ def languages_of_their_own() -> list[Language]:
         for directory in sorted(LANGUAGES_DIRECTORY.iterdir())
         if (directory / "__init__.py").is_file()
     ]
+
+
+def check_labels() -> None:
+    """Make sure that every name the words of a language are stored with,
+    of every language and of each that has rules of its own, has an entry
+    in a map.json, whatever languages that entry has a text in."""
+    missing = [
+        f"{language.name or 'every language'}: {name}"
+        for language in [Language(""), *languages_of_their_own()]
+        for name in language.names()
+        if name not in language.labels()
+    ]
+    if missing:
+        raise ValueError(f"not in a map.json: {', '.join(missing)}")

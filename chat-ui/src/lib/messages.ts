@@ -1154,6 +1154,30 @@ export const MESSAGES = {
         German: "{count}× gesehen",
         Italian: "vista {count}×",
     },
+    "Translating the words into {language}: {count} left": {
+        German: "Die Wörter werden ins {language} übersetzt: noch {count}",
+        Italian: "Traduzione delle parole in {language}: ne mancano {count}",
+    },
+    "The words could not be translated into {language}: {message}": {
+        German: "Die Wörter konnten nicht ins {language} übersetzt werden: {message}",
+        Italian: "Non è stato possibile tradurre le parole in {language}: {message}",
+    },
+    "{count} word is not translated into {language} yet.": {
+        German: "{count} Wort ist noch nicht ins {language} übersetzt.",
+        Italian: "{count} parola non è ancora tradotta in {language}.",
+    },
+    "{count} words are not translated into {language} yet.": {
+        German: "{count} Wörter sind noch nicht ins {language} übersetzt.",
+        Italian: "{count} parole non sono ancora tradotte in {language}.",
+    },
+    "Translate them into {language}": {
+        German: "Ins {language} übersetzen",
+        Italian: "Traducile in {language}",
+    },
+    "dictionary form": {
+        German: "Grundform",
+        Italian: "forma base",
+    },
     "yes": {
         German: "ja",
         Italian: "sì",

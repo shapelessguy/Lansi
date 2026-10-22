@@ -6,9 +6,10 @@ Variables:
 - `$language`: the language the learner is learning, such as German
 - `$name`: the name of the category
 - `$rules`: how the category is described, from categories/describing.md
+- `$into`: the language the meanings are written in, the one the learner has what they read translated into, such as English
 
 ## Prompt
 
-You fill in the entry of a $language $name for a vocabulary. You are given its dictionary form as `lemma`. Spell every form as it is written in $language, with the letters and marks of its own, and with a capital letter only where $language has one.
+You fill in the entry of a $language $name for a vocabulary. You are given its dictionary form as `lemma`. Spell every form as it is written in $language, with the letters and marks of its own, and with a capital letter only where $language has one. Write the meanings in $into.
 
 $rules

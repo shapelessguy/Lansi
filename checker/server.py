@@ -62,7 +62,7 @@ from intake import (
     send_chat,
 )
 from known import Asked, known_words
-from languages import DEFAULT_LANGUAGE, language_of
+from languages import DEFAULT_INTO, DEFAULT_LANGUAGE, check_labels, language_of
 from live import LiveChecker
 from logs import LogError
 from lookups import asked_anything, translation_log, write_question_logs
@@ -100,7 +100,6 @@ from topics import (
     EMBED_BATCH,
 )
 from translating import (
-    DEFAULT_INTO,
     MAX_SELECTION_LENGTH,
     Passage,
     TranslationError,
@@ -126,6 +125,7 @@ from tutor import (
 from tutor import read_messages as read_tutor_messages
 from users import Users, take_vocabulary, user_directory
 from vocabulary import Vocabularies, Vocabulary
+from word_translations import WordTranslator
 
 HOST = "127.0.0.1"
 # The request header the chat sends its OpenRouter key in.
@@ -337,6 +337,17 @@ def describe_outcomes(outcomes: list[Outcome]) -> str:
 _log_lock = threading.Lock()
 
 
+def translating_into(store: UserStore) -> str:
+    """The language the user has what they read translated into, as their
+    settings say, which new words are translated into."""
+    into = (store.settings() or {}).get("translateInto")
+    return (
+        into.strip()[:MAX_LANGUAGE_LENGTH]
+        if isinstance(into, str) and into.strip()
+        else DEFAULT_INTO
+    )
+
+
 def log(entry: str) -> None:
     """Prints one entry at a time, as requests and profiles finish on
     different threads and their lines would otherwise run into each other."""
@@ -371,6 +382,8 @@ class Account:
     practice: Practice | None = None
     # the evaluations, mock exams made of the exercises of practice
     evaluations: Evaluations | None = None
+    # what translates the stored words into another language
+    words: WordTranslator | None = None
     # held while what the tutor is to remember of a chat is decided, so that
     # chats closed together are remembered one after another, each with the
     # memories that came of those before it
@@ -1504,13 +1517,19 @@ class CheckerHandler(BaseHTTPRequestHandler):
         elif intake and intake.has_vocabulary(named):
             # asking after a language does not make a vocabulary of it
             vocabulary = intake.vocabulary_of(named)
-        # how the forms of a word of the language are laid out
-        tables = language_of(named or (intake.language if intake else "")).form_tables()
+        studied = language_of(named or (intake.language if intake else ""))
+        shown = {
+            # in the order they are to be shown in
+            "categories": list(CATEGORIES),
+            # what is stored of a word, with the values that are names
+            "details": studied.details(),
+            # each of those names in the languages the app is shown in
+            "labels": studied.labels(),
+            # how the forms of a word of the language are laid out
+            "tables": studied.form_tables(),
+        }
         if intake and not vocabulary and url.path == "/vocabulary/words":
-            self._reply(
-                HTTPStatus.OK,
-                {"categories": list(CATEGORIES), "tables": tables, "words": []},
-            )
+            self._reply(HTTPStatus.OK, {**shown, "words": []})
             return
         if vocabulary and url.path == "/vocabulary/words":
             # Every stored word, without what is known about it, which is
@@ -1518,9 +1537,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             self._reply(
                 HTTPStatus.OK,
                 {
-                    # in the order they are to be shown in
-                    "categories": list(CATEGORIES),
-                    "tables": tables,
+                    **shown,
                     "words": [asdict(word) for word in vocabulary.listing()],
                 },
             )
@@ -1567,6 +1584,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._take_selection(self.account.intake, api_key)
             elif self.path == "/vocabulary/import" and self.account.importer:
                 self._import(self.account.importer, api_key)
+            elif self.path == "/vocabulary/translations" and self.account.words:
+                self._translate_words(self.account.words, api_key)
             else:
                 self._reply(HTTPStatus.NOT_FOUND, {"error": "no such path"})
         except ValueError as error:
@@ -2255,6 +2274,22 @@ class CheckerHandler(BaseHTTPRequestHandler):
         count_usage(self.account.store, "vocabulary", "vocabulary", usage)
         self._reply(HTTPStatus.OK, {**asdict(status), "usage": usage})
 
+    def _translate_words(self, translator: WordTranslator, api_key: str | None) -> None:
+        """Replies to a `{"language": ..., "into": ..., "model": ...,
+        "start": ...}` request with what the translating of the words of
+        `language` into `into` is doing, and how many words have no
+        translations there, and starts it if `start` is true."""
+        body = self._read_body()
+        language, into, model = self._read_translating(body, api_key)
+        if body.get("start") is True:
+            translator.start(language, into, model)
+        else:
+            translator.keyed(model)
+        status, used = translator.status(language, into)
+        usage = [describe_usage(profile) for profile in used]
+        count_usage(self.account.store, "vocabulary", "vocabulary", usage)
+        self._reply(HTTPStatus.OK, {**asdict(status), "usage": usage})
+
     def _take_language(self, body: dict[str, Any]) -> None:
         """Takes the `language` of a request, if it has one, as the language
         being studied from now on: the one that is spell-checked, that
@@ -2530,6 +2565,8 @@ if __name__ == "__main__":
     # a Windows console may not be able to show every character that is typed
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    # every name a word is stored with can be shown in the app's languages
+    check_labels()
     # the language being studied, by its English name, until the chat says
     language = os.environ.get("CHECKER_LANGUAGE", DEFAULT_LANGUAGE)
     model = os.environ.get("CHECKER_PROFILE_MODEL", DEFAULT_MODEL)
@@ -2541,14 +2578,15 @@ if __name__ == "__main__":
         the user's own."""
         profiler = Profiler(model)
         speller = StudySpeller(language)
+        kept = UserStore(user_directory(data_directory, user))
         intake = Intake(
             Vocabularies(user_directory(data_directory, user)),
             profiler,
             # the language model asked about new words when a request names none
             model=os.environ.get("CHECKER_CHAT_MODEL", ""),
             known=speller.knows,
+            into=partial(translating_into, kept),
         )
-        kept = UserStore(user_directory(data_directory, user))
         anki = AnkiLink(user, deck_status_url)
         importer = AnkiImporter(
             intake,
@@ -2598,6 +2636,7 @@ if __name__ == "__main__":
             ),
         )
         assert account.practice
+        account.words = WordTranslator(intake)
         account.evaluations = Evaluations(
             kept, account.practice, later=in_background(tasks, "log")
         )

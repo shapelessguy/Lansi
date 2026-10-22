@@ -1927,6 +1927,30 @@ div.book-cover {
     color: var(--danger);
 }
 
+.translations-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+}
+
+.translations-language {
+    margin-left: 6px;
+    color: var(--muted);
+}
+
+.entry-variant + .entry-variant {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.entry-variant-title {
+    margin: 0 0 4px;
+    font-size: 0.85em;
+    color: var(--muted);
+}
+
 .import-status {
     color: var(--muted);
 }

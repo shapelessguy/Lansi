@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from categories import categories_of, dictionary_form
+from categories import Category, categories_of, dictionary_form
 from intake import mismatch
-from vocabulary import Form
+from vocabulary import Described, Form
 
 from languages.german.categories import (
     ADJECTIVE,
@@ -21,6 +21,14 @@ from languages.german.categories import (
 )
 
 PERSONS = ("ich", "du", "er", "wir", "ihr", "sie")
+
+
+def read(
+    category: Category, reply: dict[str, Any]
+) -> tuple[dict[str, Any], list[str], list[Form]]:
+    """What is known of the one variant of a word, its translations and its forms."""
+    (variant,) = category.read(reply)
+    return variant.details, variant.translations, variant.forms
 
 
 def table(*forms: str) -> dict[str, str]:
@@ -51,10 +59,10 @@ def spellings(forms: list[Form]) -> set[str]:
 
 
 def test_a_verb_is_stored_with_each_person_of_each_tense_and_its_participles() -> None:
-    details, forms = VERB.read(verb())
+    details, meanings, forms = read(VERB, verb())
 
+    assert meanings == ["to go", "to walk"]
     assert details == {
-        "meanings": ["to go", "to walk"],
         "auxiliary": "sein",
         "separable": False,
         "reflexive": "never",
@@ -70,21 +78,22 @@ def test_a_verb_is_stored_with_each_person_of_each_tense_and_its_participles() -
 
 
 def test_a_form_a_verb_does_not_have_is_left_out() -> None:
-    _, forms = VERB.read(verb())
+    _, _, forms = read(VERB, verb())
 
     assert "" not in spellings(forms)
     assert "konjunktiv II sie" not in {form.tags for form in forms}
 
 
 def test_a_separable_verb_is_stored_split_and_as_it_is_at_the_end_of_a_clause() -> None:
-    _, forms = VERB.read(
+    _, _, forms = read(
+        VERB,
         verb(
             separable=True,
             praesens=table(
                 "rufe an", "rufst an", "ruft an", "rufen an", "ruft an", "rufen an"
             ),
             imperativ={"du": "ruf an", "ihr": "ruft an"},
-        )
+        ),
     )
 
     assert Form("rufe an", "präsens ich") in forms
@@ -93,7 +102,7 @@ def test_a_separable_verb_is_stored_split_and_as_it_is_at_the_end_of_a_clause() 
     assert "anruf" not in spellings(forms)
 
 
-def test_a_noun_is_stored_with_every_gender_it_has_and_the_cases_of_each() -> None:
+def test_a_noun_has_a_variant_for_each_article_and_plural_with_its_cases() -> None:
     def declined(singular: str, genitive: str, plural: str, dative: str) -> Any:
         return {
             "singular": {
@@ -110,9 +119,9 @@ def test_a_noun_is_stored_with_every_gender_it_has_and_the_cases_of_each() -> No
             },
         }
 
-    details, forms = NOUN.read(
+    der, das, die, bank, bench = NOUN.read(
         {
-            "genders": [
+            "variants": [
                 {
                     "article": "der",
                     "meanings": ["volume"],
@@ -128,34 +137,45 @@ def test_a_noun_is_stored_with_every_gender_it_has_and_the_cases_of_each() -> No
                     "meanings": ["band"],
                     **declined("Band", "Band", "Bands", "Bands"),
                 },
+                # not the same word, but read the same way
+                {
+                    "article": "die",
+                    "meanings": ["bank"],
+                    **declined("Bank", "Bank", "Banken", "Banken"),
+                },
+                {
+                    "article": "die",
+                    "meanings": ["bench"],
+                    **declined("Bank", "Bank", "Bänke", "Bänken"),
+                },
             ]
         }
     )
 
-    assert details == {
-        "genders": [
-            {"article": "der", "meanings": ["volume"], "plural": "Bände"},
-            {"article": "das", "meanings": ["ribbon", "tape"], "plural": "Bänder"},
-            {"article": "die", "meanings": ["band"], "plural": "Bands"},
-        ]
-    }
-    assert Form("Bändern", "das dativ plural") in forms
-    assert Form("Bänden", "der dativ plural") in forms
-    assert Form("Bands", "die nominativ plural") in forms
+    assert (der.details, der.translations) == ({}, ["volume"])
+    assert das.translations == ["ribbon", "tape"]
+    assert Form("Bändern", "das dativ plural") in das.forms
+    assert Form("Bänden", "der dativ plural") in der.forms
+    assert Form("Bands", "die nominativ plural") in die.forms
+    # two variants of one article keep their plurals apart
+    assert Form("Banken", "die nominativ plural") in bank.forms
+    assert Form("Banken", "die nominativ plural") not in bench.forms
+    assert Form("Bänke", "die nominativ plural") in bench.forms
 
 
 def test_an_adjective_is_stored_with_every_ending_of_each_degree() -> None:
-    details, forms = ADJECTIVE.read(
+    details, meanings, forms = read(
+        ADJECTIVE,
         {
             "meanings": ["high", "tall"],
             "comparative": "höher",
             "positive_inflected": "hohe",
             "comparative_inflected": "höhere",
             "superlative_inflected": "höchste",
-        }
+        },
     )
 
-    assert details == {"meanings": ["high", "tall"]}
+    assert (details, meanings) == ({}, ["high", "tall"])
     assert spellings(forms) >= {
         "höher",
         *("hohe", "hoher", "hohes", "hohen", "hohem"),
@@ -166,29 +186,32 @@ def test_an_adjective_is_stored_with_every_ending_of_each_degree() -> None:
 
 
 def test_an_adjective_without_endings_or_degrees_is_stored_as_it_is() -> None:
-    _, forms = ADJECTIVE.read(
+    _, _, forms = read(
+        ADJECTIVE,
         {
             "meanings": ["purple"],
             "comparative": "",
             "positive_inflected": "lila",
             "comparative_inflected": "",
             "superlative_inflected": "",
-        }
+        },
     )
 
     assert forms == [Form("lila", "positiv")]
 
 
 def test_the_superlative_of_an_adverb_is_stored_with_and_without_am() -> None:
-    _, forms = ADVERB.read(
-        {"meanings": ["gladly"], "comparative": "lieber", "superlative": "am liebsten"}
+    _, _, forms = read(
+        ADVERB,
+        {"meanings": ["gladly"], "comparative": "lieber", "superlative": "am liebsten"},
     )
 
     assert spellings(forms) == {"lieber", "am liebsten", "liebsten"}
 
 
 def test_a_pronoun_is_stored_with_the_forms_that_were_listed_for_it() -> None:
-    details, forms = PRONOUN.read(
+    details, meanings, forms = read(
+        PRONOUN,
         {
             "meanings": ["I"],
             "forms": [
@@ -196,27 +219,27 @@ def test_a_pronoun_is_stored_with_the_forms_that_were_listed_for_it() -> None:
                 {"form": " mir ", "tags": " dativ "},
                 {"form": "", "tags": "genitiv"},
             ],
-        }
+        },
     )
 
-    assert details == {"meanings": ["I"]}
+    assert (details, meanings) == ({}, ["I"])
     assert forms == [Form("mich", "akkusativ"), Form("mir", "dativ")]
 
 
 def test_a_preposition_is_stored_with_its_cases_and_fused_with_articles() -> None:
-    details, forms = PREPOSITION.read(
-        {"meanings": ["to"], "cases": ["dativ"], "contractions": ["zum", "zur"]}
+    details, meanings, forms = read(
+        PREPOSITION,
+        {"meanings": ["to"], "cases": ["dativ"], "contractions": ["zum", "zur"]},
     )
 
-    assert details == {"meanings": ["to"], "cases": ["dativ"]}
-    assert forms == [Form("zum", "contraction"), Form("zur", "contraction")]
+    assert (details, meanings) == ({"cases": ["dativ"]}, ["to"])
+    assert forms == [Form("zum", "kontraktion"), Form("zur", "kontraktion")]
 
 
 def test_a_word_with_one_form_is_stored_with_its_meanings_only() -> None:
-    assert CONJUNCTION.read({"meanings": ["because"]}) == (
-        {"meanings": ["because"]},
-        [],
-    )
+    assert CONJUNCTION.read({"meanings": ["because"]}) == [
+        Described({}, ["because"], [])
+    ]
 
 
 def test_a_description_that_is_not_of_the_shape_is_told_from_one_that_is() -> None:
@@ -237,9 +260,10 @@ def test_a_description_that_is_not_of_the_shape_is_told_from_one_that_is() -> No
 
 
 def test_a_form_given_in_two_spellings_is_stored_as_two_forms() -> None:
-    _, noun_forms = NOUN.read(
+    _, _, noun_forms = read(
+        NOUN,
         {
-            "genders": [
+            "variants": [
                 {
                     "article": "das",
                     "meanings": ["product"],
@@ -254,26 +278,29 @@ def test_a_form_given_in_two_spellings_is_stored_as_two_forms() -> None:
                     ),
                 }
             ]
-        }
+        },
     )
-    _, verb_forms = VERB.read(
+    _, _, verb_forms = read(
+        VERB,
         verb(
             separable=True,
             praesens=table("fange an", "fängst an", "", "", "", ""),
             imperativ={"du": "fang an / fange an", "ihr": ""},
-        )
+        ),
     )
-    _, adjective_forms = ADJECTIVE.read(
+    _, _, adjective_forms = read(
+        ADJECTIVE,
         {
             "meanings": ["dear"],
             "comparative": "teurer",
             "positive_inflected": "teure/teuere",
             "comparative_inflected": "",
             "superlative_inflected": "",
-        }
+        },
     )
-    _, adverb_forms = ADVERB.read(
-        {"meanings": ["gladly"], "comparative": "", "superlative": "am liebsten"}
+    _, _, adverb_forms = read(
+        ADVERB,
+        {"meanings": ["gladly"], "comparative": "", "superlative": "am liebsten"},
     )
 
     assert Form("Produkts", "das genitiv singular") in noun_forms
@@ -296,4 +323,4 @@ def test_what_german_is_told_of_its_words_has_its_examples() -> None:
     assert "Hund" in NOUN.criterion
     assert "der, das and die Band" in NOUN.judging
     assert "Produkts / Produktes" in NOUN.describing
-    assert "short English translations" in VERB.describing
+    assert "short translations into the language" in VERB.describing

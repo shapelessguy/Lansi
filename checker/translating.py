@@ -33,8 +33,6 @@ MAX_AFTER_LENGTH = 2000
 # a chat about a few words does not go on for longer
 MAX_MESSAGES = 100
 MAX_MESSAGE_LENGTH = 10_000
-# The language a selection is translated into when the request names none.
-DEFAULT_INTO = "English"
 # A translation of a few words takes no thinking over, and a model that
 # thinks first keeps the reader waiting, and is paid for what it thought.
 # what the selection is put between in the passage the model is given

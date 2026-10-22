@@ -26,19 +26,22 @@ from typing import Any
 
 from categories import (
     CATEGORIES,
+    MEANINGS,
     NOT_STORED,
     Category,
+    Description,
     Schema,
     categories_of,
     dictionary_form,
     one_of,
     shape,
+    unknown_details,
 )
-from languages import DEFAULT_LANGUAGE, language_of
+from languages import DEFAULT_INTO, DEFAULT_LANGUAGE, language_of
 from models import Model
 from profiling import Profile, ProfileError, Profiler, Questions, post
 from prompts import PROMPTS
-from vocabulary import Entry, Form, Vocabularies, Vocabulary
+from vocabulary import Entry, Form, Vocabularies, Vocabulary, fold
 
 # How long a language model is given to answer, all in all. Writing out every
 # form of a verb takes a while, but a model that is still at it after this
@@ -169,6 +172,7 @@ class Intake:
         model: str = "",
         workers: int = WORKERS,
         known: Callable[[str], bool] | None = None,
+        into: Callable[[], str] = lambda: DEFAULT_INTO,
     ) -> None:
         # one vocabulary, or one for each language
         self._vocabulary = vocabulary
@@ -179,6 +183,9 @@ class Intake:
         self._workers = workers
         # says whether a word is in a dictionary of the language
         self._known = known
+        # The language the meanings of new words are written in: the one the
+        # learner has what they read translated into at the time.
+        self.into = into
         # The language the words are of, by its English name. It is whoever
         # sends the words that says which, and there is one for all of them.
         self.language = DEFAULT_LANGUAGE
@@ -374,10 +381,14 @@ class Intake:
                 raise IntakeError(
                     f"it was judged a form of {lemma}, which is not a stored {name}"
                 )
-            details, forms = self._describe(lemma, category, model, used)
-            if not any(form.form.lower() == word.word.lower() for form in forms):
-                forms.append(Form(word.word))
-            outcome.entry, _ = self.vocabulary.save(name, lemma, details, forms)
+            into = self.into()
+            variants = self._describe(lemma, category, into, model, used)
+            described = [fold(form.form) for each in variants for form in each.forms]
+            # the spelling it was met in, if it was described without it
+            met = [] if fold(word.word) in described else [Form(word.word)]
+            outcome.entry, _ = self.vocabulary.save_variants(
+                name, lemma, variants, into, met
+            )
             outcome.status = "added"
 
     def _fall_back(
@@ -483,7 +494,7 @@ class Intake:
         if word.sentence:
             given["sentence"] = word.sentence
         given["candidates"] = [
-            {"lemma": entry.lemma, "meanings": meanings_of(entry)}
+            {"lemma": entry.lemma, "meanings": entry.translations_into(self.into())}
             for entry in candidates
         ]
         reply = self._ask(
@@ -513,19 +524,66 @@ class Intake:
             raise IntakeError("the model gave no dictionary form")
         return verdict, lemma
 
+    def translate(
+        self,
+        language: str,
+        entry: Entry,
+        into: str,
+        model: Model,
+        used: list[Profile],
+    ) -> Entry:
+        """Have the translations of each variant of a stored word of
+        `language` written in `into`, from the word itself, what is known of
+        each variant and its translations into another language, which keep
+        the variants apart, and return the word with them."""
+        source = entry.shown_in(DEFAULT_INTO)
+        # Each variant by a name of its own, which the answer has to fill in:
+        # given a list, a model takes the meanings of one variant for several.
+        names = [f"variant_{number}" for number in range(1, len(entry.variants) + 1)]
+        given = {
+            "lemma": entry.lemma,
+            "variants": {
+                name: {
+                    **({"details": variant.details} if variant.details else {}),
+                    **(
+                        {source: variant.translations[source]}
+                        if source in variant.translations
+                        else {}
+                    ),
+                }
+                for name, variant in zip(names, entry.variants, strict=True)
+            },
+        }
+        reply = self._ask(
+            PROMPTS(
+                "intake.translations", language=language, name=entry.category, into=into
+            ),
+            given,
+            "translations",
+            shape(**dict.fromkeys(names, MEANINGS)),
+            model,
+            used,
+        )
+        vocabulary = self.vocabulary_of(language)
+        return vocabulary.set_translations(
+            entry.id, into, [reply[name] for name in names]
+        )
+
     def _describe(
         self,
         lemma: str,
         category: Category,
+        into: str,
         model: Model,
         used: list[Profile],
-    ) -> tuple[dict[str, Any], list[Form]]:
+    ) -> Description:
         reply = self._ask(
             PROMPTS(
                 "intake.describing",
                 language=self.language,
                 name=category.name,
                 rules=category.describing,
+                into=into,
             ),
             {"lemma": lemma},
             category.name,
@@ -533,7 +591,19 @@ class Intake:
             model,
             used,
         )
-        return category.read(reply)
+        variants = category.read(reply)
+        if not variants:
+            raise IntakeError(f"the model gave no variant of the {category.name}")
+        # what is stored of a word is named only as the language's tables.json has it
+        known = language_of(self.language).details()
+        unknown = [
+            name for each in variants for name in unknown_details(each.details, known)
+        ]
+        if unknown:
+            raise IntakeError(
+                f"the {category.name} is described by {', '.join(unknown)}"
+            )
+        return variants
 
     def _ask(
         self,
@@ -575,19 +645,6 @@ class Intake:
     def _describing_lock(self, category: str, lemma: str) -> threading.Lock:
         with self._lock:
             return self._describing.setdefault((category, lemma), threading.Lock())
-
-
-def meanings_of(entry: Entry) -> list[str]:
-    """The meanings of a stored word, to tell it by."""
-    meanings = entry.details.get("meanings")
-    if meanings is None:
-        # a noun has its meanings by gender
-        meanings = [
-            meaning
-            for gender in entry.details.get("genders", [])
-            for meaning in gender.get("meanings", [])
-        ]
-    return [meaning for meaning in meanings if isinstance(meaning, str)]
 
 
 def read_reply(response: dict[str, Any]) -> object:
