@@ -1124,7 +1124,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             GET /evaluations             the evaluations, the latest first
             GET /evaluations/E           an evaluation, with its parts
             POST /evaluations            start one, `{"language": ...,
-                                         "level": ..., "length": half hours,
+                                         "level": ..., "size": 1 to 5,
                                          "timed": ...}`
             POST /evaluations/E/parts/N/start
                                          start its part N in a session of its
@@ -1172,7 +1172,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 evaluation = evaluations.start(
                     named.strip() or self.account.language,
                     level,
-                    body.get("length"),  # type: ignore[arg-type]
+                    body.get("size"),  # type: ignore[arg-type]
                     body.get("timed") is True,
                 )
                 self._reply(HTTPStatus.OK, evaluation)

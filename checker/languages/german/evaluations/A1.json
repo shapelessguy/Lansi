@@ -35,6 +35,24 @@
                     },
                     "instances": 6,
                     "minutes": 8,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 5,
+                            "minutes": 7
+                        }
+                    ],
                     "points": 6,
                     "instructions": "Sie hören kurze Gespräche. Sie hören jeden Text zweimal. Kreuzen Sie an: a, b oder c.",
                     "task": "Short everyday dialogues between two people, of four to six turns, written with the speakers' names, such as Frau, Mann, Verkäuferin. The question asks for one fact the dialogue gives: a time, a day, a price, a number, a place or a thing. All three options are named or hinted at in the dialogue, and only one is what the speakers agree on, so that the listener must follow a change of mind or a correction.",
@@ -66,6 +84,24 @@
                     },
                     "instances": 4,
                     "minutes": 4,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 3
+                        }
+                    ],
                     "points": 4,
                     "instructions": "Sie hören Durchsagen. Sie hören jeden Text einmal. Kreuzen Sie an: Richtig oder Falsch.",
                     "task": "Announcements of two to four sentences, as heard at a station, an airport, in a shop or a swimming pool, with a time, a platform, a floor or an offer. The statement repeats one fact of it, rightly or with one detail changed.",
@@ -93,6 +129,24 @@
                     },
                     "instances": 5,
                     "minutes": 8,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 6
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Sie hören Nachrichten am Telefon. Sie hören jeden Text zweimal. Kreuzen Sie an: a, b oder c.",
                     "task": "Messages left on an answering machine, of three to five sentences: the caller says who they are, what they want and when or where. The question asks for one fact of it, and the options are near each other, such as three times or three places that are all said or likely.",
@@ -129,8 +183,26 @@
                         "questions": 3
                     },
                     "instances": 2,
-                    "scale": "questions",
                     "minutes": 9,
+                    "sizes": [
+                        {
+                            "instances": 1,
+                            "questions": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 2,
+                            "questions": 2,
+                            "minutes": 7
+                        },
+                        {
+                            "minutes": 9
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Lesen Sie die Texte und die Aufgaben. Kreuzen Sie an: Richtig oder Falsch.",
                     "task": "Short personal emails or letters of 50 to 70 words, with a greeting and an ending, about plans, an invitation or news. The statements each take up one fact of the text, rightly or changed in one detail, in other words than the text.",
@@ -167,6 +239,24 @@
                     },
                     "instances": 5,
                     "minutes": 8,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 7
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Lesen Sie die Texte und die Aufgaben. Wo finden Sie Informationen? Kreuzen Sie an: a oder b.",
                     "task": "A situation of one sentence, such as someone looking for a cheap flight or a doctor open on Saturday, and two short adverts or web pages, a and b, of one to three lines each. Both are about the same thing, and only one fits the situation.",
@@ -196,6 +286,24 @@
                     },
                     "instances": 5,
                     "minutes": 8,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 7
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Lesen Sie die Texte und die Aufgaben. Kreuzen Sie an: Richtig oder Falsch.",
                     "task": "Signs and notices of one to three lines, as found on a door, in a shop, at a station or in a school, with a time, a place or a rule. The statement says what the reader can or must do, rightly or wrongly.",
@@ -265,6 +373,24 @@
                     },
                     "instances": 1,
                     "minutes": 14,
+                    "sizes": [
+                        {
+                            "words": 20,
+                            "minutes": 9
+                        },
+                        {
+                            "words": 20,
+                            "minutes": 9
+                        },
+                        {
+                            "words": 25,
+                            "minutes": 11
+                        },
+                        {
+                            "words": 25,
+                            "minutes": 11
+                        }
+                    ],
                     "points": 10,
                     "instructions": "Schreiben Sie eine kurze Nachricht (circa 30 Wörter). Schreiben Sie zu allen drei Punkten. Vergessen Sie Anrede und Gruß nicht.",
                     "task": "A situation of one or two sentences in which the learner writes to a friend, a teacher or an office, and three points to write about, such as why, when and a question. The prompt states the situation's addressee and lists the three points.",
@@ -311,8 +437,25 @@
                         "prompts": 4
                     },
                     "instances": 1,
-                    "scale": "prompts",
                     "minutes": 5,
+                    "sizes": [
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 4,
+                            "minutes": 5
+                        }
+                    ],
                     "points": 6,
                     "instructions": "Um Informationen bitten und Informationen geben. Schreiben Sie so, wie Sie sprechen würden.",
                     "task": "A theme and word cards of that theme. Half of the prompts give a card and ask the learner to ask a question with its word; the other half give a question of the partner, made with a card, for the learner to answer.",
@@ -334,8 +477,25 @@
                         "prompts": 4
                     },
                     "instances": 1,
-                    "scale": "prompts",
                     "minutes": 6,
+                    "sizes": [
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 4,
+                            "minutes": 6
+                        }
+                    ],
                     "points": 6,
                     "instructions": "Bitten formulieren und darauf reagieren. Schreiben Sie so, wie Sie sprechen würden.",
                     "task": "Cards each with a thing or an action, described in words in place of a picture. Half of the prompts give a card and ask the learner to make a request with it; the other half give a request of the partner for the learner to react to.",

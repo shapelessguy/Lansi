@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 27
+SCHEMA_VERSION = 29
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -508,6 +508,18 @@ ALTER TABLE grades ADD COLUMN parts TEXT NOT NULL DEFAULT '[]';
 _GRADE_ABOUT = """
 ALTER TABLE grades ADD COLUMN about TEXT NOT NULL DEFAULT '';
 """
+# What came with version 28: an evaluation is of a size, from 1 to 5, the
+# last the exam in full, in place of a length in half hours; one before is
+# given the size nearest to its length.
+_EVALUATION_SIZES = """
+ALTER TABLE evaluations RENAME COLUMN length TO size;
+UPDATE evaluations SET size = MIN(5, MAX(1, (size + 1) / 2));
+"""
+# What came with version 29: when a message of a chat with the tutor was
+# processed, its words taken into the vocabulary as those of the chats are.
+_TUTOR_PROCESSED = """
+ALTER TABLE tutor_messages ADD COLUMN processed_at REAL;
+"""
 # how far an exercise the tutor offered got
 OFFER_STATUSES = ("running", "done", "abandoned")
 
@@ -625,7 +637,8 @@ class Unprocessed:
     """A message, or what was written in an exercise, whose words have not
     been taken into the vocabulary and counted yet."""
 
-    # "message" or "exercise"
+    # "message" of a chat, "tutor" for one of a chat with the tutor, or
+    # "exercise"
     kind: str
     # The id of the chat the message is in, or that of the session and the
     # exercise, as "SESSION/EXERCISE".
@@ -802,6 +815,10 @@ class UserStore:
                 self._db.executescript(_GRADE_PARTS)
             if version < 27:
                 self._db.executescript(_GRADE_ABOUT)
+            if version < 28:
+                self._db.executescript(_EVALUATION_SIZES)
+            if version < 29:
+                self._db.executescript(_TUTOR_PROCESSED)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -1394,16 +1411,24 @@ class UserStore:
 
     def unprocessed(self, before: float) -> list[Unprocessed]:
         """The messages that are not processed, and were last changed
-        before `before`, with what was written in the exercises that are
-        over, the oldest first. An exercise is over once it is finished or
-        its session has ended. What the app wrote to start a chat with, the
-        "system" messages, is never processed."""
+        before `before`, of the chats and of those with the tutor, with what
+        was written in the exercises that are over, the oldest first. An
+        exercise is over once it is finished or its session has ended. What
+        the app wrote to start a chat with, the "system" messages, is never
+        processed."""
         with self._lock:
             messages = self._db.execute(
                 "SELECT 'message', chat_id, position, role, content, language,"
                 " changed_at FROM messages JOIN chats ON chats.id = chat_id"
                 " WHERE processed_at IS NULL AND changed_at < ?"
                 " AND role IN ('user', 'assistant')",
+                (before,),
+            ).fetchall()
+            tutor = self._db.execute(
+                "SELECT 'tutor', chat_id, position, role, content, language,"
+                " written_at FROM tutor_messages"
+                " JOIN tutor_chats ON tutor_chats.id = chat_id"
+                " WHERE processed_at IS NULL AND written_at < ?",
                 (before,),
             ).fetchall()
             written = self._db.execute(
@@ -1420,7 +1445,7 @@ class UserStore:
                 " OR sessions.status != 'running')",
                 (before,),
             ).fetchall()
-        waiting = [Unprocessed(*row) for row in messages + written]
+        waiting = [Unprocessed(*row) for row in messages + tutor + written]
         return sorted(waiting, key=lambda item: item.changed_at)
 
     def mark_processed(self, item: Unprocessed, at: float) -> bool:
@@ -1432,6 +1457,12 @@ class UserStore:
                 cursor = self._db.execute(
                     "UPDATE written SET processed_at = ? WHERE id = ?",
                     (at, item.position),
+                )
+            elif item.kind == "tutor":
+                cursor = self._db.execute(
+                    "UPDATE tutor_messages SET processed_at = ? WHERE chat_id = ?"
+                    " AND position = ?",
+                    (at, item.source_id, item.position),
                 )
             else:
                 cursor = self._db.execute(
@@ -2048,7 +2079,7 @@ class UserStore:
         evaluation_id: str,
         language: str,
         level: str,
-        length: int,
+        size: int,
         timed: bool,
         plan: dict[str, Any],
     ) -> dict[str, Any]:
@@ -2067,13 +2098,13 @@ class UserStore:
                 (now,),
             )
             self._db.execute(
-                "INSERT INTO evaluations (id, language, level, length, timed, plan,"
+                "INSERT INTO evaluations (id, language, level, size, timed, plan,"
                 " status, started_at) VALUES (?, ?, ?, ?, ?, ?, 'running', ?)",
                 (
                     evaluation_id,
                     language,
                     level,
-                    length,
+                    size,
                     int(timed),
                     json.dumps(plan, ensure_ascii=False),
                     now,
@@ -2089,7 +2120,7 @@ class UserStore:
                 "id": evaluation_id,
                 "language": language,
                 "level": level,
-                "length": length,
+                "size": size,
                 "timed": bool(timed),
                 "plan": json.loads(plan),
                 "status": status,
@@ -2103,7 +2134,7 @@ class UserStore:
                 evaluation_id,
                 language,
                 level,
-                length,
+                size,
                 timed,
                 plan,
                 status,
@@ -2111,7 +2142,7 @@ class UserStore:
                 finished_at,
                 result,
             ) in self._db.execute(
-                "SELECT id, language, level, length, timed, plan, status,"
+                "SELECT id, language, level, size, timed, plan, status,"
                 f" started_at, finished_at, result FROM evaluations {where}"
                 " ORDER BY started_at DESC",
                 values,

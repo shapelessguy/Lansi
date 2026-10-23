@@ -200,13 +200,13 @@ test("the time limit of each exercise is remembered, what is not a number left o
     expect(normalizeSettings({}).exerciseMinutes).toEqual({});
 });
 
-test("an evaluation takes 1 to 8 half hours, timed unless it was chosen not to be", () => {
-    expect(normalizeSettings({ evaluationLength: 5, evaluationTimed: false })).toMatchObject({
-        evaluationLength: 5,
+test("an evaluation is of a size from 1 to 5, timed unless it was chosen not to be", () => {
+    expect(normalizeSettings({ evaluationSize: 5, evaluationTimed: false })).toMatchObject({
+        evaluationSize: 5,
         evaluationTimed: false,
     });
-    expect(normalizeSettings({ evaluationLength: 9 }).evaluationLength).toBe(2);
-    expect(normalizeSettings({ evaluationLength: 1.5 }).evaluationLength).toBe(2);
+    expect(normalizeSettings({ evaluationSize: 6 }).evaluationSize).toBe(3);
+    expect(normalizeSettings({ evaluationSize: 1.5 }).evaluationSize).toBe(3);
     expect(normalizeSettings({}).evaluationTimed).toBe(true);
 });
 

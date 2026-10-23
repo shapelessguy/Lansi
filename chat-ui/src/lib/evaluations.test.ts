@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { currentPart, describeLength, type Evaluation, type EvaluationPart, shownScores } from "./evaluations";
+import { currentPart, type Evaluation, type EvaluationPart, minutesOf, shownScores } from "./evaluations";
 
 function part(status: EvaluationPart["status"]): EvaluationPart {
     return {
@@ -26,7 +26,7 @@ function evaluation(...statuses: EvaluationPart["status"][]): Evaluation {
         id: "e",
         language: "German",
         level: "A1",
-        length: 2,
+        size: 3,
         timed: true,
         plan: { exam: "A1", pass: { total: 60 }, modules: [] },
         status: "running",
@@ -37,12 +37,9 @@ function evaluation(...statuses: EvaluationPart["status"][]): Evaluation {
     };
 }
 
-describe("describeLength", () => {
-    it("says half hours as hours and minutes", () => {
-        expect(describeLength(1)).toBe("30 min");
-        expect(describeLength(2)).toBe("1 h");
-        expect(describeLength(3)).toBe("1 h 30 min");
-        expect(describeLength(8)).toBe("4 h");
+describe("minutesOf", () => {
+    it("is what the parts take together", () => {
+        expect(minutesOf(evaluation("done", "pending", "pending"))).toBe(30);
     });
 });
 

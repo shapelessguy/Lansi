@@ -50,8 +50,9 @@ export interface EvaluationOffer {
     kind: "evaluation";
     level: string;
     exam: string;
-    /** How long it is to take, in half hours. */
-    length: number;
+    /** How large it is to be, from 1 to 5, the exam in full, and how long it takes at that. */
+    size: number;
+    minutes: number;
     timed: boolean;
 }
 

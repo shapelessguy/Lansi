@@ -21,6 +21,8 @@ export interface ExamLevel {
     exam: string;
     /** How long it takes in full. */
     minutes: number;
+    /** How long it takes at each size, from the first of `SIZES`. */
+    sizes: number[];
     modules: (ExamModule & { minutes: number })[];
 }
 
@@ -55,8 +57,8 @@ export interface Evaluation {
     id: string;
     language: string;
     level: string;
-    /** How long it was to take, in half hours. */
-    length: number;
+    /** How large it was, one of `SIZES`. */
+    size: number;
     timed: boolean;
     plan: { exam: string; pass: Record<string, number>; modules: ExamModule[] };
     status: "running" | "finished" | "abandoned";
@@ -67,8 +69,8 @@ export interface Evaluation {
     parts: EvaluationPart[];
 }
 
-/** The shortest and the longest an evaluation may take, in half hours. */
-export const LENGTHS = { min: 1, max: 8 } as const;
+/** The sizes an evaluation may be of, from the shortest to the exam in full. */
+export const SIZES = { min: 1, max: 5 } as const;
 /** What the requests of the evaluations are counted under. */
 export const USAGE_ID = "evaluations";
 
@@ -97,11 +99,9 @@ export const SCORES: string[] = [
     "total",
 ];
 
-/** A length of half hours, as it is said, such as "1 h 30 min". */
-export function describeLength(length: number): string {
-    const hours = Math.floor(length / 2);
-    const minutes = (length % 2) * 30;
-    return [hours ? `${hours} h` : "", minutes ? `${minutes} min` : ""].filter(Boolean).join(" ");
+/** How long an evaluation takes, which is what its parts take. */
+export function minutesOf(evaluation: Evaluation): number {
+    return evaluation.parts.reduce((sum, part) => sum + part.minutes, 0);
 }
 
 /** The part to be done next: the one running, or else the first not done, or null if all are. */
@@ -155,9 +155,9 @@ export async function fetchEvaluations(): Promise<Evaluation[]> {
     return evaluations;
 }
 
-/** Starts an evaluation of `level`, of `length` half hours, each part in its time if `timed`. */
-export function startEvaluation(language: string, level: string, length: number, timed: boolean): Promise<Evaluation> {
-    return call("/evaluations", posting({ language, level, length, timed }));
+/** Starts an evaluation of `level`, of `size`, one of `SIZES`, each part in its time if `timed`. */
+export function startEvaluation(language: string, level: string, size: number, timed: boolean): Promise<Evaluation> {
+    return call("/evaluations", posting({ language, level, size, timed }));
 }
 
 /** Starts a part of an evaluation in a session of its own, or takes up the one it is in. */

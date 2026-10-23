@@ -81,8 +81,8 @@ export interface Settings {
     exerciseInstances: Record<string, number>;
     /** How many minutes each exercise was last to take, 0 for no limit, by exercise. */
     exerciseMinutes: Record<string, number>;
-    /** How long an evaluation is to take, in half hours, from 1 to 8. */
-    evaluationLength: number;
+    /** How large an evaluation is to be, from 1, the shortest, to 5, the exam in full. */
+    evaluationSize: number;
     /** Whether each part of an evaluation is to be done in its time. */
     evaluationTimed: boolean;
 }
@@ -208,7 +208,7 @@ export function defaultSettings(): Settings {
         exerciseOptions: {},
         exerciseInstances: {},
         exerciseMinutes: {},
-        evaluationLength: 2,
+        evaluationSize: 3,
         evaluationTimed: true,
     };
 }
@@ -312,12 +312,12 @@ export function normalizeSettings(stored: unknown): Settings {
         exerciseOptions: exerciseOptionsOf(candidate.exerciseOptions),
         exerciseInstances: numbersOf(candidate.exerciseInstances),
         exerciseMinutes: numbersOf(candidate.exerciseMinutes),
-        evaluationLength: typeof candidate.evaluationLength === "number"
-                && Number.isInteger(candidate.evaluationLength)
-                && candidate.evaluationLength >= 1
-                && candidate.evaluationLength <= 8
-            ? candidate.evaluationLength
-            : defaults.evaluationLength,
+        evaluationSize: typeof candidate.evaluationSize === "number"
+                && Number.isInteger(candidate.evaluationSize)
+                && candidate.evaluationSize >= 1
+                && candidate.evaluationSize <= 5
+            ? candidate.evaluationSize
+            : defaults.evaluationSize,
         evaluationTimed: typeof candidate.evaluationTimed === "boolean"
             ? candidate.evaluationTimed
             : defaults.evaluationTimed,

@@ -88,10 +88,8 @@ MAX_FOCUS = 600
 MAX_WORDS = 30
 # how many tools called at once are run together at most
 MAX_AT_ONCE = 8
-# the most of the mock exams taken that the tool that lists them gives, and
-# how many half hours one may take
+# the most of the mock exams taken that the tool that lists them gives
 MAX_EVALUATIONS = 10
-MAX_HALF_HOURS = 8
 # the most of each that a tool that lists them gives
 MAX_SESSIONS = 20
 MAX_LOGS = 50
@@ -1188,6 +1186,7 @@ def _evaluations_tool(evaluations: Any, language: str) -> Tool:
                 "level": exam["level"],
                 "exam": exam["exam"],
                 "minutes": exam["minutes"],
+                "minutes_by_size": exam["sizes"],
                 "modules": [module["title"] for module in exam["modules"]],
             }
             for exam in levels
@@ -1197,7 +1196,8 @@ def _evaluations_tool(evaluations: Any, language: str) -> Tool:
                 "started": _date(each["started_at"]),
                 "level": each["level"],
                 "exam": each["plan"]["exam"],
-                "half_hours": each["length"],
+                "size": each["size"],
+                "minutes": sum(part["minutes"] for part in each["parts"]),
                 "timed": each["timed"],
                 "status": each["status"],
                 "result": each["result"],
@@ -1230,17 +1230,21 @@ def evaluation_tool(levels: list[dict[str, Any]]) -> list[Tool]:
     are, as the evaluations list them; none if there are none."""
     if not levels:
         return []
-    exams = {exam["level"]: exam["exam"] for exam in levels}
+    exams = {exam["level"]: exam for exam in levels}
+    largest = max(len(exam["sizes"]) for exam in levels)
 
     def offer(arguments: dict[str, Any]) -> Done:
-        level, length = arguments.get("level"), arguments.get("length", 4)
+        level, size = arguments.get("level"), arguments.get("size", largest)
         if level not in exams:
             raise ToolError(f"there is no mock exam of the level {level!r}")
+        exam = exams[level]
+        size = _whole(size, "size", 1, len(exam["sizes"]))
         offered = {
             "kind": "evaluation",
             "level": level,
-            "exam": exams[level],
-            "length": _whole(length, "length", 1, MAX_HALF_HOURS),
+            "exam": exam["exam"],
+            "size": size,
+            "minutes": exam["sizes"][size - 1],
             "timed": arguments.get("timed") is True,
         }
         told = {name: value for name, value in offered.items() if name != "kind"}
@@ -1266,18 +1270,28 @@ def evaluation_tool(levels: list[dict[str, Any]]) -> list[Tool]:
                             "tutor.tools.level", levels=", ".join(exams)
                         ),
                     },
-                    "length": {
+                    "size": {
                         "type": "integer",
                         "minimum": 1,
-                        "maximum": MAX_HALF_HOURS,
-                        "description": PROMPTS("tutor.tools.length"),
+                        "maximum": largest,
+                        "description": PROMPTS(
+                            "tutor.tools.size",
+                            most=largest,
+                            sizes="; ".join(
+                                f"{level}: "
+                                + ", ".join(
+                                    f"{minutes} min" for minutes in exam["sizes"]
+                                )
+                                for level, exam in exams.items()
+                            ),
+                        ),
                     },
                     "timed": {
                         "type": "boolean",
                         "description": PROMPTS("tutor.tools.timed"),
                     },
                 },
-                "required": ["level", "length"],
+                "required": ["level", "size"],
             },
             offer,
             lambda arguments: (

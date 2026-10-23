@@ -10,7 +10,15 @@ from typing import Any
 
 import intake as intake_module
 import pytest
-from intake import Intake, Outcome, Word, category_questions, read_words, send_chat
+from intake import (
+    IN_LANGUAGE,
+    Intake,
+    Outcome,
+    Word,
+    category_questions,
+    read_words,
+    send_chat,
+)
 from languages.german.test_categories import verb
 from models import Model
 from profiling import Answer, Profile, ProfileError, Profiler, Questions
@@ -25,12 +33,18 @@ DECIDER = Model(key=KEY)
 
 class FakeProfiler(Profiler):
     """Sorts words into the categories it was told, in place of a decision
-    model, and into nouns otherwise."""
+    model, and into nouns otherwise; and says every sentence is in the
+    language but those it was told are not."""
 
-    def __init__(self, categories: dict[str, str] | None = None) -> None:
+    def __init__(
+        self, categories: dict[str, str] | None = None, foreign: set[str] | None = None
+    ) -> None:
         super().__init__()
         self.categories = categories or {}
+        self.foreign = foreign or set()
         self.asked: list[tuple[dict[str, Any], str | None]] = []
+        # the sentences it was asked whether they are in the language
+        self.judged: list[str] = []
         # how much of a yes other categories are given than the one told
         self.also: dict[str, float] = {}
 
@@ -40,6 +54,10 @@ class FakeProfiler(Profiler):
         questions: Questions,
         model: Model,
     ) -> Profile:
+        if IN_LANGUAGE in questions:
+            self.judged.append(state["sentence"])
+            yes = 0.1 if state["sentence"] in self.foreign else 0.9
+            return Profile({IN_LANGUAGE: Answer("noul", yes=yes)}, cost=0.0001)
         self.questions = questions
         self.asked.append((state, model.name or None))
         likely = {self.categories.get(state["word"], "noun"): 0.9, **self.also}
@@ -177,6 +195,64 @@ def test_a_word_that_is_a_stored_form_is_known_without_asking_the_language_model
         stored,
     )
     assert chat.bodies == []
+
+
+def test_the_words_of_a_sentence_not_mostly_in_the_language_are_skipped(
+    vocabulary: Vocabulary, chat: FakeChat
+) -> None:
+    english = "The word ging is the past of gehen."
+    profiler = FakeProfiler({"ging": "verb"}, foreign={english})
+    intake = Intake(vocabulary, profiler, chat)
+    vocabulary.save("verb", "gehen", {}, [Form("ging")])
+
+    outcomes, _ = intake.take(
+        [Word("ging", english), Word("gehen", english), Word("ging", "Er ging.")],
+        CHAT,
+        DECIDER,
+    )
+
+    assert [(each.status, each.reason) for each in outcomes] == [
+        ("skipped", "its sentence is not mostly in German"),
+        ("skipped", "its sentence is not mostly in German"),
+        ("known", ""),
+    ]
+    # each sentence is asked about once, and the words of the one in another
+    # language are not sorted into categories at all
+    assert sorted(profiler.judged) == sorted([english, "Er ging."])
+    assert [state["word"] for state, _ in profiler.asked] == ["ging"]
+
+
+def test_a_sentence_is_asked_about_once_however_often_its_words_are_taken_in(
+    intake: Intake, vocabulary: Vocabulary, profiler: FakeProfiler
+) -> None:
+    vocabulary.save("verb", "gehen", {}, [Form("ging")])
+
+    for _ in range(2):
+        intake.take([Word("ging", "Er ging.")], CHAT, DECIDER)
+    intake.take([Word("ging")], CHAT, DECIDER, language="Italian")
+
+    assert profiler.judged == ["Er ging."]
+
+
+def test_the_words_of_a_sentence_that_could_not_be_asked_about_fail(
+    vocabulary: Vocabulary, chat: FakeChat
+) -> None:
+    class Unreachable(FakeProfiler):
+        def ask(
+            self, state: dict[str, Any], questions: Questions, model: Model
+        ) -> Profile:
+            if IN_LANGUAGE in questions:
+                raise ProfileError("the decision model could not be reached")
+            return super().ask(state, questions, model)
+
+    intake = Intake(vocabulary, Unreachable(), chat)
+
+    (outcome,), _ = intake.take([Word("Hund", "Der Hund.")], CHAT, DECIDER)
+
+    assert (outcome.status, outcome.reason) == (
+        "failed",
+        "the decision model could not be reached",
+    )
 
 
 def test_a_new_word_is_stored_under_its_dictionary_form_with_all_its_forms(

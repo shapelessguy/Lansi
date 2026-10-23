@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 from evaluating import (
     EVALUATIONS_DIRECTORY,
+    SIZES,
     EvaluationError,
     Evaluations,
     exams,
@@ -63,8 +64,13 @@ TEMPLATE = {
                     "exercise": "scored",
                     "options": {"skill": "reading", "count": 4},
                     "instances": 1,
-                    "scale": "count",
                     "minutes": 20,
+                    "sizes": [
+                        {"count": 1, "minutes": 5},
+                        {"count": 2, "minutes": 10},
+                        {"count": 3, "minutes": 15},
+                        {"count": 3, "minutes": 15},
+                    ],
                     "points": 5,
                     "instructions": "Lesen Sie.",
                     "task": "A short email.",
@@ -190,39 +196,74 @@ def test_a_language_with_no_templates_has_no_exams(templates: Path) -> None:
     assert exams("../German", templates) == {}
 
 
-def test_a_shorter_evaluation_has_fewer_instances_or_less_of_the_option_scaled(
+def test_a_smaller_evaluation_has_each_part_as_its_template_has_it_at_that_size(
     evaluations: Evaluations,
 ) -> None:
-    # half of the hour of the exam, and twice as much
-    evaluation = evaluations.start("German", "A1", 1, True)
-    half = [
-        (part["instances"], part["options"]["count"], part["minutes"])
-        for part in evaluation["parts"]
-    ]
+    smallest = evaluations.start("German", "A1", 1, True)
+    full = evaluations.start("German", "A1", 5, True)
 
-    evaluation = evaluations.start("German", "A1", 4, True)
-    twice = [
-        (part["instances"], part["options"]["count"], part["minutes"])
-        for part in evaluation["parts"]
-    ]
+    def sized(evaluation: dict[str, Any]) -> list[tuple[int, int, int]]:
+        return [
+            (part["instances"], part["options"]["count"], part["minutes"])
+            for part in evaluation["parts"]
+        ]
 
-    assert half == [(1, 2, 10), (1, 4, 20)]
-    assert twice == [(2, 4, 40), (4, 4, 80)]
+    # the part of writing has no sizes, and is the same at each
+    assert sized(smallest) == [(1, 1, 5), (2, 4, 40)]
+    assert sized(full) == [(1, 4, 20), (2, 4, 40)]
 
 
-def test_an_evaluation_is_of_an_exam_there_is_and_of_a_length_it_can_have(
+def test_the_exams_say_how_long_they_take_at_each_size(
+    evaluations: Evaluations,
+) -> None:
+    [level] = evaluations.levels("German")
+
+    assert (level["minutes"], level["sizes"]) == (60, [45, 50, 55, 55, 60])
+
+
+def test_the_exams_of_german_take_longer_at_each_size_up_to_the_exam_in_full() -> None:
+    for exam in exams("German", EVALUATIONS_DIRECTORY).values():
+        minutes = [exam.minutes_at(size) for size in SIZES]
+        assert minutes == sorted(set(minutes))
+        assert minutes[-1] == exam.minutes
+
+
+@pytest.mark.parametrize(
+    ("sizes", "wrong"),
+    [
+        ([{"count": 1, "minutes": 5}], "the first 4"),
+        ([{"count": 11, "minutes": 5}] * 4, "from 1 to 10"),
+        ([{"count": 1}] * 4, "needs minutes"),
+        ([{"plays": 1, "minutes": 5}] * 4, "has no plays"),
+        ([{"minutes": 30}] * 4, "no longer than the one after it"),
+    ],
+)
+def test_a_template_with_sizes_a_part_cannot_have_is_refused(
+    templates: Path, directory: Path, sizes: list[dict[str, Any]], wrong: str
+) -> None:
+    broken = json.loads(json.dumps(TEMPLATE))
+    broken["modules"][0]["parts"][0]["sizes"] = sizes
+    (templates / "German" / "evaluations" / "A1.json").write_text(
+        json.dumps(broken), encoding="utf-8"
+    )
+
+    with pytest.raises(EvaluationError, match=wrong):
+        exams("German", templates, directory)
+
+
+def test_an_evaluation_is_of_an_exam_there_is_and_of_a_size_it_can_have(
     evaluations: Evaluations,
 ) -> None:
     with pytest.raises(ValueError, match="no exam of German at B2"):
-        evaluations.start("German", "B2", 2, True)
-    with pytest.raises(ValueError, match="1 to 8 half hours"):
-        evaluations.start("German", "A1", 9, True)
+        evaluations.start("German", "B2", 5, True)
+    with pytest.raises(ValueError, match="a size from 1 to 5"):
+        evaluations.start("German", "A1", 6, True)
 
 
 def test_a_part_is_a_session_of_its_exercise_told_of_the_exam_and_kept_from_practice(
     evaluations: Evaluations,
 ) -> None:
-    evaluation = evaluations.start("German", "A1", 2, True)
+    evaluation = evaluations.start("German", "A1", 5, True)
 
     described, session = evaluations.start_part(evaluation["id"], 0)
     shown, _ = evaluations._practice.step(  # noqa: SLF001
@@ -243,7 +284,7 @@ def test_a_part_is_a_session_of_its_exercise_told_of_the_exam_and_kept_from_prac
 def test_an_untimed_evaluation_gives_its_parts_no_time_limit(
     evaluations: Evaluations,
 ) -> None:
-    evaluation = evaluations.start("German", "A1", 2, False)
+    evaluation = evaluations.start("German", "A1", 5, False)
 
     _, session = evaluations.start_part(evaluation["id"], 0)
 
@@ -253,7 +294,7 @@ def test_an_untimed_evaluation_gives_its_parts_no_time_limit(
 def test_an_evaluation_done_to_the_end_is_scored_by_its_parts_and_logged(
     evaluations: Evaluations,
 ) -> None:
-    evaluation = evaluations.start("German", "A1", 2, True)
+    evaluation = evaluations.start("German", "A1", 5, True)
     practice = evaluations._practice  # noqa: SLF001
     for position in (0, 1):
         _, session = evaluations.start_part(evaluation["id"], position)
@@ -279,7 +320,7 @@ def test_an_evaluation_done_to_the_end_is_scored_by_its_parts_and_logged(
 def test_an_evaluation_ended_early_is_abandoned_and_not_passed(
     evaluations: Evaluations,
 ) -> None:
-    evaluation = evaluations.start("German", "A1", 2, True)
+    evaluation = evaluations.start("German", "A1", 5, True)
     _, session = evaluations.start_part(evaluation["id"], 0)
     evaluations._practice.step(
         session["id"], "scored", "start", None, LEARNER, answering()

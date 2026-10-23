@@ -33,8 +33,25 @@
                         "questions": 5
                     },
                     "instances": 1,
-                    "scale": "questions",
                     "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Sie lesen in einer Zeitung diesen Text. Wählen Sie für die Aufgaben die richtige Lösung a, b oder c.",
                     "task": "A short newspaper article of 150 to 200 words about a person, a local event or a new place in a town, with a title. The questions follow the order of the text; each asks for a fact, a reason or a plan, and the wrong options are named in the text in another role.",
@@ -100,8 +117,25 @@
                         "questions": 5
                     },
                     "instances": 1,
-                    "scale": "questions",
                     "minutes": 6,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 5
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Sie sind in einem Kaufhaus. Lesen Sie die Aufgaben und die Information. In welchen Stock gehen Sie? Wählen Sie die richtige Lösung a, b oder c.",
                     "task": "A board of information, such as the floors of a department store, the rooms of a town hall or the departments of a hospital, of eight to twelve lines, each a place with what is found there. Each question is a situation of one sentence; its options are three of the places, only one of which fits, and the wrong ones share a word with the situation.",
@@ -131,8 +165,25 @@
                         "questions": 5
                     },
                     "instances": 1,
-                    "scale": "questions",
                     "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Sie lesen eine E-Mail. Wählen Sie für die Aufgaben die richtige Lösung a, b oder c.",
                     "task": "A personal email of 120 to 160 words, from one friend or relative to another, telling news and asking or planning something. The questions follow the order of the text.",
@@ -162,8 +213,25 @@
                         "questions": 5
                     },
                     "instances": 1,
-                    "scale": "questions",
                     "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Sechs Personen suchen im Internet nach Informationen. Lesen Sie die Aufgaben und die Anzeigen a bis f. Welche Anzeige passt zu welcher Person? Für eine Aufgabe gibt es keine passende Anzeige. Wählen Sie dann x.",
                     "task": "Six short adverts, a to f, of two to three lines each, on one field such as courses, flats or offers of free time, given in the text. Each question is a person looking for something, in one sentence; each advert fits at most one person, and exactly one person fits none (answer x, the last option). The adverts that do not fit share words with the people.",
@@ -232,6 +300,24 @@
                     },
                     "instances": 5,
                     "minutes": 8,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 7
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Sie hören fünf kurze Texte. Sie hören jeden Text zweimal. Wählen Sie für die Aufgaben die richtige Lösung a, b oder c.",
                     "task": "Short texts of the radio or the telephone, of three to five sentences: a weather report, a traffic report, an advert, a message on an answering machine. The question asks for one fact; all three options are said or likely.",
@@ -262,8 +348,25 @@
                         "plays": "1"
                     },
                     "instances": 1,
-                    "scale": "questions",
                     "minutes": 7,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 5
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Sie hören ein Gespräch. Sie hören den Text einmal. Was machen die Personen wann? Wählen Sie für jede Aufgabe die passende Lösung a bis i.",
                     "task": "A dialogue of ten to fourteen turns, with the speakers' names, in which two people go through five days or five people and say what each is doing. The prompt of each question is the day or the person; the nine activities they are chosen from, a to i, are in \"shown\", which the learner reads while listening, as 'a) … b) …'. Four activities are not done by anyone, and some of them are named in the dialogue as plans that fell through.",
@@ -361,6 +464,24 @@
                     },
                     "instances": 5,
                     "minutes": 8,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 7
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Sie hören fünf kurze Gespräche. Sie hören jeden Text zweimal. Wählen Sie für die Aufgaben die richtige Lösung a, b oder c.",
                     "task": "Short dialogues of four to six turns, with the speakers' names, in a shop, at work, at the doctor's or among friends. The question asks what someone buys, chooses, does or where they go; all three options are named, and the speakers change their minds once.",
@@ -391,8 +512,25 @@
                         "plays": "2"
                     },
                     "instances": 1,
-                    "scale": "questions",
                     "minutes": 7,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        }
+                    ],
                     "points": 5,
                     "instructions": "Sie hören ein Interview. Sie hören den Text zweimal. Wählen Sie für die Aufgaben Ja oder Nein.",
                     "task": "A radio interview of ten to fourteen turns, with the speakers' names, in which a presenter asks someone about their work, a hobby or a change in their life. The statements follow the order of the interview; each takes up one thing the guest says, rightly or wrongly.",
@@ -430,6 +568,24 @@
                     },
                     "instances": 1,
                     "minutes": 12,
+                    "sizes": [
+                        {
+                            "words": 20,
+                            "minutes": 8
+                        },
+                        {
+                            "words": 20,
+                            "minutes": 8
+                        },
+                        {
+                            "words": 20,
+                            "minutes": 10
+                        },
+                        {
+                            "words": 25,
+                            "minutes": 12
+                        }
+                    ],
                     "points": 10,
                     "instructions": "Schreiben Sie eine SMS (circa 20–30 Wörter). Schreiben Sie zu allen drei Punkten.",
                     "task": "A situation of one or two sentences in which the learner writes a short message to a friend: they are late, cannot come, need something. The prompt lists three points: say what happened, give a reason or a new plan, ask or propose something.",
@@ -451,6 +607,24 @@
                     },
                     "instances": 1,
                     "minutes": 18,
+                    "sizes": [
+                        {
+                            "words": 25,
+                            "minutes": 10
+                        },
+                        {
+                            "words": 30,
+                            "minutes": 12
+                        },
+                        {
+                            "words": 35,
+                            "minutes": 15
+                        },
+                        {
+                            "words": 35,
+                            "minutes": 15
+                        }
+                    ],
                     "points": 10,
                     "instructions": "Schreiben Sie eine E-Mail (circa 30–40 Wörter). Schreiben Sie zu allen drei Punkten. Vergessen Sie Anrede und Gruß nicht.",
                     "task": "A situation in which the learner writes a semi-formal email with Sie, to a teacher, a landlord, a boss or a club: an invitation, a request, a change of plan. The prompt lists three points.",
@@ -478,8 +652,25 @@
                         "prompts": 4
                     },
                     "instances": 1,
-                    "scale": "prompts",
                     "minutes": 4,
+                    "sizes": [
+                        {
+                            "prompts": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 4,
+                            "minutes": 4
+                        }
+                    ],
                     "points": 4,
                     "instructions": "Fragen zur Person stellen und beantworten. Schreiben Sie so, wie Sie sprechen würden.",
                     "task": "Cards each with a word about everyday life, such as Geburtstag, Wohnung, Sport, Lieblingsessen. Half of the prompts give a card and ask the learner to ask their partner a question with its word; the other half give a question of the partner for the learner to answer with a detail.",
@@ -520,8 +711,25 @@
                         "prompts": 3
                     },
                     "instances": 1,
-                    "scale": "prompts",
                     "minutes": 6,
+                    "sizes": [
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 6
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 6
+                        }
+                    ],
                     "points": 8,
                     "instructions": "Gemeinsam etwas planen. Schreiben Sie so, wie Sie sprechen würden.",
                     "task": "Two people plan something together, such as a visit or a present for a friend. The text gives the learner's own diary of one day, hour by hour, with two or three free hours. Each prompt is what the partner says, in turn, which the learner answers: proposing a time, turning one down with a reason, agreeing on what to do.",

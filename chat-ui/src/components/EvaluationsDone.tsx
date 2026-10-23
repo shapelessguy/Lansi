@@ -4,11 +4,11 @@
 import { useEffect, useState } from "react";
 
 import {
-    describeLength,
     type Evaluation,
     type EvaluationResult,
     type ExamModule,
     fetchEvaluations,
+    minutesOf,
     moduleTitle,
     shownScores,
 } from "../lib/evaluations";
@@ -115,7 +115,7 @@ export function EvaluationsDone({ active, revision }: Props) {
                                         )}
                                     </span>
                                     <span className="log-where">
-                                        {dayOf(each.started_at)} · {describeLength(each.length)}
+                                        {dayOf(each.started_at)} · {t("{minutes} min", { minutes: minutesOf(each) })}
                                         {each.timed ? `, ${t("timed")}` : ""} · {passedOf(each.result)}
                                     </span>
                                 </span>

@@ -3,6 +3,12 @@
 
 """Takes words into the vocabulary.
 
+A word comes with the sentence it was used in, if it has one, and the
+decision model is first asked whether that sentence is mostly written in
+the language the words are taken in as. The words of one that is not, such
+as an explanation in English with a German example in it, are left out, so
+that the words of another language do not end up in the vocabulary.
+
 Each word goes through the same steps. A decision model says which category
 it is of. If the vocabulary has it among the forms of that category, that is
 all. Otherwise a language model is given the word with the stored words
@@ -57,6 +63,13 @@ WORKERS = 12
 # more than a request should bring at once
 MAX_WORDS = 500
 MAX_WORD_LENGTH = 100
+# How many sentences the answer of whether each is in its language is kept
+# for, so that one whose words are taken in again is not asked about again.
+MAX_JUDGED_SENTENCES = 5000
+# what the decision model is asked about a sentence before its words are
+# taken in, and how sure it must be to have them taken in
+IN_LANGUAGE = "in_language"
+IN_LANGUAGE_AT_LEAST = 0.5
 
 
 # What the decision model is asked about a word of a language: of every category whether
@@ -118,7 +131,8 @@ class Outcome:
     #   "known": it is a stored form; nothing was done
     #   "added": it is a new word, now stored
     #   "form": it is a form of a stored word that was not among its forms
-    #   "skipped": it is of a kind that is not stored, such as a name
+    #   "skipped": it is of a kind that is not stored, such as a name, or
+    #     its sentence is not mostly in the language
     #   "rejected": it was found not to be a word of its category
     #   "failed": it could not be worked out; `reason` says why
     # A word that cannot be placed is put to the language model once more,
@@ -195,6 +209,9 @@ class Intake:
         # The vocabularies, with their languages, whose dictionary forms were
         # brought to the spelling they are now given, for those stored before.
         self._respelt: set[tuple[int, str]] = set()
+        # whether each sentence was found to be mostly in its language, by
+        # the language and the sentence, the latest found last
+        self._in_language: dict[tuple[str, str], bool] = {}
         self._lock = threading.Lock()
 
     @property
@@ -240,9 +257,11 @@ class Intake:
         return what became of each, in the order they were given, with what
         the requests to the models used. `model` is the language model that
         judges and describes new words, and `decision_model` the one that
-        sorts words into categories when there is none on this machine. A
-        word given twice is worked on once. `on_outcome` is told what became
-        of each word as soon as it is known, on the thread that worked on it.
+        sorts words into categories when there is none on this machine, and
+        says of each sentence whether it is mostly in the language; the words
+        of one that is not are skipped. A word given twice is worked on once.
+        `on_outcome` is told what became of each word as soon as it is known,
+        on the thread that worked on it.
 
         The words are taken in as words of `language`, or of the language
         there is at present if none is given, and stay words of it until
@@ -252,8 +271,31 @@ class Intake:
         bound = copy.copy(self)
         bound.language = language or self.language
 
+        def judge(sentence: str) -> bool | str:
+            try:
+                return bound._is_in_language(sentence, decision_model, used)
+            except ProfileError as error:
+                return str(error)
+
+        distinct = list({(word.word, word.sentence): word for word in words}.values())
+        sentences = list(
+            dict.fromkeys(word.sentence for word in distinct if word.sentence)
+        )
+        with ThreadPoolExecutor(max_workers=self._workers) as pool:
+            judged = dict(zip(sentences, pool.map(judge, sentences)))
+
         def take(word: Word) -> Outcome:
             outcome = Outcome(word.word, word.sentence, "known")
+            in_language = judged.get(word.sentence, True)
+            if in_language is not True:
+                outcome.status, outcome.reason = (
+                    ("failed", in_language)
+                    if isinstance(in_language, str)
+                    else ("skipped", f"its sentence is not mostly in {bound.language}")
+                )
+                if on_outcome:
+                    on_outcome(outcome)
+                return outcome
             try:
                 bound._take(word, outcome, model, decision_model, used)
             except ProfileError as error:
@@ -269,7 +311,6 @@ class Intake:
                 on_outcome(outcome)
             return outcome
 
-        distinct = list({(word.word, word.sentence): word for word in words}.values())
         with ThreadPoolExecutor(max_workers=self._workers) as pool:
             outcomes = dict(
                 zip(
@@ -453,6 +494,31 @@ class Intake:
         self._store(lemma, "new", category, word, outcome, model, used)
         # kept, to show where the first answers about a word go wrong
         outcome.reason = f"saved when asked again, after: {problem}"
+
+    def _is_in_language(self, sentence: str, model: Model, used: list[Profile]) -> bool:
+        """Whether `sentence` is mostly in the language, as the decision
+        model says. Raises ProfileError."""
+        key = (self.language.strip().lower(), sentence)
+        with self._lock:
+            known = self._in_language.get(key)
+        if known is not None:
+            return known
+        question = {
+            IN_LANGUAGE: {
+                "type": "noul",
+                "instructions": PROMPTS("intake.language", language=self.language),
+            }
+        }
+        profile = self._profiler.ask(
+            {"sentence": sentence, "language": self.language}, question, model
+        )
+        used.append(profile)
+        found = (profile.answers[IN_LANGUAGE].yes or 0.0) >= IN_LANGUAGE_AT_LEAST
+        with self._lock:
+            self._in_language[key] = found
+            while len(self._in_language) > MAX_JUDGED_SENTENCES:
+                del self._in_language[next(iter(self._in_language))]
+        return found
 
     def _classify(self, word: Word, model: Model, used: list[Profile]) -> str:
         state = {"word": word.word}

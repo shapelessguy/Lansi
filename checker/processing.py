@@ -2,8 +2,8 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 """Processes what a user has written and been written: the messages of the
-chats, and what the learner and the models wrote in the exercises of
-practice once each exercise is over.
+chats and of those with the tutor, and what the learner and the models
+wrote in the exercises of practice once each exercise is over.
 
 Processing a message, or a text of an exercise, means two things. Every word of it is taken into the
 vocabulary of the language the chat is in, so that new words are added to

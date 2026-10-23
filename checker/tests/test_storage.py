@@ -11,10 +11,14 @@ import pytest
 from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore
 
-# What came with versions 24 and 25, taken out of a store to make it as one
-# was before: the instances the exercises made, what each replays, and
-# whether a session is hidden.
+# What came with versions 24 to 29, taken out of a store to make it as one
+# was before: the instances the exercises made, what each replays, whether
+# a session is hidden, the parts of a grade and what it is about, the size
+# of an evaluation, which was a length, and when a message of the tutor was
+# processed.
 BEFORE_INSTANCES = """
+ALTER TABLE tutor_messages DROP COLUMN processed_at;
+ALTER TABLE evaluations RENAME COLUMN size TO length;
 ALTER TABLE grades DROP COLUMN about;
 ALTER TABLE grades DROP COLUMN parts;
 ALTER TABLE sessions DROP COLUMN hidden;
@@ -935,7 +939,7 @@ def test_an_evaluation_keeps_its_plan_the_sessions_of_its_parts_and_what_it_came
         "id": "e1",
         "language": "German",
         "level": "A1",
-        "length": 2,
+        "size": 2,
         "timed": True,
         "plan": plan,
         "status": "finished",
@@ -985,6 +989,23 @@ def test_the_scores_kept_before_are_named_in_english(tmp_path: Path) -> None:
     assert evaluation["plan"]["modules"] == [{"id": "reading", "title": "Lesen"}]
     assert evaluation["plan"]["parts"] == [{"module": "reading"}]
     assert evaluation["result"]["scores"] == {"writing_task": 50}
+
+
+def test_an_evaluation_kept_with_a_length_is_given_the_size_nearest_it(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    plan = {"parts": [{"module": "reading"}]}
+    for evaluation_id, half_hours in [("e1", 1), ("e2", 4), ("e3", 8), ("e4", 9)]:
+        before.start_evaluation(evaluation_id, "German", "A1", half_hours, True, plan)
+    before._db.executescript(BEFORE_INSTANCES)  # noqa: SLF001
+    before._db.execute("PRAGMA user_version = 27")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+
+    sizes = {each["id"]: each["size"] for each in store.evaluations()}
+    assert sizes == {"e1": 1, "e2": 2, "e3": 4, "e4": 5}
 
 
 def test_a_chat_with_the_tutor_keeps_what_the_learner_wrote_and_what_was_answered(

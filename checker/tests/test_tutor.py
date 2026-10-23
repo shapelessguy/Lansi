@@ -912,6 +912,7 @@ LEVELS = [
         "level": "B1",
         "exam": "Zertifikat B1",
         "minutes": 165,
+        "sizes": [60, 80, 105, 130, 165],
         "modules": [{"id": "reading", "title": "Lesen"}],
     }
 ]
@@ -926,7 +927,7 @@ class FakeEvaluations:
             {
                 "language": "German",
                 "level": "B1",
-                "length": 2,
+                "size": 2,
                 "timed": True,
                 "status": "finished",
                 "started_at": MADE_AT,
@@ -936,6 +937,7 @@ class FakeEvaluations:
                     {
                         "module": "reading",
                         "exercise": "comprehension",
+                        "minutes": 80,
                         "status": "done",
                         "scores": {"reading": 60.0},
                     }
@@ -954,29 +956,44 @@ def test_the_mock_exams_there_are_and_those_taken_are_looked_up(tmp_path: Path) 
     found = json.loads(evaluations.run({}).content)
 
     assert found["exams"] == [
-        {"level": "B1", "exam": "Zertifikat B1", "minutes": 165, "modules": ["Lesen"]}
+        {
+            "level": "B1",
+            "exam": "Zertifikat B1",
+            "minutes": 165,
+            "minutes_by_size": [60, 80, 105, 130, 165],
+            "modules": ["Lesen"],
+        }
     ]
     [taken] = found["taken"]
     assert (taken["level"], taken["result"]["passed"]) == ("B1", True)
+    assert (taken["size"], taken["minutes"]) == (2, 80)
     assert taken["parts"][0]["scores"] == {"reading": 60.0}
 
 
-def test_a_mock_exam_is_offered_of_a_level_there_is_an_exam_of() -> None:
+def test_a_mock_exam_is_offered_of_a_level_there_is_an_exam_of_and_a_size_it_has() -> (
+    None
+):
     [offer] = evaluation_tool(LEVELS)
 
-    offered = offer.run({"level": "B1", "length": 3, "timed": True})
+    offered = offer.run({"level": "B1", "size": 3, "timed": True})
 
     assert offered.shown == {
         "kind": "evaluation",
         "level": "B1",
         "exam": "Zertifikat B1",
-        "length": 3,
+        "size": 3,
+        "minutes": 105,
         "timed": True,
     }
     assert offer.parameters["properties"]["level"]["enum"] == ["B1"]
+    size = offer.parameters["properties"]["size"]
+    assert size["maximum"] == 5
+    assert "B1: 60 min, 80 min, 105 min, 130 min, 165 min" in size["description"]
     assert evaluation_tool([]) == []
     with pytest.raises(ToolError):
-        offer.run({"level": "C2", "length": 3})
+        offer.run({"level": "C2", "size": 3})
+    with pytest.raises(ToolError):
+        offer.run({"level": "B1", "size": 6})
 
 
 PRACTISED = ["noun", "verb"]

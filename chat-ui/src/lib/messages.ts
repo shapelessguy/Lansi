@@ -2402,17 +2402,9 @@ export const MESSAGES = {
         German: "Probeprüfung: {exam}",
         Italian: "Simulazione d'esame: {exam}",
     },
-    "half an hour": {
-        German: "eine halbe Stunde",
-        Italian: "mezz'ora",
-    },
-    "{count} hour": {
-        German: "{count} Stunde",
-        Italian: "{count} ora",
-    },
-    "{count} hours": {
-        German: "{count} Stunden",
-        Italian: "{count} ore",
+    "{minutes} min": {
+        German: "{minutes} Min.",
+        Italian: "{minutes} min",
     },
     "timed": {
         German: "mit Zeitlimit",
@@ -2828,6 +2820,10 @@ export const MESSAGES = {
     "Length": {
         German: "Länge",
         Italian: "Durata",
+    },
+    "{minutes} min, the exam in full": {
+        German: "{minutes} Min., die ganze Prüfung",
+        Italian: "{minutes} min, l'esame completo",
     },
     "Timed": {
         German: "Mit Zeitlimit",

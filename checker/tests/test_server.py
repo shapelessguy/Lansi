@@ -1730,7 +1730,7 @@ def test_an_evaluation_is_started_and_its_first_part_in_a_session_of_its_own(
     with_users: str,
 ) -> None:
     ada = log_in(with_users, "ada", "a password")
-    body = {"language": "German", "level": "A1", "length": 2, "timed": True}
+    body = {"language": "German", "level": "A1", "size": 5, "timed": True}
 
     _, made, _ = send(
         f"{with_users}/evaluations", "POST", ada, json.dumps(body).encode()
@@ -1757,7 +1757,7 @@ def test_an_evaluation_is_started_and_its_first_part_in_a_session_of_its_own(
 
 def test_an_evaluation_of_a_level_with_no_exam_is_refused(with_users: str) -> None:
     ada = log_in(with_users, "ada", "a password")
-    body = {"language": "German", "level": "C2", "length": 2, "timed": True}
+    body = {"language": "German", "level": "C2", "size": 5, "timed": True}
 
     status, said, _ = send(
         f"{with_users}/evaluations", "POST", ada, json.dumps(body).encode()

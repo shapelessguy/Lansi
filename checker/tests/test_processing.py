@@ -241,6 +241,35 @@ def test_what_an_exercise_wrote_is_processed_once_it_is_over_by_who_wrote_it(
     assert (listed["gehen"].used, listed["gehen"].seen) == (0, 1)
 
 
+def test_a_chat_with_the_tutor_is_processed_but_for_what_is_not_in_the_language(
+    store: UserStore, vocabularies: Vocabularies, chat: FakeChat, clock: Clock
+) -> None:
+    english = "Hund means dog, and geht means goes."
+    profiler = FakeProfiler({"geht": "verb"}, foreign={english})
+    processor = Processor(
+        store, Intake(vocabularies, profiler, chat), now=clock, settle_secs=5
+    )
+    processor.configure(CHAT, DECIDER)
+    store.add_tutor_messages(
+        "t1",
+        "German",
+        [
+            {"role": "user", "content": "Der Hund geht."},
+            {"role": "assistant", "content": f"{english} Der Hund geht schnell."},
+        ],
+    )
+    clock.now += 6
+
+    done = processor.look()
+
+    listed = {word.lemma: word for word in vocabularies.of("German").listing()}
+    assert (done, processor.look()) == (2, 0)
+    assert (listed["Hund"].used, listed["Hund"].seen) == (1, 1)
+    assert (listed["gehen"].used, listed["gehen"].seen) == (1, 1)
+    # the words of what the tutor explained in English were never looked into
+    assert not {"means", "dog", "goes"} & {state["word"] for state, _ in profiler.asked}
+
+
 def test_a_message_goes_into_the_vocabulary_of_the_language_of_its_chat(
     processor: Processor,
     store: UserStore,

@@ -625,7 +625,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
     );
     const startOfferedEvaluation = useCallback(
         (exam: EvaluationOffer) => {
-            startEvaluation(settings.language, exam.level, exam.length, exam.timed).then(
+            startEvaluation(settings.language, exam.level, exam.size, exam.timed).then(
                 (evaluation) => {
                     setOpeningEvaluation({ evaluation, nonce: Date.now() });
                     setActivity("evaluations");

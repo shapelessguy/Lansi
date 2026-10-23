@@ -1,6 +1,6 @@
 # The tutor's tools
 
-What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `agree_strategy` writes down a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `exercise` offers the learner an exercise of practice, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `length` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
+What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `agree_strategy` writes down a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `exercise` offers the learner an exercise of practice, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `size` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
 
 Variables:
 - `$exercises`: the exercises there are, one to a line as "- id: title. what it is", with what `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say of it after
@@ -13,6 +13,7 @@ Variables:
 - `$kinds`: the kinds of logs there are, joined by commas
 - `$offered`: the exercise or the mock exam offered, with what it was called with, as JSON
 - `$levels`: the levels there are mock exams of, joined by commas
+- `$sizes`: how long the mock exam of each level takes at each size, from the first, as "A1: 43 min, 50 min, …", the levels joined by semicolons
 - `$usual`: how many words, or recaps, the tool gives when it is not told how many
 - `$practised`: the categories whose words practice is best built on, joined by commas, as the categories of the language say
 
@@ -58,15 +59,15 @@ Whether to turn the order round, such as to have the words the learner has not u
 
 ## Prompt: evaluation
 
-Offer the learner a mock exam of a level, as the institute that examines the language sets it, ready to start: its modules are done one after another, each part an exercise. It takes long, from half an hour to four hours, so offer it when the learner wants to know where they stand, or before an exam.
+Offer the learner a mock exam of a level, as the institute that examines the language sets it, ready to start: its modules are done one after another, each part an exercise. It takes long, from about three quarters of an hour to as long as the real exam, so offer it when the learner wants to know where they stand, or before an exam.
 
 ## Prompt: level
 
 The level of the exam, one of: $levels.
 
-## Prompt: length
+## Prompt: size
 
-How long it is to take, in half hours, from 1 to 8: every part is made shorter or longer to fit.
+How long it is to take, from 1, the shortest, to $most, the exam in full: each part is made shorter by as much as still makes a fair task. At each size it takes: $sizes.
 
 ## Prompt: timed
 

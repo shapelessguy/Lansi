@@ -17,12 +17,14 @@ is given, what its texts and tasks are like and an example of one. These
 three are told to the exercise as its `exam`, which it follows in place of
 a lesson, as exercises/kit.py describes.
 
-An evaluation takes the time the learner chooses, from half an hour to
-four, in half hours: every part is made longer or shorter by as much, by
-its number of instances, or, where it has one instance, by the option its
-`scale` names, such as the questions on a text. With timing, each part
-has its minutes, made longer or shorter likewise; without, it takes as long
-as the learner likes.
+An evaluation is of the size the learner chooses, one of `SIZES`: the last
+is the exam in full, and each before it shorter. A part has its `sizes`,
+what it is at each but the last, written by hand so that each stays a fair
+task: its minutes, and its instances or any of its options where they are
+fewer, such as the questions on a text or the words of an email. A part
+without them is the same at every size. How long an evaluation of a size
+takes is what its parts take at it. With timing, each part has its
+minutes; without, it takes as long as the learner likes.
 
 Each part is done in a session of its own, of its one exercise, which is
 given the points of the lessons of the level of the exam, and the level as
@@ -70,8 +72,8 @@ from translating import TranslationError
 # where the directories of the languages are, each with its evaluations/
 EVALUATIONS_DIRECTORY = LANGUAGES_DIRECTORY
 LEVELS = ("A1", "A2", "B1", "B2", "C1", "C2")
-# how long an evaluation may take, in half hours
-LENGTHS = range(1, 9)
+# the sizes an evaluation may be of, from the shortest to the exam in full
+SIZES = (1, 2, 3, 4, 5)
 # the modules of an exam, which are the skills the exercises score
 MODULES = ("listening", "reading", "writing", "speaking")
 # how what is written or said is rated, as the exercises score it
@@ -103,8 +105,18 @@ class EvaluationError(Exception):
 
 
 @dataclass
+class Sized:
+    """What a part is at a size of an evaluation."""
+
+    instances: int
+    options: dict[str, Any]
+    minutes: int
+
+
+@dataclass
 class Part:
-    """A part of the exam of a level, as its template has it."""
+    """A part of the exam of a level, as its template has it: what it is in
+    full, and at each size before the last."""
 
     module: str
     title: str
@@ -116,8 +128,13 @@ class Part:
     instructions: str
     task: str
     example: Any
-    # the option that is made larger or smaller where there is one instance
-    scale: str = ""
+    smaller: list[Sized]
+
+    def at(self, size: int) -> Sized:
+        """What the part is at `size`, one of `SIZES`."""
+        if size == SIZES[-1]:
+            return Sized(self.instances, self.options, self.minutes)
+        return self.smaller[SIZES.index(size)]
 
 
 @dataclass
@@ -137,6 +154,10 @@ class Exam:
     @property
     def minutes(self) -> int:
         return sum(part.minutes for part in self.parts)
+
+    def minutes_at(self, size: int) -> int:
+        """How long the exam takes at `size`, one of `SIZES`."""
+        return sum(part.at(size).minutes for part in self.parts)
 
 
 def _whole(value: object) -> bool:
@@ -210,9 +231,8 @@ def _read_part(
     for name in ("instances", "minutes", "points"):
         if not _whole(part.get(name)) or part[name] <= 0:
             raise wrong(f"{title}: {name} is a whole number above 0")
-    scale = part.get("scale") or ""
-    if scale and "min" not in manifest.options.get(scale, {}):
-        raise wrong(f"{title}: {scale} is not an option of numbers")
+    full = Sized(part["instances"], options, part["minutes"])
+    smaller = _read_sizes(part.get("sizes"), full, manifest, title, wrong)
     return Part(
         module,
         str(part.get("title") or ""),
@@ -224,8 +244,52 @@ def _read_part(
         str(part.get("instructions") or ""),
         str(part.get("task") or ""),
         part.get("example"),
-        scale,
+        smaller,
     )
+
+
+def _read_sizes(
+    sizes: Any,
+    full: Sized,
+    manifest: Manifest,
+    title: str,
+    wrong: Callable[[str], EvaluationError],
+) -> list[Sized]:
+    """What a part is at each size before the last, from the `sizes` of its
+    template: each its minutes, and its instances or options where they
+    differ from the part in full. Without them, it is the same at each."""
+    count = len(SIZES) - 1
+    if sizes is None:
+        return [full] * count
+    if not isinstance(sizes, list) or len(sizes) != count:
+        raise wrong(f"{title}: sizes lists what the part is at the first {count}")
+    found = []
+    for size, given in zip(SIZES, sizes):
+        if not isinstance(given, dict):
+            raise wrong(f"{title}: each of its sizes is an object")
+        unknown = set(given) - {"instances", "minutes", *manifest.options}
+        if unknown:
+            raise wrong(f"{title}: size {size} has no {', '.join(sorted(unknown))}")
+        counts = {"instances": full.instances, **given}
+        for name in ("instances", "minutes"):
+            if not _whole(counts.get(name)) or counts[name] <= 0:
+                raise wrong(
+                    f"{title}: size {size} needs {name}, a whole number above 0"
+                )
+        changed = {
+            name: value
+            for name, value in given.items()
+            if name not in ("instances", "minutes")
+        }
+        try:
+            options = chosen_options(manifest, {**full.options, **changed})
+        except ValueError as error:
+            raise wrong(f"{title}: size {size}: {error}") from None
+        found.append(Sized(counts["instances"], options, counts["minutes"]))
+    taking = [each.minutes for each in [*found, full]]
+    if taking != sorted(taking):
+        raise wrong(f"{title}: a size takes no longer than the one after it")
+    return found
 
 
 def exams(
@@ -257,33 +321,20 @@ def exams(
     return found
 
 
-def scaled(
-    exam: Exam, length: int, manifests: dict[str, Manifest]
-) -> list[dict[str, Any]]:
-    """The parts of `exam` made longer or shorter, for an evaluation of
-    `length` half hours: each with its instances, its options and how many
-    minutes it takes."""
-    factor = 30 * length / exam.minutes
+def sized(exam: Exam, size: int) -> list[dict[str, Any]]:
+    """The parts of `exam` at `size`, one of `SIZES`: each with its
+    instances, its options and how many minutes it takes."""
     planned = []
     for part in exam.parts:
-        options = dict(part.options)
-        wanted = part.instances * factor
-        instances = max(1, round(wanted))
-        done = instances / part.instances
-        if wanted < 1 and part.scale:
-            option = manifests[part.exercise].options[part.scale]
-            usual = int(options[part.scale])
-            fewer = min(option["max"], max(option["min"], round(usual * wanted)))
-            options[part.scale] = fewer
-            done = fewer / usual
+        at = part.at(size)
         planned.append(
             {
                 "module": part.module,
                 "title": part.title,
                 "exercise": part.exercise,
-                "options": options,
-                "instances": instances,
-                "minutes": max(1, round(part.minutes * done)),
+                "options": dict(at.options),
+                "instances": at.instances,
+                "minutes": at.minutes,
                 "points": part.points,
                 "instructions": part.instructions,
             }
@@ -407,22 +458,19 @@ class Evaluations:
         self._later = later
         self._sample = sample
 
-    def _manifests(self) -> dict[str, Manifest]:
-        found = exercises(self._exercises) if self._exercises else exercises()
-        return {manifest.id: manifest for manifest in found}
-
     def _exams(self, language: str) -> dict[str, Exam]:
         return exams(language, self._directory, self._exercises)
 
     def levels(self, language: str) -> list[dict[str, Any]]:
         """The exams there are of `language`: the level of each, what it is
-        called, how long it takes in full and its modules. Raises
-        EvaluationError."""
+        called, how long it takes in full and at each of `SIZES`, and its
+        modules. Raises EvaluationError."""
         return [
             {
                 "level": exam.level,
                 "exam": exam.title,
                 "minutes": exam.minutes,
+                "sizes": [exam.minutes_at(size) for size in SIZES],
                 "modules": [
                     {
                         **module,
@@ -439,23 +487,25 @@ class Evaluations:
         ]
 
     def start(
-        self, language: str, level: str, length: int, timed: bool
+        self, language: str, level: str, size: int, timed: bool
     ) -> dict[str, Any]:
-        """Start an evaluation of `level`, of `length` half hours, timed or
-        not. Raises ValueError, and EvaluationError."""
+        """Start an evaluation of `level`, of `size`, one of `SIZES`, timed
+        or not. Raises ValueError, and EvaluationError."""
         exam = self._exams(language).get(level)
         if exam is None:
             raise ValueError(f"there is no exam of {language} at {level} yet")
-        if not _whole(length) or length not in LENGTHS:
-            raise ValueError("an evaluation takes 1 to 8 half hours")
+        if not _whole(size) or size not in SIZES:
+            raise ValueError(
+                f"an evaluation is of a size from {SIZES[0]} to {SIZES[-1]}"
+            )
         plan = {
             "exam": exam.title,
             "pass": exam.passing,
             "modules": exam.modules,
-            "parts": scaled(exam, length, self._manifests()),
+            "parts": sized(exam, size),
         }
         evaluation = self._store.start_evaluation(
-            uuid.uuid4().hex, language, level, length, bool(timed), plan
+            uuid.uuid4().hex, language, level, size, bool(timed), plan
         )
         return self.describe(evaluation)
 

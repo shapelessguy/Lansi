@@ -7,15 +7,14 @@ import { canAsk } from "../lib/models";
 import type { ProfileUsage } from "../lib/checker";
 import {
     currentPart,
-    describeLength,
     endEvaluation,
     type Evaluation,
     type ExamLevel,
     fetchEvaluations,
     fetchLevels,
     finishPart,
-    LENGTHS,
     moduleTitle,
+    SIZES,
     startEvaluation,
     startPart,
 } from "../lib/evaluations";
@@ -99,7 +98,7 @@ export function Evaluations(
         setBusy(true);
         setError(null);
         setEnded(null);
-        startEvaluation(language, level, settings.evaluationLength, settings.evaluationTimed).then(
+        startEvaluation(language, level, settings.evaluationSize, settings.evaluationTimed).then(
             (started) => {
                 setEvaluation(started);
                 setSession(null);
@@ -371,17 +370,23 @@ export function Evaluations(
                                 <span className="evaluation-length">
                                     <input
                                         type="range"
-                                        min={LENGTHS.min}
-                                        max={LENGTHS.max}
+                                        min={SIZES.min}
+                                        max={SIZES.max}
                                         step={1}
-                                        value={settings.evaluationLength}
+                                        value={settings.evaluationSize}
                                         onChange={(event) =>
                                             onChangeSettings({
                                                 ...settings,
-                                                evaluationLength: Number(event.target.value),
+                                                evaluationSize: Number(event.target.value),
                                             })}
                                     />
-                                    <span>{describeLength(settings.evaluationLength)}</span>
+                                    <span>
+                                        {settings.evaluationSize === SIZES.max
+                                            ? t("{minutes} min, the exam in full", { minutes: exam.minutes })
+                                            : t("{minutes} min", {
+                                                minutes: exam.sizes[settings.evaluationSize - SIZES.min],
+                                            })}
+                                    </span>
                                 </span>
                             </label>
                             <label className="exercise-setting">

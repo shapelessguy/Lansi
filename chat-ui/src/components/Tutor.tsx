@@ -795,7 +795,6 @@ function OfferCard(
 /** A mock exam the tutor offered, with how it is set, and a button that starts it in the tab of evaluations. */
 function ExamCard({ exam, disabled, onStart }: { exam: EvaluationOffer; disabled: boolean; onStart: () => void }) {
     const [started, setStarted] = useState(false);
-    const hours = exam.length / 2;
     return (
         <div className="tutor-offer">
             <div className="tutor-offer-about">
@@ -803,7 +802,7 @@ function ExamCard({ exam, disabled, onStart }: { exam: EvaluationOffer; disabled
                 <div className="tutor-offer-what">
                     {[
                         exam.level,
-                        hours < 1 ? t("half an hour") : plural(hours, "{count} hour", "{count} hours"),
+                        t("{minutes} min", { minutes: exam.minutes }),
                         exam.timed ? t("timed") : t("untimed"),
                     ].join(" · ")}
                 </div>
