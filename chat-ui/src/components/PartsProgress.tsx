@@ -3,7 +3,7 @@
 
 import { type Message, t } from "../lib/i18n";
 import { amount } from "../lib/inspect";
-import { type PartProgress, writtenShare } from "../lib/tasks";
+import { expectedTokens, type PartProgress, writtenShare } from "../lib/tasks";
 
 // the radius of a ring, and how far round it is
 const RADIUS = 9;
@@ -11,8 +11,8 @@ const ROUND = 2 * Math.PI * RADIUS;
 
 /**
  * How much of a part is written, as a ring: full once the model has written
- * as many tokens as the part was sent in, and round again in another colour
- * for what it writes beyond, as a text written anew is seldom just as long.
+ * as many tokens as the part is expected to be written in, and round again
+ * in another colour for what it writes beyond.
  */
 function WrittenRing({ share }: { share: number }) {
     const first = Math.min(share, 1);
@@ -63,6 +63,9 @@ export function PartsProgress({ parts }: { parts: PartProgress[] }) {
             {parts.map((part, index) => {
                 const share = writtenShare(part);
                 const started = part.state !== "waiting";
+                const writing = part.state === "writing";
+                // the answers that took up one that broke off
+                const takenUp = part.round - part.finished - (writing ? 1 : 0);
                 return (
                     <li key={index} className={`part-progress ${part.state}`}>
                         <WrittenRing share={share} />
@@ -71,22 +74,37 @@ export function PartsProgress({ parts }: { parts: PartProgress[] }) {
                         </span>
                         <span
                             className="part-progress-share"
-                            title={t("{written} tokens written, of the {expected} the part was sent in", {
-                                written: amount(part.written),
-                                expected: amount(part.expected),
-                            })}
+                            title={part.estimated
+                                ? t("{written} tokens written, of about {expected} estimated from the blocks done", {
+                                    written: amount(part.written),
+                                    expected: amount(expectedTokens(part)),
+                                })
+                                : t("{written} tokens written, of the {expected} the part was sent in", {
+                                    written: amount(part.written),
+                                    expected: amount(part.expected),
+                                })}
                         >
-                            {started ? `${Math.round(share * 100)}%` : t("Waiting")}
+                            {/* with the tokens written, as the share is of those expected */}
+                            {started ? `${Math.round(share * 100)}% · ${short(part.written)}` : t("Waiting")}
                         </span>
                         <span className="part-progress-detail">
                             <span>
                                 {t(STATES[part.state])}
-                                {part.round > 1 && (
+                                {writing && part.sections > 1 && (
+                                    <span title={t("Each section is written after those before it, knowing them")}>
+                                        {" · "}
+                                        {t("section {number} of {count}", {
+                                            number: part.finished + 1,
+                                            count: part.sections,
+                                        })}
+                                    </span>
+                                )}
+                                {takenUp > 0 && (
                                     <span
                                         title={t("The answer was too long for one, and is taken up where it broke off")}
                                     >
                                         {" · "}
-                                        {t("answer {number}", { number: part.round })}
+                                        {t("taken up {number}×", { number: takenUp })}
                                     </span>
                                 )}
                             </span>

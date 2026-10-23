@@ -49,8 +49,10 @@ LOOKUP_GAP_SECS = 1.5
 DEFAULT_SAMPLE_RATE = 24_000
 # how many sentences are being read at the same time
 WORKERS = 3
-# more than anyone listens to in one go
-MAX_SENTENCES = 300
+# more sentences than anyone listens to in one go: the audio of more than
+# these that is not kept yet is made only once the listener agrees to it,
+# as it is all paid for whether or not it is listened to
+ASK_ABOVE = 300
 
 
 class SpeechError(Exception):

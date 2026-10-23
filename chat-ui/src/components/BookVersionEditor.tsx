@@ -7,6 +7,7 @@ import {
     type Book,
     type BookSection,
     type BookVersion,
+    exportBook,
     fetchBlockTokens,
     fetchBook,
     fetchTransformPrompts,
@@ -135,6 +136,19 @@ export function BookVersionEditor(
     written.current = prompt;
     const [making, setMaking] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [exporting, setExporting] = useState(false);
+
+    function exportSource() {
+        if (source.status !== "ready") {
+            return;
+        }
+        setError(null);
+        setExporting(true);
+        exportBook(source.book).then(
+            () => undefined,
+            (failed: Error) => setError(failed.message),
+        ).finally(() => setExporting(false));
+    }
     // the tokens each block takes when it is sent, by its place, once the server has counted them
     const [tokens, setTokens] = useState<number[] | null>(null);
     // why they could not be counted, if they could not
@@ -390,18 +404,27 @@ export function BookVersionEditor(
             <div className="dialog version-editor" role="dialog" aria-modal="true" aria-label={t("New version")}>
                 <p className="dialog-message">{t("New version")}</p>
                 <p className="dialog-detail">{t("Made from: {name}", { name: sourceName })}</p>
-                <div className="version-kinds" role="tablist">
-                    {KINDS.map((each) => (
-                        <button
-                            key={each.kind}
-                            role="tab"
-                            aria-selected={kind === each.kind}
-                            disabled={making}
-                            onClick={() => setKind(each.kind)}
-                        >
-                            {t(each.label)}
-                        </button>
-                    ))}
+                <div className="version-kinds">
+                    <div role="tablist">
+                        {KINDS.map((each) => (
+                            <button
+                                key={each.kind}
+                                role="tab"
+                                aria-selected={kind === each.kind}
+                                disabled={making}
+                                onClick={() => setKind(each.kind)}
+                            >
+                                {t(each.label)}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        title={t("Save {name} as an EPUB file, to read it elsewhere", { name: sourceName })}
+                        disabled={source.status !== "ready" || exporting}
+                        onClick={exportSource}
+                    >
+                        {exporting ? t("Exporting…") : t("Export EPUB")}
+                    </button>
                 </div>
                 <label className="version-name">
                     {t("Name")}

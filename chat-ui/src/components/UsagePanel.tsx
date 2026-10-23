@@ -24,6 +24,7 @@ import {
     type Stacked,
     stacked,
     USAGE_CATEGORIES,
+    USAGE_INTERVAL_MS,
     type UsageSummary,
     type UsageTotals,
     type UsageView,
@@ -425,6 +426,15 @@ export function UsagePanel({ chatId, currentLabel, revision, onClose }: Props) {
     const [error, setError] = useState<string | null>(null);
     // when the bins were worked out from, which is when the usage was fetched
     const [now, setNow] = useState(Date.now);
+    // counts the times the usage is asked for again while the panel is open and seen
+    const [refresh, setRefresh] = useState(0);
+    useEffect(() => {
+        const timer = setInterval(
+            () => document.visibilityState === "visible" && setRefresh((times) => times + 1),
+            USAGE_INTERVAL_MS,
+        );
+        return () => clearInterval(timer);
+    }, []);
 
     function changeView(next: UsageView) {
         setView(next);
@@ -447,7 +457,7 @@ export function UsagePanel({ chatId, currentLabel, revision, onClose }: Props) {
         return () => {
             current = false;
         };
-    }, [chatId, revision, view.period]);
+    }, [chatId, revision, refresh, view.period]);
 
     const series = useMemo(() => summary?.series ?? [], [summary]);
     const data = useMemo(

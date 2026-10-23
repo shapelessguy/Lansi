@@ -36,6 +36,8 @@ def count(text: str) -> int:
 def block_tokens(blocks: Sequence[dict[str, Any]]) -> list[int]:
     """The tokens of each of these blocks, kept as `books.Block.kept` keeps
     them, as it is sent in a part of the book: its text with what parts it
-    from the next, so that the tokens of a part are those of its blocks."""
+    from the next, so that the tokens of a part are those of its blocks. A
+    picture, which is not sent, takes none."""
     texts = [block.get("text", "") + BLOCK_SEPARATOR for block in blocks]
-    return [len(each) for each in _encoding().encode_ordinary_batch(texts)]
+    counted = [len(each) for each in _encoding().encode_ordinary_batch(texts)]
+    return [0 if block.get("image") else each for block, each in zip(blocks, counted)]

@@ -1083,6 +1083,28 @@ a {
     background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
+/* reads a section aloud, shown as the pointer is over its row */
+.contents-play {
+    flex-shrink: 0;
+    padding: 2px 6px;
+    border: none;
+    border-radius: var(--radius);
+    background: none;
+    color: var(--muted);
+    font-size: 0.75rem;
+    opacity: 0;
+}
+
+.contents-row:hover .contents-play,
+.contents-play:focus-visible {
+    opacity: 1;
+}
+
+.contents-play:hover {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    color: var(--accent);
+}
+
 .contents-title[aria-current] {
     color: var(--accent);
     font-weight: 600;
@@ -1145,6 +1167,22 @@ a {
     padding: 0.4em 0;
     /* a line break in a paragraph is one the book has */
     white-space: pre-line;
+}
+
+/* a picture is not split between pages, and is shrunk to fit on one */
+.reader-columns .book-picture {
+    break-inside: avoid;
+    white-space: normal;
+}
+
+.reader-columns .book-picture img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    /* less the room the paragraph leaves above and below it */
+    max-height: calc(var(--page-height) - 0.8em - 2px);
+    margin: 0 auto;
+    object-fit: contain;
 }
 
 /* a link is told by its line, as the page may be of any colour */
@@ -3042,7 +3080,7 @@ div.book-cover {
     display: none;
 }
 
-.topic-item {
+.topic-row {
     position: relative;
 }
 
@@ -3050,7 +3088,96 @@ div.book-cover {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 7px 70px 7px 8px;
+    width: 100%;
+    padding: 7px 96px 7px 8px;
+}
+
+/* with what it is about shown apart, the title has room for two lines */
+.topic-title {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+}
+
+/* What a topic is about, or the form that changes it, under it as a part
+   of the same card, as the settings of an exercise are. */
+.topic-item.open .topic-choice {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.topic-item.open .topic-choice:not([aria-pressed="true"]) {
+    border-color: var(--border);
+}
+
+.topic-details,
+.topic-item > .topic-form {
+    margin-top: -1px;
+    border: 1px solid var(--border);
+    border-top: 1px dashed var(--border);
+    border-radius: 0 0 var(--radius) var(--radius);
+    background: var(--bg);
+}
+
+.topic-item:has([aria-pressed="true"]) > .topic-details,
+.topic-item:has([aria-pressed="true"]) > .topic-form {
+    border-color: var(--accent);
+    border-top-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.topic-details {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px 6px 8px 12px;
+    color: var(--muted);
+    font-size: 0.87rem;
+    line-height: 1.4;
+}
+
+.topic-details p {
+    flex: 1;
+    margin: 0;
+    padding-top: 3px;
+    white-space: pre-wrap;
+}
+
+.topic-none {
+    font-style: italic;
+}
+
+.topic-details .icon-button,
+.topic-actions .icon-button {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-color: transparent;
+    background: none;
+    color: var(--muted);
+}
+
+.topic-details .icon-button:hover {
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.topic-details .icon,
+.topic-actions .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.topic-more .icon {
+    transition: transform 0.15s;
+}
+
+.topic-more[aria-expanded="true"] .icon {
+    transform: rotate(180deg);
 }
 
 /* the chosen topics are marked on their icons, which leaves the right of
@@ -3080,17 +3207,6 @@ div.book-cover {
     font-weight: 700;
     line-height: 16px;
     text-align: center;
-}
-
-.topic-text {
-    display: grid;
-    min-width: 0;
-}
-
-.topic-text > * {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 /* the symbol alone, drawn on nothing: it was drawn for white, so it is
@@ -3127,7 +3243,8 @@ div.book-cover {
     transition: opacity 0.12s;
 }
 
-.topic-item:hover .topic-actions,
+.topic-row:hover .topic-actions,
+.topic-item.open .topic-actions,
 .topic-actions:focus-within {
     opacity: 1;
 }
@@ -3136,14 +3253,6 @@ div.book-cover {
     .topic-actions {
         opacity: 1;
     }
-}
-
-.topic-actions .icon-button {
-    width: 28px;
-    padding: 2px 0;
-    border-color: transparent;
-    background: none;
-    color: var(--muted);
 }
 
 .topic-actions .icon-button:hover {
@@ -4798,8 +4907,10 @@ div.book-cover {
     grid-template-rows: auto auto auto auto auto minmax(160px, 1fr) auto auto auto;
 }
 
-.version-kinds {
+.version-kinds,
+.version-kinds [role="tablist"] {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
 }
 
@@ -5030,6 +5141,20 @@ div.book-cover {
 .book-versions li {
     display: flex;
     align-items: center;
+}
+
+/* the name of a book or of a version, being changed where it is shown */
+.book-name {
+    flex: 1;
+    min-width: 0;
+    margin: 6px 8px;
+}
+
+.book-versions .version-name {
+    width: 12ch;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.8rem;
 }
 
 .book-versions .version-delete {

@@ -215,11 +215,25 @@ export function spotBeside(
     return { left: Math.max(edge + SPACE, rect.left), top: rect.top - SPACE - size.height };
 }
 
+/** What a reading is refused with until the listener agrees to have the audio of so many sentences made. */
+export class ManyToMake extends Error {
+    constructor(readonly toMake: number) {
+        super(`the audio of ${toMake} sentences is to be made`);
+    }
+}
+
 /**
  * Has the sentences of something read aloud. The audio that is not kept
- * yet is made by the server in the background.
+ * yet is made by the server in the background. Throws ManyToMake if there
+ * is more of it to make than the server makes without asking, unless the
+ * listener `agreed` to it.
  */
-export async function startReading(source: SpeechSource, voice: Voice, signal?: AbortSignal): Promise<Reading> {
+export async function startReading(
+    source: SpeechSource,
+    voice: Voice,
+    signal?: AbortSignal,
+    agreed = false,
+): Promise<Reading> {
     const response = await checkerFetch(`${source.base}/speech`, {
         method: "POST",
         headers: voice.apiKey ? { "X-OpenRouter-Key": voice.apiKey } : {},
@@ -228,10 +242,14 @@ export async function startReading(source: SpeechSource, voice: Voice, signal?: 
             model: modelRequest(voice.model),
             voice: voice.voice,
             instructions: voice.instructions,
+            agreed,
         }),
         signal,
     });
     const reply = await response.json().catch(() => ({}));
+    if (response.status === 409 && typeof reply.toMake === "number") {
+        throw new ManyToMake(reply.toMake);
+    }
     if (!response.ok) {
         throw new Error(describeError(reply.error, response.status));
     }

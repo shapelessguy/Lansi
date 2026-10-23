@@ -53,15 +53,30 @@ export interface PartProgress {
     written: number;
     /** The tokens of the part as it was sent, which what is written is about as long as. */
     expected: number;
+    /**
+     * The tokens the whole part is estimated to be written in, once the model
+     * has begun a block after the first: what it wrote before that block, as
+     * much longer as the part was sent in than the blocks before it. 0 before.
+     */
+    estimated: number;
     /** The most tokens the model may reason in, if it reasons. */
     budget: number | null;
-    /** How many answers the model has been asked for: more than one once an answer broke off, being too long. */
+    /** How many answers the model has been asked for to write it: one for each section, and one more each time one broke off. */
     round: number;
+    /** How many sections it is written in, one after the other, and how many of them are written. */
+    sections: number;
+    finished: number;
 }
 
-/** How much of a part is written, as a share of the tokens it was sent in: more than 1 once it is longer. */
+/** The tokens a part is expected to be written in: as estimated, once it is, or as many as it was sent in. */
+export function expectedTokens(part: PartProgress): number {
+    return part.estimated || part.expected;
+}
+
+/** How much of a part is written, as a share of the tokens it is expected to be written in: more than 1 once it is longer. */
 export function writtenShare(part: PartProgress): number {
-    return part.expected > 0 ? part.written / part.expected : 0;
+    const expected = expectedTokens(part);
+    return expected > 0 ? part.written / expected : 0;
 }
 
 /** How often the server is asked how the tasks are going while some are running, in milliseconds. */

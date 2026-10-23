@@ -6,8 +6,11 @@ time, with how each paragraph is written: how large, whether in bold or in
 italics, in which element and with which classes, and what the book says the
 parts it is in are, such as a chapter or a glossary. Where the text leads on
 to another place, in the book or outside it, that is kept as well, and so is
-the picture on the cover. The other pictures, the fonts, the colours and
-whatever else a book is made of are left out. What the book lists of itself
+the picture on the cover. A picture in the text is a block of its own, with
+no text and the picture by its id, which is made from what the picture is,
+so that one shown many times is kept once; one too small to be anything but
+an ornament is left out, and so are the fonts, the colours and whatever else
+a book is made of. What the book lists of itself
 is kept too: its table of contents, and its landmarks, the places it names
 by what they are, such as where the text itself starts.
 
@@ -19,6 +22,7 @@ most headings, less for the small print.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import posixpath
 import re
@@ -31,10 +35,31 @@ from html.parser import HTMLParser
 from urllib.parse import unquote
 from xml.etree import ElementTree
 
+from PIL import Image, UnidentifiedImageError
+
 # no file of a book is anywhere near as long, pictures aside, which are not read
 MAX_MEMBER_BYTES = 30_000_000
-# the kinds of picture a cover is kept as
+# the kinds of picture a cover, or a picture in the text, is kept as, each
+# with the end of the name of its file
 _COVER_TYPES = ("image/jpeg", "image/png", "image/gif", "image/webp")
+PICTURE_ENDS = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+}
+# a picture in the text no larger than this on its longer side, or no
+# thicker than the second, in pixels, is an ornament, such as a mark before a
+# list or a rule between parts
+MIN_PICTURE = 40
+MIN_THICKNESS = 10
+# A picture larger than this on its longer side, in pixels, is made this
+# large: no page is shown wider, and a larger one is only slower to show.
+MAX_PICTURE = 1600
+# the file each kind of picture is saved as by Pillow, when it is made smaller
+_PILLOW_FORMATS = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
+# an id of a picture: what it is, in short, and the end of the name of its file
+PICTURE_ID = re.compile(r"[0-9a-f]{24}\.(?:jpg|png|gif|webp)")
 # where a link may lead outside the book
 _OUTSIDE = ("http://", "https://", "mailto:")
 # the size text is written in where nothing says otherwise, in pixels
@@ -101,6 +126,18 @@ _UNITS = {
 _LENGTH = re.compile(r"([+-]?(?:\d+\.?\d*|\.\d+))([a-z%]*)")
 _COMPOUND = re.compile(r"([A-Za-z][\w-]*|\*)?((?:[.#][\w-]+)*)")
 _SPACE = re.compile(r"[ \t\r\n\f]+")
+# The characters that are not text, such as a backspace or a bell, which a PDF
+# may put where it draws a row of dots and which no font can draw: a browser
+# looks through every font it has for them each time it lays them out. A
+# soft hyphen only says where a word may be cut, which a reader works out.
+_CONTROL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+_SOFT_HYPHEN = "\xad"
+
+
+def clean_text(text: str) -> str:
+    """`text` without what is not text: a control character is a space,
+    and a soft hyphen is left out. Line breaks are kept."""
+    return _CONTROL.sub(" ", text.replace(_SOFT_HYPHEN, ""))
 
 
 class BookError(ValueError):
@@ -131,6 +168,13 @@ class Block:
     roles: list[str] = field(default_factory=list)
     # the file of the book that starts with it, if one does
     page: str = ""
+    # For a picture, which has no text: the picture, by its id in the
+    # pictures of the book, what the book says it shows, and how large it is
+    # in pixels.
+    image: str = ""
+    alt: str = ""
+    width: int = 0
+    height: int = 0
 
     def kept(self) -> dict[str, object]:
         """The block as it is kept, with only what it has of what most blocks
@@ -140,7 +184,17 @@ class Block:
             kept["links"] = [list(link) for link in self.links]
         if self.tag != "p":
             kept["tag"] = self.tag
-        for name in ("classes", "bold", "italic", "roles", "page"):
+        for name in (
+            "classes",
+            "bold",
+            "italic",
+            "roles",
+            "page",
+            "image",
+            "alt",
+            "width",
+            "height",
+        ):
             if getattr(self, name):
                 kept[name] = getattr(self, name)
         return kept
@@ -188,6 +242,8 @@ class Book:
     # what the book lists of itself, empty if it does not
     contents: list[Entry] = field(default_factory=list)
     landmarks: list[Landmark] = field(default_factory=list)
+    # the pictures in the text, each by its id
+    pictures: dict[str, bytes] = field(default_factory=dict)
 
 
 def _bold(value: str, parent: bool) -> bool | None:
@@ -432,17 +488,45 @@ class _Paragraph:
     # whether most of it is written in bold, and in italics
     bold: bool
     italic: bool
+    # for a picture, its id, and how wide and high it is
+    image: str = ""
+    width: int = 0
+    height: int = 0
+
+
+@dataclass
+class Picture:
+    """A picture in the text of a book, as it is kept."""
+
+    id: str
+    data: bytes
+    width: int
+    height: int
+
+
+# what a page is given a picture it names by, if it can be had and is not
+# too small to be anything but an ornament
+Pictures = Callable[[str], Picture | None]
+
+
+def _no_pictures(_: str) -> Picture | None:
+    return None
 
 
 class _Page(HTMLParser):
     """Reads one page of a book into paragraphs, each with the size most of
     it is written in and whether most of it is bold and italic."""
 
-    def __init__(self, style_sheet: Callable[[str], list[_Rule] | None]) -> None:
+    def __init__(
+        self,
+        style_sheet: Callable[[str], list[_Rule] | None],
+        picture: Pictures = _no_pictures,
+    ) -> None:
         """`style_sheet` gives the style sheet the page names, if there is
-        such a file."""
+        such a file, and `picture` a picture it names."""
         super().__init__(convert_charrefs=True)
         self.style_sheet = style_sheet
+        self.picture = picture
         self.paragraphs: list[_Paragraph] = []
         # The places in the page that have a name, for links to lead to:
         # the paragraph each is in or before, by its place among them.
@@ -475,6 +559,12 @@ class _Page(HTMLParser):
                 self._sheets.append(sheet)
         elif tag == "style":
             self._style = []
+        source = given.get("src") if tag == "img" else None
+        if tag == "image":
+            # a picture drawn in an SVG, as a cover often is
+            source = given.get("xlink:href") or given.get("href")
+        if source and not (self._path and self._path[-1].unread and tag == "img"):
+            self._add_picture(source, given.get("alt", ""))
         if tag == "br" and self._text:
             self._text = self._text.rstrip(" ") + "\n"
         if tag in _BLOCKS:
@@ -507,6 +597,28 @@ class _Page(HTMLParser):
         self._path[-1] = self._written(given.get("style", ""))
         if tag == "a" and given.get("href"):
             self._leading.append((len(self._path), given["href"], len(self._text)))
+
+    def _add_picture(self, source: str, alt: str) -> None:
+        """Ends the paragraph being read, and adds the picture `source` names
+        after it as one of its own, if it can be had."""
+        found = self.picture(source)
+        if found is None:
+            return
+        self._end_paragraph()
+        inside = self._path[-1] if self._path else _Element("")
+        self.paragraphs.append(
+            _Paragraph(
+                _SPACE.sub(" ", alt).strip(),
+                inside.px,
+                [],
+                replace(inside, tag="img"),
+                False,
+                False,
+                found.id,
+                found.width,
+                found.height,
+            )
+        )
 
     def _written(self, style: str) -> _Element:
         """The element at the end of the path as it is written, by what is
@@ -559,7 +671,7 @@ class _Page(HTMLParser):
         if self._style is not None:
             self._style.append(data)
         elif self._path and not self._path[-1].unread:
-            piece = _SPACE.sub(" ", data)
+            piece = _SPACE.sub(" ", clean_text(data))
             # spaces count once, and not at all where a line starts
             if not self._text or self._text[-1] in " \n":
                 piece = piece.lstrip(" ")
@@ -739,6 +851,51 @@ def _decoded(content: bytes) -> str:
         return content.decode("latin-1")
 
 
+def _read_picture(
+    archive: zipfile.ZipFile, where: str, kind: str | None
+) -> Picture | None:
+    """The picture in the book at `where`, of the kind of file the book
+    says it is, if it is one that is kept, can be read, and is not too
+    small to be anything but an ornament."""
+    if kind not in PICTURE_ENDS:
+        return None
+    try:
+        data = _member(archive, where)
+    except BookError:
+        return None
+    return kept_picture(data, kind)
+
+
+def kept_picture(data: bytes, kind: str) -> Picture | None:
+    """A picture in the text of a book, of the kind of file `kind` says, as
+    it is kept, if it can be read and is not too small to be anything but
+    an ornament. A kind that is not kept is made a PNG, and a picture larger
+    than MAX_PICTURE is made that large, but for a GIF, which may move."""
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            width, height = image.size
+            if max(width, height) <= MIN_PICTURE or min(width, height) < MIN_THICKNESS:
+                return None
+            larger = max(width, height) > MAX_PICTURE and kind != "image/gif"
+            if kind not in PICTURE_ENDS or larger:
+                kind = kind if kind in _PILLOW_FORMATS else "image/png"
+                if larger:
+                    image.thumbnail(
+                        (MAX_PICTURE, MAX_PICTURE), Image.Resampling.LANCZOS
+                    )
+                    width, height = image.size
+                saved: Image.Image = image
+                if kind == "image/jpeg" and image.mode not in ("RGB", "L"):
+                    saved = image.convert("RGB")
+                converted = io.BytesIO()
+                saved.save(converted, _PILLOW_FORMATS[kind], quality=88, optimize=True)
+                data = converted.getvalue()
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+        return None
+    digest = hashlib.sha256(data).hexdigest()[:24]
+    return Picture(f"{digest}.{PICTURE_ENDS[kind]}", data, width, height)
+
+
 def read_epub(data: bytes, name: str = "") -> Book:
     """The text of the EPUB file that `data` is, with how large each part of
     it is written. `name` is what the book is called if it does not say.
@@ -746,10 +903,10 @@ def read_epub(data: bytes, name: str = "") -> Book:
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
-        raise BookError("the file is not an EPUB book") from None
+        raise BookError("the file is not an EPUB or a PDF book") from None
     with archive:
         if _CONTAINER not in archive.namelist():
-            raise BookError("the file is not an EPUB book")
+            raise BookError("the file is not an EPUB or a PDF book")
         package_name = next(
             (
                 element.get("full-path") or ""
@@ -764,6 +921,10 @@ def read_epub(data: bytes, name: str = "") -> Book:
         pages: list[str] = []
         # the pictures of the book: where each is and what it is for, by its id
         pictures: dict[str, tuple[str, str]] = {}
+        # the pictures in the text that were read, by where each is in the
+        # book, and each by its id
+        read_pictures: dict[str, Picture | None] = {}
+        kept_pictures: dict[str, bytes] = {}
         named_cover = ""
         # the files that list what the book has, and its landmarks if it is
         # a book of EPUB 2, which has them in the package itself
@@ -857,6 +1018,17 @@ def read_epub(data: bytes, name: str = "") -> Book:
                     sheets[sheet] = None
             return sheets[sheet]
 
+        kinds = dict(pictures.values())
+
+        def picture_at(page: str, source: str) -> Picture | None:
+            where = _beside(page, source)
+            if where not in read_pictures:
+                read_pictures[where] = _read_picture(archive, where, kinds.get(where))
+            found = read_pictures[where]
+            if found is not None:
+                kept_pictures[found.id] = found.data
+            return found
+
         paragraphs: list[_Paragraph] = []
         # where each page starts among the paragraphs, and where each place
         # with a name in it is
@@ -865,7 +1037,7 @@ def read_epub(data: bytes, name: str = "") -> Book:
         # the page each paragraph is from
         from_page: list[str] = []
         for page in pages:
-            reader = _Page(partial(style_sheet, page))
+            reader = _Page(partial(style_sheet, page), partial(picture_at, page))
             reader.feed(_decoded(_member(archive, page)))
             reader.close()
             starts.setdefault(page, len(paragraphs))
@@ -873,7 +1045,7 @@ def read_epub(data: bytes, name: str = "") -> Book:
                 anchors.setdefault((page, anchor), len(paragraphs) + place)
             paragraphs += reader.paragraphs
             from_page += [page] * len(reader.paragraphs)
-    if not paragraphs:
+    if not any(not paragraph.image for paragraph in paragraphs):
         raise BookError("there is no text in the book")
 
     def target(page: str, href: str) -> int | str | None:
@@ -892,7 +1064,8 @@ def read_epub(data: bytes, name: str = "") -> Book:
     # measured by
     letters: Counter[float] = Counter()
     for paragraph in paragraphs:
-        letters[paragraph.px] += len(paragraph.text)
+        if not paragraph.image:
+            letters[paragraph.px] += len(paragraph.text)
     usual = letters.most_common(1)[0][0]
     blocks: list[Block] = []
     for paragraph, page in zip(paragraphs, from_page):
@@ -902,6 +1075,21 @@ def read_epub(data: bytes, name: str = "") -> Book:
             if (leads_to := target(page, href)) is not None
         ]
         written = paragraph.element
+        if paragraph.image:
+            blocks.append(
+                Block(
+                    "",
+                    1,
+                    tag="img",
+                    roles=list(written.roles),
+                    page=page if starts.get(page) == len(blocks) else "",
+                    image=paragraph.image,
+                    alt=paragraph.text,
+                    width=paragraph.width,
+                    height=paragraph.height,
+                )
+            )
+            continue
         blocks.append(
             Block(
                 paragraph.text,
@@ -938,4 +1126,5 @@ def read_epub(data: bytes, name: str = "") -> Book:
             for each in landmarks
             if isinstance(leads_to := target(each.file, each.href), int)
         ],
+        kept_pictures,
     )

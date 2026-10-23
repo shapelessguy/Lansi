@@ -5,6 +5,7 @@ import { type FormEvent, useEffect, useState } from "react";
 
 import { t } from "../lib/i18n";
 import { iconOf, matchesTopic, type Topic } from "../lib/topics";
+import { Icon } from "./Icon";
 
 interface Props {
     topics: Topic[];
@@ -16,6 +17,7 @@ interface Props {
     revision: number;
     onToggle: (id: string) => void;
     onAdd: (title: string, description: string) => void;
+    onChange: (id: string, title: string, description: string) => void;
     onDelete: (id: string) => void;
     onRemakeIcon: (id: string) => void;
 }
@@ -40,28 +42,67 @@ function TopicIcon({ topic }: { topic: Topic }) {
         : <span className="topic-icon empty" aria-hidden="true">{topic.title.slice(0, 1).toUpperCase()}</span>;
 }
 
+interface FormProps {
+    /** What the form starts with: nothing for a new topic, what a topic has for one changed. */
+    initial?: Pick<Topic, "title" | "description">;
+    submit: string;
+    onSubmit: (title: string, description: string) => void;
+    onCancel: () => void;
+}
+
+/** A title and what it is about, for a new topic or one changed. */
+function TopicForm({ initial, submit, onSubmit, onCancel }: FormProps) {
+    const [title, setTitle] = useState(initial?.title ?? "");
+    const [description, setDescription] = useState(initial?.description ?? "");
+
+    function send(event: FormEvent) {
+        event.preventDefault();
+        if (title.trim()) {
+            onSubmit(title.trim(), description.trim());
+        }
+    }
+
+    return (
+        <form className="topic-form" onSubmit={send} onKeyDown={(event) => event.key === "Escape" && onCancel()}>
+            <input
+                type="text"
+                placeholder={t("Title, such as At the doctor's")}
+                aria-label={initial ? t("Title of the topic") : t("Title of the new topic")}
+                autoFocus
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+            />
+            <textarea
+                rows={3}
+                placeholder={t("What it is about (optional)")}
+                aria-label={initial ? t("What the topic is about") : t("What the new topic is about")}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+            />
+            <span className="topic-form-actions">
+                <button type="submit" className="primary" disabled={!title.trim()}>{submit}</button>
+                <button type="button" onClick={onCancel}>{t("Cancel")}</button>
+            </span>
+        </form>
+    );
+}
+
 /** The topics to choose from, with a search among them and a form to add one. */
-export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, onDelete, onRemakeIcon }: Props) {
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
+export function TopicList(
+    { topics, chosen, adding, revision, onToggle, onAdd, onChange, onDelete, onRemakeIcon }: Props,
+) {
     // whether the form to add a topic is shown, rather than the button that shows it
     const [open, setOpen] = useState(false);
+    // the topic whose title and what it is about are shown in full, and whether they are being changed
+    const [shownInFull, setShownInFull] = useState<string | null>(null);
+    const [editing, setEditing] = useState(false);
     const [query, setQuery] = useState("");
     // those chosen are listed whatever is looked for, so that they can be left out again
     const shown = topics.filter((topic) => chosen.includes(topic.id) || matchesTopic(topic, query.trim()));
 
-    function add(event: FormEvent) {
-        event.preventDefault();
-        if (title.trim()) {
-            onAdd(title.trim(), description.trim());
-            close();
-        }
-    }
-
-    function close() {
-        setTitle("");
-        setDescription("");
-        setOpen(false);
+    function showInFull(id: string) {
+        setShownInFull((current) => (current === id ? null : id));
+        setEditing(false);
     }
 
     return (
@@ -78,41 +119,80 @@ export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, o
                 />
             )}
             <ul className="practice-list">
-                {shown.map((topic) => (
-                    <li key={topic.id} className="topic-item">
-                        <button
-                            className="practice-choice topic-choice"
-                            aria-pressed={chosen.includes(topic.id)}
-                            onClick={() => onToggle(topic.id)}
-                        >
-                            <span className="topic-icon-wrap">
-                                <TopicIcon key={`${topic.id}:${revision}`} topic={topic} />
-                            </span>
-                            <span className="topic-text">
-                                <span className="practice-title">{topic.title}</span>
-                                {topic.description && <span className="practice-detail">{topic.description}</span>}
-                            </span>
-                        </button>
-                        <span className="topic-actions">
-                            <button
-                                className="icon-button"
-                                title={t("Make the icon again")}
-                                aria-label={t("Make the icon of {name} again", { name: topic.title })}
-                                onClick={() => onRemakeIcon(topic.id)}
-                            >
-                                ↻
-                            </button>
-                            <button
-                                className="icon-button"
-                                title={t("Delete")}
-                                aria-label={t("Delete {name}", { name: topic.title })}
-                                onClick={() => onDelete(topic.id)}
-                            >
-                                ×
-                            </button>
-                        </span>
-                    </li>
-                ))}
+                {shown.map((topic) => {
+                    const full = shownInFull === topic.id;
+                    return (
+                        <li key={topic.id} className={full ? "topic-item open" : "topic-item"}>
+                            <div className="topic-row">
+                                <button
+                                    className="practice-choice topic-choice"
+                                    aria-pressed={chosen.includes(topic.id)}
+                                    title={topic.description || undefined}
+                                    onClick={() => onToggle(topic.id)}
+                                >
+                                    <span className="topic-icon-wrap">
+                                        <TopicIcon key={`${topic.id}:${revision}`} topic={topic} />
+                                    </span>
+                                    <span className="practice-title topic-title">{topic.title}</span>
+                                </button>
+                                <span className="topic-actions">
+                                    <button
+                                        className="icon-button topic-more"
+                                        title={t("What it is about")}
+                                        aria-label={t("What {name} is about", { name: topic.title })}
+                                        aria-expanded={full}
+                                        onClick={() => showInFull(topic.id)}
+                                    >
+                                        <Icon name="chevron" />
+                                    </button>
+                                    <button
+                                        className="icon-button"
+                                        title={t("Make the icon again")}
+                                        aria-label={t("Make the icon of {name} again", { name: topic.title })}
+                                        onClick={() => onRemakeIcon(topic.id)}
+                                    >
+                                        ↻
+                                    </button>
+                                    <button
+                                        className="icon-button"
+                                        title={t("Delete")}
+                                        aria-label={t("Delete {name}", { name: topic.title })}
+                                        onClick={() => onDelete(topic.id)}
+                                    >
+                                        ×
+                                    </button>
+                                </span>
+                            </div>
+                            {full && (editing
+                                ? (
+                                    <TopicForm
+                                        initial={topic}
+                                        submit={t("Save")}
+                                        onSubmit={(title, description) => {
+                                            onChange(topic.id, title, description);
+                                            setEditing(false);
+                                        }}
+                                        onCancel={() => setEditing(false)}
+                                    />
+                                )
+                                : (
+                                    <div className="topic-details">
+                                        <p className={topic.description ? "" : "topic-none"}>
+                                            {topic.description || t("Nothing is said yet about what it is about.")}
+                                        </p>
+                                        <button
+                                            className="icon-button"
+                                            title={t("Edit")}
+                                            aria-label={t("Edit {name}", { name: topic.title })}
+                                            onClick={() => setEditing(true)}
+                                        >
+                                            <Icon name="edit" />
+                                        </button>
+                                    </div>
+                                ))}
+                        </li>
+                    );
+                })}
             </ul>
             {topics.length > 0 && shown.length === 0 && <p className="practice-note">{t("No topic is about that.")}</p>}
             {topics.length === 0 && (
@@ -122,31 +202,14 @@ export function TopicList({ topics, chosen, adding, revision, onToggle, onAdd, o
             )}
             {open
                 ? (
-                    <form
-                        className="topic-form"
-                        onSubmit={add}
-                        onKeyDown={(event) => event.key === "Escape" && close()}
-                    >
-                        <input
-                            type="text"
-                            placeholder={t("Title, such as At the doctor's")}
-                            aria-label={t("Title of the new topic")}
-                            autoFocus
-                            value={title}
-                            onChange={(event) => setTitle(event.target.value)}
-                        />
-                        <input
-                            type="text"
-                            placeholder={t("What it is about (optional)")}
-                            aria-label={t("What the new topic is about")}
-                            value={description}
-                            onChange={(event) => setDescription(event.target.value)}
-                        />
-                        <span className="topic-form-actions">
-                            <button type="submit" className="primary" disabled={!title.trim()}>{t("Add")}</button>
-                            <button type="button" onClick={close}>{t("Cancel")}</button>
-                        </span>
-                    </form>
+                    <TopicForm
+                        submit={t("Add")}
+                        onSubmit={(title, description) => {
+                            onAdd(title, description);
+                            setOpen(false);
+                        }}
+                        onCancel={() => setOpen(false)}
+                    />
                 )
                 : (
                     <button className="topic-new" disabled={adding} onClick={() => setOpen(true)}>

@@ -55,6 +55,15 @@ interface Found {
     book: BookSelection | null;
     /** Where it was selected, as what is done with it is logged. */
     where: Where | null;
+    /** Where the selection starts and ends, to tell it from another. */
+    bounds: Bounds;
+}
+
+/** Where a selection starts and ends. */
+type Bounds = [Node, number, Node, number];
+
+function sameBounds(a: Bounds, b: Bounds): boolean {
+    return a.every((each, place) => each === b[place]);
 }
 
 type Box =
@@ -84,6 +93,7 @@ function findSelection(): Found | null {
         rect: range.getBoundingClientRect(),
         book: book && region instanceof Element ? bookSelection(range, region) : null,
         where: readWhere(markedAncestor(range.commonAncestorContainer, WHERE_ATTRIBUTE)?.value),
+        bounds: [range.startContainer, range.startOffset, range.endContainer, range.endOffset],
     };
 }
 
@@ -110,6 +120,9 @@ export function SelectionTools(
     const [box, setBox] = useState<Box | null>(null);
     const tools = useRef<HTMLDivElement>(null);
     const request = useRef<AbortController | null>(null);
+    // where the selection the buttons were last brought up for is, which a
+    // click elsewhere, such as on a button that opens a panel, leaves as it was
+    const lastBounds = useRef<Bounds | null>(null);
 
     useEffect(() => {
         // The selection is as it will be only after the click that made or
@@ -124,7 +137,14 @@ export function SelectionTools(
                 return;
             }
             clearTimeout(timer);
-            timer = window.setTimeout(() => setFound(findSelection()));
+            timer = window.setTimeout(() => {
+                const next = findSelection();
+                const known = next !== null && lastBounds.current !== null
+                    && sameBounds(next.bounds, lastBounds.current);
+                lastBounds.current = next?.bounds ?? null;
+                // the buttons come up only for a selection that was just made
+                setFound(known ? null : next);
+            });
         }
         function onMouseDown(event: MouseEvent) {
             if (!(event.target instanceof Node && tools.current?.contains(event.target))) {

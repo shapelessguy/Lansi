@@ -41,6 +41,7 @@ import {
     forgetIcon,
     remakeIcon,
     type Topic,
+    updateTopic,
 } from "../lib/topics";
 import { type ChosenExercise, ExerciseSettings } from "./ExerciseSettings";
 import { ExerciseView } from "./ExerciseView";
@@ -200,6 +201,22 @@ export function Practice(
             },
             (failed: Error) => setError(failed.message),
         ).finally(() => setAddingTopic(false));
+    }
+
+    function changeTopic(id: string, title: string, description: string) {
+        setError(null);
+        updateTopic(id, title, description).then(
+            (changed) =>
+                setTopics((loaded) =>
+                    loaded.status === "ready"
+                        ? {
+                            status: "ready",
+                            items: loaded.items.map((topic) => (topic.id === id ? changed : topic)),
+                        }
+                        : loaded
+                ),
+            (failed: Error) => setError(failed.message),
+        );
     }
 
     function removeTopic(id: string) {
@@ -567,9 +584,7 @@ export function Practice(
                 )}
                 <div className="practice-columns">
                     <section className="practice-column">
-                        <h2>
-                            {t("Lesson")} <span className="practice-hint">{t("one, or none to review")}</span>
-                        </h2>
+                        <h2>{t("Lesson")} ({languageName(language)})</h2>
                         {lessons.status === "loading" && <p className="practice-note">{t("Loading lessons…")}</p>}
                         {lessons.status === "error" && (
                             <div className="practice-note error">
@@ -627,6 +642,7 @@ export function Practice(
                                         current.includes(id) ? current.filter((each) => each !== id) : [...current, id]
                                     )}
                                 onAdd={addTopic}
+                                onChange={changeTopic}
                                 onDelete={removeTopic}
                                 onRemakeIcon={iconAgain}
                             />

@@ -85,6 +85,24 @@ def test_what_a_task_that_breaks_had_used_before_is_told_all_the_same() -> None:
     assert tasks.listing()[0]["state"] == "failed"
 
 
+def test_what_a_request_of_a_task_used_is_told_as_soon_as_it_is_done() -> None:
+    told: list[tuple[str, list[Any]]] = []
+    tasks = Tasks(background=lambda job: job(), on_used=lambda *each: told.append(each))
+    seen: list[int] = []
+
+    def job(step: Step) -> tuple[list[Any], list[Any]]:
+        step.used(Profile({}, id="gen-3", model="m"))
+        seen.append(len(told))
+        return [], []
+
+    tasks.start("transform", "Der Hund · B1", 1, job)
+
+    assert seen == [1]
+    assert [(kind, [each["id"] for each in used]) for kind, used in told] == [
+        ("transform", ["gen-3"])
+    ]
+
+
 def test_a_task_is_listed_with_how_its_steps_are_going_as_it_reports_them() -> None:
     waiting: list[Callable[[], None]] = []
     tasks = Tasks(background=waiting.append)

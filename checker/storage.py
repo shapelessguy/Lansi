@@ -28,6 +28,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from books import PICTURE_ID
+
 # Raised with every change to the tables.
 SCHEMA_VERSION = 31
 
@@ -778,6 +780,8 @@ class UserStore:
         self._directory.mkdir(parents=True, exist_ok=True)
         self._covers = self._directory / "covers"
         self._originals = self._directory / "books"
+        # the pictures in the text of each book, which its versions show too
+        self._pictures = self._directory / "pictures"
         self._speech = self._directory / "speech"
         self._icons = self._directory / "topics"
         self._instances = self._directory / "exercises"
@@ -1421,11 +1425,13 @@ class UserStore:
         original: bytes | None = None,
         contents: list[dict[str, Any]] | None = None,
         landmarks: list[dict[str, Any]] | None = None,
+        pictures: dict[str, bytes] | None = None,
     ) -> dict[str, Any]:
         """Keep a book, and return it as it is listed. `cover` is the
         picture on its cover with the kind of file it is, `original` the
-        EPUB file it was read from, and `contents` and `landmarks` what it
-        lists of itself. A book that was kept before stays as long ago added as it
+        EPUB file it was read from, `contents` and `landmarks` what it
+        lists of itself, and `pictures` the pictures in its text, each by
+        its id, as `books.PICTURE_ID` has it. A book that was kept before stays as long ago added as it
         was. Raises ValueError for an id that is not one."""
         if not is_id(book_id):
             raise ValueError("a book needs an id")
@@ -1440,6 +1446,13 @@ class UserStore:
                 (self._originals / f"{book_id}.epub").write_bytes(original)
             else:
                 (self._originals / f"{book_id}.epub").unlink(missing_ok=True)
+            shutil.rmtree(self._pictures / book_id, ignore_errors=True)
+            if pictures:
+                (self._pictures / book_id).mkdir(parents=True)
+                for picture_id, data in pictures.items():
+                    if not PICTURE_ID.fullmatch(picture_id):
+                        raise ValueError("a picture needs an id")
+                    (self._pictures / book_id / picture_id).write_bytes(data)
             self._db.execute(
                 "INSERT INTO books (id, title, author, language, added_at, blocks,"
                 " cover_type, navigation)"
@@ -1479,6 +1492,20 @@ class UserStore:
                 return None
             return file.read_bytes(), row[0]
 
+    def picture(self, book_id: str, picture_id: str) -> bytes | None:
+        """A picture in the text of a book or of one of its versions, which
+        is kept once, with the book, if there is such a picture."""
+        if not is_id(book_id) or not PICTURE_ID.fullmatch(picture_id):
+            return None
+        with self._lock:
+            row = self._db.execute(
+                "SELECT parent_id FROM books WHERE id = ?", (book_id,)
+            ).fetchone()
+        if not row:
+            return None
+        file = self._pictures / (row[0] or book_id) / picture_id
+        return file.read_bytes() if file.exists() else None
+
     def original(self, book_id: str) -> bytes | None:
         """The EPUB file a book was read from, if it was kept: those added
         before the files were kept have none."""
@@ -1490,6 +1517,32 @@ class UserStore:
             if not row or not is_id(book_id) or not file.exists():
                 return None
             return file.read_bytes()
+
+    def rename_book(self, book_id: str, name: str) -> bool:
+        """Call a book `name`, and its versions with it, as they are called
+        what the book is; or call a version `name`, leaving its book as it
+        is. Whether there is such a book or version. Raises ValueError for
+        an empty name."""
+        if not name.strip():
+            raise ValueError("a book needs a name")
+        with self._lock, self._db:
+            row = self._db.execute(
+                "SELECT version FROM books WHERE id = ?", (book_id,)
+            ).fetchone()
+            if not row:
+                return False
+            if row[0]:
+                version = {**json.loads(row[0]), "name": name.strip()}
+                self._db.execute(
+                    "UPDATE books SET version = ? WHERE id = ?",
+                    (json.dumps(version, ensure_ascii=False), book_id),
+                )
+            else:
+                self._db.execute(
+                    "UPDATE books SET title = ? WHERE id = ? OR parent_id = ?",
+                    (name.strip(), book_id, book_id),
+                )
+        return True
 
     def delete_book(self, book_id: str) -> None:
         """Remove a book, the file it was read from, the picture on its cover
@@ -1509,6 +1562,7 @@ class UserStore:
             (self._covers / each).unlink(missing_ok=True)
             (self._originals / f"{each}.epub").unlink(missing_ok=True)
             shutil.rmtree(self._speech / each, ignore_errors=True)
+            shutil.rmtree(self._pictures / each, ignore_errors=True)
 
     def save_speech(
         self,
@@ -2385,6 +2439,20 @@ class UserStore:
         topic = self.topic(topic_id)
         assert topic
         return topic
+
+    def update_topic(
+        self, topic_id: str, title: str, description: str
+    ) -> dict[str, Any] | None:
+        """Change the title of a topic and what it is about, keeping its
+        icon. None if there is no such topic. Raises ValueError."""
+        if not title.strip():
+            raise ValueError("a topic needs a title")
+        with self._lock, self._db:
+            cursor = self._db.execute(
+                "UPDATE topics SET title = ?, description = ? WHERE id = ?",
+                (title.strip(), description.strip(), topic_id),
+            )
+        return self.topic(topic_id) if cursor.rowcount else None
 
     def add_starter_topics(
         self,

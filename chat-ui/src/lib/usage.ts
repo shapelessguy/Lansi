@@ -164,6 +164,14 @@ export function stacked(series: UsageBin[], starts: number[], measure: Measure):
 export const SERIES_COLOURS = 8;
 
 /**
+ * How often the usage is asked for again while it is shown, in
+ * milliseconds: the server counts what a background task uses as each of
+ * its requests is done, and looks up a reply that was stopped a little
+ * after, neither of which the app is told of.
+ */
+export const USAGE_INTERVAL_MS = 5000;
+
+/**
  * The colour of the series at `place`: the eight in order, then the same
  * eight in paler tones, as there are no more that can be told apart.
  */

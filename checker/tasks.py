@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from profiling import describe_usage, spent_by
+from profiling import Profile, describe_usage, spent_by
 
 # how many tasks are remembered, the newest ones
 KEPT = 20
@@ -55,11 +55,19 @@ class Task:
 
 class Step:
     """What a task calls after each of its steps, and, if it says how they
-    are going, with how they are going."""
+    are going, with how they are going, and with what each request to a
+    model used as soon as it is done, for it to be counted then rather than
+    once the task is."""
 
-    def __init__(self, task: Task, lock: threading.Lock) -> None:
+    def __init__(
+        self,
+        task: Task,
+        lock: threading.Lock,
+        on_used: Callable[[str, list[Any]], None] | None = None,
+    ) -> None:
         self._task = task
         self._lock = lock
+        self._on_used = on_used
 
     def __call__(self) -> None:
         with self._lock:
@@ -68,6 +76,12 @@ class Step:
     def report(self, progress: list[dict[str, Any]]) -> None:
         with self._lock:
             self._task.progress = progress
+
+    def used(self, profile: Profile) -> None:
+        """Count what a request the task made used. It is counted once,
+        though the task returns it too."""
+        if self._on_used is not None:
+            self._on_used(self._task.kind, [describe_usage(profile)])
 
 
 # What a task does. It is given what to call after each step, and returns
@@ -103,7 +117,7 @@ class Tasks:
             self._tasks = [task, *self._tasks][:KEPT]
             started = asdict(task)
 
-        step = Step(task, self._lock)
+        step = Step(task, self._lock, self._on_used)
 
         def run() -> None:
             try:

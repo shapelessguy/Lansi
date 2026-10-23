@@ -549,9 +549,9 @@ export const MESSAGES = {
         German: "Bücher werden geladen…",
         Italian: "Caricamento dei libri…",
     },
-    "EPUB books you add are kept here, as their text.": {
-        German: "EPUB-Bücher, die du hinzufügst, werden hier als Text aufbewahrt.",
-        Italian: "I libri EPUB che aggiungi vengono conservati qui, come testo.",
+    "EPUB and PDF books you add are kept here, as their text.": {
+        German: "EPUB- und PDF-Bücher, die du hinzufügst, werden hier als Text aufbewahrt.",
+        Italian: "I libri EPUB e PDF che aggiungi vengono conservati qui, come testo.",
     },
     "Delete book": {
         German: "Buch löschen",
@@ -653,6 +653,42 @@ export const MESSAGES = {
     "What it is about (optional)": {
         German: "Worum es geht (optional)",
         Italian: "Di cosa parla (facoltativo)",
+    },
+    "Export EPUB": {
+        German: "Als EPUB exportieren",
+        Italian: "Esporta EPUB",
+    },
+    "Exporting…": {
+        German: "Wird exportiert…",
+        Italian: "Esportazione…",
+    },
+    "Save {name} as an EPUB file, to read it elsewhere": {
+        German: "{name} als EPUB-Datei speichern, um es anderswo zu lesen",
+        Italian: "Salva {name} come file EPUB, per leggerlo altrove",
+    },
+    "Edit {name}": {
+        German: "{name} bearbeiten",
+        Italian: "Modifica {name}",
+    },
+    "Title of the topic": {
+        German: "Titel des Themas",
+        Italian: "Titolo dell'argomento",
+    },
+    "What the topic is about": {
+        German: "Worum es im Thema geht",
+        Italian: "Di cosa parla l'argomento",
+    },
+    "What it is about": {
+        German: "Worum es geht",
+        Italian: "Di cosa parla",
+    },
+    "What {name} is about": {
+        German: "Worum es bei {name} geht",
+        Italian: "Di cosa parla {name}",
+    },
+    "Nothing is said yet about what it is about.": {
+        German: "Noch steht nicht da, worum es geht.",
+        Italian: "Non è ancora detto di cosa parla.",
     },
     "What the new topic is about": {
         German: "Worum es im neuen Thema geht",
@@ -1084,6 +1120,26 @@ export const MESSAGES = {
         German: "Die ausgewählten Sätze vorlesen",
         Italian: "Leggi ad alta voce le frasi selezionate",
     },
+    "Have the audio of {count} sentences made?": {
+        German: "Den Ton von {count} Sätzen erzeugen lassen?",
+        Italian: "Generare l'audio di {count} frasi?",
+    },
+    "It is all paid for as it is made, whether or not it is listened to.": {
+        German: "Alles wird bezahlt, sobald es erzeugt ist, ob es angehört wird oder nicht.",
+        Italian: "Si paga tutto man mano che viene generato, che lo si ascolti o no.",
+    },
+    "Make it": {
+        German: "Erzeugen",
+        Italian: "Genera",
+    },
+    "Read it aloud": {
+        German: "Vorlesen",
+        Italian: "Leggi ad alta voce",
+    },
+    "Read {name} aloud": {
+        German: "{name} vorlesen",
+        Italian: "Leggi {name} ad alta voce",
+    },
     "Play": {
         German: "Abspielen",
         Italian: "Riproduci",
@@ -1513,9 +1569,10 @@ export const MESSAGES = {
         German: "Der Server ist nicht erreichbar. Läuft `just dev`?",
         Italian: "Il server non è raggiungibile. `just dev` è in esecuzione?",
     },
-    "Add an EPUB book under Books in the library, and choose it to read it here.": {
-        German: "Füge in der Bibliothek unter „Bücher“ ein EPUB-Buch hinzu und wähle es aus, um es hier zu lesen.",
-        Italian: "Aggiungi un libro EPUB in Libri nella biblioteca e sceglilo per leggerlo qui.",
+    "Add an EPUB or PDF book under Books in the library, and choose it to read it here.": {
+        German:
+            "Füge in der Bibliothek unter „Bücher“ ein EPUB- oder PDF-Buch hinzu und wähle es aus, um es hier zu lesen.",
+        Italian: "Aggiungi un libro EPUB o PDF in Libri nella biblioteca e sceglilo per leggerlo qui.",
     },
     "Contents": {
         German: "Inhalt",
@@ -1580,6 +1637,14 @@ export const MESSAGES = {
     "Delete version: {name}": {
         German: "Version löschen: {name}",
         Italian: "Elimina versione: {name}",
+    },
+    "Double-click to rename": {
+        German: "Doppelklick zum Umbenennen",
+        Italian: "Doppio clic per rinominare",
+    },
+    "Name of {name}": {
+        German: "Name von {name}",
+        Italian: "Nome di {name}",
     },
     "Versions of {name}": {
         German: "Versionen von {name}",
@@ -1711,13 +1776,25 @@ export const MESSAGES = {
         German: "Die Antwort war zu lang für eine und wird dort fortgesetzt, wo sie abbrach",
         Italian: "La risposta era troppo lunga per una sola e viene ripresa da dove si è interrotta",
     },
-    "answer {number}": {
-        German: "Antwort {number}",
-        Italian: "risposta {number}",
+    "taken up {number}×": {
+        German: "{number}× fortgesetzt",
+        Italian: "ripresa {number}×",
+    },
+    "section {number} of {count}": {
+        German: "Abschnitt {number} von {count}",
+        Italian: "sezione {number} di {count}",
+    },
+    "Each section is written after those before it, knowing them": {
+        German: "Jeder Abschnitt wird nach den vorigen geschrieben und kennt sie",
+        Italian: "Ogni sezione è scritta dopo le precedenti, conoscendole",
     },
     "Tokens of reasoning": {
         German: "Tokens beim Nachdenken",
         Italian: "Token di ragionamento",
+    },
+    "{written} tokens written, of about {expected} estimated from the blocks done": {
+        German: "{written} Tokens geschrieben, von etwa {expected}, geschätzt aus den fertigen Blöcken",
+        Italian: "{written} token scritti, su circa {expected} stimati dai blocchi completati",
     },
     "{written} tokens written, of the {expected} the part was sent in": {
         German: "{written} Tokens geschrieben, von den {expected}, in denen der Teil gesendet wurde",
@@ -2729,10 +2806,6 @@ export const MESSAGES = {
     "Lesson": {
         German: "Lektion",
         Italian: "Lezione",
-    },
-    "one, or none to review": {
-        German: "eine, oder keine zum Wiederholen",
-        Italian: "una, o nessuna per ripassare",
     },
     "Loading lessons…": {
         German: "Lektionen werden geladen…",

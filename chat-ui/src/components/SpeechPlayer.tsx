@@ -4,12 +4,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { ask } from "../lib/dialogs";
 import { t } from "../lib/i18n";
 import {
     audioPlayer,
     fetchSentenceAudio,
     listenAt,
     loadSpeed,
+    ManyToMake,
     rangeOf,
     type Reading,
     saveSpeed,
@@ -33,6 +35,9 @@ interface Props {
     onTask: (task: BackgroundTask) => void;
     onClose: () => void;
 }
+
+/** What a reading is given up with when the listener does not agree to have its audio made. */
+class Declined extends Error {}
 
 /** What the sentence that is listened to is marked with in the book, and what tells the reader to show it. */
 const HIGHLIGHT = "spoken";
@@ -119,8 +124,27 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
         let started: string | null = null;
         // A player that is put away at once, as one is while the app is
         // being worked on, asks for nothing.
+        // the audio of many sentences is made only once the listener agrees to it
+        const start = () =>
+            startReading(source, voice).catch(async (caught: unknown) => {
+                if (!(caught instanceof ManyToMake)) {
+                    throw caught;
+                }
+                const agreed = await ask(
+                    t("Have the audio of {count} sentences made?", { count: caught.toMake }),
+                    {
+                        detail: t("It is all paid for as it is made, whether or not it is listened to."),
+                        confirm: t("Make it"),
+                        danger: false,
+                    },
+                );
+                if (!agreed) {
+                    throw new Declined();
+                }
+                return startReading(source, voice, undefined, true);
+            });
         const timer = setTimeout(() =>
-            startReading(source, voice).then(
+            start().then(
                 (begun) => {
                     started = begun.task?.reading ?? null;
                     if (controller.signal.aborted) {
@@ -135,7 +159,13 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                         onTask(begun.task);
                     }
                 },
-                (caught: Error) => controller.signal.aborted || setError(caught.message),
+                (caught: Error) => {
+                    if (caught instanceof Declined) {
+                        onClose();
+                    } else if (!controller.signal.aborted) {
+                        setError(caught.message);
+                    }
+                },
             )
         );
         return () => {

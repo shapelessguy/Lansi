@@ -42,6 +42,7 @@ import {
     fetchBooks,
     type ListedBook,
     loadReading,
+    renameBook,
 } from "./lib/books";
 import {
     activeChat,
@@ -211,6 +212,14 @@ export function App({ user, initialSettings, initialChats }: Props) {
     const [editingBook, setEditingBook] = useState<ListedBook | null>(null);
     const [addingBook, setAddingBook] = useState(false);
     const [bookError, setBookError] = useState<string | null>(null);
+    // what the book in the reader and its version are called as they are listed, renamed or not
+    const readBook = booksState.status === "ready"
+        ? booksState.books.find((book) => book.id === bookId || book.versions?.some((version) => version.id === bookId))
+        : undefined;
+    const readNames = readBook && {
+        title: readBook.title,
+        version: readBook.versions?.find((version) => version.id === bookId)?.name,
+    };
     const chat = activeChat(chatStore);
     const chats = listedChats(chatStore);
     // The words a prompt is given come from the vocabulary of the language
@@ -369,6 +378,15 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     openBook(isBook ? null : of.id, isBook ? undefined : of);
                 }
             },
+            (error: Error) => setBookError(error.message),
+        );
+    }
+
+    /** Calls a book, with its versions, or one of its versions, by its id, what the learner named it. */
+    function nameBook(id: string, name: string) {
+        setBookError(null);
+        renameBook(id, name).then(
+            (books) => setBooksState({ status: "ready", books }),
             (error: Error) => setBookError(error.message),
         );
     }
@@ -915,6 +933,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 onSelect={openBook}
                                 onAdd={takeBook}
                                 onDelete={removeBook}
+                                onRename={nameBook}
                                 onEdit={setEditingBook}
                                 onReload={loadBooks}
                             />
@@ -1184,7 +1203,13 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             )}
                     </div>
                     <div className="pane" hidden={activity !== "books"}>
-                        <BookReader bookId={bookId} active={activity === "books"} />
+                        <BookReader
+                            bookId={bookId}
+                            active={activity === "books"}
+                            names={readNames}
+                            onPlay={(selection) =>
+                                bookId && setListening({ source: bookSource(bookId, selection), nonce: Date.now() })}
+                        />
                     </div>
                     <div className="pane" hidden={activity !== "practice"}>
                         <Practice

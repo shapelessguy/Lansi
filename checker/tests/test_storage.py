@@ -664,6 +664,25 @@ def test_an_icon_is_not_kept_for_a_topic_there_is_not(tmp_path: Path) -> None:
     assert store.save_icon("../escape", b"png", "image/png") is False
 
 
+def test_a_topic_is_changed_with_its_icon_kept(tmp_path: Path) -> None:
+    store = UserStore(tmp_path / "ada", now=lambda: 5.0)
+    store.add_topic("t1", "Beim Arzt", "symptoms")
+    store.save_icon("t1", b"png", "image/png")
+
+    changed = store.update_topic("t1", " Beim Zahnarzt ", " teeth, pain ")
+
+    assert changed == {
+        "id": "t1",
+        "title": "Beim Zahnarzt",
+        "description": "teeth, pain",
+        "created_at": 5.0,
+        "icon": True,
+    }
+    assert store.update_topic("gone", "Title", "") is None
+    with pytest.raises(ValueError, match="title"):
+        store.update_topic("t1", " ", "")
+
+
 def test_a_topic_needs_a_title(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="title"):
         UserStore(tmp_path / "ada").add_topic("t1", "  ", "")
@@ -1437,6 +1456,28 @@ def test_a_version_is_kept_under_its_book_whichever_it_is_made_from(
         second,
     )
     assert store.cover("v-2") == picture
+
+
+def test_a_book_is_renamed_with_its_versions_and_a_version_alone(
+    store: UserStore,
+) -> None:
+    store.add_book("book-1", "Der Hund", "", "", [])
+    store.add_version("v-1", "book-1", "stripped", "Eins", [], [], [])
+    store.add_version("v-2", "book-1", "stripped", "Zwei", [], [], [])
+
+    renamed = store.rename_book("book-1", " Der Wolf ")
+    store.rename_book("v-2", "Kurz")
+
+    version = store.book("v-1")
+    assert renamed and version is not None
+    assert version["title"] == "Der Wolf"
+    assert [
+        (book["title"], [each["name"] for each in book["versions"]])
+        for book in store.books()
+    ] == [("Der Wolf", ["Eins", "Kurz"])]
+    assert not store.rename_book("gone", "Nichts")
+    with pytest.raises(ValueError):
+        store.rename_book("book-1", "  ")
 
 
 def test_a_book_is_removed_with_its_versions_and_a_version_alone(

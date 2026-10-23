@@ -12,6 +12,8 @@ interface Props {
     place: number;
     /** Told the block a section starts with, by its place, when it is chosen. */
     onGoTo: (place: number) => void;
+    /** Told a section to read aloud, with those under it. */
+    onPlay: (section: BookSection) => void;
 }
 
 /** What tells a section from the others: where it starts and ends, as no two sections share both. */
@@ -23,7 +25,7 @@ function keyOf(section: BookSection): string {
  * The sections of a book as a tree, to go to one by choosing it. The
  * sections the book is at are marked, and open to show those under them.
  */
-export function BookContents({ sections, place, onGoTo }: Props) {
+export function BookContents({ sections, place, onGoTo, onPlay }: Props) {
     const at = sectionsAt(sections, place);
     const [open, setOpen] = useState(() => new Set(at.map(keyOf)));
 
@@ -65,6 +67,14 @@ export function BookContents({ sections, place, onGoTo }: Props) {
                                     title={section.title || t("Beginning")}
                                 >
                                     {section.title || t("Beginning")}
+                                </button>
+                                <button
+                                    className="contents-play"
+                                    onClick={() => onPlay(section)}
+                                    title={t("Read it aloud")}
+                                    aria-label={t("Read {name} aloud", { name: section.title || t("Beginning") })}
+                                >
+                                    ▶
                                 </button>
                             </div>
                             {section.sections && isOpen && tree(section.sections)}

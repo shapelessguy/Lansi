@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import io
 import zipfile
+from collections.abc import Mapping
 
 import pytest
 from books import Block, BookError, Entry, Landmark, font_size, read_epub
+from PIL import Image
 
 CONTAINER = """<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -30,7 +32,7 @@ def page(body: str, head: str = "") -> str:
 
 def epub(
     *pages: str,
-    files: dict[str, str] | None = None,
+    files: Mapping[str, str | bytes] | None = None,
     metadata: str = "<dc:title>Der Hund</dc:title>",
     manifest: str = "",
     guide: str = "",
@@ -56,8 +58,8 @@ def epub(
         archive.writestr("OEBPS/content.opf", package)
         for number, content in enumerate(pages):
             archive.writestr(f"OEBPS/text/p{number}.xhtml", content)
-        for name, content in (files or {}).items():
-            archive.writestr(name, content)
+        for name, member in (files or {}).items():
+            archive.writestr(name, member)
     return data.getvalue()
 
 
@@ -209,9 +211,9 @@ def test_a_file_that_is_not_a_book_is_refused() -> None:
     with zipfile.ZipFile(not_a_book, "w") as archive:
         archive.writestr("notes.txt", "Hallo")
 
-    with pytest.raises(BookError, match="not an EPUB"):
+    with pytest.raises(BookError, match="not an EPUB or a PDF"):
         read_epub(b"%PDF-1.7 and so on")
-    with pytest.raises(BookError, match="not an EPUB"):
+    with pytest.raises(BookError, match="not an EPUB or a PDF"):
         read_epub(not_a_book.getvalue())
     with pytest.raises(BookError, match="no text"):
         read_epub(epub(page("<img src='cover.jpg'/>")))
@@ -519,3 +521,111 @@ def test_what_a_book_lists_of_itself_is_kept_with_what_it_has_under_it() -> None
         "title": "Inhalt",
         "block": 2,
     }
+
+
+def png(width: int, height: int, colour: str = "red") -> bytes:
+    data = io.BytesIO()
+    Image.new("RGB", (width, height), colour).save(data, "PNG")
+    return data.getvalue()
+
+
+PICTURES = (
+    '<item id="map" href="images/map.png" media-type="image/png"/>'
+    '<item id="dot" href="images/dot.png" media-type="image/png"/>'
+    '<item id="same" href="images/again.png" media-type="image/png"/>'
+)
+
+
+def test_a_picture_in_the_text_is_a_block_of_its_own_kept_once_by_its_id() -> None:
+    picture = png(300, 200)
+    book = read_epub(
+        epub(
+            page(
+                "<p>Vorher <img src='../images/map.png' alt=' Die  Karte '/> nachher.</p>"
+                "<p><img src='../images/again.png'/></p>"
+            ),
+            manifest=PICTURES,
+            files={"OEBPS/images/map.png": picture, "OEBPS/images/again.png": picture},
+        )
+    )
+
+    shown = [block for block in book.blocks if block.image]
+    assert [block.text for block in book.blocks] == ["Vorher", "", "nachher.", ""]
+    assert len(shown) == 2 and shown[0].image == shown[1].image
+    assert shown[0].image.endswith(".png") and len(shown[0].image) == 28
+    assert (shown[0].tag, shown[0].alt, shown[0].width, shown[0].height) == (
+        "img",
+        "Die Karte",
+        300,
+        200,
+    )
+    assert book.pictures == {shown[0].image: picture}
+    assert book.blocks[1].kept() == {
+        "text": "",
+        "size": 1,
+        "tag": "img",
+        "image": shown[0].image,
+        "alt": "Die Karte",
+        "width": 300,
+        "height": 200,
+    }
+
+
+def test_a_picture_drawn_in_an_svg_is_kept_and_an_ornament_or_one_missing_is_not() -> (
+    None
+):
+    book = read_epub(
+        epub(
+            page(
+                '<svg xmlns="http://www.w3.org/2000/svg"'
+                ' xmlns:xlink="http://www.w3.org/1999/xlink">'
+                '<image xlink:href="../images/map.png"/></svg>'
+                "<p><img src='../images/dot.png'/>Text.<img src='gone.png'/></p>"
+                "<p><img src='../images/again.png'/></p>"
+            ),
+            manifest=PICTURES,
+            files={
+                "OEBPS/images/map.png": png(90, 120),
+                "OEBPS/images/dot.png": png(12, 12),
+            },
+        )
+    )
+
+    assert [(block.text, block.image != "") for block in book.blocks] == [
+        ("", True),
+        ("Text.", False),
+    ]
+    assert len(book.pictures) == 1
+
+
+def test_the_size_of_the_text_is_not_counted_from_its_pictures() -> None:
+    book = read_epub(
+        epub(
+            page(f"<p>{TEXT}</p><p><img src='../images/map.png'/></p>"),
+            manifest=PICTURES,
+            files={"OEBPS/images/map.png": png(300, 200)},
+        )
+    )
+
+    assert book.blocks[0].size == 1
+
+
+def test_what_is_not_text_is_left_out_of_a_paragraph() -> None:
+    book = read_epub(epub(page("<p>Vor\xadwort\x08 xi und\x07 mehr.</p>")))
+
+    assert [block.text for block in book.blocks] == ["Vorwort xi und mehr."]
+
+
+def test_a_picture_larger_than_any_page_is_made_smaller() -> None:
+    book = read_epub(
+        epub(
+            page(f"<p>{TEXT}</p><p><img src='../images/map.png'/></p>"),
+            manifest=PICTURES,
+            files={"OEBPS/images/map.png": png(3200, 1000)},
+        )
+    )
+
+    picture = book.blocks[1]
+    assert (picture.width, picture.height) == (1600, 500)
+    with Image.open(io.BytesIO(book.pictures[picture.image])) as kept:
+        assert kept.size == (1600, 500)

@@ -22,6 +22,13 @@ const ICONS = {
         </>
     ),
     checks: <path d="M20 6 9 17l-5-5" />,
+    chevron: <path d="m6 9 6 6 6-6" />,
+    edit: (
+        <>
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </>
+    ),
     usage: <path d="M5 20v-8M12 20V4M19 20v-5" />,
     settings: (
         <>

@@ -79,6 +79,7 @@ test("what was stored about reading is kept as it was left", () => {
         spacing: "wide",
         bookId: "book-1",
         places: { "book-1": 120 },
+        offsets: { "book-1": 340 },
         versions: { "book-1": "version-2" },
     };
 
@@ -100,16 +101,22 @@ test.each([
             spacing: "normal",
             bookId: null,
             places: {},
+            offsets: {},
             versions: {},
         });
     },
 );
 
 test("a stored size beyond the limits and a place that is not one are not used", () => {
-    const reading = normalizeReading({ fontSize: 400, places: { a: -1, b: 2.5, c: "3", d: 7 } });
+    const reading = normalizeReading({
+        fontSize: 400,
+        places: { a: -1, b: 2.5, c: "3", d: 7 },
+        offsets: { a: 12, b: -3 },
+    });
 
     expect(reading.fontSize).toBe(MAX_FONT_SIZE);
     expect(reading.places).toEqual({ d: 7 });
+    expect(reading.offsets).toEqual({ a: 12 });
 });
 
 test("what the server said is wrong with a file is shown as a sentence", () => {

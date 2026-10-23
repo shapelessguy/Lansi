@@ -72,6 +72,15 @@ export function remakeIcon(
     );
 }
 
+/** Changes the title of a topic and what it is about; its icon is kept. */
+export async function updateTopic(id: string, title: string, description: string): Promise<Topic> {
+    const { topic } = await call<{ topic: Topic }>(`/topics/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        body: JSON.stringify({ title, description }),
+    });
+    return topic;
+}
+
 export async function deleteTopic(id: string): Promise<void> {
     icons.delete(id);
     await call(`/topics/${encodeURIComponent(id)}`, { method: "DELETE" });

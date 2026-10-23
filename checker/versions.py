@@ -12,11 +12,16 @@ the one it is made from, those that are the text itself, without what was
 put around it, such as the words and the questions after each chapter. A
 "transformed" one is written anew by the reasoning model, as a prompt says,
 such as in another language or for a lower or a higher level, each part of
-the book that is independent of the others on its own, as the prompt
-versions/part.md says: the part is sent as a JSON object of its blocks by
-their places, and the model answers with an object of the same keys, each
-with the block written anew. A block keeps how it was written, its size and
-its element, with the text the model wrote for it.
+the book that is independent of the others on its own: the model settles
+how to transform the whole part, as the prompt versions/plan.md says, and
+then writes it a section at a time, as versions/section.md says, each
+answer knowing every block written before it. The part is sent as a JSON
+object of its blocks by their places, and the model answers with an object
+of the same keys, each with the block written anew. A block keeps how it was written, its size and
+its element, with the text the model wrote for it. A picture, which has no
+text, is not sent: it stays where it was among the blocks of its part. The
+pictures themselves are kept once, with the book, and a version shows
+them by their ids.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from bisect import bisect_right
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -34,7 +40,7 @@ from logs import read_json
 from models import Model
 from profiling import Profile, ProfileError, spent, spent_by
 from prompts import PROMPTS
-from sections import headings
+from sections import Section, headings
 from tokens import count
 from tutor import stream_chat
 
@@ -52,7 +58,7 @@ TRANSFORM_WITHIN_SECS = 3600
 # how many parts of a book are transformed at the same time
 PARALLEL_PARTS = 4
 # the most tokens the model may reason in before it writes a part
-MAX_REASONING = 32_000
+MAX_REASONING = 16_000
 # how many answers a part may take, one after another as each breaks off
 MAX_ROUNDS = 20
 
@@ -117,11 +123,12 @@ def stream_transforming(body: dict[str, Any], model: Model) -> Iterator[dict[str
 
 def part_blocks(book: dict[str, Any], part: list[tuple[int, int]]) -> dict[str, str]:
     """The blocks of a part of `book` as the model is sent them: the text of
-    each by its place, in order."""
+    each by its place, in order, without the pictures."""
     return {
         str(place): book["blocks"][place]["text"]
         for start, end in part
         for place in range(start, end)
+        if not book["blocks"][place].get("image")
     }
 
 
@@ -157,11 +164,18 @@ class PartProgress:
     # the tokens of the part as it was sent, which what is written is about
     # as long as
     expected: int = 0
+    # the tokens the whole part is estimated to be written in, once the
+    # model has begun a block after the first, or 0 before
+    estimated: int = 0
     # the most tokens the model may reason in, if it reasons
     budget: int | None = None
-    # how many answers the model has been asked for: more than one once
-    # an answer broke off
+    # how many answers the model has been asked for to write the part, one
+    # for each section and one more each time an answer broke off
     round: int = 0
+    # how many sections the part is written in, one answer each, and how
+    # many of them are written
+    sections: int = 1
+    finished: int = 0
 
 
 def _said(piece: dict[str, Any]) -> tuple[str, str]:
@@ -210,15 +224,79 @@ def _finish(piece: dict[str, Any]) -> str:
     return reason if isinstance(reason, str) else ""
 
 
+class Keys:
+    """Follows the keys of the JSON object of a part as the model writes
+    it, to estimate how many tokens it writes the whole part in: once it
+    begins a key, the blocks before it are taken as written, and the whole
+    is as much longer than what it has written so far as the part, as it
+    was sent, is longer than those blocks."""
+
+    def __init__(self, blocks: dict[str, str], progress: PartProgress) -> None:
+        self._progress = progress
+        # the tokens of the blocks before each key, as they were sent
+        self._before: dict[str, int] = {}
+        self._total = 0
+        for key, value in blocks.items():
+            self._before[key] = self._total
+            self._total += count(json.dumps({key: value}, ensure_ascii=False))
+        self._text = ""
+        # where the next pair of a key and its value begins, once the
+        # object has begun
+        self._place: int | None = None
+        self._key: str | None = None
+        self._decoder = json.JSONDecoder()
+
+    def __call__(self, content: str) -> None:
+        """Takes the next piece of what the model writes."""
+        self._text += content
+        text = self._text
+        if self._place is None:
+            start = text.find("{")
+            if start == -1:
+                return
+            self._place = start + 1
+        while True:
+            place = _past_space(text, self._place)
+            if place >= len(text) or text[place] != '"':
+                return
+            try:
+                key, place = self._decoder.raw_decode(text, place)
+                place = _past_space(text, place)
+                if place >= len(text) or text[place] != ":":
+                    return
+                if key != self._key:
+                    self._key = key
+                    self._begun(key)
+                _, place = self._decoder.raw_decode(text, _past_space(text, place + 1))
+            except ValueError:
+                return
+            place = _past_space(text, place)
+            # the next key is not looked for before the comma that leads to it
+            if place >= len(text) or text[place] != ",":
+                return
+            self._place = place + 1
+
+    def _begun(self, key: object) -> None:
+        done = self._before.get(key, 0) if isinstance(key, str) else 0
+        if done > 0:
+            self._progress.estimated = round(
+                self._progress.written * self._total / done
+            )
+
+
 def _streamed(
     body: dict[str, Any],
     model: Model,
     progress: PartProgress,
     report: Callable[[], None],
     stream: Stream,
+    follow: Callable[[str], None] = lambda content: None,
+    planning: bool = False,
 ) -> Streamed:
     """What the model answered, as it streamed it, keeping `progress` and
-    calling `report` as it reasons and writes. Raises ProfileError and
+    calling `report` as it reasons and writes, and `follow` with each piece
+    it writes. What it answers when `planning` is not counted as written,
+    and may be nothing if it reasoned. Raises ProfileError and
     TransformError."""
     written: list[str] = []
     thought: list[str] = []
@@ -245,14 +323,16 @@ def _streamed(
             progress.reasoning += count(reasoning)
         if content:
             written.append(content)
-            progress.state = "writing"
-            progress.written += count(content)
+            if not planning:
+                progress.state = "writing"
+                progress.written += count(content)
+                follow(content)
         report()
     used = read_usage(usage, model.name)
     reasoned = _reasoned(usage.get("usage"))
     if reasoned is not None:
         progress.reasoning = reasoned_before + reasoned
-    if not "".join(written).strip():
+    if not "".join(written).strip() and not (planning and "".join(thought).strip()):
         raise spent(TransformError("the model gave no answer"), [used])
     return Streamed("".join(written), "".join(thought), finish, used)
 
@@ -297,18 +377,41 @@ def _past_space(text: str, place: int) -> int:
     return place
 
 
-def _prompt(instructions: str, part: str, budget: int | None) -> str:
-    """What the model is told to transform a part with, and how long to
-    reason over it, if it reasons within a budget."""
-    reasoning = PROMPTS("versions.reasoning", budget=budget) if budget else ""
-    prompt = PROMPTS(
-        "versions.part",
+def part_sections(
+    places: Sequence[int], sections: Sequence[Section]
+) -> list[list[int]]:
+    """The places of the blocks of a part, divided as the sections of the
+    book divide them, for each to be written in an answer of its own: the
+    sections of the highest level the part has more than one of, going down
+    through a section that holds the whole of it. A block of the part in
+    none of them, such as the heading of the section they are under, goes
+    with the one after it, or with the last at its end."""
+    level = list(sections)
+    while True:
+        touching = [
+            section
+            for section in level
+            if any(section.start <= place < section.end for place in places)
+        ]
+        if len(touching) != 1 or not touching[0].sections:
+            break
+        level = touching[0].sections
+    cuts = sorted(section.start for section in touching)[1:]
+    divided: list[list[int]] = [[] for _ in range(len(cuts) + 1)]
+    for place in places:
+        divided[bisect_right(cuts, place)].append(place)
+    return [each for each in divided if each]
+
+
+def _planned(instructions: str, part: str, budget: int) -> str:
+    """What the model is told to settle how to transform a part with,
+    before any of it is written, reasoning in at most `budget` tokens."""
+    return PROMPTS(
+        "versions.plan",
         instructions=instructions.strip(),
         part=part,
-        reasoning=reasoning,
+        reasoning=PROMPTS("versions.reasoning", budget=budget),
     )
-    # without a budget, the line it would be on is left out
-    return prompt.replace("\n\n\n\n", "\n\n")
 
 
 def _asked(
@@ -319,10 +422,14 @@ def _asked(
     progress: PartProgress,
     report: Callable[[], None],
     stream: Stream,
+    follow: Callable[[str], None],
+    planning: bool = False,
 ) -> Streamed:
     """What the model answered to `prompt`, reasoning first in at most
     `budget` tokens if `think`. A model that cannot but reason is asked
-    again with reasoning. Raises ProfileError and TransformError."""
+    again with reasoning. `follow` is told what it writes, piece by piece;
+    it is `planning` as `_streamed` says. Raises ProfileError and
+    TransformError."""
     body: dict[str, Any] = {
         "model": model.name,
         "messages": [{"role": "user", "content": prompt}],
@@ -331,12 +438,12 @@ def _asked(
         "usage": {"include": True},
     }
     try:
-        return _streamed(body, model, progress, report, stream)
+        return _streamed(body, model, progress, report, stream, follow, planning)
     except ProfileError as error:
         if think or "(400)" not in str(error):
             raise
     body["reasoning"] = {"max_tokens": budget}
-    return _streamed(body, model, progress, report, stream)
+    return _streamed(body, model, progress, report, stream, follow, planning)
 
 
 def transform_part(
@@ -348,17 +455,25 @@ def transform_part(
     report: Callable[[], None] = lambda: None,
     stream: Stream = stream_transforming,
     budget: int | None = None,
+    sections: Sequence[Sequence[str]] = (),
+    spend: Callable[[Profile], None] = lambda used: None,
 ) -> tuple[dict[str, str], list[Profile]]:
     """The blocks of a part, as `part_blocks` gives them, written anew by
     `model` as `instructions` say, with what asking used.
 
-    The model reasons first if `think`, in at most `budget` tokens and never
-    more than MAX_REASONING. An answer that breaks off, as the model reached
-    the most it may write at once, is taken up by another request, without
-    reasoning, until every block is written: the model is sent the part
-    again, what it reasoned the first time and the blocks it has written
-    whole, and writes those after the last of them. `progress` is kept as
-    the answers stream in, and `report` called each time it changes. Raises
+    If `think`, the model first reasons over how to transform the whole
+    part, in at most `budget` tokens and never more than MAX_REASONING, and
+    answers with what it decided, writing none of it. Then it writes the
+    part a section at a time, `sections` giving the keys of each in order,
+    or the whole part as one if there are none: each in an answer of its
+    own, without reasoning, sent the whole part, what was decided and every
+    block written before, so that the last sections are written knowing all
+    that came before them. An answer that breaks off, as the model reached
+    the most it may write at once, is taken up by another, sent the blocks
+    written whole so far, until the section is written. `progress` is kept
+    as the answers stream in, with the tokens the part is estimated to be
+    written in as `Keys` says, and `report` called each time it changes.
+    `spend` is told what each answer used as soon as it is done. Raises
     TransformError, which carries what asking used."""
     problem = model.problem()
     if problem:
@@ -368,61 +483,103 @@ def transform_part(
     progress = progress or PartProgress()
     progress.expected = count(text)
     progress.budget = budget if think else None
+    divided = [list(each) for each in sections if each] or [list(blocks)]
+    progress.sections = len(divided)
     keys = list(blocks)
     written: dict[str, str] = {}
     notes = ""
-    # the last block written whole, after which the next answer goes on
-    last = keys[0]
     used: list[Profile] = []
     try:
-        while True:
-            progress.round += 1
-            if progress.round == 1:
-                prompt = _prompt(instructions, text, budget if think else None)
-            else:
-                prompt = PROMPTS(
-                    "versions.continue",
-                    instructions=instructions.strip(),
-                    notes=notes.strip() or "(none)",
-                    part=text,
-                    written=json.dumps(written, ensure_ascii=False, indent=0),
-                    next=keys[keys.index(last) + 1],
-                )
-            answer = _asked(
-                prompt,
+        if think:
+            plan = _asked(
+                _planned(instructions, text, budget),
                 model,
-                think and progress.round == 1,
+                True,
                 budget,
                 progress,
                 report,
                 stream,
+                lambda content: None,
+                planning=True,
             )
-            used.append(answer.used)
-            notes = notes or answer.reasoning
-            if answer.finish != "length":
-                written.update(read_part(answer.text))
-                break
-            begun = read_begun(answer.text)
-            if not set(begun) - set(written):
-                raise TransformError(
-                    "the model reached the most it may write before it wrote a"
-                    " whole block"
+            used.append(plan.used)
+            spend(plan.used)
+            notes = "\n\n".join(
+                each.strip() for each in (plan.reasoning, plan.text) if each.strip()
+            )
+        for section in divided:
+            # the first block of the section that is left to write
+            left = section[0]
+            answers = 0
+            while True:
+                answers += 1
+                progress.round += 1
+                answer = _asked(
+                    PROMPTS(
+                        "versions.section",
+                        instructions=instructions.strip(),
+                        part=text,
+                        notes=notes or "(none)",
+                        written=json.dumps(written, ensure_ascii=False, indent=0)
+                        if written
+                        else "(nothing yet)",
+                        first=left,
+                        last=section[-1],
+                    ),
+                    model,
+                    False,
+                    budget,
+                    progress,
+                    report,
+                    stream,
+                    # the blocks before the section are written already
+                    Keys(blocks, progress),
                 )
-            written.update(begun)
-            last = max((key for key in written if key in blocks), key=keys.index)
-            if last == keys[-1]:
-                break
-            if progress.round >= MAX_ROUNDS:
-                raise TransformError(
-                    f"the part was not written whole in {MAX_ROUNDS} answers"
+                used.append(answer.used)
+                spend(answer.used)
+                if answer.finish != "length":
+                    written.update(_of_section(read_part(answer.text), section, blocks))
+                    break
+                begun = _of_section(read_begun(answer.text), section, blocks)
+                if not set(begun) - set(written):
+                    raise TransformError(
+                        "the model reached the most it may write before it wrote a"
+                        " whole block"
+                    )
+                written.update(begun)
+                last = max(
+                    (key for key in written if key in section), key=section.index
                 )
+                if last == section[-1]:
+                    break
+                if answers >= MAX_ROUNDS:
+                    raise TransformError(
+                        f"a section was not written whole in {MAX_ROUNDS} answers"
+                    )
+                left = section[section.index(last) + 1]
+            progress.finished += 1
+            report()
     except ProfileError as error:
         raise spent(TransformError(str(error)), used) from None
     except TransformError as error:
         raise spent(error, used) from None
     progress.state = "done"
+    progress.estimated = progress.written
     report()
-    return written, used
+    # the blocks in the order of the part, those the model added where it put them
+    return {key: written[key] for key in keys if key in written} | written, used
+
+
+def _of_section(
+    found: dict[str, str], section: list[str], blocks: dict[str, str]
+) -> dict[str, str]:
+    """The blocks of an answer that are of the section it was to write, or
+    that the model added, without those of other sections."""
+    return {
+        key: value
+        for key, value in found.items()
+        if key in section or key not in blocks
+    }
 
 
 def transform_parts(
@@ -436,13 +593,17 @@ def transform_parts(
     stream: Stream = stream_transforming,
     titles: Sequence[str] = (),
     budget: int | None = None,
+    sections: Sequence[Section] = (),
+    spend: Callable[[Profile], None] = lambda used: None,
 ) -> tuple[list[dict[str, str]], list[Profile]]:
     """What `model` wrote for each part of `book`, as `transform_part` gives
     it, with what asking used. The parts are transformed a few at a time;
     `step` is called as each is done, and `report` told how each is going,
     as `PartProgress` says, whenever any changes, each by its title in
     `titles` if it has one. The model reasons in at most `budget` tokens
-    for each part, if there is one. Raises the error of the first part that failed,
+    for each part, if there is one, and writes each part a section at a
+    time, as `part_sections` divides it by the `sections` of the book;
+    `spend` is told what each answer used as soon as it is done. Raises the error of the first part that failed,
     carrying what asking for every part used."""
     progress = [
         PartProgress(titles[place] if place < len(titles) else "")
@@ -455,15 +616,27 @@ def transform_parts(
             report([asdict(each) for each in progress])
 
     def one(place: int) -> tuple[dict[str, str], list[Profile]]:
+        sent = part_blocks(book, parts[place])
+        if not sent:
+            # a part of pictures alone has nothing to write
+            progress[place].state = "done"
+            told()
+            step()
+            return {}, []
         written = transform_part(
             instructions,
-            part_blocks(book, parts[place]),
+            sent,
             model,
             think,
             progress[place],
             told,
             stream,
             budget,
+            [
+                [str(place) for place in each]
+                for each in part_sections([int(key) for key in sent], sections)
+            ],
+            spend,
         )
         step()
         return written
@@ -488,11 +661,20 @@ def transform_parts(
     return written, used
 
 
-def matches(part: list[tuple[int, int]], written: dict[str, str]) -> bool:
-    """Whether the model wrote a part with the keys it was sent, in order."""
-    return list(written) == [
-        str(place) for start, end in part for place in range(start, end)
-    ]
+def matches(
+    book: dict[str, Any], part: list[tuple[int, int]], written: dict[str, str]
+) -> bool:
+    """Whether the model wrote a part of `book` with the keys it was sent,
+    in order, as it may write one for a picture too, which is not taken."""
+    pictures = {
+        str(place)
+        for start, end in part
+        for place in range(start, end)
+        if book["blocks"][place].get("image")
+    }
+    return [key for key in written if key not in pictures] == list(
+        part_blocks(book, part)
+    )
 
 
 def _copied(
@@ -500,16 +682,20 @@ def _copied(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """The blocks, the table of contents and the landmarks of a version of
     `book` made of the blocks `emitted` says, in order, without their links.
-    A block the model added is a paragraph. An entry of the table of
-    contents that leads to a heading written anew is called as it now says.
-    An entry or a landmark that leads to a block that is left out is left
-    out; the entries under such an entry are moved up to where it was."""
+    A block the model added is a paragraph, and one it wrote as nothing is
+    left out. An entry of the table of contents that leads to a heading
+    written anew is called as it now says. An entry or a landmark that leads
+    to a block that is left out is left out; the entries under such an entry
+    are moved up to where it was."""
     blocks: list[dict[str, Any]] = []
     places: dict[int, int] = {}
     rewrite: dict[int, str] = {}
     for old, text in emitted:
+        # a block the model wrote as nothing is left out
+        if text is not None and not text.strip():
+            continue
         if old is None:
-            blocks.append({"text": text or "", "size": 1})
+            blocks.append({"text": text, "size": 1})
             continue
         block = {
             name: value
@@ -560,8 +746,10 @@ def transformed(
     gives it. The model is told not to change the structure of a part, but
     what it wrote is kept as it wrote it if it did: a block it left out is
     left out, and a key it added is a paragraph after the block it wrote
-    before it, or before the first of the part. The blocks in no part are
-    kept as they are if `untouched_kept`, and left out if not."""
+    before it, or before the first of the part. A picture in a part stays
+    where it was, before what the model wrote after the block before it. The
+    blocks in no part are kept as they are if `untouched_kept`, and left
+    out if not."""
     # what each block of a part is written as, from where it is on: its
     # text, then those the model added after it
     at: dict[int, list[Emitted]] = {}
@@ -571,11 +759,19 @@ def transformed(
             str(place): place for start, end in part for place in range(start, end)
         }
         in_parts.update(places.values())
+        for picture in places.values():
+            if book["blocks"][picture].get("image"):
+                at[picture] = [(picture, None)]
         anchor = part[0][0]
         for key, text in blocks.items():
             place = places.get(key)
             if place is not None:
                 anchor = place
+                # The model was not sent a picture, but may fill the gap its
+                # key leaves among those it was sent: the picture is already
+                # where it was.
+                if book["blocks"][place].get("image"):
+                    continue
             at.setdefault(anchor, []).append((place, text))
     emitted: list[Emitted] = []
     for place in range(len(book["blocks"])):

@@ -17,6 +17,7 @@ from unittest.mock import ANY
 
 import pytest
 from anki_import import AnkiImporter, AnkiLink, AnkiRefused, AnkiUnavailable
+from books import read_epub
 from evaluating import Evaluations
 from exercising import Practice, Runner
 from intake import Intake
@@ -29,8 +30,9 @@ from speaking import Speaker
 from spelling import Speller, SpellingIssue
 from storage import UserStore
 from tasks import Tasks
-from test_books import epub, page
+from test_books import epub, page, png
 from test_intake import FakeChat, FakeProfiler
+from test_pdfs import a_pdf
 from test_speaking import FakeVoice
 from test_topics import FakeOpenRouter
 from test_translating import FakeModel
@@ -1126,15 +1128,115 @@ def test_the_file_a_book_was_read_from_is_given_as_it_was_sent(
     assert not_bens == 404
 
 
+def test_a_book_is_exported_as_its_file_and_a_version_as_one_written_anew(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    file = epub(page("<h1>Kapitel</h1><p>Es war einmal.</p><p>Vokabeln</p>"))
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    book_id = json.loads(added)["id"]
+    _, made, _ = send(
+        f"{with_users}/books/{book_id}/strip",
+        "POST",
+        ada,
+        json.dumps({"name": "Nur Text", "keep": [[0, 2]]}).encode(),
+    )
+
+    _, whole, _ = send(f"{with_users}/books/{book_id}/epub", "GET", ada)
+    status, written, kind = send(
+        f"{with_users}/books/{json.loads(made)['id']}/epub", "GET", ada
+    )
+    missing, _, _ = send(f"{with_users}/books/gone/epub", "GET", ada)
+
+    assert whole == file
+    assert (status, kind) == (200, "application/epub+zip")
+    assert [block.text for block in read_epub(written).blocks] == [
+        "Kapitel",
+        "Es war einmal.",
+    ]
+    assert missing == 404
+
+
+def test_a_picture_is_kept_once_with_its_book_and_shown_by_its_versions(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    ben = log_in(with_users, "ben", "another one")
+    picture = png(300, 200)
+    file = epub(
+        page("<p>Es war einmal.</p><p><img src='../images/map.png'/></p>"),
+        manifest='<item id="map" href="images/map.png" media-type="image/png"/>',
+        files={"OEBPS/images/map.png": picture},
+    )
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    book_id = json.loads(added)["id"]
+    _, whole, _ = send(f"{with_users}/books/{book_id}", "GET", ada)
+    picture_id = json.loads(whole)["blocks"][1]["image"]
+    _, made, _ = send(
+        f"{with_users}/books/{book_id}/strip",
+        "POST",
+        ada,
+        json.dumps({"name": "Bilder", "keep": [[1, 2]]}).encode(),
+    )
+    version_id = json.loads(made)["id"]
+
+    status, of_book, kind = send(
+        f"{with_users}/books/{book_id}/pictures/{picture_id}", "GET", ada
+    )
+    _, of_version, _ = send(
+        f"{with_users}/books/{version_id}/pictures/{picture_id}", "GET", ada
+    )
+    not_bens, _, _ = send(
+        f"{with_users}/books/{book_id}/pictures/{picture_id}", "GET", ben
+    )
+    no_such, _, _ = send(
+        f"{with_users}/books/{book_id}/pictures/../../app.db", "GET", ada
+    )
+    send(f"{with_users}/books/{version_id}", "DELETE", ada)
+    _, still, _ = send(
+        f"{with_users}/books/{book_id}/pictures/{picture_id}", "GET", ada
+    )
+    send(f"{with_users}/books/{book_id}", "DELETE", ada)
+    gone, _, _ = send(f"{with_users}/books/{book_id}/pictures/{picture_id}", "GET", ada)
+
+    assert (status, of_book, kind) == (200, picture, "image/png")
+    assert (of_version, still) == (picture, picture)
+    assert (not_bens, no_such, gone) == (404, 404, 404)
+
+
+def test_a_pdf_is_kept_as_the_epub_it_is_made_into_with_its_pictures(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+
+    _, added, _ = send(f"{with_users}/books", "POST", ada, a_pdf())
+    book_id = json.loads(added)["id"]
+    _, whole, _ = send(f"{with_users}/books/{book_id}", "GET", ada)
+    _, file, kind = send(f"{with_users}/books/{book_id}/epub", "GET", ada)
+    blocks = json.loads(whole)["blocks"]
+    picture_id = next(block["image"] for block in blocks if "image" in block)
+    status, _, shown = send(
+        f"{with_users}/books/{book_id}/pictures/{picture_id}", "GET", ada
+    )
+
+    assert json.loads(added)["title"] == "Der lesende Hund"
+    assert json.loads(added)["cover"] is True
+    assert kind == "application/epub+zip"
+    assert [block.image or block.text for block in read_epub(file).blocks] == [
+        block.get("image") or block["text"] for block in blocks
+    ]
+    assert (status, shown) == (200, "image/png")
+
+
 def test_a_file_that_is_not_a_book_is_refused_with_the_reason(with_users: str) -> None:
     ada = log_in(with_users, "ada", "a password")
 
-    status, reply, _ = send(f"{with_users}/books", "POST", ada, b"%PDF-1.7")
+    status, reply, _ = send(f"{with_users}/books", "POST", ada, b"GIF89a")
     _, books, _ = send(f"{with_users}/books", "GET", ada)
 
     assert (status, json.loads(reply)) == (
         400,
-        {"error": "the file is not an EPUB book"},
+        {"error": "the file is not an EPUB or a PDF book"},
     )
     assert json.loads(books) == {"books": []}
 
@@ -1441,6 +1543,38 @@ def test_the_sentences_of_a_book_are_read_aloud_once_and_their_audio_kept(
     assert [one["status"] for one in task["result"]] == ["made", "made"]
 
 
+def test_the_audio_of_many_sentences_to_make_is_made_once_the_listener_agrees(
+    with_users: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("server.ASK_ABOVE", 1)
+    ada = log_in(with_users, "ada", "a password")
+    file = epub(page("<p>Der Hund schläft. Die Katze nicht.</p>"))
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    book = f"{with_users}/books/{json.loads(added)['id']}"
+    body = {"start_block": 0, "start": 0, "end_block": 0, "end": 34}
+    voiced = {**body, "model": "some/tts", "voice": "Kore"}
+
+    asked, how_many = post(f"{book}/speech", json.dumps(voiced).encode(), token=ada)
+    agreed, made = post(
+        f"{book}/speech",
+        json.dumps({**voiced, "agreed": True}).encode(),
+        key="sk-test",
+        token=ada,
+    )
+    for _ in range(200):
+        _, tasks, _ = send(f"{with_users}/tasks", "GET", ada)
+        if json.loads(tasks)["tasks"][0]["state"] != "running":
+            break
+        time.sleep(0.01)
+    # once it is made, there is nothing to agree to
+    again, _ = post(f"{book}/speech", json.dumps(voiced).encode(), token=ada)
+
+    assert asked == 409 and isinstance(how_many, dict)
+    assert how_many["toMake"] == 2
+    assert agreed == 200 and isinstance(made, dict) and made["task"]
+    assert again == 200
+
+
 def test_a_reading_is_told_where_the_listener_is_and_to_stop(with_users: str) -> None:
     ada = log_in(with_users, "ada", "a password")
     place = json.dumps({"at": 3}).encode()
@@ -1629,6 +1763,23 @@ def test_a_topic_is_made_with_an_icon_and_removed(with_users: str) -> None:
     assert json.loads(listed)["topics"][0]["icon"] is True
     assert (status, icon[:4], kind) == (200, b"\x89PNG", "image/png")
     assert json.loads(after) == {"topics": []}
+
+
+def test_a_topic_is_changed_by_its_id(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    _, made, _ = send(
+        f"{with_users}/topics", "POST", ada, json.dumps({"title": "Fußball"}).encode()
+    )
+    topic_id = json.loads(made)["topic"]["id"]
+    body = json.dumps({"title": "Tennis", "description": "rackets"}).encode()
+
+    status, changed, _ = send(f"{with_users}/topics/{topic_id}", "PUT", ada, body)
+    missing, _, _ = send(f"{with_users}/topics/gone", "PUT", ada, body)
+
+    assert status == 200
+    topic = json.loads(changed)["topic"]
+    assert (topic["title"], topic["description"]) == ("Tennis", "rackets")
+    assert missing == 404
 
 
 def test_a_topic_made_without_a_key_has_no_icon_yet(with_users: str) -> None:
@@ -2420,6 +2571,42 @@ def test_a_stripped_version_is_made_of_the_stretches_kept_and_listed_under_its_b
     )
 
 
+def test_a_book_and_a_version_of_it_are_renamed_by_their_ids(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    _, added, _ = send(f"{with_users}/books", "POST", ada, epub(page("<p>Ende.</p>")))
+    book_id = json.loads(added)["id"]
+    _, made, _ = send(
+        f"{with_users}/books/{book_id}/strip",
+        "POST",
+        ada,
+        json.dumps({"name": "Nur Text", "keep": [[0, 1]]}).encode(),
+    )
+    version_id = json.loads(made)["id"]
+
+    send(
+        f"{with_users}/books/{book_id}",
+        "PUT",
+        ada,
+        json.dumps({"name": "Der Wolf"}).encode(),
+    )
+    status, listed, _ = send(
+        f"{with_users}/books/{version_id}",
+        "PUT",
+        ada,
+        json.dumps({"name": "Kurz"}).encode(),
+    )
+    missing, _, _ = send(
+        f"{with_users}/books/gone", "PUT", ada, json.dumps({"name": "X"}).encode()
+    )
+
+    book = json.loads(listed)["books"][0]
+    assert status == 200
+    assert (book["title"], book["versions"][0]["name"]) == ("Der Wolf", "Kurz")
+    assert missing == 404
+
+
 def test_the_tokens_of_each_paragraph_of_a_book_are_counted_as_it_would_be_sent(
     with_users: str,
 ) -> None:
@@ -2459,7 +2646,8 @@ def test_a_transformed_version_is_made_in_the_background_as_its_book_was_written
 
     def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
         sent.append(body)
-        blocks = json.loads(body["messages"][0]["content"].split("The part:\n")[1])
+        part = body["messages"][0]["content"].split("The part:\n")[1]
+        blocks, _ = json.JSONDecoder().raw_decode(part)
         written = {key: text.upper() for key, text in blocks.items()}
         yield {"choices": [{"delta": {"content": json.dumps(written)}}]}
         yield {"usage": {"prompt_tokens": 9, "completion_tokens": 3}}

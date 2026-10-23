@@ -8,6 +8,7 @@ import {
     type BookBlock,
     changeReading,
     fetchBook,
+    fetchPicture,
     FONTS,
     loadReading,
     MAX_FONT_SIZE,
@@ -23,6 +24,7 @@ import {
 } from "../lib/books";
 import { t } from "../lib/i18n";
 import type { Where } from "../lib/logs";
+import type { BookSelection } from "../lib/speaking";
 import { BookContents } from "./BookContents";
 import { SPOKEN_EVENT } from "./SpeechPlayer";
 
@@ -31,6 +33,10 @@ interface Props {
     bookId: string | null;
     /** Whether the reader is on show. */
     active: boolean;
+    /** What the book and the version are called as they are listed, which they may have been renamed to since. */
+    names?: { title: string; version?: string };
+    /** Told what of the book to read aloud, such as a section chosen in the contents. */
+    onPlay: (selection: BookSelection) => void;
 }
 
 type BookState =
@@ -54,15 +60,17 @@ const KEYS: Record<string, number> = {
 };
 
 /** Shows a book a page at a time: its text, each part in its size, and nothing else. */
-export function BookReader({ bookId, active }: Props) {
+export function BookReader({ bookId, active, names, onPlay }: Props) {
     const [state, setState] = useState<BookState>({ status: "loading" });
     const [attempt, setAttempt] = useState(0);
     // how the text looks: its size, its font, its colours and how far apart its lines are
     const [look, setLook] = useState<Reading>(loadReading);
     const [optionsOpen, setOptionsOpen] = useState(false);
     const [contentsOpen, setContentsOpen] = useState(false);
-    // the paragraph at the top of the page of each book, by the id of the book
+    // the paragraph at the top of the page of each book, and the character
+    // of it the page starts at, by the id of the book
     const places = useRef(look.places);
+    const offsets = useRef(look.offsets);
     // the places links were followed from, the last one last, to go back to
     const [trail, setTrail] = useState<number[]>([]);
     // what the pages are seen through, and the text, which is laid out in
@@ -75,6 +83,7 @@ export function BookReader({ bookId, active }: Props) {
     // how large the pages are, as text, to tell when it changes
     const [viewSize, setViewSize] = useState("");
     const book = state.status === "ready" && state.book.id === bookId ? state.book : null;
+    const title = names?.title ?? book?.title ?? "";
 
     useEffect(() => {
         setTrail([]);
@@ -120,11 +129,23 @@ export function BookReader({ bookId, active }: Props) {
         }
         const count = pageCount(laid.scrollWidth, shown.clientWidth, PAGE_GAP);
         setPages(count);
-        setPage(Math.min(count - 1, pageWith(places.current[book.id] ?? 0)));
+        const block = laid.children[places.current[book.id] ?? 0] as HTMLElement | undefined;
+        const left = block && leftOf(block, offsets.current[book.id] ?? 0);
+        const wanted = left === undefined || left === null
+            ? pageWith(places.current[book.id] ?? 0)
+            : pageOf(left - laid.getBoundingClientRect().left, shown.clientWidth, PAGE_GAP);
+        // the place is not kept again, so that it stays what was read however often the size changes
+        setPage(Math.min(count - 1, wanted));
     }, [book, active, look.fontSize, look.font, look.spacing, viewSize, pageWith]);
 
-    const keepPlace = useCallback((id: string, place: number) => {
-        places.current = changeReading((kept) => ({ ...kept, places: { ...kept.places, [id]: place } })).places;
+    const keepPlace = useCallback((id: string, place: number, offset = 0) => {
+        const kept = changeReading((before) => ({
+            ...before,
+            places: { ...before.places, [id]: place },
+            offsets: { ...before.offsets, [id]: offset },
+        }));
+        places.current = kept.places;
+        offsets.current = kept.offsets;
     }, []);
 
     const turnTo = useCallback((wanted: number) => {
@@ -136,8 +157,9 @@ export function BookReader({ bookId, active }: Props) {
         const count = pageCount(laid.scrollWidth, shown.clientWidth, PAGE_GAP);
         const next = Math.min(count - 1, Math.max(0, wanted));
         setPage(next);
-        // The place is the first paragraph that starts on the page, or the
-        // one the page is in the middle of if none does.
+        // The place is the first character on the page: in the paragraph the
+        // page is in the middle of, or that ends on it, if one does, and
+        // otherwise at the start of the first paragraph that starts on it.
         let low = 0;
         let high = laid.children.length - 1;
         while (low < high) {
@@ -148,7 +170,17 @@ export function BookReader({ bookId, active }: Props) {
                 low = middle + 1;
             }
         }
-        keepPlace(book.id, low > 0 && pageWith(low) > next ? low - 1 : low);
+        const into = pageWith(low) < next ? low : low - 1;
+        const block = laid.children[into] as HTMLElement | undefined;
+        if (block) {
+            const start = laid.getBoundingClientRect().left;
+            const offset = firstWhere(block, (left) => pageOf(left - start, shown.clientWidth, PAGE_GAP) >= next);
+            if (offset < (block.textContent?.length ?? 0)) {
+                keepPlace(book.id, into, offset);
+                return;
+            }
+        }
+        keepPlace(book.id, low);
     }, [book, pageWith, keepPlace]);
 
     /** Shows the page a paragraph is on, and has the book left at that paragraph. */
@@ -238,7 +270,7 @@ export function BookReader({ bookId, active }: Props) {
         return (
             <section className="reader">
                 <p className="reader-note">
-                    {t("Add an EPUB book under Books in the library, and choose it to read it here.")}
+                    {t("Add an EPUB or PDF book under Books in the library, and choose it to read it here.")}
                 </p>
             </section>
         );
@@ -261,7 +293,11 @@ export function BookReader({ bookId, active }: Props) {
                         ☰
                     </button>
                     <span className="reader-title">
-                        {book ? [book.title, book.version?.name, book.author].filter(Boolean).join(" · ") : ""}
+                        {book
+                            ? [title, book.version && (names?.version ?? book.version.name), book.author].filter(
+                                Boolean,
+                            ).join(" · ")
+                            : ""}
                     </span>
                     {/* where the player of what is read aloud goes */}
                     <span className="speech-dock" data-speech-dock="book" />
@@ -306,6 +342,17 @@ export function BookReader({ bookId, active }: Props) {
                         onGoTo={(place) => {
                             goTo(place);
                             setContentsOpen(false);
+                        }}
+                        onPlay={(section) => {
+                            goTo(section.start);
+                            setContentsOpen(false);
+                            // to the end of its last paragraph, however long it is
+                            onPlay({
+                                startBlock: section.start,
+                                start: 0,
+                                endBlock: section.end - 1,
+                                end: Number.MAX_SAFE_INTEGER,
+                            });
                         }}
                     />
                 )}
@@ -403,22 +450,77 @@ export function BookReader({ bookId, active }: Props) {
                             className="reader-columns"
                             data-selectable="book"
                             data-where={JSON.stringify(
-                                { kind: "book", id: book.id, title: book.title, page } satisfies Where,
+                                { kind: "book", id: book.id, title, page } satisfies Where,
                             )}
                             ref={columns}
                             style={{
+                                // a picture is no higher than a page
+                                ["--page-height" as string]: `${Number(viewSize.split("x")[1]) || 0}px`,
                                 columnGap: `${PAGE_GAP}px`,
                                 // a page further on is its own width and the gap to the left
                                 transform: `translateX(calc(${-page} * (100% + ${PAGE_GAP}px)))`,
                             }}
                         >
-                            <Blocks blocks={book.blocks} onFollow={follow} />
+                            <Blocks bookId={book.id} blocks={book.blocks} onFollow={follow} />
                         </div>
                     </div>
                 </div>
             )}
         </section>
     );
+}
+
+/** Where a character of the text of `block` is, by its place in it, from 0, if it is laid out. */
+function characterRange(block: HTMLElement, offset: number): Range | null {
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    let left = offset;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const length = node.textContent?.length ?? 0;
+        if (left < length) {
+            const range = document.createRange();
+            range.setStart(node, left);
+            range.setEnd(node, left + 1);
+            return range;
+        }
+        left -= length;
+    }
+    return null;
+}
+
+/**
+ * How far from the left of the window a character of `block` is, or the
+ * first after it that takes up room, as a space where a line breaks may not;
+ * null if none does.
+ */
+function leftOf(block: HTMLElement, offset: number): number | null {
+    const length = block.textContent?.length ?? 0;
+    for (let at = offset; at < length; at++) {
+        const rect = characterRange(block, at)?.getBoundingClientRect();
+        if (rect && (rect.width > 0 || rect.height > 0)) {
+            return rect.left;
+        }
+    }
+    return null;
+}
+
+/**
+ * The first character of `block`, by its place in it, whose left `reached`
+ * holds for, as it holds for every one after it; the length of its text if
+ * none.
+ */
+function firstWhere(block: HTMLElement, reached: (left: number) => boolean): number {
+    let low = 0;
+    let high = block.textContent?.length ?? 0;
+    while (low < high) {
+        const middle = (low + high) >> 1;
+        const left = leftOf(block, middle);
+        if (left === null || reached(left)) {
+            high = middle;
+        } else {
+            low = middle + 1;
+        }
+    }
+    return low;
 }
 
 interface PageFieldProps {
@@ -473,48 +575,111 @@ function PageField({ page, pages, onTurn }: PageFieldProps) {
 }
 
 interface BlocksProps {
+    /** The book the blocks are of, for their pictures. */
+    bookId: string;
     blocks: BookBlock[];
     /** Told the paragraph a link in the book leads to, by its place among them, when it is followed. */
     onFollow: (to: number) => void;
 }
 
 /** The paragraphs of a book, which are many, and are not gone through again when a page is turned. */
-const Blocks = memo(function Blocks({ blocks, onFollow }: BlocksProps) {
+const Blocks = memo(function Blocks({ bookId, blocks, onFollow }: BlocksProps) {
     return (
         <>
-            {blocks.map((block, index) => (
-                <p key={index} style={block.size === 1 ? undefined : { fontSize: `${shownSize(block)}em` }}>
-                    {block.links
-                        ? segments(block).map((segment, at) =>
-                            typeof segment.to === "number"
-                                ? (
-                                    <a
-                                        key={at}
-                                        role="link"
-                                        tabIndex={-1}
-                                        onClick={() => onFollow(segment.to as number)}
-                                    >
-                                        {segment.text}
-                                    </a>
+            {blocks.map((block, index) =>
+                block.image
+                    ? (
+                        // a paragraph of its own, as each block is one child of the columns
+                        <p key={index} className="book-picture">
+                            <BookPicture bookId={bookId} block={block} />
+                        </p>
+                    )
+                    : (
+                        <p key={index} style={block.size === 1 ? undefined : { fontSize: `${shownSize(block)}em` }}>
+                            {block.links
+                                ? segments(block).map((segment, at) =>
+                                    typeof segment.to === "number"
+                                        ? (
+                                            <a
+                                                key={at}
+                                                role="link"
+                                                tabIndex={-1}
+                                                onClick={() => onFollow(segment.to as number)}
+                                            >
+                                                {segment.text}
+                                            </a>
+                                        )
+                                        : segment.to
+                                        ? (
+                                            // a link out of the book opens beside the app
+                                            <a
+                                                key={at}
+                                                href={segment.to}
+                                                target="_blank"
+                                                rel="noreferrer noopener"
+                                                tabIndex={-1}
+                                            >
+                                                {segment.text}
+                                            </a>
+                                        )
+                                        : segment.text
                                 )
-                                : segment.to
-                                ? (
-                                    // a link out of the book opens beside the app
-                                    <a
-                                        key={at}
-                                        href={segment.to}
-                                        target="_blank"
-                                        rel="noreferrer noopener"
-                                        tabIndex={-1}
-                                    >
-                                        {segment.text}
-                                    </a>
-                                )
-                                : segment.text
-                        )
-                        : block.text}
-                </p>
-            ))}
+                                : block.text}
+                        </p>
+                    )
+            )}
         </>
     );
 });
+
+/**
+ * A picture in the text of a book, as large as the book has it but never
+ * wider or higher than a page. It takes its room before it has come, so
+ * that the pages are laid out once, and is only shown while it is on the
+ * page or on one beside it: a browser has every page of the book laid out,
+ * and would otherwise keep every picture of it drawn.
+ */
+function BookPicture({ bookId, block }: { bookId: string; block: BookBlock }) {
+    const [near, setNear] = useState(false);
+    const [source, setSource] = useState<string | null>(null);
+    const shown = useRef<HTMLImageElement>(null);
+
+    useEffect(() => {
+        const picture = shown.current;
+        const view = picture?.closest(".reader-view");
+        if (!picture || !view) {
+            return;
+        }
+        // a page on either side of the one that is shown
+        const observer = new IntersectionObserver(
+            (entries) => setNear(entries.some((entry) => entry.isIntersecting)),
+            { root: view, rootMargin: "0px 100%" },
+        );
+        observer.observe(picture);
+        return () => observer.disconnect();
+    }, []);
+
+    useEffect(() => {
+        let current = true;
+        if (near && block.image) {
+            fetchPicture(bookId, block.image).then((url) => current && setSource(url), () => undefined);
+        } else {
+            setSource(null);
+        }
+        return () => {
+            current = false;
+        };
+    }, [bookId, block.image, near]);
+
+    return (
+        <img
+            ref={shown}
+            src={source ?? undefined}
+            alt={block.alt ?? ""}
+            width={block.width}
+            height={block.height}
+            decoding="async"
+            draggable={false}
+        />
+    );
+}

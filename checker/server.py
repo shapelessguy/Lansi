@@ -39,7 +39,7 @@ from anki_import import (
     AnkiUnavailable,
     vocabulary_words,
 )
-from books import BookError, read_epub
+from books import PICTURE_ENDS, Book, BookError, read_epub
 from categories import CATEGORIES, practised_categories
 from evaluating import EvaluationError, Evaluations
 from exercising import (
@@ -52,6 +52,7 @@ from exercising import (
     model_drawer,
     ui_file,
 )
+from exporting import write_epub
 from grammar import GrammarError
 from intake import (
     MAX_WORDS,
@@ -67,6 +68,7 @@ from live import LiveChecker
 from logs import LogError
 from lookups import asked_anything, translation_log, write_question_logs
 from models import Model, read_model
+from pdfs import read_pdf
 from processing import Processor, words_in
 from profiling import (
     DEFAULT_MODEL,
@@ -84,7 +86,7 @@ from relaying import Listing, Watched
 from sections import outline
 from sentences import Sentence
 from speaking import (
-    MAX_SENTENCES,
+    ASK_ABOVE,
     BookSentence,
     Speaker,
     SpeechError,
@@ -156,6 +158,8 @@ DEFAULT_PORT = 8092
 MAX_BODY_BYTES = 1_000_000
 # a book with many pictures in it, which are not kept
 MAX_BOOK_BYTES = 200_000_000
+# the kind of file each picture in the text of a book is, by the end of its name
+PICTURE_TYPES = {end: kind for kind, end in PICTURE_ENDS.items()}
 # the request header the name of the file of a book comes in, encoded as in a URL
 FILE_NAME_HEADER = "X-File-Name"
 # How much of the text on either side of a selection is looked at for the
@@ -163,6 +167,8 @@ FILE_NAME_HEADER = "X-File-Name"
 MAX_AROUND_LENGTH = 2000
 # how much of a selection a task that is about it is told by
 MAX_TITLE_LENGTH = 80
+# the most characters the name a book is given may have, as that of its file
+MAX_BOOK_TITLE = 200
 # How long the audio of a sentence that is being made is waited for before
 # whoever asked for it is told to ask again.
 SPEECH_WAIT_SECS = 50.0
@@ -189,6 +195,17 @@ USERS_FILE = Path(__file__).parent.parent / "users.json"
 MAX_ANKI_LOGIN_LENGTH = 500
 # no collection has more decks to choose
 MAX_ANKI_DECKS = 5000
+
+
+def _kept_book(book: Book) -> dict[str, Any]:
+    """A book that was read as the store keeps it, to be written as a file."""
+    return {
+        "title": book.title,
+        "author": book.author,
+        "language": book.language,
+        "blocks": [block.kept() for block in book.blocks],
+        "contents": [entry.kept() for entry in book.contents],
+    }
 
 
 def describe(sentences: list[Sentence]) -> str:
@@ -482,6 +499,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 return
             if self._books("PUT") or self._speech("PUT") or self._texts("PUT"):
                 return
+            if self._topics("PUT"):
+                return
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
             return
@@ -630,6 +649,29 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
         return words
 
+    def _book_file(self, store: UserStore, book_id: str, written: bool) -> bool:
+        """Sends the EPUB file a book was read from or, if `written`, the
+        book as an EPUB file: the one it was read from, if it was kept, and
+        for a version, one written from what it says, with the cover of its
+        book."""
+        found = store.book(book_id)
+        file = store.original(book_id) if found and "parent" not in found else None
+        if found and written and file is None:
+            parent = found.get("parent")
+            cover = store.cover(book_id) or (store.cover(parent) if parent else None)
+            file = write_epub(
+                found, cover, lambda picture_id: store.picture(book_id, picture_id)
+            )
+        if file is None:
+            self._reply(HTTPStatus.NOT_FOUND, {"error": "no such file"})
+            return True
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/epub+zip")
+        self.send_header("Content-Length", str(len(file)))
+        self.end_headers()
+        self.wfile.write(file)
+        return True
+
     def _books(self, method: str, api_key: str | None = None) -> bool:
         """Answers a request about the books the user reads, and returns
         whether the request was one.
@@ -637,13 +679,20 @@ class CheckerHandler(BaseHTTPRequestHandler):
             GET /books         the books, without what they say
             POST /books        keep the EPUB file that is sent, as it is
                                and as its text and how each part of it is
-                               written
+                               written; a PDF is kept as the EPUB it is
+                               made into
             GET /books/prompts  the prompts a transformed version can be
                                written anew with, to start from
             GET /books/ID      a book with its paragraphs, its table of
                                contents, its landmarks and its sections
             GET /books/ID/cover  the picture on its cover, as a file
+            GET /books/ID/pictures/P  a picture in its text, by the id its
+                               block has, as a file; a version shows those
+                               of its book
             GET /books/ID/original  the EPUB file it was read from
+            GET /books/ID/epub  the book as an EPUB file: the one it was read
+                               from, if it was kept, and for a version, one
+                               written from what it says
             GET /books/ID/tokens  the tokens each of its paragraphs takes
                                when it is sent to a model, as `tokens`
                                counts them
@@ -652,6 +701,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                the book
             POST /books/ID/transform  make a transformed version in the
                                background, answered with the task
+            PUT /books/ID      call a book `{"name": ...}`, with its versions,
+                               or a version, answered with the books
             DELETE /books/ID   remove a book with its versions, or a version
 
         The books are listed with their versions. Each way of making a
@@ -673,12 +724,22 @@ class CheckerHandler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         one = re.fullmatch(r"/books/([^/]+)", path)
         cover = re.fullmatch(r"/books/([^/]+)/cover", path)
+        picture = re.fullmatch(r"/books/([^/]+)/pictures/([^/]+)", path)
         original = re.fullmatch(r"/books/([^/]+)/original", path)
+        exported = re.fullmatch(r"/books/([^/]+)/epub", path)
         strip = re.fullmatch(r"/books/([^/]+)/strip", path)
         transform = re.fullmatch(r"/books/([^/]+)/transform", path)
         tokens = re.fullmatch(r"/books/([^/]+)/tokens", path)
         if store is None or not (
-            one or cover or original or strip or transform or tokens or path == "/books"
+            one
+            or cover
+            or picture
+            or original
+            or exported
+            or strip
+            or transform
+            or tokens
+            or path == "/books"
         ):
             return False
         if path == "/books/prompts":
@@ -689,27 +750,33 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return method == "POST" and self._transform(
                 store, transform.group(1), api_key or ""
             )
-        if original:
-            file = store.original(original.group(1)) if method == "GET" else None
-            if file is None:
-                self._reply(HTTPStatus.NOT_FOUND, {"error": "no original file"})
+        if original or exported:
+            file_of = original or exported
+            assert file_of
+            return method == "GET" and self._book_file(
+                store, file_of.group(1), exported is not None
+            )
+        if cover or picture:
+            shown = None
+            if method == "GET" and cover:
+                shown = store.cover(cover.group(1))
+            elif method == "GET" and picture:
+                data = store.picture(picture.group(1), picture.group(2))
+                end = picture.group(2).rpartition(".")[2]
+                shown = None if data is None else (data, PICTURE_TYPES[end])
+            if shown is None:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such picture"})
                 return True
             self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "application/epub+zip")
-            self.send_header("Content-Length", str(len(file)))
+            self.send_header("Content-Type", shown[1])
+            self.send_header("Content-Length", str(len(shown[0])))
+            if picture:
+                # a picture of an id is always the same, as its id is made from it
+                self.send_header(
+                    "Cache-Control", "private, max-age=31536000, immutable"
+                )
             self.end_headers()
-            self.wfile.write(file)
-            return True
-        if cover:
-            picture = store.cover(cover.group(1)) if method == "GET" else None
-            if picture is None:
-                self._reply(HTTPStatus.NOT_FOUND, {"error": "no cover"})
-                return True
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", picture[1])
-            self.send_header("Content-Length", str(len(picture[0])))
-            self.end_headers()
-            self.wfile.write(picture[0])
+            self.wfile.write(shown[0])
             return True
         if method == "GET" and path == "/books":
             self._reply(HTTPStatus.OK, {"books": store.books()})
@@ -720,7 +787,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
             name = unquote(self.headers.get(FILE_NAME_HEADER) or "")
             data = self.rfile.read(length)
             try:
-                book = read_epub(data, Path(name).stem[:200])
+                if data.startswith(b"%PDF"):
+                    book = read_pdf(data, Path(name).stem[:MAX_BOOK_TITLE])
+                    # it is kept as the EPUB it is made into, as a book is
+                    data = write_epub(_kept_book(book), book.cover, book.pictures.get)
+                else:
+                    book = read_epub(data, Path(name).stem[:MAX_BOOK_TITLE])
             except BookError as error:
                 raise ValueError(str(error)) from None
             listed = store.add_book(
@@ -733,6 +805,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 original=data,
                 contents=[entry.kept() for entry in book.contents],
                 landmarks=[landmark.kept() for landmark in book.landmarks],
+                pictures=book.pictures,
             )
             log(
                 f"{datetime.now():%H:%M:%S} book added: {book.title}"
@@ -751,6 +824,16 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 )
             else:
                 self._reply(HTTPStatus.NOT_FOUND, {"error": "no such book"})
+        elif method == "PUT" and one:
+            called = self._read_body().get("name")
+            if not isinstance(called, str):
+                raise ValueError('expected {"name": "..."}')
+            books = {book["id"] for book in store.books()}
+            limit = MAX_BOOK_TITLE if one.group(1) in books else MAX_VERSION_NAME
+            if not store.rename_book(one.group(1), called.strip()[:limit]):
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such book"})
+                return True
+            self._reply(HTTPStatus.OK, {"books": store.books()})
         elif method == "DELETE" and one:
             store.delete_book(one.group(1))
             self._reply(HTTPStatus.OK, {})
@@ -865,13 +948,15 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 stream_transforming,
                 titles,
                 budget,
+                outline(source["blocks"], source["contents"]),
+                step.used,
             )
             blocks, contents, landmarks = transformed(
                 source, parts, written, untouched_kept
             )
             # parts whose structure the model changed, though told not to
             changed = sum(
-                not matches(part, each)
+                not matches(source, part, each)
                 for part, each in zip(parts, written, strict=True)
             )
             listed = store.add_version(
@@ -922,7 +1007,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
         `sentences`, each with its id, where it is, and whether its audio
         is `ready`. The audio that is not is made in the background, as the
         `task` of the reply, whose `reading` is what a PUT and a DELETE
-        name; there is none if all of it is kept.
+        name; there is none if all of it is kept. If the audio of more than
+        ASK_ABOVE sentences is to be made, the POST is answered 409 with how
+        many as `toMake`, unless it brings `"agreed": true`, as it does once
+        the listener agrees to have them all made.
 
         A POST for a chat brings `{"message": ..., "text": ..., "model":
         ..., "voice": ..., "instructions": ...}` in place of a selection:
@@ -1006,10 +1094,17 @@ class CheckerHandler(BaseHTTPRequestHandler):
             sentences = sentences_between(book["blocks"], *places)
         if not sentences:
             raise ValueError("there is no sentence in the selection")
-        if len(sentences) > MAX_SENTENCES:
-            raise ValueError(f"more than {MAX_SENTENCES} sentences are selected")
         ready = speaker.kept(book_id, sentences, model.name, voice)
         missing = [number for number, kept in enumerate(ready) if not kept]
+        if len(missing) > ASK_ABOVE and body.get("agreed") is not True:
+            self._reply(
+                HTTPStatus.CONFLICT,
+                {
+                    "error": f"the audio of {len(missing)} sentences is to be made",
+                    "toMake": len(missing),
+                },
+            )
+            return
         task = None
         if missing and not model.has_key:
             self._reply(
@@ -1456,6 +1551,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                     "description": ..., "image_model": ...}`;
                                     its icon is made in the background, as
                                     the `task` of the reply
+            PUT /topics/ID          change its `{"title": ...,
+                                    "description": ...}`, keeping its icon
             DELETE /topics/ID       remove a topic
             GET /topics/ID/icon     the icon of a topic, as a file
             POST /topics/ID/icon    make its icon again, `{"image_model": ...}`
@@ -1487,6 +1584,20 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 )
                 task = self._make_icon(topic, body, api_key)
                 self._reply(HTTPStatus.OK, {"topic": topic, "task": task})
+            elif method == "PUT" and one:
+                body = self._read_body()
+                title, description = body.get("title"), body.get("description", "")
+                if not isinstance(title, str) or not isinstance(description, str):
+                    raise ValueError('expected {"title": "...", "description": "..."}')
+                changed = store.update_topic(
+                    one.group(1),
+                    title[:MAX_TOPIC_LENGTH],
+                    description[:MAX_TOPIC_LENGTH],
+                )
+                if changed is None:
+                    self._reply(HTTPStatus.NOT_FOUND, {"error": "no such topic"})
+                    return True
+                self._reply(HTTPStatus.OK, {"topic": changed})
             elif method == "DELETE" and one:
                 store.delete_topic(one.group(1))
                 self._reply(HTTPStatus.OK, {})

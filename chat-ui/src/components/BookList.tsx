@@ -23,6 +23,8 @@ interface Props {
     onAdd: (file: File) => void;
     /** Told the book or the version to remove, by its id, with the book it is of. */
     onDelete: (id: string, book: ListedBook) => void;
+    /** Told the book, with its versions, or the version to call by a name, by its id. */
+    onRename: (id: string, name: string) => void;
     /** Told the book a new version is to be made of, from the version of it that is chosen. */
     onEdit: (book: ListedBook) => void;
     onReload: () => void;
@@ -48,6 +50,47 @@ function BookCover({ book }: { book: ListedBook }) {
         : <div className="book-cover" aria-hidden="true">{book.title.trim().charAt(0).toUpperCase()}</div>;
 }
 
+/** A field the name of a book or of a version is changed in, kept once Enter is pressed or it is left, and not on Escape. */
+function NameField(
+    { name, label, className, onDone }: {
+        name: string;
+        label: string;
+        className: string;
+        onDone: (name: string | null) => void;
+    },
+) {
+    const [value, setValue] = useState(name);
+    // Enter and Escape end it before it is left, which would end it again
+    const done = useRef(false);
+
+    function finish(kept: boolean) {
+        if (done.current) {
+            return;
+        }
+        done.current = true;
+        const named = value.trim();
+        onDone(kept && named && named !== name ? named : null);
+    }
+
+    return (
+        <input
+            className={className}
+            aria-label={label}
+            value={value}
+            autoFocus
+            onFocus={(event) => event.target.select()}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === "Escape") {
+                    event.preventDefault();
+                    finish(event.key === "Enter");
+                }
+            }}
+            onBlur={() => finish(true)}
+        />
+    );
+}
+
 /** The version of a book that is chosen, by its id: the one chosen last if it is still there, or the book itself. */
 export function chosenVersion(book: ListedBook, chosen: Record<string, string>): string {
     const id = chosen[book.id];
@@ -55,9 +98,21 @@ export function chosenVersion(book: ListedBook, chosen: Record<string, string>):
 }
 
 export function BookList(
-    { state, selectedId, chosenVersions, adding, addError, onSelect, onAdd, onDelete, onEdit, onReload }: Props,
+    { state, selectedId, chosenVersions, adding, addError, onSelect, onAdd, onDelete, onRename, onEdit, onReload }:
+        Props,
 ) {
     const fileInput = useRef<HTMLInputElement>(null);
+    // the book or the version whose name is being changed, by its id
+    const [renaming, setRenaming] = useState<string | null>(null);
+
+    function rename(id: string) {
+        return (name: string | null) => {
+            setRenaming(null);
+            if (name) {
+                onRename(id, name);
+            }
+        };
+    }
 
     function confirmDelete(book: ListedBook) {
         const detail = book.versions?.length
@@ -83,7 +138,7 @@ export function BookList(
                 <input
                     ref={fileInput}
                     type="file"
-                    accept=".epub,application/epub+zip"
+                    accept=".epub,application/epub+zip,.pdf,application/pdf"
                     hidden
                     onChange={(event) => {
                         const file = event.target.files?.[0];
@@ -104,7 +159,7 @@ export function BookList(
                 </div>
             )}
             {state.status === "ready" && state.books.length === 0 && (
-                <p className="sidebar-note">{t("EPUB books you add are kept here, as their text.")}</p>
+                <p className="sidebar-note">{t("EPUB and PDF books you add are kept here, as their text.")}</p>
             )}
             <ul className="chat-list">
                 {state.status === "ready"
@@ -115,27 +170,41 @@ export function BookList(
                         return (
                             <li key={book.id} className={open ? "chat-item book-item active" : "chat-item book-item"}>
                                 <BookCover book={book} />
-                                <button
-                                    className="chat-open"
-                                    onClick={() =>
-                                        onSelect(chosen, book)}
-                                    aria-current={open ? "true" : undefined}
-                                >
-                                    <span className="chat-title">{book.title}</span>
-                                    <span className="chat-detail">
-                                        {[
-                                            book.author,
-                                            new Date(book.addedAt).toLocaleDateString(locale(), {
-                                                month: "short",
-                                                day: "numeric",
-                                            }),
-                                        ].filter(Boolean).join(" · ")}
-                                    </span>
-                                </button>
+                                {renaming === book.id
+                                    ? (
+                                        <NameField
+                                            name={book.title}
+                                            label={t("Name of {name}", { name: book.title })}
+                                            className="book-name"
+                                            onDone={rename(book.id)}
+                                        />
+                                    )
+                                    : (
+                                        <button
+                                            className="chat-open"
+                                            onClick={() => onSelect(chosen, book)}
+                                            onDoubleClick={() =>
+                                                setRenaming(book.id)}
+                                            onKeyDown={(event) =>
+                                                event.key === "F2" && setRenaming(book.id)}
+                                            title={t("Double-click to rename")}
+                                            aria-current={open ? "true" : undefined}
+                                        >
+                                            <span className="chat-title">{book.title}</span>
+                                            <span className="chat-detail">
+                                                {[
+                                                    book.author,
+                                                    new Date(book.addedAt).toLocaleDateString(locale(), {
+                                                        month: "short",
+                                                        day: "numeric",
+                                                    }),
+                                                ].filter(Boolean).join(" · ")}
+                                            </span>
+                                        </button>
+                                    )}
                                 <button
                                     className="icon-button chat-delete"
-                                    onClick={() =>
-                                        onEdit(book)}
+                                    onClick={() => onEdit(book)}
                                     title={t("Make a new version")}
                                     aria-label={t("Make a new version")}
                                 >
@@ -164,12 +233,27 @@ export function BookList(
                                         </li>
                                         {book.versions.map((version) => (
                                             <li key={version.id}>
-                                                <button
-                                                    aria-pressed={chosen === version.id}
-                                                    onClick={() => onSelect(version.id, book)}
-                                                >
-                                                    {version.name}
-                                                </button>
+                                                {renaming === version.id
+                                                    ? (
+                                                        <NameField
+                                                            name={version.name}
+                                                            label={t("Name of {name}", { name: version.name })}
+                                                            className="version-name"
+                                                            onDone={rename(version.id)}
+                                                        />
+                                                    )
+                                                    : (
+                                                        <button
+                                                            aria-pressed={chosen === version.id}
+                                                            onClick={() => onSelect(version.id, book)}
+                                                            onDoubleClick={() => setRenaming(version.id)}
+                                                            onKeyDown={(event) =>
+                                                                event.key === "F2" && setRenaming(version.id)}
+                                                            title={t("Double-click to rename")}
+                                                        >
+                                                            {version.name}
+                                                        </button>
+                                                    )}
                                                 <button
                                                     className="version-delete"
                                                     onClick={() => confirmDeleteVersion(book, version)}
