@@ -14,6 +14,13 @@ export interface ChatContext {
     prompt: string;
 }
 
+/** A prompt the learner wrote to transform books with, kept under a name of theirs. */
+export interface SavedPrompt {
+    id: string;
+    name: string;
+    prompt: string;
+}
+
 export interface Settings {
     apiKey: string;
     /** The language being learned, by its English name. The vocabulary is of this language. */
@@ -85,6 +92,8 @@ export interface Settings {
     evaluationSize: number;
     /** Whether each part of an evaluation is to be done in its time. */
     evaluationTimed: boolean;
+    /** The prompts the learner saved to transform books with, in the order they were saved. */
+    transformPrompts: SavedPrompt[];
 }
 
 /** What each look of the app is called, to be shown with `t`. */
@@ -210,6 +219,7 @@ export function defaultSettings(): Settings {
         exerciseMinutes: {},
         evaluationSize: 3,
         evaluationTimed: true,
+        transformPrompts: [],
     };
 }
 
@@ -321,7 +331,18 @@ export function normalizeSettings(stored: unknown): Settings {
         evaluationTimed: typeof candidate.evaluationTimed === "boolean"
             ? candidate.evaluationTimed
             : defaults.evaluationTimed,
+        transformPrompts: Array.isArray(candidate.transformPrompts)
+            ? candidate.transformPrompts.filter(isSavedPrompt)
+            : defaults.transformPrompts,
     };
+}
+
+function isSavedPrompt(stored: unknown): stored is SavedPrompt {
+    if (typeof stored !== "object" || stored === null) {
+        return false;
+    }
+    const { id, name, prompt } = stored as Partial<Record<keyof SavedPrompt, unknown>>;
+    return typeof id === "string" && typeof name === "string" && typeof prompt === "string";
 }
 
 /** The numbers of stored settings kept by exercise, those that are not numbers left out. */

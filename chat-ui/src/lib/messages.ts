@@ -215,6 +215,14 @@ export const MESSAGES = {
         German: "Fragen werden festgehalten",
         Italian: "Registrazione delle domande",
     },
+    "Transforming the parts": {
+        German: "Die Teile werden umgeschrieben",
+        Italian: "Trasformazione delle parti",
+    },
+    "The version is made.": {
+        German: "Die Version ist erstellt.",
+        Italian: "La versione è stata creata.",
+    },
     "Looking into the words": {
         German: "Wörter werden untersucht",
         Italian: "Analisi delle parole",
@@ -1508,6 +1516,242 @@ export const MESSAGES = {
     "Add an EPUB book under Books in the library, and choose it to read it here.": {
         German: "Füge in der Bibliothek unter „Bücher“ ein EPUB-Buch hinzu und wähle es aus, um es hier zu lesen.",
         Italian: "Aggiungi un libro EPUB in Libri nella biblioteca e sceglilo per leggerlo qui.",
+    },
+    "Contents": {
+        German: "Inhalt",
+        Italian: "Indice",
+    },
+    "Beginning": {
+        German: "Anfang",
+        Italian: "Inizio",
+    },
+    "Show the sections under it": {
+        German: "Die Abschnitte darunter zeigen",
+        Italian: "Mostra le sezioni al suo interno",
+    },
+    "Hide the sections under it": {
+        German: "Die Abschnitte darunter ausblenden",
+        Italian: "Nascondi le sezioni al suo interno",
+    },
+    "Strip": {
+        German: "Kürzen",
+        Italian: "Ridurre",
+    },
+    "Transform": {
+        German: "Umschreiben",
+        Italian: "Trasformare",
+    },
+    "Original": {
+        German: "Original",
+        Italian: "Originale",
+    },
+    "Stripped": {
+        German: "Gekürzt",
+        Italian: "Ridotto",
+    },
+    "New version": {
+        German: "Neue Version",
+        Italian: "Nuova versione",
+    },
+    "Make a new version": {
+        German: "Eine neue Version erstellen",
+        Italian: "Crea una nuova versione",
+    },
+    "Made from: {name}": {
+        German: "Erstellt aus: {name}",
+        Italian: "Creata da: {name}",
+    },
+    "Not available yet": {
+        German: "Noch nicht verfügbar",
+        Italian: "Non ancora disponibile",
+    },
+    "{kept} of {count} paragraphs kept": {
+        German: "{kept} von {count} Absätzen behalten",
+        Italian: "{kept} paragrafi su {count} mantenuti",
+    },
+    "Making the version…": {
+        German: "Die Version wird erstellt…",
+        Italian: "Creazione della versione…",
+    },
+    "Make version": {
+        German: "Version erstellen",
+        Italian: "Crea versione",
+    },
+    "Delete version: {name}": {
+        German: "Version löschen: {name}",
+        Italian: "Elimina versione: {name}",
+    },
+    "Versions of {name}": {
+        German: "Versionen von {name}",
+        Italian: "Versioni di {name}",
+    },
+    "Its versions are deleted with it. This can't be undone.": {
+        German: "Seine Versionen werden mit ihm gelöscht. Das kann nicht rückgängig gemacht werden.",
+        Italian: "Le sue versioni vengono eliminate con esso. Non si può annullare.",
+    },
+    "Prompt": {
+        German: "Prompt",
+        Italian: "Prompt",
+    },
+    "Transformed": {
+        German: "Umgeschrieben",
+        Italian: "Trasformato",
+    },
+    "Undo changes": {
+        German: "Änderungen verwerfen",
+        Italian: "Annulla le modifiche",
+    },
+    "Translate into the language you learn": {
+        German: "In die Sprache übersetzen, die du lernst",
+        Italian: "Traduci nella lingua che stai imparando",
+    },
+    "Rewrite for your level": {
+        German: "Für dein Niveau umschreiben",
+        Italian: "Riscrivi per il tuo livello",
+    },
+    "Parts not ticked": {
+        German: "Nicht angehakte Teile",
+        Italian: "Parti non spuntate",
+    },
+    "Kept as they are": {
+        German: "Bleiben, wie sie sind",
+        Italian: "Restano come sono",
+    },
+    "Left out": {
+        German: "Werden weggelassen",
+        Italian: "Vengono tolte",
+    },
+    "{kept} of {count} paragraphs to transform, in {parts} parts": {
+        German: "{kept} von {count} Absätzen werden umgeschrieben, in {parts} Teilen",
+        Italian: "{kept} paragrafi su {count} da trasformare, in {parts} parti",
+    },
+    "Story": {
+        German: "Geschichte",
+        Italian: "Storia",
+    },
+    "Stories": {
+        German: "Geschichten",
+        Italian: "Storie",
+    },
+    "Suggest": {
+        German: "Vorschlagen",
+        Italian: "Suggerisci",
+    },
+    "Clear": {
+        German: "Leeren",
+        Italian: "Svuota",
+    },
+    "A new story starts here, and goes on until the next": {
+        German: "Hier beginnt eine neue Geschichte, die bis zur nächsten geht",
+        Italian: "Qui inizia una nuova storia, che va avanti fino alla successiva",
+    },
+    "Mark the sections that look like stories": {
+        German: "Die Abschnitte markieren, die nach Geschichten aussehen",
+        Italian: "Segna le sezioni che sembrano storie",
+    },
+    "Untick what is not the text itself.": {
+        German: "Entferne die Häkchen bei allem, was nicht zum eigentlichen Text gehört.",
+        Italian: "Togli la spunta a ciò che non è il testo vero e proprio.",
+    },
+    "The tokens could not be counted: {reason}": {
+        German: "Die Tokens konnten nicht gezählt werden: {reason}",
+        Italian: "Non è stato possibile contare i token: {reason}",
+    },
+    "{count} par.": {
+        German: "{count} Abs.",
+        Italian: "{count} par.",
+    },
+    "The parts in red are too long: each must take less than {limit} tokens, a third of what the reasoning model takes in at once. Mark more stories to cut them.":
+        {
+            German:
+                "Die roten Teile sind zu lang: Jeder muss weniger als {limit} Tokens brauchen, ein Drittel dessen, was das Denkmodell auf einmal aufnimmt. Markiere mehr Geschichten, um sie aufzuteilen.",
+            Italian:
+                "Le parti in rosso sono troppo lunghe: ognuna deve occupare meno di {limit} token, un terzo di quanto il modello di ragionamento accetta in una volta. Segna altre storie per dividerle.",
+        },
+    "How many tokens the reasoning model takes in at once is not known, so no part can be told to fit.": {
+        German:
+            "Wie viele Tokens das Denkmodell auf einmal aufnimmt, ist nicht bekannt, daher lässt sich nicht sagen, ob ein Teil hineinpasst.",
+        Italian:
+            "Non si sa quanti token il modello di ragionamento accetti in una volta, quindi non si può dire se una parte ci stia.",
+    },
+    "Save as…": {
+        German: "Speichern unter…",
+        Italian: "Salva come…",
+    },
+    "Name of the prompt": {
+        German: "Name des Prompts",
+        Italian: "Nome del prompt",
+    },
+    "Custom": {
+        German: "Eigener",
+        Italian: "Personalizzato",
+    },
+    "Think first": {
+        German: "Erst nachdenken",
+        Italian: "Prima ragiona",
+    },
+    "The model reasons before it writes each part: slower and dearer, and perhaps truer to the prompt": {
+        German:
+            "Das Modell denkt nach, bevor es jeden Teil schreibt: langsamer und teurer, aber vielleicht näher am Prompt",
+        Italian: "Il modello ragiona prima di scrivere ogni parte: più lento e costoso, ma forse più fedele al prompt",
+    },
+    "Part {number}": {
+        German: "Teil {number}",
+        Italian: "Parte {number}",
+    },
+    "Done": {
+        German: "Fertig",
+        Italian: "Fatto",
+    },
+    "Waiting": {
+        German: "Wartet",
+        Italian: "In attesa",
+    },
+    "The answer was too long for one, and is taken up where it broke off": {
+        German: "Die Antwort war zu lang für eine und wird dort fortgesetzt, wo sie abbrach",
+        Italian: "La risposta era troppo lunga per una sola e viene ripresa da dove si è interrotta",
+    },
+    "answer {number}": {
+        German: "Antwort {number}",
+        Italian: "risposta {number}",
+    },
+    "Tokens of reasoning": {
+        German: "Tokens beim Nachdenken",
+        Italian: "Token di ragionamento",
+    },
+    "{written} tokens written, of the {expected} the part was sent in": {
+        German: "{written} Tokens geschrieben, von den {expected}, in denen der Teil gesendet wurde",
+        Italian: "{written} token scritti, sui {expected} con cui la parte è stata inviata",
+    },
+    "{tokens} tokens": {
+        German: "{tokens} Tokens",
+        Italian: "{tokens} token",
+    },
+    "The tokens the part takes if it is sent as it is": {
+        German: "Die Tokens, die der Teil braucht, wenn er so gesendet wird, wie er ist",
+        Italian: "I token che la parte occupa se viene inviata così com'è",
+    },
+    "The tokens the part takes if it is sent as it is, of the {window} the reasoning model takes in at once": {
+        German:
+            "Die Tokens, die der Teil braucht, wenn er so gesendet wird, wie er ist, von den {window}, die das Denkmodell auf einmal aufnimmt",
+        Italian:
+            "I token che la parte occupa se viene inviata così com'è, sui {window} che il modello di ragionamento accetta in una volta",
+    },
+    "All as one story": {
+        German: "Alles als eine Geschichte",
+        Italian: "Tutto come un'unica storia",
+    },
+    "Before the first story": {
+        German: "Vor der ersten Geschichte",
+        Italian: "Prima della prima storia",
+    },
+    "The parts transformed one by one": {
+        German: "Die Teile, die einzeln umgeschrieben werden",
+        Italian: "Le parti trasformate una per una",
+    },
+    "Transform book": {
+        German: "Buch umschreiben",
+        Italian: "Trasforma libro",
     },
     "Back to where the link was": {
         German: "Zurück zur Stelle des Links",

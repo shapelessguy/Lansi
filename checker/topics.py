@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import math
 import re
 import threading
+import time
+import urllib.request
 import uuid
 from collections.abc import Callable, Iterable
 from typing import Any
@@ -43,6 +46,10 @@ MIN_WORDS = 20
 # how long an image or a batch of embeddings may take
 TIMEOUT_SECS = 60
 WITHIN_SECS = 180
+# how long what the image models take is known from what was listed, and
+# how long the listing may take
+SHAPES_KNOWN_FOR_SECS = 3600
+SHAPES_TIMEOUT_SECS = 10
 
 # how big an icon is kept, on each side, in pixels; it is shown far smaller
 ICON_SIZE = 256
@@ -94,27 +101,85 @@ def _usage(response: dict[str, Any], model: str) -> Profile:
     )
 
 
+# The aspect ratios an image model draws in, as listed where it is asked,
+# none if it is drawn in its own; None where that is not known.
+Shapes = Callable[[Model], list[str] | None]
+
+
+class ImageShapes:
+    """The aspect ratios each image model draws in, as the listing of the
+    image models where it is asked says, listed again only once what was
+    had is old. It can be used from several threads."""
+
+    def __init__(self) -> None:
+        self._listed: dict[str, tuple[float, dict[str, list[str]]]] = {}
+        self._lock = threading.Lock()
+
+    def accepted(self, model: Model) -> list[str] | None:
+        """The aspect ratios `model` draws in; none if it takes no aspect
+        ratio, and None if it is not listed or the listing cannot be had."""
+        url = model.endpoint("images/models")
+        with self._lock:
+            had = self._listed.get(url)
+        if had is None or time.monotonic() - had[0] >= SHAPES_KNOWN_FOR_SECS:
+            listed = _list_shapes(url, model)
+            if listed is None:
+                return None
+            had = (time.monotonic(), listed)
+            with self._lock:
+                self._listed[url] = had
+        return had[1].get(model.name)
+
+
+def _list_shapes(url: str, model: Model) -> dict[str, list[str]] | None:
+    """The aspect ratios of each image model listed at `url`, as OpenRouter
+    lists them, by its id; None if they cannot be had."""
+    request = urllib.request.Request(url, headers=model.headers())
+    try:
+        with urllib.request.urlopen(request, timeout=SHAPES_TIMEOUT_SECS) as response:
+            data = json.load(response)["data"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    shapes: dict[str, list[str]] = {}
+    for listed in data if isinstance(data, list) else []:
+        if not isinstance(listed, dict) or not isinstance(listed.get("id"), str):
+            continue
+        parameters = listed.get("supported_parameters")
+        ratio = parameters.get("aspect_ratio") if isinstance(parameters, dict) else None
+        values = ratio.get("values") if isinstance(ratio, dict) else None
+        shapes[listed["id"]] = [
+            value
+            for value in (values if isinstance(values, list) else [])
+            if isinstance(value, str) and _ratio(value) is not None
+        ]
+    return shapes
+
+
+IMAGE_SHAPES = ImageShapes()
+
+
 def draw(
     prompt: str,
     model: Model,
     aspect_ratio: str = "1:1",
     send: Send = send_to_model,
+    shapes: Shapes | None = None,
 ) -> tuple[bytes, str, Profile]:
     """What the image `model` drew for `prompt`, as the bytes of an image
-    with the kind of file it is, and what drawing it used. Raises
-    ProfileError."""
+    with the kind of file it is, and what drawing it used. It is drawn in
+    the aspect ratio nearest to `aspect_ratio` of those the model draws in,
+    as `shapes` says them. Raises ProfileError."""
     problem = model.problem()
     if problem:
         raise ProfileError(problem)
-    body = {"model": model.name, "prompt": prompt, "aspect_ratio": aspect_ratio, "n": 1}
-    try:
-        response = send("images", body, model)
-    except ProfileError as error:
-        # a model that draws only some shapes draws the nearest it can
-        nearest = _nearest_ratio(str(error), aspect_ratio)
-        if nearest is None:
-            raise
-        response = send("images", {**body, "aspect_ratio": nearest}, model)
+    body: dict[str, Any] = {"model": model.name, "prompt": prompt, "n": 1}
+    accepted = (shapes or IMAGE_SHAPES.accepted)(model)
+    # Where they are not known, it is asked as it is; a model that takes
+    # none is asked with none.
+    chosen = aspect_ratio if accepted is None else nearest_ratio(aspect_ratio, accepted)
+    if chosen:
+        body["aspect_ratio"] = chosen
+    response = send("images", body, model)
     try:
         image = response["data"][0]
         picture = base64.b64decode(image["b64_json"], validate=True)
@@ -128,24 +193,21 @@ def draw(
     )
 
 
-def _nearest_ratio(refused: str, aspect_ratio: str) -> str | None:
-    """Of the aspect ratios a request to draw was `refused` for not being
-    one of, as OpenRouter says them, the nearest to `aspect_ratio`; None
-    when it was refused for something else."""
-    accepted = re.search(r"aspect_ratio\b.*?Accepted: ([\d:, ]+)", refused, re.S)
-    ratios = re.findall(r"(\d+):(\d+)", accepted.group(1)) if accepted else []
-    wanted = _ratio(aspect_ratio)
-    if not ratios or wanted is None:
+def nearest_ratio(aspect_ratio: str, accepted: list[str]) -> str | None:
+    """Of the `accepted` aspect ratios, the nearest to `aspect_ratio`; None
+    if there are none."""
+    wanted = _ratio(aspect_ratio) or 1.0
+    known = [(each, ratio) for each in accepted if (ratio := _ratio(each)) is not None]
+    if not known:
         return None
-    width, height = min(
-        ratios, key=lambda each: abs(math.log(int(each[0]) / int(each[1]) / wanted))
-    )
-    return None if f"{width}:{height}" == aspect_ratio else f"{width}:{height}"
+    return min(known, key=lambda each: abs(math.log(each[1] / wanted)))[0]
 
 
 def _ratio(aspect_ratio: str) -> float | None:
-    found = re.fullmatch(r"(\d+):(\d+)", aspect_ratio)
-    return int(found.group(1)) / int(found.group(2)) if found else None
+    found = re.fullmatch(r"(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)", aspect_ratio)
+    if not found or not float(found.group(1)) or not float(found.group(2)):
+        return None
+    return float(found.group(1)) / float(found.group(2))
 
 
 def _open(picture: bytes) -> Image.Image:

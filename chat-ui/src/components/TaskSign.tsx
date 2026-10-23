@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { t } from "../lib/i18n";
 import { type BackgroundTask, describeTask, mentioned, taskName } from "../lib/tasks";
 import { Icon } from "./Icon";
+import { PartsProgress } from "./PartsProgress";
 
 interface Props {
     /** What the server does in the background, and has done of late, the newest first. */
@@ -60,6 +61,9 @@ export function TaskSign({ tasks }: Props) {
                             <span className="task-title">{task.title}</span>
                             {task.state === "running" && <progress max={Math.max(1, task.total)} value={task.done} />}
                             <span className="task-state">{describeTask(task)}</span>
+                            {task.state === "running" && task.progress && task.progress.length > 0 && (
+                                <PartsProgress parts={task.progress} />
+                            )}
                             {mentioned(task).length > 0 && (
                                 <ul className="selection-words">
                                     {mentioned(task).map((word, index) => (

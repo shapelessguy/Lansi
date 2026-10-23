@@ -1017,6 +1017,77 @@ a {
     box-shadow: 0 2px 10px rgb(0 0 0 / 15%);
 }
 
+/* the page that is shown, which can be written over to turn to another */
+.page-field input {
+    width: auto;
+    padding: 1px 4px;
+    text-align: right;
+    font: inherit;
+}
+
+/* the sections of the book, opening over the page under the bar */
+.reader-contents {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 12px;
+    z-index: 3;
+    width: min(420px, calc(100% - 24px));
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 6px 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    box-shadow: 0 2px 10px rgb(0 0 0 / 15%);
+}
+
+.reader-contents ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.reader-contents ul ul {
+    padding-left: 18px;
+}
+
+.contents-row {
+    display: flex;
+    align-items: center;
+}
+
+.contents-toggle {
+    flex-shrink: 0;
+    width: 22px;
+    padding: 2px 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+}
+
+.contents-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    padding: 3px 6px;
+    border: none;
+    border-radius: var(--radius);
+    background: none;
+    color: inherit;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.contents-title:hover {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.contents-title[aria-current] {
+    color: var(--accent);
+    font-weight: 600;
+}
+
 .reader-options label {
     display: flex;
     align-items: center;
@@ -1432,6 +1503,93 @@ div.book-cover {
     width: 100%;
     height: 6px;
     accent-color: var(--accent);
+}
+
+.parts-progress {
+    display: grid;
+    gap: 2px;
+    margin: 4px -6px 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* the ring, then the title and how much is written, over what the part is at and what it reasoned */
+.part-progress {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    column-gap: 8px;
+    align-items: center;
+    padding: 5px 6px;
+    border-radius: 6px;
+    font-size: 0.87rem;
+}
+
+.part-progress.thinking,
+.part-progress.writing {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.part-progress.waiting {
+    color: var(--muted);
+}
+
+.part-progress-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.part-progress-share {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.part-progress-detail {
+    display: flex;
+    grid-column: 2 / 4;
+    justify-content: space-between;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.part-progress.waiting .part-progress-detail {
+    display: none;
+}
+
+.part-progress.waiting .part-progress-share {
+    font-weight: normal;
+}
+
+.part-progress.waiting .written-ring {
+    grid-row: auto;
+}
+
+.written-ring {
+    grid-row: 1 / 3;
+    width: 22px;
+    height: 22px;
+    /* the ring fills from the top */
+    transform: rotate(-90deg);
+}
+
+.written-ring circle {
+    fill: none;
+    stroke-width: 3;
+}
+
+.ring-track {
+    stroke: var(--border);
+}
+
+.ring-written {
+    stroke: var(--accent);
+}
+
+/* what is written beyond the length of the part, going round again */
+.ring-beyond {
+    stroke: var(--series-4);
 }
 
 .selection-words {
@@ -4119,10 +4277,6 @@ div.book-cover {
     border-bottom: none;
 }
 
-.side-list .text-list {
-    padding-top: 0;
-}
-
 /* what is open makes room for the button above it */
 .chat-body .messages,
 .texts-pane .text-editor {
@@ -4165,10 +4319,6 @@ div.book-cover {
     }
 }
 
-.text-list {
-    padding-top: 12px;
-}
-
 .texts-empty {
     flex: 1;
     padding: 24px;
@@ -4187,10 +4337,6 @@ div.book-cover {
     }
 }
 
-.text-list {
-    padding-top: 12px;
-}
-
 .texts-empty {
     padding: 24px;
 }
@@ -4206,45 +4352,6 @@ div.book-cover {
         border-right: none;
         border-bottom: 1px solid var(--border);
     }
-}
-
-.text-list {
-    display: grid;
-    gap: 6px;
-    margin: 0;
-    padding: 0 14px 14px;
-    list-style: none;
-}
-
-/* a text, with its button to delete it beside it */
-.text-list li {
-    display: flex;
-    gap: 6px;
-    align-items: stretch;
-}
-
-.text-choice {
-    flex: 1;
-    min-width: 0;
-    display: grid;
-    gap: 2px;
-    padding: 8px 10px;
-    text-align: left;
-}
-
-.text-choice[aria-pressed="true"] {
-    border-color: var(--accent);
-}
-
-.text-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.text-meta {
-    color: var(--muted);
-    font-size: 0.82rem;
 }
 
 .text-editor {
@@ -4682,6 +4789,254 @@ div.book-cover {
     border-color: var(--danger);
     background: var(--danger-bg);
     color: var(--danger);
+}
+
+/* where a new version of a book is made */
+.dialog.version-editor {
+    width: min(620px, 100%);
+    max-height: calc(100vh - 32px);
+    grid-template-rows: auto auto auto auto auto minmax(160px, 1fr) auto auto auto;
+}
+
+.version-kinds {
+    display: flex;
+    gap: 6px;
+}
+
+.version-kinds [aria-selected="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.version-help {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9em;
+}
+
+.version-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+}
+
+.version-name input {
+    flex: 1;
+}
+
+.version-tree {
+    min-height: 120px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.version-tree ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.version-tree ul ul {
+    padding-left: 18px;
+}
+
+.version-section {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 4px;
+    cursor: pointer;
+}
+
+.version-tree .contents-row .count {
+    margin-right: 10px;
+}
+
+.version-section.left .version-section-title {
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+.version-section-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* a section of a story of its own has the colour of the story along it */
+.version-tree li {
+    border-left: 3px solid transparent;
+}
+
+/* what marks a section as a story of its own, seen once it is one or its row is pointed at */
+.story-chip {
+    flex-shrink: 0;
+    margin: 0 4px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    opacity: 0;
+}
+
+.contents-row:hover .story-chip,
+.story-chip:focus-visible {
+    opacity: 0.7;
+}
+
+.story-chip.marked {
+    color: #ffffff;
+    opacity: 1;
+}
+
+/* the parts that are transformed one by one, each with the colour of its story */
+.story-parts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 12px;
+    max-height: 4.5em;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    color: var(--muted);
+    font-size: 0.85rem;
+    list-style: none;
+}
+
+.story-parts li {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.part-tokens::before {
+    content: "· ";
+}
+
+.part-tokens.over {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.story-swatch {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+}
+
+.version-prompt-saving,
+.version-prompt-saving form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.version-prompt-saving .small {
+    padding: 2px 10px;
+    font-size: 0.85rem;
+}
+
+.version-prompt-saving input {
+    flex: 1;
+    min-width: 160px;
+}
+
+.version-keywords summary {
+    color: var(--muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.version-stories {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+}
+
+.version-stories .small {
+    padding: 2px 10px;
+    font-size: 0.85rem;
+}
+
+.version-transform {
+    display: grid;
+    gap: 8px;
+}
+
+.version-prompt {
+    width: 100%;
+    resize: vertical;
+    font: inherit;
+}
+
+.version-options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.version-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+    color: var(--muted);
+}
+
+.version-kept {
+    margin-right: auto;
+    align-self: center;
+}
+
+/* a book in the library, with its versions on a line of their own under it */
+.book-item {
+    flex-wrap: wrap;
+}
+
+/* the versions of a book in the library, under it, one of them chosen */
+.book-versions {
+    flex-basis: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0 8px 8px 52px;
+    list-style: none;
+}
+
+.book-versions button {
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+}
+
+.book-versions button[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+}
+
+.book-versions li {
+    display: flex;
+    align-items: center;
+}
+
+.book-versions .version-delete {
+    padding: 0 4px;
+    border: none;
+    background: none;
+    color: var(--muted);
 }
 
 /* the name of a setting, with the question mark beside it, on one line even in a toggle */

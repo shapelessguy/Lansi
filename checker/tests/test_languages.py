@@ -19,18 +19,18 @@ from sentences import split_sentences
 
 
 def test_a_language_without_a_directory_has_the_rules_that_fit_every_language() -> None:
-    italian = language_of("Italian")
+    french = language_of("French")
 
-    assert type(italian) is Language
-    assert italian.name == "Italian"
-    assert italian.directory is None
-    assert italian.categories() is GENERIC
-    assert not italian.nouns_have_capitals
-    assert italian.dictionary_form("casa", "noun") == "casa"
-    assert dict(italian.equivalents) == {}
-    assert italian.marks == "accents"
-    assert italian.form_tables() == {}
-    assert italian.details() == {}
+    assert type(french) is Language
+    assert french.name == "French"
+    assert french.directory is None
+    assert french.categories() is GENERIC
+    assert not french.nouns_have_capitals
+    assert french.dictionary_form("maison", "noun") == "maison"
+    assert dict(french.equivalents) == {}
+    assert french.marks == "accents"
+    assert french.form_tables() == {}
+    assert french.details() == {}
 
 
 def test_a_language_is_found_by_its_name_whatever_its_case() -> None:

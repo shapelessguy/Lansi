@@ -7,42 +7,39 @@ const RESULTS = { right: "right", partial: "almost", wrong: "wrong" };
 
 export function mount(root, exercise) {
     const t = exercise.t;
+    // the points the learner marked on the picture shown, each with its
+    // label, kept here until they are checked
+    let points = [];
     // the point being labelled, which stays open across what is shown
     let open = null;
+    // the picture the points are on, so that a new one starts with none
+    let shownImage = null;
+    let shown = null;
     const error = element("p", { className: "error" });
-
-    /** The next point after `after` that has no label, or null. */
-    function nextBlank(show, after = -1) {
-        const count = show.points.length;
-        for (let step = 1; step <= count; step++) {
-            const index = (after + step + count) % count;
-            if (!show.points[index].label) {
-                return index;
-            }
-        }
-        return null;
-    }
 
     /** Has the backend do `message`, showing what it shows then, or why it could not. */
     function send(message, button, busyText) {
-        const idle = button?.textContent;
-        if (button) {
-            button.disabled = true;
-            button.textContent = busyText;
-        }
+        const idle = button.textContent;
+        button.disabled = true;
+        button.textContent = busyText;
         error.textContent = "";
         return exercise.act(message).catch((failed) => {
             error.textContent = failed.message;
-            if (button) {
-                button.disabled = false;
-                button.textContent = idle;
-            }
+            button.disabled = false;
+            button.textContent = idle;
             throw failed;
         });
     }
 
-    function askBox(show, index, stage) {
-        const point = show.points[index];
+    /** The point being labelled closed, and left out if it has no label. */
+    function close() {
+        if (open !== null && !points[open]?.label) {
+            points.splice(open, 1);
+        }
+        open = null;
+    }
+
+    function askBox(point, stage) {
         const input = element("input", {
             autocomplete: "off",
             spellcheck: false,
@@ -51,7 +48,8 @@ export function mount(root, exercise) {
             "aria-label": t("What the point is on"),
         });
         const ok = element("button", { className: "primary", textContent: t("OK") });
-        const box = element("div", { className: "ask" }, input, ok);
+        const remove = element("button", { textContent: t("Remove") });
+        const box = element("div", { className: "ask" }, input, ok, remove);
         // beside the point, on whichever side there is room
         if (point.x < 600) {
             box.style.left = `calc(${point.x / 10}% + 18px)`;
@@ -60,27 +58,27 @@ export function mount(root, exercise) {
         }
         box.style.top = `calc(${point.y / 10}% - 20px)`;
         const save = () => {
-            input.disabled = ok.disabled = true;
-            send({ point: index, label: input.value }).then(
-                (shown) => {
-                    open = nextBlank(shown, index);
-                    render(shown);
-                },
-                () => {
-                    input.disabled = ok.disabled = false;
-                },
-            );
+            point.label = input.value.split(/\s+/).filter(Boolean).join(" ");
+            close();
+            render();
         };
         ok.onclick = save;
+        remove.onclick = () => {
+            point.label = "";
+            close();
+            render();
+        };
         input.addEventListener("keydown", (event) => {
             if (event.key === "Enter") {
                 event.preventDefault();
                 save();
             } else if (event.key === "Escape") {
-                open = null;
-                render(show);
+                close();
+                render();
             }
         });
+        // a click in the box is not one on the picture
+        box.addEventListener("click", (event) => event.stopPropagation());
         stage.append(box);
         setTimeout(() => {
             input.focus();
@@ -93,10 +91,7 @@ export function mount(root, exercise) {
         const label = element("span", { className: `label ${side}` });
         const { feedback } = point;
         if (feedback && feedback.result !== "right") {
-            if (point.label) {
-                label.append(element("s", { textContent: point.label }), " ");
-            }
-            label.append(feedback.correct);
+            label.append(element("s", { textContent: point.label }), " ", feedback.correct);
         } else {
             label.append(point.label);
         }
@@ -113,16 +108,28 @@ export function mount(root, exercise) {
                 element("span", { className: "number", textContent: `${index + 1}.` }),
                 element("strong", { className: feedback.result, textContent: t(RESULTS[feedback.result]) }),
                 " ",
-                point.label ? element("span", { textContent: point.label }) : element("em", { className: "muted", textContent: t("nothing") }),
+                element("span", { textContent: point.label }),
             );
             if (feedback.result !== "right") {
                 item.append(" → ", element("strong", { textContent: feedback.correct }));
             }
+            if (feedback.alternatives?.length) {
+                item.append(
+                    element("span", {
+                        className: "muted",
+                        textContent: ` (${t("also {names}", { names: feedback.alternatives.join(", ") })})`,
+                    }),
+                );
+            }
             if (feedback.translation) {
-                item.append(element("span", { className: "muted", textContent: ` (${feedback.translation})` }));
+                item.append(element("span", { className: "muted", textContent: ` · ${feedback.translation}` }));
             }
             if (feedback.note) {
                 item.append(element("span", { className: "muted", textContent: ` · ${feedback.note}` }));
+            }
+            if (feedback.hint) {
+                // where the ring is, which does not count against the label
+                item.append(element("span", { className: "hint", textContent: ` ⚠ ${feedback.hint}` }));
             }
             list.append(item);
         });
@@ -130,14 +137,15 @@ export function mount(root, exercise) {
     }
 
     function summary(show) {
-        const labelled = show.points.filter((point) => point.label).length;
         if (!show.judged) {
+            const named = points.filter((point) => point.label).length;
             return element("span", {
                 className: "muted",
-                textContent: t(
-                    "{labelled} of {count} labelled. Click a point to label it, and check when you are done.",
-                    { labelled, count: show.points.length },
-                ),
+                textContent: named
+                    ? t("{count} named. Click on the picture to mark another thing, or on a point to change it.", {
+                        count: named,
+                    })
+                    : t("Click on the picture where there is something you can name, and name it. Check when you are done."),
             });
         }
         const count = (result) => show.points.filter((point) => point.feedback.result === result).length;
@@ -150,9 +158,12 @@ export function mount(root, exercise) {
         });
     }
 
-    function render(show) {
+    function render() {
+        const show = shown;
         root.replaceChildren();
-        if (show.judged || (open !== null && !show.points[open])) {
+        // what is shown once it is checked is what was checked
+        const marks = show.judged ? show.points : points;
+        if (show.judged) {
             open = null;
         }
         const progress = show.pictures > 1
@@ -166,9 +177,29 @@ export function mount(root, exercise) {
                 element("span", { className: "progress", textContent: progress }),
             ),
         );
-        const stage = element("div", { className: "stage" });
-        stage.append(element("img", { src: show.image, alt: t("A picture with points to label") }));
-        show.points.forEach((point, index) => {
+        const stage = element("div", { className: `stage ${show.judged ? "" : "marking"}` });
+        const image = element("img", { src: show.image, alt: t("A picture to mark things on") });
+        stage.append(image);
+        if (!show.judged) {
+            stage.onclick = (event) => {
+                if (event.target !== image) {
+                    return;
+                }
+                close();
+                if (points.length < show.most) {
+                    const box = image.getBoundingClientRect();
+                    const at = (offset, size) => Math.min(1000, Math.max(0, Math.round((offset / size) * 1000)));
+                    points.push({
+                        x: at(event.clientX - box.left, box.width),
+                        y: at(event.clientY - box.top, box.height),
+                        label: "",
+                    });
+                    open = points.length - 1;
+                }
+                render();
+            };
+        }
+        marks.forEach((point, index) => {
             const state = point.feedback?.result ?? (point.label ? "labelled" : "");
             const dot = element("button", {
                 className: `dot ${state} ${open === index ? "open" : ""}`,
@@ -177,47 +208,39 @@ export function mount(root, exercise) {
                 disabled: show.judged,
             });
             Object.assign(dot.style, { left: `${point.x / 10}%`, top: `${point.y / 10}%` });
-            dot.onclick = () => {
-                open = index;
-                render(show);
+            dot.onclick = (event) => {
+                event.stopPropagation();
+                if (open !== index) {
+                    const chosen = points[index];
+                    close();
+                    open = points.indexOf(chosen);
+                }
+                render();
             };
             stage.append(dot);
-            if (point.label || point.feedback) {
+            if (point.label && open !== index) {
                 stage.append(labelOf(point));
             }
         });
         root.append(stage);
         if (open !== null) {
-            askBox(show, open, stage);
+            askBox(points[open], stage);
         }
         const actions = element("div", { className: "actions" });
-        if (show.lost) {
-            // the picture is kept: only where the things are is asked again
-            const again = element("button", { className: "primary", textContent: t("Look again") });
-            again.onclick = () =>
-                send({ look: true }, again, t("Looking…")).then((shown) => {
-                    open = nextBlank(shown);
-                    render(shown);
-                }, () => undefined);
-            actions.append(
-                element("span", { className: "error", textContent: t("No thing could be found on the picture.") }),
-                again,
-            );
-            root.append(actions, element("p", { className: "muted", textContent: show.lost }), error);
-            return;
-        }
         if (!show.judged) {
             const check = element("button", { className: "primary", textContent: t("Check labels") });
-            check.disabled = !show.points.some((point) => point.label);
-            check.onclick = () => send({ check: true }, check, t("Checking…")).then(render, () => undefined);
+            check.disabled = !points.some((point) => point.label);
+            check.onclick = () => {
+                close();
+                send({ check: true, points: points.filter((point) => point.label) }, check, t("Checking…")).then(
+                    () => undefined,
+                    () => undefined,
+                );
+            };
             actions.append(check);
         } else if (show.more) {
             const next = element("button", { className: "primary", textContent: t("Next picture") });
-            next.onclick = () =>
-                send({ next: true }, next, t("Drawing the next picture…")).then((shown) => {
-                    open = nextBlank(shown);
-                    render(shown);
-                }, () => undefined);
+            next.onclick = () => send({ next: true }, next, t("Drawing the next picture…")).catch(() => undefined);
             actions.append(next);
         } else {
             const done = element("button", { className: "primary", textContent: t("Done") });
@@ -231,9 +254,22 @@ export function mount(root, exercise) {
     }
 
     exercise.onShow((show) => {
-        if (open === null && !show.judged && !show.points.some((point) => point.label)) {
-            open = nextBlank(show);
+        if (shown && show.image === shownImage && show.judged === shown.judged) {
+            // nothing changed, as when the next picture was drawn ahead: the
+            // label being written stays as it is
+            shown = show;
+            return;
         }
-        render(show);
+        if (show.image !== shownImage) {
+            shownImage = show.image;
+            points = [];
+            open = null;
+            if (!show.judged && show.picture < show.pictures) {
+                // drawn while this one is labelled, so that it is there at once
+                exercise.act({ prepare: true }).catch(() => undefined);
+            }
+        }
+        shown = show;
+        render();
     });
 }

@@ -1,0 +1,50 @@
+{
+    "details": {
+        "auxiliary": ["avere", "essere", "avere o essere"],
+        "reflexive": ["never", "sometimes", "always"]
+    },
+    "tables": {
+        "verb": [
+            {
+                "title": "Indicativo",
+                "columns": ["presente", "imperfetto", "passato remoto", "futuro"],
+                "rows": ["io", "tu", "lui", "noi", "voi", "loro"],
+                "tags": "{column} {row}"
+            },
+            {
+                "title": "Congiuntivo e condizionale",
+                "columns": ["congiuntivo presente", "congiuntivo imperfetto", "condizionale"],
+                "rows": ["io", "tu", "lui", "noi", "voi", "loro"],
+                "tags": "{column} {row}"
+            },
+            {
+                "title": "Participio passato",
+                "columns": ["singolare", "plurale"],
+                "rows": ["maschile", "femminile"],
+                "tags": "participio passato {row} {column}"
+            }
+        ],
+        "noun": [
+            {
+                "title": "Nome",
+                "columns": ["singolare", "plurale"],
+                "rows": ["maschile", "femminile"],
+                "tags": "{row} {column}"
+            }
+        ],
+        "adjective": [
+            {
+                "title": "Aggettivo",
+                "columns": ["singolare", "plurale"],
+                "rows": ["maschile", "femminile"],
+                "tags": "{row} {column}"
+            },
+            {
+                "title": "Superlativo",
+                "columns": ["singolare", "plurale"],
+                "rows": ["maschile", "femminile"],
+                "tags": "superlativo {row} {column}"
+            }
+        ]
+    }
+}

@@ -943,26 +943,26 @@ def test_words_of_another_language_go_by_its_rules_into_its_own_vocabulary(
 ) -> None:
     vocabularies = Vocabularies(tmp_path)
     intake = Intake(vocabularies, profiler, chat)
-    intake.language = "Italian"
-    chat.judged("parlo", "new", "parlare")
-    chat.descriptions["parlare"] = {
+    intake.language = "French"
+    chat.judged("parle", "new", "parler")
+    chat.descriptions["parler"] = {
         "meanings": ["to speak"],
-        "forms": [{"form": "parlo", "tags": "present 1st singular"}],
+        "forms": [{"form": "parle", "tags": "present 1st singular"}],
     }
-    profiler.categories["parlo"] = "verb"
+    profiler.categories["parle"] = "verb"
 
-    (outcome,) = take(intake, "parlo")
+    (outcome,) = take(intake, "parle")
 
     describing = chat.bodies[-1]
     assert outcome.status == "added"
-    assert "the entry of a Italian verb" in describing["messages"][0]["content"]
+    assert "the entry of a French verb" in describing["messages"][0]["content"]
     assert list(
         describing["response_format"]["json_schema"]["schema"]["properties"]
     ) == [
         "meanings",
         "forms",
     ]
-    assert vocabularies.of("Italian").find("verb", "parlo") is not None
+    assert vocabularies.of("French").find("verb", "parle") is not None
     assert vocabularies.of("German").find("verb", "parlo") is None
 
 

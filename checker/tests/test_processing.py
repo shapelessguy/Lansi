@@ -277,15 +277,15 @@ def test_a_message_goes_into_the_vocabulary_of_the_language_of_its_chat(
     chat: FakeChat,
     clock: Clock,
 ) -> None:
-    chat.judged("cane", "new", "cane")
-    chat.descriptions["cane"] = {"meanings": ["dog"], "forms": []}
-    keep_chat(store, "cane", language="Italian")
+    chat.judged("chien", "new", "chien")
+    chat.descriptions["chien"] = {"meanings": ["dog"], "forms": []}
+    keep_chat(store, "chien", language="French")
     clock.now += 6
 
     processor.look()
 
-    assert vocabularies.of("Italian").find("noun", "cane") is not None
-    assert vocabularies.of("German").find("noun", "cane") is None
+    assert vocabularies.of("French").find("noun", "chien") is not None
+    assert vocabularies.of("German").find("noun", "chien") is None
 
 
 def test_nothing_is_processed_without_a_key(

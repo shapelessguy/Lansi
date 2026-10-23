@@ -23,6 +23,7 @@ import {
 } from "../lib/books";
 import { t } from "../lib/i18n";
 import type { Where } from "../lib/logs";
+import { BookContents } from "./BookContents";
 import { SPOKEN_EVENT } from "./SpeechPlayer";
 
 interface Props {
@@ -59,6 +60,7 @@ export function BookReader({ bookId, active }: Props) {
     // how the text looks: its size, its font, its colours and how far apart its lines are
     const [look, setLook] = useState<Reading>(loadReading);
     const [optionsOpen, setOptionsOpen] = useState(false);
+    const [contentsOpen, setContentsOpen] = useState(false);
     // the paragraph at the top of the page of each book, by the id of the book
     const places = useRef(look.places);
     // the places links were followed from, the last one last, to go back to
@@ -248,8 +250,18 @@ export function BookReader({ bookId, active }: Props) {
             {/* how the book looks opens over the page, under the bar */}
             <div className="reader-top">
                 <header className="reader-bar">
+                    <button
+                        className="icon-button"
+                        aria-pressed={contentsOpen}
+                        onClick={() => setContentsOpen(!contentsOpen)}
+                        disabled={!book}
+                        title={t("Contents")}
+                        aria-label={t("Contents")}
+                    >
+                        ☰
+                    </button>
                     <span className="reader-title">
-                        {book ? [book.title, book.author].filter(Boolean).join(" · ") : ""}
+                        {book ? [book.title, book.version?.name, book.author].filter(Boolean).join(" · ") : ""}
                     </span>
                     {/* where the player of what is read aloud goes */}
                     <span className="speech-dock" data-speech-dock="book" />
@@ -267,7 +279,7 @@ export function BookReader({ bookId, active }: Props) {
                     >
                         ‹
                     </button>
-                    <span className="count" title={t("Page")}>{book ? `${page + 1} / ${pages}` : ""}</span>
+                    {book && <PageField page={page} pages={pages} onTurn={turnTo} />}
                     <button
                         className="icon-button"
                         onClick={() => turnTo(page + 1)}
@@ -287,6 +299,16 @@ export function BookReader({ bookId, active }: Props) {
                         Aa
                     </button>
                 </header>
+                {contentsOpen && book && (
+                    <BookContents
+                        sections={book.sections}
+                        place={places.current[book.id] ?? 0}
+                        onGoTo={(place) => {
+                            goTo(place);
+                            setContentsOpen(false);
+                        }}
+                    />
+                )}
                 {optionsOpen && (
                     <div className="reader-options">
                         <label>
@@ -396,6 +418,57 @@ export function BookReader({ bookId, active }: Props) {
                 </div>
             )}
         </section>
+    );
+}
+
+interface PageFieldProps {
+    /** The page that is shown, from 0, and how many there are. */
+    page: number;
+    pages: number;
+    /** Told the page to turn to, from 0. */
+    onTurn: (page: number) => void;
+}
+
+/**
+ * The page that is shown, as a number that can be written over to turn to
+ * another: Enter or leaving it turns there, Escape leaves it as it was.
+ */
+function PageField({ page, pages, onTurn }: PageFieldProps) {
+    // what is written in it while it is being written in
+    const [draft, setDraft] = useState<string | null>(null);
+
+    function turn() {
+        const wanted = Number.parseInt(draft ?? "", 10);
+        setDraft(null);
+        if (Number.isFinite(wanted)) {
+            onTurn(Math.min(pages, Math.max(1, wanted)) - 1);
+        }
+    }
+
+    return (
+        <span className="count page-field">
+            <input
+                type="text"
+                inputMode="numeric"
+                value={draft ?? String(page + 1)}
+                size={Math.max(2, String(pages).length)}
+                title={t("Page")}
+                aria-label={t("Page")}
+                onFocus={(event) => event.target.select()}
+                onChange={(event) => setDraft(event.target.value.replace(/\D/g, ""))}
+                onBlur={turn}
+                onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                        event.currentTarget.blur();
+                    } else if (event.key === "Escape") {
+                        setDraft(null);
+                        // the number that was there is put back before it is left
+                        requestAnimationFrame(() => (event.target as HTMLInputElement).blur());
+                    }
+                }}
+            />
+            {` / ${pages}`}
+        </span>
     );
 }
 

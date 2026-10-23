@@ -39,6 +39,14 @@ test("a task is described by how far it is, and in the end by what came of it", 
     expect(describeTask(task({ state: "failed", error: "no key" }))).toBe("Failed: no key");
 });
 
+test("a book being transformed is told by the parts done, and in the end by the version", () => {
+    const transforming = task({ kind: "transform", total: 8, done: 7 });
+
+    expect(describeTask(transforming)).toBe("Transforming the parts: 7 of 8");
+    expect(describeTask({ ...transforming, state: "done" })).toBe("The version is made.");
+    expect(taskName(transforming)).toBe("Transform book");
+});
+
 test("the words of a task that are mentioned are the new ones and those that failed", () => {
     const done = task({ state: "done", result: taken("added", "known", "form", "skipped", "failed") });
 

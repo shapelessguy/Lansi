@@ -53,11 +53,12 @@ Each question is a question, or the start of a sentence, with \
 three "options" that answer it."""
 truefalse = """
 Each question is a statement about the text, which is \
-"Richtig" or "Falsch": leave "options" empty, and "answer" is 0 for Richtig \
-and 1 for Falsch."""
+"$first" or "$second": leave "options" empty, and "answer" is 0 for $first \
+and 1 for $second."""
 yesno = """
-Each question is a statement about the text, which is "Ja" or \
-"Nein": leave "options" empty, and "answer" is 0 for Ja and 1 for Nein."""
+Each question is a statement about the text, to which the answer is \
+"$first" or "$second": leave "options" empty, and "answer" is 0 for $first \
+and 1 for $second."""
 match = """
 The text, or "shown" if the text is heard, has a list of six to \
 nine things, each with its letter, such as "a) ...". Each question is a \

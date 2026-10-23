@@ -148,7 +148,7 @@ Later = Callable[[str, Callable[[], list[Profile]]], None]
 # describes. Raises ValueError for what cannot be asked, and AnkiUnavailable.
 AnkiAsker = Callable[[dict[str, Any]], Any]
 # the aspect ratios a picture may be drawn in
-ASPECT_RATIOS = ("1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3")
+ASPECT_RATIOS = ("1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9")
 
 
 class ExerciseError(Exception):
@@ -465,10 +465,12 @@ class Runner:
         draw: Drawer = cannot_draw,
         look: Asker | None = None,
         anki: AnkiAsker | None = None,
+        timed: list[str] | None = None,
     ) -> tuple[dict[str, Any], list[Profile]]:
         """What the backend of `exercise` replied to `request`, with what
         the models it had asked used, and `anki` what it asked of the Anki
-        collection. Raises ExerciseError."""
+        collection. How long each request to a model took is told to
+        `timed`, a line each. Raises ExerciseError."""
         backend = self._directory / exercise / "backend.py"
         if not _ID.fullmatch(exercise) or not backend.exists():
             raise ExerciseError(f"there is no exercise {exercise}")
@@ -510,7 +512,7 @@ class Runner:
         try:
             process.stdin.write(json.dumps(request) + "\n")
             process.stdin.flush()
-            reply = self._converse(process, ask, draw, look or ask, anki, used)
+            reply = self._converse(process, ask, draw, look or ask, anki, used, timed)
         except (OSError, ValueError) as error:
             raise spent(ExerciseError(f"the exercise failed: {error}"), used) from None
         except ExerciseError as error:
@@ -546,6 +548,7 @@ class Runner:
         look: Asker,
         anki: AnkiAsker | None,
         used: list[Profile],
+        timed: list[str] | None = None,
     ) -> dict[str, Any] | None:
         """Answers what the backend asks of the models and of the Anki
         collection until it replies. None if it stops first."""
@@ -581,7 +584,9 @@ class Runner:
                     kind = "ask" if "ask" in said else "look"
                     request = said[kind] if isinstance(said[kind], dict) else {}
                     asker = ask if kind == "ask" else look
+                    started = time.monotonic()
                     text, profile = asker(_read_messages(request.get("messages")))
+                    _time(timed, kind, profile, started)
                     used.append(profile)
                     answer = {"answer": text}
                 else:
@@ -591,7 +596,9 @@ class Runner:
                             f"an exercise has at most {MAX_DRAWS} pictures drawn"
                         )
                     request = said["draw"] if isinstance(said["draw"], dict) else {}
+                    started = time.monotonic()
                     text, profile = draw(*_read_drawing(request))
+                    _time(timed, "draw", profile, started)
                     used.append(profile)
                     answer = {"answer": text}
             except (TranslationError, ValueError, AnkiUnavailable) as error:
@@ -599,6 +606,14 @@ class Runner:
             process.stdin.write(json.dumps(answer) + "\n")
             process.stdin.flush()
         return None
+
+
+def _time(timed: list[str] | None, kind: str, profile: Profile, started: float) -> None:
+    if timed is not None:
+        timed.append(
+            f"{kind} {profile.model}: {time.monotonic() - started:.1f} s,"
+            f" {profile.input_tokens} tokens in, {profile.output_tokens} out"
+        )
 
 
 def anki_asker(anki: AnkiLink) -> AnkiAsker:
@@ -750,7 +765,7 @@ class Practice:
         embeddings: Embeddings | None = None,
         lemmas_of: Callable[[str], list[str]] = lambda language: [],
         draw: Callable[[list[str]], str] = random.choice,
-        on_words: Callable[[str], None] = lambda line: None,
+        tell: Callable[[str], None] = lambda line: None,
         send: Send = send_to_model,
         later: Later = do_now,
         now: Callable[[], float] = time.time,
@@ -769,8 +784,9 @@ class Practice:
         # the words of the vocabulary of a language, those used last first
         self.lemmas_of = lemmas_of
         self._draw = draw
-        # what is told of the words a session was given
-        self._on_words = on_words
+        # what is told to whoever runs the server: the words a session was
+        # given, and how long each step took, and what in it
+        self._tell = tell
         # what has the logs of the exercises written once they are over
         self._later = later
         # the embedding models that are embedding a vocabulary in the background
@@ -1025,7 +1041,7 @@ class Practice:
         nearest = ", ".join(
             f"{word} {score:.2f}" for word, score in ranked[:SHOWN_WORDS]
         )
-        self._on_words(
+        self._tell(
             f"{datetime.now():%H:%M:%S} words for {'; '.join(topics)}:"
             f" {words['mode']} {len(words['lemmas'])} of {len(candidates)}"
             f"\n       nearest: {nearest}"
@@ -1060,7 +1076,9 @@ class Practice:
         is the language the learner reads in, as `into`, and their `level`.
         Raises ValueError for a step that cannot be made, and ExerciseError
         for one that failed."""
+        asked_at = time.monotonic()
         with self._lock:
+            began = time.monotonic()
             session = self._store.session(session_id)
             kept = self._store.exercise_state(session_id, exercise)
             if session is None or kept is None:
@@ -1088,7 +1106,18 @@ class Practice:
                 "message": message,
             }
             anki = anki_asker(self._anki) if self._anki else None
-            reply, used = self._runner.run(exercise, request, ask, draw, look, anki)
+            timed: list[str] = []
+            try:
+                reply, used = self._runner.run(
+                    exercise, request, ask, draw, look, anki, timed
+                )
+            finally:
+                self._tell(
+                    f"{datetime.now():%H:%M:%S} {exercise} {op}:"
+                    f" {time.monotonic() - began:.1f} s,"
+                    f" after waiting {began - asked_at:.1f} s"
+                    + "".join(f"\n       {line}" for line in timed)
+                )
             # what the models it asked used is counted though what came of it is refused
             try:
                 # the grades are kept first, as they are what matters most
@@ -1410,6 +1439,9 @@ class Practice:
             "language": session["language"],
             "letters": dict(language.equivalents),
             "marks": language.marks,
+            "answer_words": {
+                kind: list(words) for kind, words in language.answer_words.items()
+            },
             "into": context.get("into") or "English",
             "level": context.get("level") or "",
             "lesson": lesson,

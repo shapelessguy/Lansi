@@ -32,23 +32,25 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
                     {t("Write your homework, or any text, here. The tutor can open one in an exercise that corrects it.")}
                 </p>
             )}
-            <ul className="text-list">
+            <ul className="chat-list">
                 {own.map((text) => (
-                    <li key={text.id}>
+                    <li key={text.id} className={text.id === selectedId ? "chat-item active" : "chat-item"}>
                         <button
-                            className="text-choice"
-                            aria-pressed={text.id === selectedId}
-                            onClick={() => onSelect(text.id)}
+                            className="chat-open"
+                            aria-current={text.id === selectedId ? "true" : undefined}
+                            onClick={() =>
+                                onSelect(text.id)}
                         >
-                            <span className="text-title">{text.title || t("Untitled")}</span>
-                            <span className="text-meta">
+                            <span className="chat-title">{text.title || t("Untitled")}</span>
+                            <span className="chat-detail">
                                 {plural(text.words ?? 0, "{count} word", "{count} words")} · {day(text.updatedAt)}
                                 {text.lockedAt !== null && ` · ${t("corrected")}`}
                             </span>
                         </button>
                         <button
-                            className="icon-button"
-                            onClick={() => onDelete(text)}
+                            className="icon-button chat-delete"
+                            onClick={() =>
+                                onDelete(text)}
                             title={t("Delete")}
                             aria-label={t("Delete {name}", { name: text.title || t("the text") })}
                         >

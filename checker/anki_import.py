@@ -250,8 +250,9 @@ def vocabulary_words(note: str, language: str = DEFAULT_LANGUAGE) -> list[str]:
     """The words an Anki note of `language` gives the vocabulary. A note may
     hold several spellings, separated by commas, an abbreviation in brackets,
     and before a word one of the `note_prefixes` of the language, such as an
-    article. Expressions of several words give nothing: the vocabulary takes
-    words one by one."""
+    article, or joined to it one of them that is elided, such as "l'".
+    Expressions of several words give nothing: the vocabulary takes words
+    one by one."""
     prefixes = language_of(language).note_prefixes
     text = _MARKUP.sub("", note).replace("&nbsp;", " ").replace("&amp;", "&")
     words: dict[str, None] = {}
@@ -260,6 +261,19 @@ def vocabulary_words(note: str, language: str = DEFAULT_LANGUAGE) -> list[str]:
         first, _, rest = word.partition(" ")
         if rest and first.lower() in prefixes:
             word = rest.strip()
+        # an article that is elided is written joined to the word: "l'amico"
+        elided = next(
+            (
+                prefix
+                for prefix in prefixes
+                if prefix.endswith("'")
+                and word.replace("’", "'").lower().startswith(prefix)
+                and len(word) > len(prefix)
+            ),
+            None,
+        )
+        if elided:
+            word = word[len(elided) :]
         word = word.rstrip(".!?")
         if _SINGLE_WORD.fullmatch(word):
             words[word] = None

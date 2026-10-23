@@ -21,6 +21,11 @@
     border-radius: var(--radius);
 }
 
+/* where a click marks a thing */
+.stage.marking img {
+    cursor: crosshair;
+}
+
 .dot {
     position: absolute;
     width: 22px;
@@ -133,4 +138,9 @@
 
 .judged .wrong {
     color: var(--danger);
+}
+
+/* what the ring is on, if it is mostly on something else than was named */
+.judged .hint {
+    color: rgb(224 160 32);
 }

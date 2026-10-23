@@ -4,15 +4,22 @@
 import { expect, test } from "vitest";
 
 import {
+    keptStretches,
     MAX_FONT_SIZE,
     MIN_FONT_SIZE,
     normalizeReading,
     pageCount,
     pageOf,
+    partFits,
     resized,
+    sectionsAt,
     segments,
     sentence,
     shownSize,
+    storyAt,
+    storyParts,
+    stretchTokens,
+    suggestedStories,
 } from "./books";
 
 test("the text of a block is cut where its links start and end", () => {
@@ -72,12 +79,18 @@ test("what was stored about reading is kept as it was left", () => {
         spacing: "wide",
         bookId: "book-1",
         places: { "book-1": 120 },
+        versions: { "book-1": "version-2" },
     };
 
     expect(normalizeReading(stored)).toEqual(stored);
 });
 
-test.each([null, "large", {}, { fontSize: "24", paper: "pink", font: 3, spacing: "toString", bookId: 3, places: [] }])(
+test.each([
+    null,
+    "large",
+    {},
+    { fontSize: "24", paper: "pink", font: 3, spacing: "toString", bookId: 3, places: [], versions: ["v"] },
+])(
     "what was stored about reading as %j falls back to the defaults",
     (stored) => {
         expect(normalizeReading(stored)).toEqual({
@@ -87,6 +100,7 @@ test.each([null, "large", {}, { fontSize: "24", paper: "pink", font: 3, spacing:
             spacing: "normal",
             bookId: null,
             places: {},
+            versions: {},
         });
     },
 );
@@ -101,4 +115,90 @@ test("a stored size beyond the limits and a place that is not one are not used",
 test("what the server said is wrong with a file is shown as a sentence", () => {
     expect(sentence("the file is not an EPUB book")).toBe("The file is not an EPUB book.");
     expect(sentence("Too large!")).toBe("Too large!");
+});
+
+test("a block is in the sections around it, from the outermost in, and in none past the end", () => {
+    const kapitel = { title: "Kapitel 1", start: 3, end: 9, sections: [{ title: "Vokabeln", start: 6, end: 9 }] };
+    const sections = [
+        { title: "", start: 0, end: 2 },
+        { title: "Der Feuer-Traum", start: 2, end: 12, sections: [kapitel] },
+    ];
+
+    expect(sectionsAt(sections, 7).map((section) => section.title)).toEqual([
+        "Der Feuer-Traum",
+        "Kapitel 1",
+        "Vokabeln",
+    ]);
+    expect(sectionsAt(sections, 2).map((section) => section.title)).toEqual(["Der Feuer-Traum"]);
+    expect(sectionsAt(sections, 12)).toEqual([]);
+});
+
+test("the stretches kept are what is not in a section left out, those that touch made one", () => {
+    const sections = [
+        { title: "", start: 0, end: 2 },
+        {
+            title: "Der Feuer-Traum",
+            start: 2,
+            end: 12,
+            sections: [
+                { title: "Kapitel 1", start: 3, end: 8, sections: [{ title: "Anhang", start: 6, end: 8 }] },
+                { title: "Kapitel 2", start: 8, end: 11, sections: [{ title: "Anhang", start: 10, end: 11 }] },
+            ],
+        },
+        { title: "Glossar", start: 12, end: 15 },
+    ];
+
+    expect(keptStretches(sections, new Set())).toEqual([[0, 15]]);
+    expect(keptStretches(sections, new Set(["0-2", "6-8", "10-11", "12-15"]))).toEqual([[2, 6], [8, 10], [11, 12]]);
+    expect(keptStretches(sections, new Set(["2-12", "3-8"]))).toEqual([[0, 2], [12, 15]]);
+});
+
+test("a story goes on until the next starts, and what is before the first is a part of its own", () => {
+    const sections = [
+        { title: "", start: 0, end: 2 },
+        {
+            title: "Der Feuer-Traum",
+            start: 2,
+            end: 9,
+            sections: [{ title: "Kapitel 1", start: 3, end: 9, sections: [{ title: "Anhang", start: 6, end: 9 }] }],
+        },
+        { title: "Hartnäckigkeit", start: 9, end: 12, sections: [{ title: "Kapitel 1", start: 10, end: 12 }] },
+        { title: "Skull Tooth", start: 12, end: 15, sections: [{ title: "Kapitel 1", start: 13, end: 15 }] },
+    ];
+
+    expect(storyParts(sections, new Set(["6-9"]), new Set(["2-9", "12-15"]))).toEqual([
+        { story: null, stretches: [[0, 2]] },
+        { story: "2-9", stretches: [[2, 6], [9, 12]] },
+        { story: "12-15", stretches: [[12, 15]] },
+    ]);
+    expect(storyParts(sections, new Set(), new Set(["2-9", "10-12"]))).toEqual([
+        { story: null, stretches: [[0, 2]] },
+        { story: "2-9", stretches: [[2, 10]] },
+        { story: "10-12", stretches: [[10, 15]] },
+    ]);
+    expect(storyParts(sections, new Set(["0-2"]), new Set())).toEqual([{ story: null, stretches: [[2, 15]] }]);
+    expect(storyAt(new Set(["2-9", "12-15"]), 11)).toBe("2-9");
+    expect(storyAt(new Set(["2-9"]), 1)).toBeNull();
+});
+
+test("the tokens of a part are those of the blocks of its stretches", () => {
+    const tokens = [3, 5, 7, 11, 13];
+
+    expect(stretchTokens([[0, 2], [3, 5]], tokens)).toBe(3 + 5 + 11 + 13);
+    expect(stretchTokens([], tokens)).toBe(0);
+});
+
+test("a part fits if it takes less than a third of what the reasoning model takes in", () => {
+    expect(partFits(32_999, 99_000)).toBe(true);
+    expect(partFits(33_000, 99_000)).toBe(false);
+});
+
+test("the stories suggested are the sections at the top with a title and sections under them", () => {
+    const sections = [
+        { title: "", start: 0, end: 2, sections: [{ title: "Inhalt", start: 1, end: 2 }] },
+        { title: "Vorwort", start: 2, end: 4 },
+        { title: "Der Feuer-Traum", start: 4, end: 9, sections: [{ title: "Kapitel 1", start: 5, end: 9 }] },
+    ];
+
+    expect(suggestedStories(sections)).toEqual(new Set(["4-9"]));
 });

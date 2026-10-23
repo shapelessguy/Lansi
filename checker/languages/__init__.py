@@ -82,6 +82,14 @@ class Language:
     equivalents: Mapping[str, str] = {}
     # what the marks on its letters are called, in English
     marks = "accents"
+    # The two answers to a statement, in the language, by the kind of
+    # question: whether it is right, and whether it is so. The exercises are
+    # told them, as exercises/kit.py describes. A language that has none of
+    # its own is answered in English.
+    answer_words: Mapping[str, tuple[str, str]] = {
+        "truefalse": ("True", "False"),
+        "yesno": ("Yes", "No"),
+    }
     # The words an Anki note may put before the word it is of, such as an
     # article, in small letters.
     note_prefixes: frozenset[str] = frozenset()

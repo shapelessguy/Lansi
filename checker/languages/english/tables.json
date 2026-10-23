@@ -1,0 +1,37 @@
+{
+    "details": {},
+    "tables": {
+        "verb": [
+            {
+                "title": "Verb",
+                "columns": ["form"],
+                "rows": ["present", "3rd person singular", "past", "past participle", "-ing"],
+                "tags": "{row}"
+            }
+        ],
+        "noun": [
+            {
+                "title": "Noun",
+                "columns": ["form"],
+                "rows": ["plural"],
+                "tags": "{row}"
+            }
+        ],
+        "adjective": [
+            {
+                "title": "Adjective",
+                "columns": ["form"],
+                "rows": ["comparative", "superlative"],
+                "tags": "{row}"
+            }
+        ],
+        "adverb": [
+            {
+                "title": "Adverb",
+                "columns": ["form"],
+                "rows": ["comparative", "superlative"],
+                "tags": "{row}"
+            }
+        ]
+    }
+}

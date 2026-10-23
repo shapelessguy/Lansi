@@ -7,7 +7,7 @@ import io
 import zipfile
 
 import pytest
-from books import Block, BookError, font_size, read_epub
+from books import Block, BookError, Entry, Landmark, font_size, read_epub
 
 CONTAINER = """<?xml version="1.0"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -33,6 +33,7 @@ def epub(
     files: dict[str, str] | None = None,
     metadata: str = "<dc:title>Der Hund</dc:title>",
     manifest: str = "",
+    guide: str = "",
 ) -> bytes:
     """An EPUB file with the pages in the order given, and what else it is
     to have in it, by name."""
@@ -45,7 +46,8 @@ def epub(
     package = (
         '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
         f'<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">{metadata}</metadata>'
-        f"<manifest>{items}{manifest}</manifest><spine>{spine}</spine></package>"
+        f"<manifest>{items}{manifest}</manifest><spine>{spine}</spine>"
+        f"<guide>{guide}</guide></package>"
     )
     data = io.BytesIO()
     with zipfile.ZipFile(data, "w") as archive:
@@ -76,9 +78,9 @@ def test_a_book_is_read_into_its_paragraphs_in_the_order_of_its_pages() -> None:
 
     assert book.title == "Der Hund"
     assert book.blocks == [
-        Block("Erster Absatz, noch immer.", 1),
+        Block("Erster Absatz, noch immer.", 1, page="OEBPS/text/p0.xhtml"),
         Block("Zweiter Absatz.", 1),
-        Block("Dritter Absatz.", 1),
+        Block("Dritter Absatz.", 1, tag="div", page="OEBPS/text/p1.xhtml"),
     ]
 
 
@@ -228,7 +230,7 @@ def test_a_book_whose_pages_are_locked_is_refused_and_one_with_locked_fonts_read
 
     with_fonts_locked = epub(page("<p>Text.</p>"), files=locking("OEBPS/font.otf"))
 
-    assert read_epub(with_fonts_locked).blocks == [Block("Text.", 1)]
+    assert [block.text for block in read_epub(with_fonts_locked).blocks] == ["Text."]
     with pytest.raises(BookError, match="locked"):
         read_epub(epub(page("<p>Text.</p>"), files=locking("OEBPS/text/p0.xhtml")))
 
@@ -296,6 +298,104 @@ def test_only_a_block_with_links_is_kept_with_them() -> None:
     }
 
 
+def test_a_block_is_kept_with_how_it_is_written_only_where_most_are_not() -> None:
+    assert Block(
+        "Vokabeln",
+        0.9,
+        tag="h3",
+        classes=["vocab"],
+        bold=True,
+        italic=True,
+        roles=["chapter"],
+        page="OEBPS/text/p3.xhtml",
+    ).kept() == {
+        "text": "Vokabeln",
+        "size": 0.9,
+        "tag": "h3",
+        "classes": ["vocab"],
+        "bold": True,
+        "italic": True,
+        "roles": ["chapter"],
+        "page": "OEBPS/text/p3.xhtml",
+    }
+
+
+def read(*pages: str, files: dict[str, str] | None = None) -> list[Block]:
+    """The blocks of a book with those pages, without the paragraph that most
+    of it is written in the size of."""
+    return read_epub(epub(*pages, page(f"<p>{TEXT}</p>"), files=files)).blocks[:-1]
+
+
+def test_a_block_has_the_element_it_is_written_in_and_its_classes() -> None:
+    found = read(
+        page(
+            '<section class="chapter"><h2 class="title big">Kapitel 1</h2>'
+            '<div class="vocab"><p>der <b>Hund</b> dog</p>Ohne Absatz</div>'
+            "</section>"
+        )
+    )
+
+    assert [(block.tag, block.classes) for block in found] == [
+        ("h2", ["big", "title"]),
+        ("p", []),
+        ("div", ["vocab"]),
+    ]
+
+
+def test_a_block_is_bold_or_italic_when_most_of_it_is_so() -> None:
+    found = read(
+        page(
+            "<h3>Anhang</h3><p><b>Fast alles hier fett</b>, nicht.</p>"
+            '<p class="note">Notiz</p><p><span style="font-style: italic">Kursiv'
+            '</span></p><p style="font: bold 1em serif">Kurz</p>'
+            '<h4 style="font-weight: normal">Leicht</h4><p><i>ein</i> Wort</p>',
+            "<style>.note { font-weight: 700; font-style: oblique }</style>",
+        )
+    )
+
+    assert [(block.text, block.bold, block.italic) for block in found] == [
+        ("Anhang", True, False),
+        ("Fast alles hier fett, nicht.", True, False),
+        ("Notiz", True, True),
+        ("Kursiv", False, True),
+        ("Kurz", True, False),
+        ("Leicht", False, False),
+        ("ein Wort", False, False),
+    ]
+
+
+def test_a_block_has_what_the_book_says_the_parts_it_is_in_are() -> None:
+    found = read(
+        page(
+            '<section epub:type="bodymatter chapter"><h1>Eins</h1>'
+            '<aside epub:type="footnote" role="doc-footnote"><p>Fußnote</p></aside>'
+            '<p epub:type="chapter">Text</p></section>'
+        ),
+        page('<section role="doc-glossary"><p>der Hund: dog</p></section>'),
+    )
+
+    assert [(block.text, block.roles) for block in found] == [
+        ("Eins", ["bodymatter", "chapter"]),
+        ("Fußnote", ["bodymatter", "chapter", "footnote", "doc-footnote"]),
+        ("Text", ["bodymatter", "chapter"]),
+        ("der Hund: dog", ["doc-glossary"]),
+    ]
+
+
+def test_a_block_that_starts_a_file_of_the_book_has_its_name() -> None:
+    found = read(
+        page("<p>Eins</p><p>Zwei</p>"),
+        page("<script>nothing</script>"),
+        page("<p>Drei</p>"),
+    )
+
+    assert [(block.text, block.page) for block in found] == [
+        ("Eins", "OEBPS/text/p0.xhtml"),
+        ("Zwei", ""),
+        ("Drei", "OEBPS/text/p2.xhtml"),
+    ]
+
+
 @pytest.mark.parametrize(
     ("metadata", "manifest"),
     [
@@ -334,3 +434,88 @@ def test_a_book_without_a_picture_for_its_cover_has_none() -> None:
     drawn = '<item id="cover" href="cover.svg" media-type="image/svg+xml"/>'
 
     assert read_epub(epub(page("<p>Text.</p>"), manifest=drawn)).cover is None
+
+
+NAV_ITEM = (
+    '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml"'
+    ' properties="nav"/>'
+)
+
+
+def test_a_book_has_the_table_of_contents_its_list_of_pages_has() -> None:
+    nav = page(
+        '<nav epub:type="toc" xmlns:epub="http://www.idpf.org/2007/ops"><ol>'
+        '<li><a href="text/p0.xhtml">Vorwort</a></li>'
+        "<li><span>Geschichten</span><ol>"
+        '<li><a href="text/p1.xhtml#k1">Kapitel  1</a></li>'
+        '<li><a href="text/p1.xhtml#nowhere">Kapitel 2</a></li>'
+        '<li><a href="text/missing.xhtml">Verloren</a></li>'
+        "</ol></li></ol></nav>"
+        '<nav epub:type="landmarks" xmlns:epub="http://www.idpf.org/2007/ops"><ol>'
+        '<li><a epub:type="bodymatter" href="text/p1.xhtml">Anfang</a></li>'
+        "</ol></nav>"
+    )
+    book = read_epub(
+        epub(
+            page("<p>Vorwort</p>"),
+            page('<p>Titel</p><h2 id="k1">Kapitel 1</h2><p>Text</p>'),
+            files={"OEBPS/nav.xhtml": nav},
+            manifest=NAV_ITEM,
+        )
+    )
+
+    assert book.contents == [
+        Entry("Vorwort", 0),
+        Entry("Geschichten", 2, [Entry("Kapitel 1", 2), Entry("Kapitel 2", 1)]),
+    ]
+    assert book.landmarks == [Landmark("bodymatter", "Anfang", 1)]
+
+
+def test_an_older_book_has_the_table_of_contents_of_its_own_file_and_its_guide() -> (
+    None
+):
+    ncx = (
+        '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/"><navMap>'
+        '<navPoint id="a"><navLabel><text>Eins</text></navLabel>'
+        '<content src="text/p0.xhtml"/>'
+        '<navPoint id="b"><navLabel><text>Zwei</text></navLabel>'
+        '<content src="text/p1.xhtml"/></navPoint></navPoint>'
+        "</navMap></ncx>"
+    )
+    book = read_epub(
+        epub(
+            page("<p>Eins</p>"),
+            page("<p>Zwei</p>"),
+            files={"OEBPS/toc.ncx": ncx},
+            manifest='<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
+            guide='<reference type="text" title="Text" href="text/p1.xhtml"/>',
+        )
+    )
+
+    assert book.contents == [Entry("Eins", 0, [Entry("Zwei", 1)])]
+    assert book.landmarks == [Landmark("text", "Text", 1)]
+
+
+def test_a_list_of_pages_that_cannot_be_read_leaves_the_book_without_contents() -> None:
+    book = read_epub(
+        epub(
+            page("<p>Text</p>"),
+            files={"OEBPS/nav.xhtml": "<html><nav>not closed"},
+            manifest=NAV_ITEM,
+        )
+    )
+
+    assert (book.contents, [block.text for block in book.blocks]) == ([], ["Text"])
+
+
+def test_what_a_book_lists_of_itself_is_kept_with_what_it_has_under_it() -> None:
+    assert Entry("Eins", 0, [Entry("Zwei", 3)]).kept() == {
+        "title": "Eins",
+        "block": 0,
+        "entries": [{"title": "Zwei", "block": 3}],
+    }
+    assert Landmark("toc", "Inhalt", 2).kept() == {
+        "type": "toc",
+        "title": "Inhalt",
+        "block": 2,
+    }

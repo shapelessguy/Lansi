@@ -23,8 +23,8 @@ export interface BackgroundTask {
     /**
      * What kind of thing is done. "words" is taking the words of a selection
      * into the vocabulary, "speech" making the audio of sentences of a book,
-     * "icon" making the icon of a topic, and "embeddings" embedding the words
-     * of the vocabulary.
+     * "icon" making the icon of a topic, "embeddings" embedding the words
+     * of the vocabulary, and "transform" making a transformed version of a book.
      */
     kind: string;
     /** What it is done to, in a few words. */
@@ -39,6 +39,29 @@ export interface BackgroundTask {
     result: TakenWord[];
     /** The requests to the models it made. */
     usage: ProfileUsage[];
+    /** How each of its steps is going, for a task that says: each part of a book that is transformed. */
+    progress?: PartProgress[];
+}
+
+/** How the transforming of a part of a book is going. */
+export interface PartProgress {
+    /** What the part is called, such as the title of its story. */
+    title: string;
+    state: "waiting" | "thinking" | "writing" | "done";
+    /** The tokens the model has reasoned and written so far. */
+    reasoning: number;
+    written: number;
+    /** The tokens of the part as it was sent, which what is written is about as long as. */
+    expected: number;
+    /** The most tokens the model may reason in, if it reasons. */
+    budget: number | null;
+    /** How many answers the model has been asked for: more than one once an answer broke off, being too long. */
+    round: number;
+}
+
+/** How much of a part is written, as a share of the tokens it was sent in: more than 1 once it is longer. */
+export function writtenShare(part: PartProgress): number {
+    return part.expected > 0 ? part.written / part.expected : 0;
 }
 
 /** How often the server is asked how the tasks are going while some are running, in milliseconds. */
@@ -81,6 +104,7 @@ export function describeTask(task: BackgroundTask): string {
             embeddings: "Embedding the words",
             log: "Writing the log",
             questions: "Logging what was asked",
+            transform: "Transforming the parts",
         } as Record<string, Message>)[task.kind] ?? "Looking into the words";
         return t("{doing}: {done} of {total}", { doing: t(doing), done: task.done, total: task.total });
     }
@@ -95,6 +119,9 @@ export function describeTask(task: BackgroundTask): string {
     }
     if (task.kind === "log") {
         return t("The log is written.");
+    }
+    if (task.kind === "transform") {
+        return t("The version is made.");
     }
     if (task.kind === "questions") {
         return t("Logged: {what}.", { what: task.result.map((each) => each.subject).join(", ") || t("nothing") });
@@ -121,13 +148,14 @@ export function taskName(task: BackgroundTask): string {
         embeddings: "Embed vocabulary",
         log: "Exercise log",
         questions: "Questions log",
+        transform: "Transform book",
     } as Record<string, Message>)[task.kind];
     return t(name ?? "Add to vocabulary");
 }
 
 /** The words of a task that are worth a mention: those that are new, and those that could not be taken. */
 export function mentioned(task: BackgroundTask): TakenWord[] {
-    if (task.kind === "icon" || task.kind === "embeddings" || task.kind === "questions") {
+    if (task.kind === "icon" || task.kind === "embeddings" || task.kind === "questions" || task.kind === "transform") {
         return [];
     }
     const worth = task.kind === "speech" ? ["failed"] : ["added", "form", "failed"];

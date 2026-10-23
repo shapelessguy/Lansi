@@ -174,6 +174,19 @@ def test_a_backend_has_pictures_drawn_through_the_server(directory: Path) -> Non
     assert [profile.id for profile in used] == ["img-1"]
 
 
+def test_how_long_each_picture_drawn_took_is_told(directory: Path) -> None:
+    def draw(prompt: str, aspect_ratio: str) -> tuple[str, Profile]:
+        return "data:image/jpeg;base64,BBBB", Profile({}, model="m", output_tokens=7)
+
+    request = {"op": "act", "context": CONTEXT, "state": {}, "message": "draw"}
+    timed: list[str] = []
+
+    Runner(directory).run("echo", request, answering(), draw, timed=timed)
+
+    assert len(timed) == 1
+    assert timed[0].startswith("draw m: ") and timed[0].endswith("7 out")
+
+
 def test_a_backend_looks_with_the_model_that_sees_or_else_the_chat_model(
     directory: Path,
 ) -> None:
@@ -356,6 +369,7 @@ def test_an_exercise_is_told_the_lesson_with_its_points(
             draw: Any = None,
             look: Any = None,
             anki: Any = None,
+            timed: Any = None,
         ) -> Any:
             told.append(request["context"])
             return {"state": {}, "show": None, "graded": []}, []
@@ -838,6 +852,7 @@ def test_logs_that_are_not_logs_are_refused_and_none_is_kept(
             draw: Any = None,
             look: Any = None,
             anki: Any = None,
+            timed: Any = None,
         ) -> Any:
             logs = [{"result": "right", "answer": "a"}, {"result": "great"}]
             return {"state": {}, "show": None, "graded": logs}, []
@@ -917,6 +932,7 @@ def recording(practice: Practice, directory: Path) -> list[dict[str, Any]]:
             draw: Any = None,
             look: Any = None,
             anki: Any = None,
+            timed: Any = None,
         ) -> Any:
             told.append(request["context"])
             return {"state": {}, "show": None, "graded": []}, []
@@ -1062,6 +1078,7 @@ def test_an_exercise_is_told_what_it_was_answered_with_in_the_sessions_before(
             draw: Any = None,
             look: Any = None,
             anki: Any = None,
+            timed: Any = None,
         ) -> Any:
             told.append(request["context"])
             return {"state": {}, "show": None, "graded": []}, []

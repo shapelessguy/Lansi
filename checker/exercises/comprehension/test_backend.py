@@ -126,7 +126,7 @@ def test_listening_scores_as_hearing_and_says_how_often_the_text_may_be_heard() 
     assert finish(context, state, model).scores == {"listening": 100.0}
 
 
-def test_statements_are_answered_richtig_or_falsch_whatever_options_the_model_gave() -> (
+def test_statements_are_answered_with_the_words_of_the_language_whatever_the_model_gave() -> (
     None
 ):
     statements = {
@@ -135,10 +135,24 @@ def test_statements_are_answered_richtig_or_falsch_whatever_options_the_model_ga
             {"prompt": "Die Party ist am Samstag.", "options": ["x"], "answer": 0}
         ],
     }
+    words = {"truefalse": ["Richtig", "Falsch"], "yesno": ["Ja", "Nein"]}
+    model = FakeModel(statements)
 
-    step = start(with_options(answers="truefalse"), FakeModel(statements))
+    step = start({**with_options(answers="truefalse"), "answer_words": words}, model)
 
     assert step.show["questions"][0]["options"] == ["Richtig", "Falsch"]
+    assert '"Richtig" or "Falsch"' in model.asked[0]
+
+
+def test_statements_are_answered_in_english_where_the_language_has_no_words() -> None:
+    statements = {
+        **TEXT,
+        "questions": [{"prompt": "La festa è sabato.", "options": [], "answer": 1}],
+    }
+
+    step = start(with_options(answers="yesno"), FakeModel(statements))
+
+    assert step.show["questions"][0]["options"] == ["Yes", "No"]
 
 
 def test_a_text_whose_questions_cannot_be_answered_is_a_failure() -> None:

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from profiling import Profile, spent
-from tasks import KEPT, Tasks
+from tasks import KEPT, Step, Tasks
 
 
 def test_a_task_is_listed_as_running_until_its_job_is_run() -> None:
@@ -83,3 +83,21 @@ def test_what_a_task_that_breaks_had_used_before_is_told_all_the_same() -> None:
     assert [each["id"] for each in told[0][1]] == ["gen-2"]
     assert tasks.listing()[0]["id"] == task["id"]
     assert tasks.listing()[0]["state"] == "failed"
+
+
+def test_a_task_is_listed_with_how_its_steps_are_going_as_it_reports_them() -> None:
+    waiting: list[Callable[[], None]] = []
+    tasks = Tasks(background=waiting.append)
+    seen: list[list[dict[str, Any]]] = []
+
+    def job(step: Step) -> tuple[list[dict[str, Any]], list[Any]]:
+        step.report([{"state": "writing", "written": 40}])
+        seen.append(tasks.listing()[0]["progress"])
+        step()
+        return [], []
+
+    started = tasks.start("transform", "Ein Buch", 1, job)
+    waiting[0]()
+
+    assert started["progress"] == []
+    assert seen == [[{"state": "writing", "written": 40}]]

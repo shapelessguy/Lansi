@@ -11,12 +11,15 @@ import pytest
 from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore
 
-# What came with versions 24 to 29, taken out of a store to make it as one
+# What came with versions 24 to 31, taken out of a store to make it as one
 # was before: the instances the exercises made, what each replays, whether
 # a session is hidden, the parts of a grade and what it is about, the size
-# of an evaluation, which was a length, and when a message of the tutor was
-# processed.
+# of an evaluation, which was a length, when a message of the tutor was
+# processed, what a book lists of itself, and the versions of books.
 BEFORE_INSTANCES = """
+ALTER TABLE books DROP COLUMN version;
+ALTER TABLE books DROP COLUMN parent_id;
+ALTER TABLE books DROP COLUMN navigation;
 ALTER TABLE tutor_messages DROP COLUMN processed_at;
 ALTER TABLE evaluations RENAME COLUMN size TO length;
 ALTER TABLE grades DROP COLUMN about;
@@ -359,8 +362,26 @@ def test_a_book_is_listed_without_what_it_says_and_given_whole_when_asked_for(
         "addedAt": 12500,
         "cover": False,
     }
-    assert store.books() == [listed]
-    assert store.book("book-1") == {**listed, "blocks": blocks}
+    assert store.books() == [{**listed, "versions": []}]
+    assert store.book("book-1") == {
+        **listed,
+        "blocks": blocks,
+        "contents": [],
+        "landmarks": [],
+    }
+
+
+def test_a_book_is_given_with_what_it_lists_of_itself(store: UserStore) -> None:
+    contents = [{"title": "Eins", "block": 0, "entries": [{"title": "A", "block": 1}]}]
+    landmarks = [{"type": "bodymatter", "title": "Text", "block": 0}]
+    store.add_book(
+        "book-1", "Der Hund", "", "", [], contents=contents, landmarks=landmarks
+    )
+
+    book = store.book("book-1")
+
+    assert book is not None
+    assert (book["contents"], book["landmarks"]) == (contents, landmarks)
 
 
 def test_a_book_that_is_removed_is_gone(store: UserStore) -> None:
@@ -434,6 +455,19 @@ def test_the_cover_of_a_book_is_kept_with_it_and_removed_with_it(
     assert with_cover["cover"] is True
     assert kept == picture
     assert (store.cover("book-2"), store.cover("book-1")) == (None, None)
+
+
+def test_the_file_a_book_was_read_from_is_kept_with_it_and_removed_with_it(
+    store: UserStore,
+) -> None:
+    store.add_book("book-1", "Der Hund", "", "", [], original=b"PK-and-so-on")
+    store.add_book("book-2", "Die Katze", "", "", [])
+
+    kept = store.original("book-1")
+    store.delete_book("book-1")
+
+    assert kept == b"PK-and-so-on"
+    assert (store.original("book-2"), store.original("book-1")) == (None, None)
 
 
 def test_a_book_that_is_read_again_without_a_cover_has_none_any_more(
@@ -1371,3 +1405,54 @@ def test_the_usage_is_added_up_by_model_in_bins_of_the_learners_own_days(
     ]
     assert series[0]["costIncomplete"] is True
     assert series[1]["cost"] == 0.75
+
+
+def test_a_version_is_kept_under_its_book_whichever_it_is_made_from(
+    tmp_path: Path,
+) -> None:
+    times = iter([1.0, 2.0, 3.0])
+    store = UserStore(tmp_path / "ada", now=lambda: next(times))
+    picture = (b"GIF89a", "image/gif")
+    store.add_book(
+        "book-1", "Der Hund", "Ada", "de", [{"text": "A", "size": 1}], cover=picture
+    )
+    blocks = [{"text": "A", "size": 1}]
+
+    first = store.add_version("v-1", "book-1", "stripped", "Nur Text", blocks, [], [])
+    second = store.add_version("v-2", "v-1", "stripped", "Weniger", blocks, [], [])
+
+    assert first == {
+        "id": "v-1",
+        "name": "Nur Text",
+        "kind": "stripped",
+        "addedAt": 2000,
+    }
+    assert [book["id"] for book in store.books()] == ["book-1"]
+    assert store.books()[0]["versions"] == [first, second]
+    version = store.book("v-2")
+    assert version is not None
+    assert (version["title"], version["parent"], version["version"]) == (
+        "Der Hund",
+        "book-1",
+        second,
+    )
+    assert store.cover("v-2") == picture
+
+
+def test_a_book_is_removed_with_its_versions_and_a_version_alone(
+    store: UserStore,
+) -> None:
+    store.add_book("book-1", "Der Hund", "", "", [])
+    store.add_book("book-2", "Die Katze", "", "", [])
+    store.add_version("v-1", "book-1", "stripped", "Eins", [], [], [])
+    store.add_version("v-2", "book-2", "stripped", "Zwei", [], [], [])
+    store.add_version("v-3", "book-2", "stripped", "Drei", [], [], [])
+
+    store.delete_book("book-1")
+    store.delete_book("v-2")
+
+    assert (store.book("v-1"), store.book("v-2")) == (None, None)
+    assert [
+        (book["id"], [version["id"] for version in book["versions"]])
+        for book in store.books()
+    ] == [("book-2", ["v-3"])]

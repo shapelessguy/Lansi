@@ -22,6 +22,7 @@ from topics import (
     clear_background,
     draw,
     make_icon,
+    nearest_ratio,
     rank,
     topic_text,
 )
@@ -142,25 +143,65 @@ def test_a_picture_for_an_exercise_is_a_jpeg_no_bigger_than_it_need_be() -> None
     assert image.size == (1024, 1024)
 
 
-REFUSED_RATIO = (
-    "OpenRouter refused the request (400): No provider for openai/gpt-image-1-mini"
-    ' supports the requested parameter(s): aspect_ratio "4:3", n "1". Provider'
-    " rejections: OpenAI: aspect_ratio: not supported. Accepted: 1:1, 3:2, 2:3, auto"
-)
-
-
-def test_a_picture_is_drawn_in_the_nearest_shape_the_model_takes() -> None:
+def test_a_picture_is_drawn_in_the_nearest_shape_the_model_is_listed_to_take() -> None:
     sent = FakeOpenRouter()
 
-    def send(path: str, body: dict[str, Any], model: Model) -> dict[str, Any]:
-        if body["aspect_ratio"] == "4:3":
-            raise ProfileError(REFUSED_RATIO)
-        return sent(path, body, model)
-
-    picture, _, _ = draw("a kitchen", IMAGE_MODEL, "4:3", send)
+    picture, _, _ = draw(
+        "a kitchen", IMAGE_MODEL, "4:3", sent, lambda model: ["1:1", "3:2", "2:3"]
+    )
 
     assert picture == SYMBOL
     assert [body["aspect_ratio"] for _, body in sent.asked] == ["3:2"]
+
+
+def test_a_model_listed_with_no_shapes_is_asked_for_none() -> None:
+    sent = FakeOpenRouter()
+
+    draw("a kitchen", IMAGE_MODEL, "4:3", sent, lambda model: [])
+
+    ((_, body),) = sent.asked
+    assert "aspect_ratio" not in body
+
+
+def test_a_model_whose_shapes_are_not_known_is_asked_for_the_one_wanted() -> None:
+    sent = FakeOpenRouter()
+
+    draw("a kitchen", IMAGE_MODEL, "4:3", sent, lambda model: None)
+
+    ((_, body),) = sent.asked
+    assert body["aspect_ratio"] == "4:3"
+
+
+@pytest.mark.parametrize(
+    ("wanted", "accepted", "chosen"),
+    [
+        ("4:3", ["1:1", "4:3", "16:9", "auto"], "4:3"),
+        ("16:9", ["1:1", "9:19.5", "19.5:9"], "19.5:9"),
+        ("1:1", ["auto"], None),
+    ],
+)
+def test_the_nearest_shape_is_chosen_of_those_taken(
+    wanted: str, accepted: list[str], chosen: str | None
+) -> None:
+    assert nearest_ratio(wanted, accepted) == chosen
+
+
+def test_the_shapes_of_a_model_are_listed_once_for_all_its_pictures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    listed: list[str] = []
+
+    def list_shapes(url: str, model: Model) -> dict[str, list[str]]:
+        listed.append(url)
+        return {"some/image-model": ["1:1", "4:3"], "other/model": []}
+
+    monkeypatch.setattr(topics, "_list_shapes", list_shapes)
+    shapes = topics.ImageShapes()
+
+    assert shapes.accepted(IMAGE_MODEL) == ["1:1", "4:3"]
+    assert shapes.accepted(Model("other/model", key=KEY)) == []
+    assert shapes.accepted(Model("unlisted/model", key=KEY)) is None
+    assert listed == ["https://openrouter.ai/api/v1/images/models"]
 
 
 def test_a_picture_refused_for_something_else_is_a_failure() -> None:

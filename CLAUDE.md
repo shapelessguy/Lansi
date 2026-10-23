@@ -21,8 +21,11 @@ A language-learning chat built on an Anki collection. Three parts:
   spell-checks them and profiles finished sentences with a decision model.
   It also keeps everything a user has, in `checker/data/users/<name>/`:
   the chats, books, sessions of practice and settings (`storage.py`) and a vocabulary for
-  each language (`intake.py`, `vocabulary.py`); a book is an EPUB file read
-  into its text and font sizes (`books.py`); the categories of words are
+  each language (`intake.py`, `vocabulary.py`); a book is an EPUB file, kept as
+  it is and read into its text, how each part is written and its table of
+  contents (`books.py`), and made into a tree of sections from those
+  (`sections.py`); a version of a book, such as one stripped of what is not
+  the text, is a copy kept as a book of its own under it (`versions.py`); the categories of words are
   in `categories.py`. What the server tells the models is in
   `checker/prompts/`, a Markdown file for each kind of prompt, with
   `$variables`, as `prompts.py` describes; what an exercise tells them is

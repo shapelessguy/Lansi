@@ -3,7 +3,8 @@
 
 """What a user has written and been written: the chats with their messages,
 what was written in the exercises of practice, and the settings. The books a
-user reads are kept here as well.
+user reads are kept here as well, as their text and as the files they came
+in.
 
 Every message and everything written in an exercise carries when it was
 processed, which is not yet until its words have been taken into the
@@ -28,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 29
+SCHEMA_VERSION = 31
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -520,6 +521,22 @@ UPDATE evaluations SET size = MIN(5, MAX(1, (size + 1) / 2));
 _TUTOR_PROCESSED = """
 ALTER TABLE tutor_messages ADD COLUMN processed_at REAL;
 """
+
+# What came with version 30: what a book lists of itself, its table of
+# contents and its landmarks, in JSON as `{"contents": ..., "landmarks": ...}`.
+# A book kept before has neither.
+_BOOK_NAVIGATION = """
+ALTER TABLE books ADD COLUMN navigation TEXT;
+"""
+
+# What came with version 31: the versions of a book, each kept as a book of
+# its own, a copy of what it says: the book it is a version of, which is
+# never a version itself, and what it is, in JSON as `{"kind": ...,
+# "name": ...}`.
+_BOOK_VERSIONS = """
+ALTER TABLE books ADD COLUMN parent_id TEXT;
+ALTER TABLE books ADD COLUMN version TEXT;
+"""
 # how far an exercise the tutor offered got
 OFFER_STATUSES = ("running", "done", "abandoned")
 
@@ -712,6 +729,18 @@ def _listed(
     }
 
 
+def _listed_version(version_id: str, added_at: int, version: str) -> dict[str, Any]:
+    """A version of a book as it is listed: what it is called and what kind
+    it is."""
+    made = json.loads(version)
+    return {
+        "id": version_id,
+        "name": made["name"],
+        "kind": made["kind"],
+        "addedAt": added_at,
+    }
+
+
 def _log(
     log_id: int,
     kind: str,
@@ -748,6 +777,7 @@ class UserStore:
         self._directory = Path(directory)
         self._directory.mkdir(parents=True, exist_ok=True)
         self._covers = self._directory / "covers"
+        self._originals = self._directory / "books"
         self._speech = self._directory / "speech"
         self._icons = self._directory / "topics"
         self._instances = self._directory / "exercises"
@@ -819,6 +849,10 @@ class UserStore:
                 self._db.executescript(_EVALUATION_SIZES)
             if version < 29:
                 self._db.executescript(_TUTOR_PROCESSED)
+            if version < 30:
+                self._db.executescript(_BOOK_NAVIGATION)
+            if version < 31:
+                self._db.executescript(_BOOK_VERSIONS)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -1279,18 +1313,102 @@ class UserStore:
     # books
 
     def books(self) -> list[dict[str, Any]]:
-        """Every book, without what it says."""
+        """Every book, without what it says, each with its versions, the
+        one made first first. The versions are not listed as books."""
         with self._lock:
-            rows = self._db.execute(f"SELECT {_LISTED} FROM books").fetchall()
-        return [_listed(*row) for row in rows]
+            rows = self._db.execute(
+                f"SELECT {_LISTED} FROM books WHERE parent_id IS NULL"
+            ).fetchall()
+            versions = self._db.execute(
+                "SELECT id, parent_id, added_at, version FROM books"
+                " WHERE parent_id IS NOT NULL ORDER BY added_at, rowid"
+            ).fetchall()
+        under: dict[str, list[dict[str, Any]]] = {}
+        for version_id, parent_id, added_at, version in versions:
+            under.setdefault(parent_id, []).append(
+                _listed_version(version_id, added_at, version)
+            )
+        return [{**_listed(*row), "versions": under.get(row[0], [])} for row in rows]
 
     def book(self, book_id: str) -> dict[str, Any] | None:
-        """A book with its paragraphs, if there is such a book."""
+        """A book with its paragraphs, its table of contents and its
+        landmarks, if there is such a book."""
         with self._lock:
             row = self._db.execute(
-                f"SELECT {_LISTED}, blocks FROM books WHERE id = ?", (book_id,)
+                f"SELECT {_LISTED}, blocks, navigation, parent_id, version"
+                " FROM books WHERE id = ?",
+                (book_id,),
             ).fetchone()
-        return {**_listed(*row[:6]), "blocks": json.loads(row[6])} if row else None
+        if not row:
+            return None
+        navigation = json.loads(row[7]) if row[7] else {}
+        book = {
+            **_listed(*row[:6]),
+            "blocks": json.loads(row[6]),
+            "contents": navigation.get("contents", []),
+            "landmarks": navigation.get("landmarks", []),
+        }
+        if row[8]:
+            book["parent"] = row[8]
+            book["version"] = _listed_version(row[0], row[4], row[9])
+        return book
+
+    def add_version(
+        self,
+        version_id: str,
+        source_id: str,
+        kind: str,
+        name: str,
+        blocks: list[dict[str, Any]],
+        contents: list[dict[str, Any]],
+        landmarks: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Keep a version of a book, made from the book or from another of
+        its versions, `source_id`, and return it as it is listed. It is
+        called what the book is, has its cover, and is kept under the book
+        whichever it was made from. Raises ValueError for a source that is
+        not kept, or an id that is not one."""
+        if not is_id(version_id):
+            raise ValueError("a version needs an id")
+        with self._lock, self._db:
+            source = self._db.execute(
+                "SELECT title, author, language, cover_type, parent_id FROM books"
+                " WHERE id = ?",
+                (source_id,),
+            ).fetchone()
+            if not source:
+                raise ValueError("no such book")
+            title, author, language, cover_type, parent_id = source
+            # the versions are all under the book, whichever they are made from
+            parent_id = parent_id or source_id
+            cover = self._covers / source_id
+            if cover_type and cover.exists():
+                shutil.copyfile(cover, self._covers / version_id)
+            else:
+                cover_type = None
+            version = {"kind": kind, "name": name}
+            added_at = int(self._now() * 1000)
+            self._db.execute(
+                "INSERT INTO books (id, title, author, language, added_at, blocks,"
+                " cover_type, navigation, parent_id, version)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    version_id,
+                    title,
+                    author,
+                    language,
+                    added_at,
+                    json.dumps(blocks, ensure_ascii=False),
+                    cover_type,
+                    json.dumps(
+                        {"contents": contents, "landmarks": landmarks},
+                        ensure_ascii=False,
+                    ),
+                    parent_id,
+                    json.dumps(version, ensure_ascii=False),
+                ),
+            )
+        return _listed_version(version_id, added_at, json.dumps(version))
 
     def add_book(
         self,
@@ -1300,9 +1418,14 @@ class UserStore:
         language: str,
         blocks: list[dict[str, Any]],
         cover: tuple[bytes, str] | None = None,
+        original: bytes | None = None,
+        contents: list[dict[str, Any]] | None = None,
+        landmarks: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Keep a book, and return it as it is listed. `cover` is the
-        picture on its cover with the kind of file it is. A book that was kept before stays as long ago added as it
+        picture on its cover with the kind of file it is, `original` the
+        EPUB file it was read from, and `contents` and `landmarks` what it
+        lists of itself. A book that was kept before stays as long ago added as it
         was. Raises ValueError for an id that is not one."""
         if not is_id(book_id):
             raise ValueError("a book needs an id")
@@ -1312,13 +1435,19 @@ class UserStore:
                 (self._covers / book_id).write_bytes(cover[0])
             else:
                 (self._covers / book_id).unlink(missing_ok=True)
+            if original is not None:
+                self._originals.mkdir(exist_ok=True)
+                (self._originals / f"{book_id}.epub").write_bytes(original)
+            else:
+                (self._originals / f"{book_id}.epub").unlink(missing_ok=True)
             self._db.execute(
                 "INSERT INTO books (id, title, author, language, added_at, blocks,"
-                " cover_type)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET"
+                " cover_type, navigation)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET"
                 " title = excluded.title, author = excluded.author,"
                 " language = excluded.language, blocks = excluded.blocks,"
-                " cover_type = excluded.cover_type",
+                " cover_type = excluded.cover_type,"
+                " navigation = excluded.navigation",
                 (
                     book_id,
                     title,
@@ -1327,6 +1456,10 @@ class UserStore:
                     int(self._now() * 1000),
                     json.dumps(blocks, ensure_ascii=False),
                     cover[1] if cover else None,
+                    json.dumps(
+                        {"contents": contents or [], "landmarks": landmarks or []},
+                        ensure_ascii=False,
+                    ),
                 ),
             )
             row = self._db.execute(
@@ -1346,15 +1479,36 @@ class UserStore:
                 return None
             return file.read_bytes(), row[0]
 
+    def original(self, book_id: str) -> bytes | None:
+        """The EPUB file a book was read from, if it was kept: those added
+        before the files were kept have none."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT 1 FROM books WHERE id = ?", (book_id,)
+            ).fetchone()
+            file = self._originals / f"{book_id}.epub"
+            if not row or not is_id(book_id) or not file.exists():
+                return None
+            return file.read_bytes()
+
     def delete_book(self, book_id: str) -> None:
-        """Remove a book, the picture on its cover and the audio of its
-        sentences."""
+        """Remove a book, the file it was read from, the picture on its cover
+        and the audio of its sentences, and its versions with theirs. A
+        version is removed alone."""
         with self._lock, self._db:
-            self._db.execute("DELETE FROM books WHERE id = ?", (book_id,))
-            self._db.execute("DELETE FROM book_speech WHERE book_id = ?", (book_id,))
-        if is_id(book_id):
-            (self._covers / book_id).unlink(missing_ok=True)
-            shutil.rmtree(self._speech / book_id, ignore_errors=True)
+            removed = [book_id] + [
+                version_id
+                for (version_id,) in self._db.execute(
+                    "SELECT id FROM books WHERE parent_id = ?", (book_id,)
+                )
+            ]
+            for each in removed:
+                self._db.execute("DELETE FROM books WHERE id = ?", (each,))
+                self._db.execute("DELETE FROM book_speech WHERE book_id = ?", (each,))
+        for each in filter(is_id, removed):
+            (self._covers / each).unlink(missing_ok=True)
+            (self._originals / f"{each}.epub").unlink(missing_ok=True)
+            shutil.rmtree(self._speech / each, ignore_errors=True)
 
     def save_speech(
         self,

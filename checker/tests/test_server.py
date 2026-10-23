@@ -34,10 +34,14 @@ from test_intake import FakeChat, FakeProfiler
 from test_speaking import FakeVoice
 from test_topics import FakeOpenRouter
 from test_translating import FakeModel
+from tokens import count
 from translating import Translator
 from users import Users, user_directory
 from vocabulary import Form, Vocabularies, Vocabulary
 from word_translations import WordTranslator
+
+# the name, in a book made for a test, of the file its first page is in
+PAGE = "OEBPS/text/p0.xhtml"
 
 # the importer of each server that is running, by the server's address
 IMPORTERS: dict[str, AnkiImporter] = {}
@@ -584,27 +588,27 @@ def test_the_words_of_a_language_come_with_how_its_forms_are_laid_out(
     url: str,
 ) -> None:
     _, german = get(f"{url}/vocabulary/words?language=German")
-    _, italian = get(f"{url}/vocabulary/words?language=Italian")
+    _, french = get(f"{url}/vocabulary/words?language=French")
 
     assert [table["title"] for table in german["tables"]["noun"]] == [
         "der",
         "die",
         "das",
     ]
-    assert italian["tables"] == {}
+    assert french["tables"] == {}
 
 
 def test_the_words_of_a_language_come_with_their_names_in_the_apps_languages(
     url: str,
 ) -> None:
     _, german = get(f"{url}/vocabulary/words?language=German")
-    _, italian = get(f"{url}/vocabulary/words?language=Italian")
+    _, french = get(f"{url}/vocabulary/words?language=French")
 
     assert german["details"]["reflexive"] == ["never", "sometimes", "always"]
     assert german["labels"]["reflexive"]["Italian"] == "riflessivo"
     assert german["labels"]["noun"]["German"] == "Substantiv"
-    assert "reflexive" not in italian["labels"]
-    assert italian["labels"]["translations"]["Italian"] == "traduzioni"
+    assert "reflexive" not in french["labels"]
+    assert french["labels"]["translations"]["Italian"] == "traduzioni"
 
 
 def test_the_import_is_told_which_language_the_anki_words_are_of(url: str) -> None:
@@ -1097,13 +1101,29 @@ def test_a_book_is_kept_as_its_text_for_its_user_only_and_removed_when_asked(
     gone, _, _ = send(f"{with_users}/books/{listed['id']}", "GET", ada)
 
     assert listed["title"] == "Der Hund"
-    assert json.loads(of_ada) == {"books": [listed]}
+    assert json.loads(of_ada) == {"books": [{**listed, "versions": []}]}
     assert json.loads(of_ben) == {"books": []}
     assert json.loads(whole)["blocks"] == [
-        {"text": "Der Hund", "size": 2},
+        {"text": "Der Hund", "size": 2, "tag": "h1", "bold": True, "page": PAGE},
         {"text": "Es war einmal ein Hund, der gern las.", "size": 1},
     ]
     assert (not_bens, gone) == (404, 404)
+
+
+def test_the_file_a_book_was_read_from_is_given_as_it_was_sent(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    ben = log_in(with_users, "ben", "another one")
+    file = epub(page("<p>Es war einmal.</p>"))
+
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    at = f"{with_users}/books/{json.loads(added)['id']}/original"
+    status, kept, kind = send(at, "GET", ada)
+    not_bens, _, _ = send(at, "GET", ben)
+
+    assert (status, kept, kind) == (200, file, "application/epub+zip")
+    assert not_bens == 404
 
 
 def test_a_file_that_is_not_a_book_is_refused_with_the_reason(with_users: str) -> None:
@@ -1468,6 +1488,7 @@ class FakeRunner(Runner):
         draw: Any = None,
         look: Any = None,
         anki: Any = None,
+        timed: Any = None,
     ) -> tuple[dict[str, Any], list[Profile]]:
         state = request["state"] or {"done": 0}
         logs = []
@@ -2352,3 +2373,153 @@ def test_a_request_for_known_words_that_asks_what_there_is_not_is_refused() -> N
 
     assert category == (400, {"error": "there is no category colour"})
     assert order[0] == limit[0] == flag[0] == 400
+
+
+def test_a_stripped_version_is_made_of_the_stretches_kept_and_listed_under_its_book(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    file = epub(
+        page(
+            '<h1>Kapitel</h1><p>Es war <a href="#v">einmal</a>.</p>'
+            '<h2 id="v">Vokabeln</h2><p>einmal: once</p><p>Ende.</p>'
+        )
+    )
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    book_id = json.loads(added)["id"]
+
+    _, made, _ = send(
+        f"{with_users}/books/{book_id}/strip",
+        "POST",
+        ada,
+        json.dumps({"name": " Nur Text ", "keep": [[0, 2], [4, 5]]}).encode(),
+    )
+    version = json.loads(made)
+    _, books, _ = send(f"{with_users}/books", "GET", ada)
+    _, whole, _ = send(f"{with_users}/books/{version['id']}", "GET", ada)
+    refused, reason, _ = send(
+        f"{with_users}/books/{book_id}/strip",
+        "POST",
+        ada,
+        json.dumps({"name": "Falsch", "keep": [[2, 4], [0, 1]]}).encode(),
+    )
+
+    assert (version["name"], version["kind"]) == ("Nur Text", "stripped")
+    assert [each["id"] for each in json.loads(books)["books"]] == [book_id]
+    assert json.loads(books)["books"][0]["versions"] == [version]
+    assert [block["text"] for block in json.loads(whole)["blocks"]] == [
+        "Kapitel",
+        "Es war einmal.",
+        "Ende.",
+    ]
+    assert "links" not in json.loads(whole)["blocks"][1]
+    assert json.loads(whole)["version"] == version
+    assert (refused, json.loads(reason)) == (
+        400,
+        {"error": "the stretches to keep are in order and in the book"},
+    )
+
+
+def test_the_tokens_of_each_paragraph_of_a_book_are_counted_as_it_would_be_sent(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    file = epub(page("<h1>Kapitel</h1><p>Es war einmal ein König.</p>"))
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    book_id = json.loads(added)["id"]
+
+    status, counted, _ = send(f"{with_users}/books/{book_id}/tokens", "GET", ada)
+    missing, _, _ = send(f"{with_users}/books/nothing/tokens", "GET", ada)
+
+    assert status == 200
+    assert json.loads(counted) == {
+        "encoding": "o200k_base",
+        "blocks": [count("Kapitel\n\n"), count("Es war einmal ein König.\n\n")],
+    }
+    assert missing == 404
+
+
+def test_the_prompts_a_book_can_be_transformed_with_are_listed_to_start_from(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+
+    status, listed, _ = send(f"{with_users}/books/prompts", "GET", ada)
+
+    prompts = json.loads(listed)["prompts"]
+    assert status == 200
+    assert [prompt["id"] for prompt in prompts] == ["translate", "level"]
+    assert all("{{language}}" in prompt["prompt"] for prompt in prompts)
+
+
+def test_a_transformed_version_is_made_in_the_background_as_its_book_was_written(
+    with_users: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent: list[dict[str, Any]] = []
+
+    def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+        sent.append(body)
+        blocks = json.loads(body["messages"][0]["content"].split("The part:\n")[1])
+        written = {key: text.upper() for key, text in blocks.items()}
+        yield {"choices": [{"delta": {"content": json.dumps(written)}}]}
+        yield {"usage": {"prompt_tokens": 9, "completion_tokens": 3}}
+
+    monkeypatch.setattr("server.stream_transforming", stream)
+    ada = log_in(with_users, "ada", "a password")
+    file = epub(page("<h1>Kapitel</h1><p>Es war einmal.</p><p>Wörter</p><p>Ende.</p>"))
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    book_id = json.loads(added)["id"]
+    asked = {
+        "name": "B1",
+        "prompt": "Rewrite it for B1.",
+        "parts": [[[0, 2]], [[3, 4]]],
+        "untouched": "left",
+        "model": {"model": "thinker", "url": "http://127.0.0.1:1/v1"},
+        "reasoning": False,
+        "reasoningBudget": 40_000,
+        "titles": ["Kapitel", "Ende"],
+    }
+
+    _, started, _ = send(
+        f"{with_users}/books/{book_id}/transform",
+        "POST",
+        ada,
+        json.dumps(asked).encode(),
+    )
+    for _ in range(200):
+        _, listed, _ = send(f"{with_users}/tasks", "GET", ada)
+        (task,) = json.loads(listed)["tasks"]
+        if task["state"] != "running":
+            break
+        time.sleep(0.01)
+    _, books, _ = send(f"{with_users}/books", "GET", ada)
+    (version,) = json.loads(books)["books"][0]["versions"]
+    _, whole, _ = send(f"{with_users}/books/{version['id']}", "GET", ada)
+    overlapping = {**asked, "parts": [[[0, 2]], [[1, 3]]]}
+    refused, reason, _ = send(
+        f"{with_users}/books/{book_id}/transform",
+        "POST",
+        ada,
+        json.dumps(overlapping).encode(),
+    )
+
+    assert (json.loads(started)["kind"], json.loads(started)["total"]) == (
+        "transform",
+        2,
+    )
+    assert (task["state"], task["done"]) == ("done", 2)
+    assert (version["name"], version["kind"]) == ("B1", "transformed")
+    blocks = json.loads(whole)["blocks"]
+    assert [(block["text"], block.get("tag")) for block in blocks] == [
+        ("KAPITEL", "h1"),
+        ("ES WAR EINMAL.", None),
+        ("ENDE.", None),
+    ]
+    assert task["result"] == [{"version": version["id"], "changed": 0}]
+    assert [each["model"] for each in sent] == ["thinker", "thinker"]
+    assert [each["reasoning"] for each in sent] == [{"enabled": False}] * 2
+    assert [(part["title"], part["state"]) for part in task["progress"]] == [
+        ("Kapitel", "done"),
+        ("Ende", "done"),
+    ]
+    assert (refused, json.loads(reason)) == (400, {"error": "no block is in two parts"})

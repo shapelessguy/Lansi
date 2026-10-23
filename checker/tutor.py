@@ -664,9 +664,12 @@ def _call(call: dict[str, Any], tools: dict[str, Tool], emit: Emit) -> dict[str,
     return {"role": "tool", "tool_call_id": call["id"], "content": done.content}
 
 
-def stream_chat(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+def stream_chat(
+    body: dict[str, Any], model: Model, timeout: float = CHAT_TIMEOUT_SECS
+) -> Iterator[dict[str, Any]]:
     """Send a chat request to `model` and give each piece of its streamed
-    response as it comes. Raises ProfileError."""
+    response as it comes, waiting at most `timeout` seconds for the next.
+    Raises ProfileError."""
     request = urllib.request.Request(
         model.endpoint("chat/completions"),
         data=json.dumps(body).encode(),
@@ -674,7 +677,7 @@ def stream_chat(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
         method="POST",
     )
     try:
-        response = urllib.request.urlopen(request, timeout=CHAT_TIMEOUT_SECS)
+        response = urllib.request.urlopen(request, timeout=timeout)
     except urllib.error.HTTPError as error:
         raise ProfileError(error_message(error, model.where)) from None
     except OSError as error:

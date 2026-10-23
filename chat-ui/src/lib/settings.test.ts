@@ -221,3 +221,12 @@ test("every keyword is filled in, as often as it is named", () => {
     expect(expandPrompt("{{language}} at {{level}}: {{words}}; {{words:Travel}}; {{language}}", words, "German", "B1"))
         .toBe("German at B1: Hund; Zug, Bahnhof; German");
 });
+
+test("the prompts saved to transform books with are kept, and what is not one is left out", () => {
+    const saved = { id: "a1", name: "Simple Italian", prompt: "Rewrite it in {{language}}." };
+
+    expect(normalizeSettings({ transformPrompts: [saved, { name: "no id" }, "text"] }).transformPrompts).toEqual([
+        saved,
+    ]);
+    expect(normalizeSettings({}).transformPrompts).toEqual([]);
+});

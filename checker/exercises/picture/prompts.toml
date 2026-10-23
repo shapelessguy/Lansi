@@ -1,75 +1,98 @@
 planning = """
-You plan a picture for someone learning $language at level $level: a \
-drawing of one scene with things in it that the learner will label in \
-$language.
+You plan a picture for someone learning $language at level $level, who \
+will mark on it the things they can name, and name them in $language.
 
 $topics
 $words$guidance
-Choose a scene that fits the topics and has room for many things: a \
+Choose $count different things that fit the topics: concrete objects, easy \
+to see and to draw, whose names a learner at level $level knows or should \
+learn.$avoid Then choose $panels scenes where they could be seen, each a \
 particular place and moment, rather than the first that comes to mind for \
-the topic. Then choose \
-$count different things in it that are concrete objects, clearly visible, \
-of a fair size and apart from one another, and whose names a learner at \
-level $level knows or should learn.$avoid
+the topic, and each with a few of the things.
 
 For each thing, say in English what it is, for the illustrator, such as "a \
-wooden kitchen table". For the scene, say in English what the picture shows, \
-in one sentence that leaves the things out.
+red kettle". For each scene, say in English what it shows, in one sentence \
+that leaves the things out.
 
-Reply with JSON alone: {"scene": "A sunny kitchen seen from the door.", \
+Reply with JSON alone: {"scenes": ["A sunny kitchen seen from the door."], \
 "things": ["a wooden kitchen table", "a red kettle"]}"""
 
-drawing = """
-$scene In it, each clearly visible, once, and apart from the others: \
-$things. A clear, colourful illustration. No text, letters, labels or \
-numbers."""
-
-locating = """
-These are things that should be in the picture, numbered:
-$things
-
-Detect each of them that is in the picture, and give its bounding box, tight \
-around the thing itself, as "box_2d": [ymin, xmin, ymax, xmax], each from 0 \
-to 1000 of the height or the width of the picture. Leave out a thing that is \
-not in the picture, or that cannot be told apart from the others.
-
-Reply with JSON alone: {"boxes": [{"n": 1, "box_2d": [520, 380, 700, 610]}]}"""
-
 judging = """
-Someone learning $language at level $level labelled the things in this \
-picture. Each thing is marked with a numbered circle, and this is what they \
-wrote for each, with what the illustrator meant to draw there:
+Someone learning $language at level $level marked things on this picture \
+and named each in $language. Each mark is a red ring, with its number in a \
+red circle beside it. After the picture comes a close-up of each mark, with \
+the ring around what was marked. This is what they wrote for each:
 $labels
 
-For each number, look at the thing under its circle, and judge what was \
-written as its name in $language:
-- "right": a correct name of that thing, with the right article if \
-$language has articles. A capital first letter does not matter.
+Judge each in two steps.
+
+First, find what they meant: the thing in the picture that what they \
+wrote names, among those the ring is on, on a part of, or next to. A mark \
+is rarely placed exactly, so a ring on an arm, a hand or a sleeve is on \
+the person, a ring on a leg of a table is on the table, and a ring by the \
+edge of a thing is on it. Only if what they wrote names nothing there, \
+what they meant is what the ring is on. Say it in English as "meant".
+
+Then judge only the $language of what they wrote, as a name of what they \
+meant, never where the ring is:
+- "right": a correct name of it, with the right article if $language has \
+articles. A more general or a more particular name is right too, such as \
+the name of the whole thing or of the part the ring is on. Where it is one \
+of a group of the same things, the plural is right as well as the \
+singular. A capital first letter does not matter.
 - "partial": the right word with a small mistake, such as in its article, a \
-missing article, its spelling, the marks on its letters or capitals; or a word so near in \
-meaning that it is not quite the name of the thing.
-- "wrong": not a name of that thing, or nothing written.
+missing article, its spelling, the marks on its letters or capitals; or a \
+word so near in meaning that it is not quite the name of it.
+- "wrong": not a name of anything the ring is on or next to.
 
-For each, give also "correct": the everyday name of the thing in $language, \
-in the singular, with its article if $language has articles, or what was \
-written if that is right; "translation": its name in $into; and "note": in \
-$into, in a few words, what was not right, or "" if it was.
+For each, give also "correct": what was written if it is right, and \
+otherwise the everyday name in $language of what they meant, as near to \
+what was written as it can be, with its article if $language has \
+articles; "alternatives": for one that is not right, up to three other \
+words in $language for that very thing, as a synonym is, never things \
+that are near it, parts of it or what it is in, or [] if there are none \
+or it is right; "translation": its name in $into; "note": in $into, in a \
+few words, what was not right in the $language, or "" if it was, never \
+anything about where the ring is; and "hint": in $into, in a few words, \
+only if the ring is mostly on something else than what they meant, what \
+that is called in $language, as something more to learn, or "" otherwise.
 
-Reply with JSON alone: {"labels": [{"n": 1, "result": "partial", \
-"correct": "...", "translation": "trophy", "note": "That is the word for a \
-prize, not for this cup."}]}"""
+Reply with JSON alone: {"labels": [{"n": 1, "meant": "a silver cup", \
+"result": "partial", "correct": "...", "alternatives": ["..."], \
+"translation": "trophy", "note": "That is the word for a prize, not for \
+this cup.", "hint": ""}]}"""
 
-label = "$number. $given (the illustrator meant: $thing)"
+label = "$number. $given"
+
+close_up = "Close-up of mark $number:"
 
 words = """
 Some words the learner knows. Choose things that are named by these \
-words where they fit the scene:
+words where they fit the topics:
 $lemmas"""
+
+[drawing]
+one = """
+$scene Things such as these could be in it: $things. A clear, colourful \
+illustration, with big, plain objects, that fills the picture to its edges, \
+with no border or frame. No text, letters, labels or numbers."""
+panels = """
+A picture divided into $count panels $layout, numbered from left to right \
+and from the top. Between the panels are only thin plain white lines, as \
+thin as they can be, and the panels reach the edges of the picture, with no \
+border, margin or frame around it. The panels: $panels. Things such as these \
+could be in them: $things. Clear, colourful illustrations, with big, plain \
+objects. No text, letters, labels, numbers or captions."""
+
+[drawing.rows]
+one = "side by side in one row"
+even = "in two rows of $each"
+uneven = "in two rows, $top in the top row and $bottom in the bottom row"
 
 [avoid]
 scenes = """
-The learner has had pictures of these scenes already; choose one \
+The learner has had pictures of these scenes already; choose scenes \
 clearly different from all of them: $scenes."""
-drawn = """
-None of these may be in the picture, under any name, as the learner \
-has labelled them already: $drawn."""
+planned = """
+Choose none of these, under any name, as the learner has had pictures \
+of them already: $planned."""

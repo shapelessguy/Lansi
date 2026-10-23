@@ -29,11 +29,11 @@ import {
     TEXT_SIZES,
     THEMES,
     TRANSLATION_LANGUAGES,
-    WORDS_PLACEHOLDER,
 } from "../lib/settings";
 import { Help } from "./Help";
 import { LevelPicker } from "./Level";
 import { ModelPicker, OpenChoice } from "./ModelPicker";
+import { PromptKeywords } from "./PromptKeywords";
 import { SidePanel } from "./SidePanel";
 import { T } from "./T";
 
@@ -721,32 +721,7 @@ function ContentTab({ settings, onChange }: TabProps) {
                     "Write these in any prompt, whether of a context, of the speech model or of a question about each sentence, and each is replaced by what it stands for:",
                 )}
             </p>
-            <dl className="keywords">
-                <div>
-                    <dt>
-                        <code>{LANGUAGE_PLACEHOLDER}</code>
-                    </dt>
-                    <dd>{t("the language you are learning ({language})", { language: settings.language })}</dd>
-                </div>
-                <div>
-                    <dt>
-                        <code>{LEVEL_PLACEHOLDER}</code>
-                    </dt>
-                    <dd>{t("your level in it ({level})", { level: settings.level })}</dd>
-                </div>
-                <div>
-                    <dt>
-                        <code>{WORDS_PLACEHOLDER}</code>
-                    </dt>
-                    <dd>{t("the words of the set in use, picked in the Vocabulary tab")}</dd>
-                </div>
-                <div>
-                    <dt>
-                        <code>{t("{{words:Name}}")}</code>
-                    </dt>
-                    <dd>{t("the words of the set of that name")}</dd>
-                </div>
-            </dl>
+            <PromptKeywords settings={settings} />
             <h3>{t("Contexts")}</h3>
             <p className="hint">{t("A context is the instruction a chat starts with.")}</p>
             {settings.contexts.map((context) => (

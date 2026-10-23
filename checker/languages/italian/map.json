@@ -1,0 +1,10 @@
+{
+    "auxiliary": { "English": "auxiliary", "German": "Hilfsverb", "Italian": "ausiliare" },
+    "reflexive": { "English": "reflexive", "German": "reflexiv", "Italian": "riflessivo" },
+    "avere": {},
+    "essere": {},
+    "avere o essere": { "English": "avere or essere", "German": "avere oder essere", "Italian": "avere o essere" },
+    "never": { "English": "never", "German": "nie", "Italian": "mai" },
+    "sometimes": { "English": "sometimes", "German": "manchmal", "Italian": "a volte" },
+    "always": { "English": "always", "German": "immer", "Italian": "sempre" }
+}

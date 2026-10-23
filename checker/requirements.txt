@@ -2,3 +2,4 @@ numpy==2.2.6
 pillow==12.2.0
 pyspellchecker==0.9.1
 tomli==2.5.0
+tiktoken==0.14.0

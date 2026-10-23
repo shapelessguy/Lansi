@@ -47,11 +47,32 @@ class Task:
     result: list[dict[str, Any]] = field(default_factory=list)
     # the requests to the models it made, for whoever keeps count
     usage: list[dict[str, Any]] = field(default_factory=list)
+    # how each of its steps is going, for a task that says: for one that
+    # transforms a book, how many tokens the model has reasoned and written
+    # of each part
+    progress: list[dict[str, Any]] = field(default_factory=list)
+
+
+class Step:
+    """What a task calls after each of its steps, and, if it says how they
+    are going, with how they are going."""
+
+    def __init__(self, task: Task, lock: threading.Lock) -> None:
+        self._task = task
+        self._lock = lock
+
+    def __call__(self) -> None:
+        with self._lock:
+            self._task.done += 1
+
+    def report(self, progress: list[dict[str, Any]]) -> None:
+        with self._lock:
+            self._task.progress = progress
 
 
 # What a task does. It is given what to call after each step, and returns
 # what came of it with the requests to the models it made.
-Job = Callable[[Callable[[], None]], tuple[list[dict[str, Any]], list[dict[str, Any]]]]
+Job = Callable[[Step], tuple[list[dict[str, Any]], list[dict[str, Any]]]]
 
 
 def run_on_a_thread(job: Callable[[], None]) -> None:
@@ -82,9 +103,7 @@ class Tasks:
             self._tasks = [task, *self._tasks][:KEPT]
             started = asdict(task)
 
-        def step() -> None:
-            with self._lock:
-                task.done += 1
+        step = Step(task, self._lock)
 
         def run() -> None:
             try:

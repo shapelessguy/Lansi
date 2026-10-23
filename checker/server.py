@@ -79,7 +79,9 @@ from profiling import (
     read_questions,
     spent_by,
 )
+from prompts import PROMPTS
 from relaying import Listing, Watched
+from sections import outline
 from sentences import Sentence
 from speaking import (
     MAX_SENTENCES,
@@ -93,7 +95,9 @@ from speaking import (
 from spelling import StudySpeller
 from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore, is_id
-from tasks import Tasks
+from tasks import Step, Tasks
+from tokens import ENCODING as TOKEN_ENCODING
+from tokens import block_tokens
 from topics import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_IMAGE_MODEL,
@@ -124,6 +128,17 @@ from tutor import (
 )
 from tutor import read_messages as read_tutor_messages
 from users import Users, take_vocabulary, user_directory
+from versions import MAX_NAME as MAX_VERSION_NAME
+from versions import (
+    TRANSFORM_PROMPTS,
+    kept_stretches,
+    matches,
+    stream_transforming,
+    stripped,
+    transform_parts,
+    transformed,
+    transformed_parts,
+)
 from vocabulary import Vocabularies, Vocabulary
 from word_translations import WordTranslator
 
@@ -275,6 +290,8 @@ TASK_CATEGORIES = {
     "log": "practice",
     "questions": "translation",
     "memories": "tutor",
+    # the books, which are read as texts are
+    "transform": "text",
 }
 # the bins the usage over time is added up in, in milliseconds
 USAGE_BINS = {"hour": 3_600_000, "day": 86_400_000}
@@ -613,23 +630,76 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
         return words
 
-    def _books(self, method: str) -> bool:
+    def _books(self, method: str, api_key: str | None = None) -> bool:
         """Answers a request about the books the user reads, and returns
         whether the request was one.
 
             GET /books         the books, without what they say
-            POST /books        keep the EPUB file that is sent, as its text
-                               and how large each part of it is written
-            GET /books/ID      a book with its paragraphs
+            POST /books        keep the EPUB file that is sent, as it is
+                               and as its text and how each part of it is
+                               written
+            GET /books/prompts  the prompts a transformed version can be
+                               written anew with, to start from
+            GET /books/ID      a book with its paragraphs, its table of
+                               contents, its landmarks and its sections
             GET /books/ID/cover  the picture on its cover, as a file
-            DELETE /books/ID   remove a book
+            GET /books/ID/original  the EPUB file it was read from
+            GET /books/ID/tokens  the tokens each of its paragraphs takes
+                               when it is sent to a model, as `tokens`
+                               counts them
+            POST /books/ID/strip  make a stripped version of the book, or of
+                               one of its versions, kept as a book under
+                               the book
+            POST /books/ID/transform  make a transformed version in the
+                               background, answered with the task
+            DELETE /books/ID   remove a book with its versions, or a version
+
+        The books are listed with their versions. Each way of making a
+        version has a path of its own. A POST to /strip brings `{"name":
+        ..., "keep": [[START, END], ...]}`, the stretches of blocks to keep,
+        and is answered with the version as it is listed. A POST to
+        /transform brings `{"name": ..., "prompt": ..., "parts": [[[START,
+        END], ...], ...], "untouched": "kept" | "left", "model": ...,
+        "reasoning": true | false, "reasoningBudget": TOKENS, "titles":
+        [...]}`: the prompt filled in, the parts each transformed on its own
+        with their stretches of blocks, whether the blocks in none are kept
+        as they are, the reasoning model that transforms them, whether it
+        reasons first, as it does if the request does not say, the most
+        tokens it may reason in for each part, if there is a most, and what
+        each part is called. The task says how many tokens the model has
+        reasoned and written of each part as it goes.
         """
         store = self.account.store
         path = urlsplit(self.path).path
         one = re.fullmatch(r"/books/([^/]+)", path)
         cover = re.fullmatch(r"/books/([^/]+)/cover", path)
-        if store is None or not (one or cover or path == "/books"):
+        original = re.fullmatch(r"/books/([^/]+)/original", path)
+        strip = re.fullmatch(r"/books/([^/]+)/strip", path)
+        transform = re.fullmatch(r"/books/([^/]+)/transform", path)
+        tokens = re.fullmatch(r"/books/([^/]+)/tokens", path)
+        if store is None or not (
+            one or cover or original or strip or transform or tokens or path == "/books"
+        ):
             return False
+        if path == "/books/prompts":
+            return method == "GET" and self._transform_prompts()
+        if strip:
+            return method == "POST" and self._strip(store, strip.group(1))
+        if transform:
+            return method == "POST" and self._transform(
+                store, transform.group(1), api_key or ""
+            )
+        if original:
+            file = store.original(original.group(1)) if method == "GET" else None
+            if file is None:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no original file"})
+                return True
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/epub+zip")
+            self.send_header("Content-Length", str(len(file)))
+            self.end_headers()
+            self.wfile.write(file)
+            return True
         if cover:
             picture = store.cover(cover.group(1)) if method == "GET" else None
             if picture is None:
@@ -641,15 +711,16 @@ class CheckerHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(picture[0])
             return True
-        if method == "GET" and not one:
+        if method == "GET" and path == "/books":
             self._reply(HTTPStatus.OK, {"books": store.books()})
-        elif method == "POST" and not one:
+        elif method == "POST" and path == "/books":
             length = int(self.headers.get("Content-Length") or 0)
             if length > MAX_BOOK_BYTES:
                 raise ValueError("the book is too large")
             name = unquote(self.headers.get(FILE_NAME_HEADER) or "")
+            data = self.rfile.read(length)
             try:
-                book = read_epub(self.rfile.read(length), Path(name).stem[:200])
+                book = read_epub(data, Path(name).stem[:200])
             except BookError as error:
                 raise ValueError(str(error)) from None
             listed = store.add_book(
@@ -659,16 +730,25 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 book.language,
                 [block.kept() for block in book.blocks],
                 cover=book.cover,
+                original=data,
+                contents=[entry.kept() for entry in book.contents],
+                landmarks=[landmark.kept() for landmark in book.landmarks],
             )
             log(
                 f"{datetime.now():%H:%M:%S} book added: {book.title}"
                 f" ({len(book.blocks)} paragraphs)"
             )
             self._reply(HTTPStatus.OK, listed)
+        elif method == "GET" and tokens:
+            self._book_tokens(store, tokens.group(1))
         elif method == "GET" and one:
             found = store.book(one.group(1))
             if found:
-                self._reply(HTTPStatus.OK, found)
+                sections = outline(found["blocks"], found["contents"])
+                self._reply(
+                    HTTPStatus.OK,
+                    {**found, "sections": [section.kept() for section in sections]},
+                )
             else:
                 self._reply(HTTPStatus.NOT_FOUND, {"error": "no such book"})
         elif method == "DELETE" and one:
@@ -676,6 +756,147 @@ class CheckerHandler(BaseHTTPRequestHandler):
             self._reply(HTTPStatus.OK, {})
         else:
             return False
+        return True
+
+    def _transform_prompts(self) -> bool:
+        """Answers with the prompts a transformed version can be written
+        anew with, to start from."""
+        self._reply(
+            HTTPStatus.OK,
+            {
+                "prompts": [
+                    {"id": name, "prompt": prompt}
+                    for name, prompt in PROMPTS.table(TRANSFORM_PROMPTS).items()
+                ]
+            },
+        )
+        return True
+
+    def _book_tokens(self, store: UserStore, book_id: str) -> None:
+        """Answers with the tokens each block of a book or of one of its
+        versions takes when it is sent to a model, and how they are
+        counted."""
+        found = store.book(book_id)
+        if found is None:
+            self._reply(HTTPStatus.NOT_FOUND, {"error": "no such book"})
+        else:
+            self._reply(
+                HTTPStatus.OK,
+                {"encoding": TOKEN_ENCODING, "blocks": block_tokens(found["blocks"])},
+            )
+
+    def _strip(self, store: UserStore, book_id: str) -> bool:
+        """Makes a stripped version of a book or of one of its versions, of
+        the stretches of blocks the request keeps, and answers with it."""
+        body = self._read_body()
+        source = store.book(book_id)
+        if source is None:
+            self._reply(HTTPStatus.NOT_FOUND, {"error": "no such book"})
+            return True
+        name = body.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("a version needs a name")
+        keep = kept_stretches(body.get("keep"), len(source["blocks"]))
+        blocks, contents, landmarks = stripped(source, keep)
+        listed = store.add_version(
+            uuid.uuid4().hex,
+            source["id"],
+            "stripped",
+            name.strip()[:MAX_VERSION_NAME],
+            blocks,
+            contents,
+            landmarks,
+        )
+        log(
+            f"{datetime.now():%H:%M:%S} version made of {source['title']}:"
+            f" {listed['name']} ({len(blocks)} of {len(source['blocks'])}"
+            " paragraphs)"
+        )
+        self._reply(HTTPStatus.OK, listed)
+        return True
+
+    def _transform(self, store: UserStore, book_id: str, api_key: str) -> bool:
+        """Starts making a transformed version of a book or of one of its
+        versions in the background, each part written anew by the model the
+        request names, and answers with the task. The version is made once
+        every part is written, and not at all if any could not be."""
+        body = self._read_body()
+        source = store.book(book_id)
+        if source is None:
+            self._reply(HTTPStatus.NOT_FOUND, {"error": "no such book"})
+            return True
+        name = body.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("a version needs a name")
+        prompt = body.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError("a transformed version needs a prompt")
+        if body.get("untouched") not in ("kept", "left"):
+            raise ValueError('what is not transformed is "kept" or "left"')
+        parts = transformed_parts(body.get("parts"), len(source["blocks"]))
+        untouched_kept = body["untouched"] == "kept"
+        name = name.strip()[:MAX_VERSION_NAME]
+        model = read_model(body.get("model"), api_key)
+        problem = model.problem()
+        if problem:
+            raise ValueError(problem)
+        think = body.get("reasoning", True)
+        if not isinstance(think, bool):
+            raise ValueError("whether the model reasons first is true or false")
+        titles = body.get("titles", [])
+        if not isinstance(titles, list) or not all(
+            isinstance(title, str) for title in titles
+        ):
+            raise ValueError("the titles of the parts are a list of texts")
+        titles = [title[:MAX_VERSION_NAME] for title in titles]
+        budget = body.get("reasoningBudget")
+        if budget is not None and (type(budget) is not int or budget < 1):
+            raise ValueError("the reasoning budget is a number of tokens")
+
+        def make(step: Step) -> tuple[list[Any], list[Any]]:
+            written, used = transform_parts(
+                prompt,
+                source,
+                parts,
+                model,
+                step,
+                step.report,
+                think,
+                stream_transforming,
+                titles,
+                budget,
+            )
+            blocks, contents, landmarks = transformed(
+                source, parts, written, untouched_kept
+            )
+            # parts whose structure the model changed, though told not to
+            changed = sum(
+                not matches(part, each)
+                for part, each in zip(parts, written, strict=True)
+            )
+            listed = store.add_version(
+                uuid.uuid4().hex,
+                source["id"],
+                "transformed",
+                name,
+                blocks,
+                contents,
+                landmarks,
+            )
+            log(
+                f"{datetime.now():%H:%M:%S} version made of {source['title']}:"
+                f" {name}, transformed in {len(parts)} parts by {model.name}"
+                + (f", {changed} of them with another structure" if changed else "")
+            )
+            return (
+                [{"version": listed["id"], "changed": changed}],
+                [describe_usage(each) for each in used],
+            )
+
+        task = self.account.tasks.start(
+            "transform", f"{source['title']} · {name}", len(parts), make
+        )
+        self._reply(HTTPStatus.OK, task)
         return True
 
     def _speech(self, method: str, api_key: str | None = None) -> bool:
@@ -1560,7 +1781,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._log_in()
             elif not self._find_account() or self._kept("POST") or self._anki("POST"):
                 pass
-            elif self._books("POST") or self._speech("POST", api_key):
+            elif self._books("POST", api_key) or self._speech("POST", api_key):
                 pass
             elif self._practice("POST", api_key) or self._topics("POST", api_key):
                 pass
@@ -2630,7 +2851,7 @@ if __name__ == "__main__":
             practice=Practice(
                 kept,
                 lemmas_of=partial(lemmas_of, intake),
-                on_words=log,
+                tell=log,
                 later=in_background(tasks, "log"),
                 anki=anki,
             ),

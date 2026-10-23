@@ -29,7 +29,7 @@ def objects_of(schema: Schema) -> list[Schema]:
     return [schema, *inner]
 
 
-@pytest.mark.parametrize("language", ["German", "Italian"])
+@pytest.mark.parametrize("language", ["German", "Italian", "English", "French"])
 def test_every_language_has_every_category_in_the_same_order(language: str) -> None:
     assert tuple(categories_of(language)) == CATEGORIES
     for name, category in categories_of(language).items():
@@ -41,8 +41,8 @@ def test_every_language_has_every_category_in_the_same_order(language: str) -> N
 
 
 def test_a_language_without_rules_of_its_own_has_the_general_ones() -> None:
-    assert categories_of("Italian") is GENERIC
-    assert dictionary_form("casa", "noun", "Italian") == "casa"
+    assert categories_of("French") is GENERIC
+    assert dictionary_form("maison", "noun", "French") == "maison"
 
 
 def test_a_word_of_a_language_without_rules_is_stored_with_the_forms_listed() -> None:

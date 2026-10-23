@@ -4,8 +4,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { orModel } from "./lib/models";
 
-import { BookList } from "./components/BookList";
+import { BookList, chosenVersion } from "./components/BookList";
 import { BookReader } from "./components/BookReader";
+import { BookVersionEditor } from "./components/BookVersionEditor";
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
 import { Evaluations } from "./components/Evaluations";
@@ -33,7 +34,15 @@ import { WordList } from "./components/WordList";
 import { WritingChecks } from "./components/WritingChecks";
 import { type AnkiState, fetchAnkiState, fetchKnownWords } from "./lib/anki";
 import { useAnkiImport } from "./lib/ankiImport";
-import { addBook, changeReading, deleteBook, fetchBooks, type ListedBook, loadReading } from "./lib/books";
+import {
+    addBook,
+    type BookVersion,
+    changeReading,
+    deleteBook,
+    fetchBooks,
+    type ListedBook,
+    loadReading,
+} from "./lib/books";
 import {
     activeChat,
     type ChatStore,
@@ -180,7 +189,14 @@ export function App({ user, initialSettings, initialChats }: Props) {
     const [texts, setTexts] = useState<Text[] | string>([]);
     const [textsRevision, setTextsRevision] = useState(0);
     useEffect(() => {
-        fetchTexts().then(setTexts, (failed: Error) => setTexts(failed.message));
+        fetchTexts().then(
+            (listed) => {
+                setTexts(listed);
+                // the text open last may have been deleted since, and is not opened then
+                setTextId((open) => (open && !listed.some((text) => text.id === open) ? null : open));
+            },
+            (failed: Error) => setTexts(failed.message),
+        );
     }, [textsRevision]);
     // what has the memories of the tutor listed again once more may have been made
     const [memoriesRevision, setMemoriesRevision] = useState(0);
@@ -190,6 +206,9 @@ export function App({ user, initialSettings, initialChats }: Props) {
     const [booksState, setBooksState] = useState<BooksState>({ status: "loading" });
     // the book in the reader, which is the one that was read last
     const [bookId, setBookId] = useState<string | null>(() => loadReading().bookId);
+    // the version of each book chosen last, and the book a version is being made of
+    const [chosenVersions, setChosenVersions] = useState(() => loadReading().versions);
+    const [editingBook, setEditingBook] = useState<ListedBook | null>(null);
     const [addingBook, setAddingBook] = useState(false);
     const [bookError, setBookError] = useState<string | null>(null);
     const chat = activeChat(chatStore);
@@ -276,8 +295,23 @@ export function App({ user, initialSettings, initialChats }: Props) {
 
     useEffect(loadBooks, [loadBooks]);
 
-    function openBook(id: string | null) {
-        setBookId(changeReading((reading) => ({ ...reading, bookId: id })).bookId);
+    /**
+     * Has the reader show a book or a version, by its id. With `book`, the
+     * book it is of, which is remembered to be shown the next time the book
+     * is chosen.
+     */
+    function openBook(id: string | null, book?: ListedBook) {
+        const reading = changeReading((kept) => {
+            const versions = { ...kept.versions };
+            if (book && id === book.id) {
+                delete versions[book.id];
+            } else if (book && id !== null) {
+                versions[book.id] = id;
+            }
+            return { ...kept, bookId: id, versions };
+        });
+        setBookId(reading.bookId);
+        setChosenVersions(reading.versions);
         if (id !== null) {
             setActivity("books");
         }
@@ -298,23 +332,61 @@ export function App({ user, initialSettings, initialChats }: Props) {
         ).finally(() => setAddingBook(false));
     }
 
-    function removeBook(id: string) {
+    /** Removes a book with its versions, or one of its versions, by its id, with the book it is of. */
+    function removeBook(id: string, of: ListedBook) {
         setBookError(null);
         deleteBook(id).then(
             () => {
+                const isBook = id === of.id;
                 setBooksState((state) =>
                     state.status === "ready"
-                        ? { status: "ready", books: state.books.filter((book) => book.id !== id) }
+                        ? {
+                            status: "ready",
+                            books: isBook
+                                ? state.books.filter((book) => book.id !== id)
+                                : state.books.map((book) =>
+                                    book.id === of.id
+                                        ? { ...book, versions: book.versions?.filter((version) => version.id !== id) }
+                                        : book
+                                ),
+                        }
                         : state
                 );
-                // how far it was read is forgotten with it
-                changeReading(({ places: { [id]: _, ...places }, ...reading }) => ({ ...reading, places }));
-                if (id === bookId) {
-                    openBook(null);
+                // how far each was read, and which was chosen, is forgotten with it
+                const gone = new Set(isBook ? [id, ...(of.versions ?? []).map((version) => version.id)] : [id]);
+                const reading = changeReading((kept) => ({
+                    ...kept,
+                    places: Object.fromEntries(Object.entries(kept.places).filter(([place]) => !gone.has(place))),
+                    versions: Object.fromEntries(
+                        Object.entries(kept.versions).filter(([book, version]) =>
+                            !gone.has(book) && !gone.has(version)
+                        ),
+                    ),
+                }));
+                setChosenVersions(reading.versions);
+                if (bookId !== null && gone.has(bookId)) {
+                    // a version that is gone leaves the book it was of open
+                    openBook(isBook ? null : of.id, isBook ? undefined : of);
                 }
             },
             (error: Error) => setBookError(error.message),
         );
+    }
+
+    /** Lists a version that was made under its book, and has it read. */
+    function takeVersion(version: BookVersion, of: ListedBook) {
+        setEditingBook(null);
+        setBooksState((state) =>
+            state.status === "ready"
+                ? {
+                    status: "ready",
+                    books: state.books.map((book) =>
+                        book.id === of.id ? { ...book, versions: [...(book.versions ?? []), version] } : book
+                    ),
+                }
+                : state
+        );
+        openBook(version.id, of);
     }
 
     const addUsageEntry = useCallback(
@@ -508,6 +580,10 @@ export function App({ user, initialSettings, initialChats }: Props) {
             }
             if (task.kind === "memories") {
                 setMemoriesRevision((revision) => revision + 1);
+            }
+            if (task.kind === "transform" && task.state === "done") {
+                // the version it made is listed under its book
+                fetchBooks().then((books) => setBooksState({ status: "ready", books }), () => undefined);
             }
         }
     }, [addUsageEntry]);
@@ -833,13 +909,35 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             <BookList
                                 state={booksState}
                                 selectedId={bookId}
+                                chosenVersions={chosenVersions}
                                 adding={addingBook}
                                 addError={bookError}
                                 onSelect={openBook}
                                 onAdd={takeBook}
                                 onDelete={removeBook}
+                                onEdit={setEditingBook}
                                 onReload={loadBooks}
                             />
+                            {editingBook && (
+                                <BookVersionEditor
+                                    sourceId={chosenVersion(editingBook, chosenVersions)}
+                                    settings={settings}
+                                    expand={(prompt) => expandPrompt(prompt, words, settings.language, settings.level)}
+                                    onSettingsChange={updateSettings}
+                                    sourceName={[
+                                        editingBook.title,
+                                        editingBook.versions?.find((version) =>
+                                            version.id === chosenVersion(editingBook, chosenVersions)
+                                        )?.name ?? t("Original"),
+                                    ].join(" · ")}
+                                    onClose={() => setEditingBook(null)}
+                                    onMade={(version) => takeVersion(version, editingBook)}
+                                    onStarted={(task) => {
+                                        addTask(task);
+                                        setEditingBook(null);
+                                    }}
+                                />
+                            )}
                         </div>
                     </SidePanel>
                 </aside>

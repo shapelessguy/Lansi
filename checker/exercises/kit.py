@@ -108,6 +108,8 @@ The context is the same for every call:
 
     {"language": "German", "into": "English", "level": "A1",
      "letters": {"ß": "ss", ...}, "marks": "umlauts",
+     "answer_words": {"truefalse": ["Richtig", "Falsch"],
+                      "yesno": ["Ja", "Nein"]},
      "lesson": {"id": ..., "title": ..., "level": ..., "more_info": ...,
                 "points": [{"id": ..., "role": "new", "title": ...,
                             "statement": ..., "when": ..., ...}]},
@@ -207,6 +209,8 @@ otherwise by someone who cannot type them, each with how, and what the
 marks on its letters are called. `loose` compares answers by them, so that
 one that differs only in capitals, marks or such letters is almost right
 rather than wrong, and an exercise names the marks so where it says why.
+`answer_words` are the two answers to a statement in the language, by
+whether it is right or whether it is so, as its exams word them.
 
 `level` is the learner's, and may be empty, when the level of the lesson is
 taken: `describe_level` tells a model how hard what it writes is to be.

@@ -21,6 +21,8 @@ class German(Language):
     nouns_have_capitals = True
     equivalents = {"ß": "ss", "ä": "ae", "ö": "oe", "ü": "ue"}
     marks = "umlauts"
+    # as the Goethe-Institut asks them
+    answer_words = {"truefalse": ("Richtig", "Falsch"), "yesno": ("Ja", "Nein")}
     # "der Hund", "sich freuen"
     note_prefixes = frozenset({"der", "die", "das", "sich"})
     abbreviations = frozenset(

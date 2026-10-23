@@ -6,8 +6,8 @@ option `by` says, with questions on each that are answered by choosing, as
 the option `answers` says:
 
     choice      one of three answers, a, b or c
-    truefalse   Richtig or Falsch, of a statement
-    yesno       Ja or Nein, of a statement
+    truefalse   right or wrong, of a statement
+    yesno       yes or no, of a statement
     match       which of a list, such as adverts a to f, goes with each
                 question, or x for none
 
@@ -57,7 +57,8 @@ from kit import (
 
 QUESTIONS = 3
 # the answers of statements, which are the same for every question
-FIXED = {"truefalse": ["Richtig", "Falsch"], "yesno": ["Ja", "Nein"]}
+# the answers to a statement if the language says none, as kit.py describes
+ANSWER_WORDS = {"truefalse": ["True", "False"], "yesno": ["Yes", "No"]}
 ANSWERS = ("choice", "truefalse", "yesno", "match")
 # about how many words a text is at each level, and at a level not known
 LENGTHS = {"A1": 60, "A2": 110, "B1": 200, "B2": 300, "C1": 400, "C2": 450}
@@ -108,7 +109,18 @@ def _text(value: Any) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def read_text(reply: Any, answers: str, count: int) -> dict[str, Any]:
+def answer_words(context: dict[str, Any], answers: str) -> list[str] | None:
+    """The two answers to a statement, in the language, for `answers` that
+    are of one; None for those whose options the model writes."""
+    if answers not in ANSWER_WORDS:
+        return None
+    words = (context.get("answer_words") or {}).get(answers)
+    return list(words) if words else ANSWER_WORDS[answers]
+
+
+def read_text(
+    reply: Any, answers: str, count: int, fixed: list[str] | None = None
+) -> dict[str, Any]:
     """The text the model wrote, with no more than `count` questions, each
     with its options and the place of the right one. Raises ModelError if
     there is no text, or no question that can be answered."""
@@ -121,7 +133,7 @@ def read_text(reply: Any, answers: str, count: int) -> dict[str, Any]:
     for each in listed if isinstance(listed, list) else []:
         if not isinstance(each, dict) or not _text(each.get("prompt")):
             continue
-        options = FIXED.get(answers) or [
+        options = fixed or [
             _text(choice) for choice in each.get("options") or [] if _text(choice)
         ]
         answer = each.get("answer")
@@ -184,12 +196,18 @@ def make_text(
         guidance=describe_guidance(context),
         exam=describe_exam(context),
         made=describe_made(texts),
-        answers=PROMPTS(f"answering.{answers}"),
+        answers=PROMPTS(f"answering.{answers}", **_two(answer_words(context, answers))),
         heard=PROMPTS("heard") if heard else "",
     )
     reply = ask_json(model, [{"role": "user", "content": prompt}])
-    texts.append(read_text(reply, answers, questions_of(context)))
+    texts.append(
+        read_text(reply, answers, questions_of(context), answer_words(context, answers))
+    )
     return [json.loads(json.dumps(texts[-1]))]
+
+
+def _two(words: list[str] | None) -> dict[str, str]:
+    return {"first": words[0], "second": words[1]} if words else {}
 
 
 def check(text: dict[str, Any], chosen: list[Any]) -> list[dict[str, Any]]:

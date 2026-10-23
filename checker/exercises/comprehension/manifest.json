@@ -27,8 +27,8 @@
             "label": "Answers",
             "choices": {
                 "choice": "a, b or c",
-                "truefalse": "Richtig or Falsch",
-                "yesno": "Ja or Nein",
+                "truefalse": "Right or wrong",
+                "yesno": "Yes or no",
                 "match": "Match to a list"
             }
         },
@@ -116,8 +116,6 @@
             "An interview": "Ein Interview",
             "Answers": "Antworten",
             "a, b or c": "a, b oder c",
-            "Richtig or Falsch": "Richtig oder Falsch",
-            "Ja or Nein": "Ja oder Nein",
             "Match to a list": "Einer Liste zuordnen",
             "Questions on a text": "Fragen pro Text",
             "Heard": "Gehört",
@@ -138,7 +136,9 @@
             "Next text": "Nächster Text",
             "Writing the next text…": "Nächster Text wird geschrieben…",
             "What was said": "Was gesagt wurde",
-            "Handing in…": "Wird abgegeben…"
+            "Handing in…": "Wird abgegeben…",
+            "Right or wrong": "Richtig oder falsch",
+            "Yes or no": "Ja oder nein"
         },
         "Italian": {
             "Understand a text": "Capire un testo",
@@ -158,8 +158,6 @@
             "An interview": "Un'intervista",
             "Answers": "Risposte",
             "a, b or c": "a, b o c",
-            "Richtig or Falsch": "Richtig o Falsch",
-            "Ja or Nein": "Ja o Nein",
             "Match to a list": "Abbinare a un elenco",
             "Questions on a text": "Domande per testo",
             "Heard": "Ascoltato",
@@ -180,7 +178,9 @@
             "Next text": "Testo successivo",
             "Writing the next text…": "Scrittura del testo successivo…",
             "What was said": "Cosa è stato detto",
-            "Handing in…": "Consegna in corso…"
+            "Handing in…": "Consegna in corso…",
+            "Right or wrong": "Vero o falso",
+            "Yes or no": "Sì o no"
         }
     }
 }

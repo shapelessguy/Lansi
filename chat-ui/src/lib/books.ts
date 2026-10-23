@@ -2,7 +2,9 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { type Message, t } from "./i18n";
+import type { ModelChoice } from "./models";
 import { checkerFetch } from "./session";
+import type { BackgroundTask } from "./tasks";
 
 /** A book as it is listed, without what it says. */
 export interface ListedBook {
@@ -16,6 +18,23 @@ export interface ListedBook {
     addedAt: number;
     /** Whether there is a picture of its cover. */
     cover?: boolean;
+    /** Its versions, the one made first first; a version has none. */
+    versions?: BookVersion[];
+}
+
+/** The kinds of version a book can have: some of it, or written anew by a model as a prompt says. */
+export type VersionKind = "stripped" | "transformed";
+
+/**
+ * A version of a book, which is read as a book of its own, by its id: a
+ * copy of what it says, made from the book or from another of its versions.
+ */
+export interface BookVersion {
+    id: string;
+    name: string;
+    kind: VersionKind;
+    /** In milliseconds since the epoch. */
+    addedAt: number;
 }
 
 /** A paragraph, a heading or another piece of text that stands alone. */
@@ -30,6 +49,20 @@ export interface BookBlock {
      * among the blocks from 0, or an address outside the book.
      */
     links?: [start: number, end: number, to: number | string][];
+    /** The element it is written in, such as "h2"; a paragraph, "p", if not given. */
+    tag?: string;
+    /** The classes the book gives that element. */
+    classes?: string[];
+    /** Whether most of it is written in bold, and in italics. */
+    bold?: boolean;
+    italic?: boolean;
+    /**
+     * What the book says the parts it is in are, from the outermost, such as
+     * "bodymatter" and "chapter": the epub:type and role of the elements.
+     */
+    roles?: string[];
+    /** The file of the book that starts with it, if one does. */
+    page?: string;
 }
 
 /** A piece of the text of a block, with where it leads if it is a link. */
@@ -59,9 +92,212 @@ export function segments(block: BookBlock): Segment[] {
     return pieces;
 }
 
-/** A book as the server keeps it: its text, and how large each part is written. */
+/** An entry of the table of contents of a book, as the book has it, with those under it. */
+export interface BookEntry {
+    title: string;
+    /** The block it leads to, by its place among them from 0. */
+    block: number;
+    entries?: BookEntry[];
+}
+
+/** A place the book names by what it is, such as "bodymatter" or "toc". */
+export interface BookLandmark {
+    type: string;
+    title: string;
+    block: number;
+}
+
+/**
+ * A section of a book, with those under it: a stretch of its blocks, which
+ * the server works out from its table of contents and its headings. Every
+ * block is in a section at the top; one with no title holds those before
+ * the first that has one.
+ */
+export interface BookSection {
+    title: string;
+    /** The first of its blocks, and the one after its last, by their places. */
+    start: number;
+    end: number;
+    sections?: BookSection[];
+}
+
+/** A book as the server keeps it: its text, how each part is written, and what it lists of itself. */
 export interface Book extends ListedBook {
     blocks: BookBlock[];
+    contents: BookEntry[];
+    landmarks: BookLandmark[];
+    sections: BookSection[];
+    /** For a version, the book it is a version of, by its id, and what version it is. */
+    parent?: string;
+    version?: BookVersion;
+}
+
+/** What tells a section from the others: where it starts and ends, as no two sections share both. */
+export function sectionKey(section: BookSection): string {
+    return `${section.start}-${section.end}`;
+}
+
+/**
+ * The stretches of blocks that are kept when the sections `left` names, by
+ * their keys, are left out with all that is under them: each from its first
+ * block to the one after its last, in order, those that touch made one.
+ */
+export function keptStretches(sections: BookSection[], left: ReadonlySet<string>): [number, number][] {
+    const kept: [number, number][] = [];
+    walkKept(sections, left, (start, end) => add(kept, start, end));
+    return kept;
+}
+
+/** Adds a stretch to stretches in order, made one with the last if they touch. */
+function add(stretches: [number, number][], start: number, end: number) {
+    const last = stretches[stretches.length - 1];
+    if (last && last[1] === start) {
+        last[1] = end;
+    } else {
+        stretches.push([start, end]);
+    }
+}
+
+/** Goes through the stretches of blocks that are not in a section left out, in order. */
+function walkKept(
+    sections: BookSection[],
+    left: ReadonlySet<string>,
+    visit: (start: number, end: number) => void,
+) {
+    for (const section of sections) {
+        if (left.has(sectionKey(section))) {
+            continue;
+        }
+        // what is in it before, between and after those under it is its own
+        let at = section.start;
+        for (const under of section.sections ?? []) {
+            if (at < under.start) {
+                visit(at, under.start);
+            }
+            walkKept([under], left, visit);
+            at = under.end;
+        }
+        if (at < section.end) {
+            visit(at, section.end);
+        }
+    }
+}
+
+/**
+ * The story a block is in, by the key of the section marked as one that
+ * starts it: the last of those that `stories` names to start at or before
+ * the block, as a story goes on until the next starts. Null for a block
+ * before the first.
+ */
+export function storyAt(stories: ReadonlySet<string>, place: number): string | null {
+    let found: string | null = null;
+    let foundStart = -1;
+    for (const key of stories) {
+        const start = Number.parseInt(key, 10);
+        if (start <= place && start > foundStart) {
+            found = key;
+            foundStart = start;
+        }
+    }
+    return found;
+}
+
+/**
+ * A part of a book that is transformed on its own: a story, by the key of
+ * the section that starts it, or null for what comes before the first, with
+ * its stretches of blocks.
+ */
+export interface StoryPart {
+    story: string | null;
+    stretches: [number, number][];
+}
+
+/**
+ * The parts a book is transformed in: the blocks that are not in a section
+ * left out, gathered by the story each is in, in order. A story starts with
+ * a section marked as one and goes on until the next such section starts.
+ */
+export function storyParts(
+    sections: BookSection[],
+    left: ReadonlySet<string>,
+    stories: ReadonlySet<string>,
+): StoryPart[] {
+    const starts = [...new Set([...stories].map((key) => Number.parseInt(key, 10)))].sort((a, b) => a - b);
+    const parts: StoryPart[] = [];
+    function put(start: number, end: number) {
+        const story = storyAt(stories, start);
+        let part = parts.find((each) => each.story === story);
+        if (!part) {
+            part = { story, stretches: [] };
+            parts.push(part);
+        }
+        add(part.stretches, start, end);
+    }
+    for (const [start, end] of keptStretches(sections, left)) {
+        // a stretch is cut where a story starts in it
+        let at = start;
+        for (const cut of starts) {
+            if (at < cut && cut < end) {
+                put(at, cut);
+                at = cut;
+            }
+        }
+        put(at, end);
+    }
+    return parts;
+}
+
+/**
+ * The sections that look like stories of their own, by their keys: those at
+ * the top that have a title and sections under them, such as the stories of
+ * a book of short stories with their chapters.
+ */
+export function suggestedStories(sections: BookSection[]): Set<string> {
+    return new Set(sections.filter((section) => section.title && section.sections).map(sectionKey));
+}
+
+/** The tokens each block of a book takes when it is sent to a model, by its place, as the server counts them. */
+export async function fetchBlockTokens(id: string): Promise<number[]> {
+    const { blocks }: { blocks: number[] } = await (await send(`/${id}/tokens`)).json();
+    return blocks;
+}
+
+/** The tokens of the blocks of these stretches, as they would be sent, of the tokens of each block by its place. */
+export function stretchTokens(stretches: [number, number][], tokens: number[]): number {
+    return stretches.reduce(
+        (sum, [start, end]) => sum + tokens.slice(start, end).reduce((inner, each) => inner + each, 0),
+        0,
+    );
+}
+
+/** A part is transformed only if it takes no more than this share of what the reasoning model takes in at once, to leave room for the prompt and for what the model writes. */
+export const PART_SHARE = 1 / 3;
+
+/** The most a model may reason before it writes each part, as a share of what it takes in at once. */
+export const REASONING_SHARE = 1 / 5;
+
+/** Whether a part of that many tokens may be transformed by a model that takes in `contextWindow` at once. */
+export function partFits(tokens: number, contextWindow: number): boolean {
+    return tokens < contextWindow * PART_SHARE;
+}
+
+/** A prompt a transformed version can be written anew with, as the server offers it to start from. */
+export interface TransformPrompt {
+    /** Which it is, such as "translate" or "level". */
+    id: string;
+    /** As it is written, with the keywords of a prompt, such as `{{language}}`, to be filled in as in every prompt. */
+    prompt: string;
+}
+
+export async function fetchTransformPrompts(): Promise<TransformPrompt[]> {
+    const { prompts }: { prompts: TransformPrompt[] } = await (await send("/prompts")).json();
+    return prompts;
+}
+
+/** The sections a block is in, from the one at the top to the innermost, by the block's place. */
+export function sectionsAt(sections: BookSection[] | undefined, place: number): BookSection[] {
+    const found = sections?.find((section) => section.start <= place && place < section.end);
+    return found ? [found, ...sectionsAt(found.sections, place)] : [];
 }
 
 const BASE = "/books";
@@ -109,6 +345,49 @@ export async function addBook(file: File): Promise<ListedBook> {
         body: file,
     });
     return added.json();
+}
+
+/** Has the server make a version of a book, or of one of its versions, of the stretches of blocks kept. */
+export async function stripBook(id: string, name: string, keep: [number, number][]): Promise<BookVersion> {
+    const made = await send(`/${id}/strip`, { method: "POST", body: JSON.stringify({ name, keep }) });
+    return made.json();
+}
+
+/** What a transformed version is made of. */
+export interface Transforming {
+    name: string;
+    /** The prompt with its keywords filled in. */
+    prompt: string;
+    /** The stretches of blocks of each part, which is transformed on its own. */
+    parts: [number, number][][];
+    /** Whether the blocks in no part are in the version as they are, or left out of it. */
+    untouched: "kept" | "left";
+    /** The reasoning model that writes each part anew, as the checker server is told a model. */
+    model: string | ModelChoice;
+    /** Whether the model reasons before it writes each part. */
+    reasoning: boolean;
+    /** The most tokens it may reason in for each part, or null for as many as it likes. */
+    reasoningBudget: number | null;
+    /** What each part is called, for how it is going to be shown by it. */
+    titles: string[];
+}
+
+/**
+ * Has the server make a transformed version of a book, or of one of its
+ * versions, in the background. Returns the task, which lists the version
+ * under the book once it is done.
+ */
+export async function transformBook(
+    id: string,
+    transforming: Transforming,
+    apiKey: string,
+): Promise<BackgroundTask> {
+    const started = await send(`/${id}/transform`, {
+        method: "POST",
+        headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {},
+        body: JSON.stringify(transforming),
+    });
+    return started.json();
 }
 
 export async function deleteBook(id: string): Promise<void> {
@@ -194,6 +473,8 @@ export interface Reading {
     bookId: string | null;
     /** The paragraph at the top of the page of each book that was opened, by the id of the book. */
     places: Record<string, number>;
+    /** The version of each book that was chosen last, by the ids of the book and of the version. */
+    versions: Record<string, string>;
 }
 
 export const MIN_FONT_SIZE = 12;
@@ -208,6 +489,7 @@ const defaultReading: Reading = {
     spacing: "normal",
     bookId: null,
     places: {},
+    versions: {},
 };
 
 /** The size that is `steps` larger, or smaller if `steps` is negative, as far as sizes go. */
@@ -247,6 +529,14 @@ export function normalizeReading(stored: unknown): Reading {
         spacing: Object.hasOwn(SPACINGS, candidate.spacing ?? "") ? candidate.spacing! : defaultReading.spacing,
         bookId: typeof candidate.bookId === "string" ? candidate.bookId : null,
         places,
+        versions: Object.fromEntries(
+            Object.entries(
+                typeof candidate.versions === "object" && candidate.versions !== null
+                    && !Array.isArray(candidate.versions)
+                    ? candidate.versions
+                    : {},
+            ).filter(([, version]) => typeof version === "string"),
+        ),
     };
 }
 
