@@ -158,7 +158,7 @@ def make_story(
         lesson=describe_lesson(context),
         topics=describe_topics(context),
         words=describe_words(context),
-        guidance=describe_guidance(context),
+        guidance=describe_guidance(context, len(stories) + 1),
         made=describe_stories(stories),
         asking=PROMPTS(
             "asking", language=context["language"], count=questions_of(context)

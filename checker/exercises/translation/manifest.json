@@ -5,8 +5,9 @@
     "options": {
         "sentences": {
             "label": "Sentences in a set",
+            "about": "how many items a set has: sentences, or whole texts, such as short stories, where the brief gives texts; three stories in one set are 3, and ten sentences 10",
             "min": 1,
-            "max": 10,
+            "max": 20,
             "default": 5
         }
     },

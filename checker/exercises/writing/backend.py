@@ -138,7 +138,7 @@ def make_task(
         "language": context["language"],
         "level": describe_level(context),
         "topics": describe_topics(context),
-        "guidance": describe_guidance(context),
+        "guidance": describe_guidance(context, len(tasks) + 1),
         "exam": describe_exam(context),
         "made": describe_made(tasks),
     }

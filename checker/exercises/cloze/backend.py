@@ -217,7 +217,7 @@ def make_set(
         ),
         topics=describe_topics(context),
         words=describe_words(context),
-        guidance=describe_guidance(context),
+        guidance=describe_guidance(context, len(sets) + 1),
         made=describe_made([item["text"] for made in sets for item in made]),
         into=context["into"],
     )

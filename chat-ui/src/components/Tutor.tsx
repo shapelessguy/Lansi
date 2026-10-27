@@ -31,6 +31,8 @@ import {
     type ListedTutorChat,
     type Offer,
     type Practised,
+    STOPPED_ANSWER,
+    stoppedTurn,
     thinkingAbout,
     type TutorAsking,
     type TutorEvent,
@@ -39,12 +41,13 @@ import {
     withEvent,
 } from "../lib/tutor";
 import type { UsageEntry } from "../lib/usage";
-import { Check } from "./Check";
 import { CheckedTextarea } from "./CheckedTextarea";
 import { ContextRing } from "./ContextRing";
 import { ExerciseView } from "./ExerciseView";
 import { Inspector } from "./Inspector";
+import { PlaceSentenceChecks } from "./SentenceChecks";
 import { T } from "./T";
+import { Toggle } from "./Toggle";
 
 /** What the server says of a session that cannot be finished, as it is over already or gone. */
 const SESSION_OVER = /no such (session|exercise)|session has ended|exercise is finished/;
@@ -151,10 +154,19 @@ export function Tutor(
     // the chat shown, which tells the request kept of a chat that is still shown
     const shownChat = useRef(chatId);
     const request = useRef<AbortController | null>(null);
+    // whether the request is let go of because the learner pressed Stop
+    const stopping = useRef(false);
+    // What the panel of the sentence checks shows: the box written in
+    // last, the tutor's own, or that of an exercise it offered, by its key.
+    const [checksOf, setChecksOf] = useState<string | null>(null);
+    // an exercise that is over gives the panel back to the tutor's box
+    const checksShownOf = checksOf !== null && doing[checksOf]?.status === "running" ? checksOf : null;
     const listRef = useRef<HTMLDivElement>(null);
     const usable = canAsk(asking.model, asking.apiKey);
     // one exercise at a time, and none while the tutor is answering
-    const occupied = busy || Object.values(doing).some((each) => each.status !== "done");
+    // an exercise offered that is under way, from its start to its end
+    const exercising = Object.values(doing).some((each) => each.status !== "done");
+    const occupied = busy || exercising;
 
     useEffect(() => () => request.current?.abort(), []);
     // the latest chat is taken up where it was left
@@ -280,6 +292,7 @@ export function Tutor(
         let answer = "";
         const controller = new AbortController();
         request.current = controller;
+        stopping.current = false;
         setShown([
             ...before,
             ...(wrote === null ? [] : [{ role: "user", text: wrote } as const]),
@@ -314,6 +327,14 @@ export function Tutor(
             }
             return true;
         } catch (caught) {
+            // Stopped by the learner, the turn stays as it was, and so does
+            // what they asked, which the tutor is told was not answered.
+            if (controller.signal.aborted && stopping.current) {
+                stopping.current = false;
+                changeTurn(stoppedTurn);
+                setMessages([...asked, { role: "assistant", content: answer.trim() || STOPPED_ANSWER }]);
+                return true;
+            }
             setShown(before);
             if (!controller.signal.aborted) {
                 setError(caught instanceof Error ? caught.message : String(caught));
@@ -430,13 +451,14 @@ export function Tutor(
             <header className="chat-header">
                 <h2 className="tutor-title">{t("Tutor")}</h2>
                 <ContextRing trace={trace} onOpen={() => setInspecting(true)} />
-                <Check
-                    checked={speakReplies}
+                <PlaceSentenceChecks place="tutor" settings={settings} onChangeSettings={onSettingsChange} />
+                <Toggle
+                    icon="speak"
+                    label={t("Speak replies")}
+                    on={speakReplies}
                     title={t("Reads each answer aloud once it has arrived. The audio is kept.")}
                     onChange={onSpeakReplies}
-                >
-                    {t("Speak replies")}
-                </Check>
+                />
                 {chats.length > 0 && (
                     <select
                         aria-label={t("Chats with the tutor")}
@@ -550,12 +572,22 @@ export function Tutor(
                                                 }}
                                             />
                                             {state?.status === "running" && (
-                                                <div className="tutor-exercise-body">
+                                                <div
+                                                    className="tutor-exercise-body"
+                                                    // focus within its shadow root is told here too
+                                                    onFocus={() => setChecksOf(key)}
+                                                >
                                                     <ExerciseView
                                                         sessionId={state.sessionId}
                                                         exercise={offer.exercise}
                                                         theory={offer.theory}
                                                         settings={settings}
+                                                        // its sentences are checked as the tutor's are
+                                                        checksAlong="tutor"
+                                                        checksSlot={checksShownOf === key ? checksSlot : null}
+                                                        onSettingsChange={onSettingsChange}
+                                                        onCloseChecks={onCloseChecks}
+                                                        onEditQuestions={onEditQuestions}
                                                         words={words}
                                                         learner={learner}
                                                         onUsage={onPracticeUsage}
@@ -606,49 +638,65 @@ export function Tutor(
                     />
                 </div>
             )}
-            <form
-                className="composer"
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void send();
-                }}
-            >
-                <CheckedTextarea
-                    className="composer-input"
-                    rows={2}
-                    placeholder={closed ? t("This chat is over") : t("Ask your tutor")}
-                    disabled={closed}
-                    aria-label={t("Message to the tutor")}
-                    title={enterSends
-                        ? t("Enter sends the message, and Shift+Enter starts a new line")
-                        : t("Enter starts a new line, and Shift+Enter sends the message")}
-                    value={draft}
-                    onChange={setDraft}
-                    onKeyDown={onKeyDown}
-                    settings={settings}
-                    onSettingsChange={onSettingsChange}
-                    words={words}
-                    onUsage={onCheckingUsage}
-                    // counted under the chat with the tutor
-                    usageId={`tutor:${chatId}`}
-                    checksSlot={checksSlot}
-                    onCloseChecks={onCloseChecks}
-                    onEditQuestions={onEditQuestions}
-                />
-                <div className="composer-send">
-                    {busy
-                        ? <button type="button" onClick={() => request.current?.abort()}>{t("Stop")}</button>
-                        : (
-                            <button
-                                type="submit"
-                                className="primary"
-                                disabled={!draft.trim() || occupied || !usable || closed}
-                            >
-                                {t("Send")}
-                            </button>
-                        )}
-                </div>
-            </form>
+            {/* while an exercise is under way, it is what is written in */}
+            {!exercising && (
+                <form
+                    className="composer"
+                    onFocus={() => setChecksOf(null)}
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        void send();
+                    }}
+                >
+                    <CheckedTextarea
+                        className="composer-input"
+                        place="tutor"
+                        rows={2}
+                        placeholder={closed ? t("This chat is over") : t("Ask your tutor")}
+                        disabled={closed}
+                        aria-label={t("Message to the tutor")}
+                        title={enterSends
+                            ? t("Enter sends the message, and Shift+Enter starts a new line")
+                            : t("Enter starts a new line, and Shift+Enter sends the message")}
+                        value={draft}
+                        onChange={setDraft}
+                        onKeyDown={onKeyDown}
+                        settings={settings}
+                        onSettingsChange={onSettingsChange}
+                        words={words}
+                        onUsage={onCheckingUsage}
+                        // counted under the chat with the tutor
+                        usageId={`tutor:${chatId}`}
+                        checksSlot={checksShownOf === null ? checksSlot : null}
+                        onCloseChecks={onCloseChecks}
+                        onEditQuestions={onEditQuestions}
+                    />
+                    <div className="composer-send">
+                        {busy
+                            ? (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        // unlike a request let go of when another chat is opened
+                                        stopping.current = true;
+                                        request.current?.abort();
+                                    }}
+                                >
+                                    {t("Stop")}
+                                </button>
+                            )
+                            : (
+                                <button
+                                    type="submit"
+                                    className="primary"
+                                    disabled={!draft.trim() || occupied || !usable || closed}
+                                >
+                                    {t("Send")}
+                                </button>
+                            )}
+                    </div>
+                </form>
+            )}
             {inspecting && <Inspector trace={trace} onClose={() => setInspecting(false)} />}
         </section>
     );
@@ -724,6 +772,7 @@ function TurnView(
                         <Markdown>{turn.text}</Markdown>
                     </div>
                 )}
+                {turn.stopped && <p className="tutor-stopped">{t("Stopped")}</p>}
                 {children}
                 {doing && (
                     <div className="tutor-doing" role="status">
@@ -752,6 +801,7 @@ function OfferCard(
     },
 ) {
     const said = [
+        offer.again ? (offer.again.fresh ? t("Again, made anew") : t("Again, exactly as it was")) : "",
         offer.practises_lesson === false
             ? ""
             : offer.lesson

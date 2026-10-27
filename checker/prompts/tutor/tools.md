@@ -1,12 +1,12 @@
 # The tutor's tools
 
-What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `remember` writes down a fact about the learner, called with `remember_what`, `agree_strategy` a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `exercise` offers the learner an exercise of practice, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `size` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
+What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `remember` writes down a fact about the learner, called with `remember_what`, `agree_strategy` a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `favourites` lists the exercises the learner keeps among their favourites and `exercise_done` gives all of one they did, called with `session_id` and `exercise_of_session`; `exercise` offers the learner an exercise of practice, and `exercise_again` one they did, done again, called with those and `fresh`, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, and in the schema of `options` as `option_is_number` or `option_is_choice` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `size` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
 
 Variables:
 - `$exercises`: the exercises there are, one to a line as "- id: title. what it is", with what `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say of it after
 - `$title`, `$description`: the title of an exercise offered with a tool of its own, and what it is, as its manifest says
 - `$options`: the options of an exercise, each as `option_choices` or `option_number` says, joined by semicolons
-- `$name`, `$label`: the name of an option, and what it is, as the manifest of the exercise says
+- `$name`, `$label`: the name of an option, and what it is, as the manifest of the exercise says: its `about` if it has one, else its label
 - `$choices`: the choices of an option, each as "value (what it is)", joined by commas
 - `$least`, `$usual`: the least an option may be, and what it is unless another fits better
 - `$most`: how many there may be at most, or the most an option may be
@@ -23,7 +23,31 @@ The lessons of the language the learner is learning, in the order they are taugh
 
 ## Prompt: sessions
 
-The learner's latest sessions of practice, the latest first: when each was, its lesson, its status, and for each of its exercises how many answers were right, partial and wrong, with the scores it came to.
+The learner's latest sessions of practice, the latest first: each with its id, when it was, its lesson, its status, and for each of its exercises how many answers were right, partial and wrong, the scores it came to, and whether the learner keeps it among their favourites. exercise_done gives all of one exercise, by the id of its session and its own.
+
+## Prompt: favourites
+
+The exercises the learner keeps among their favourites, the latest added first: each with the id of its session and its own, when it was added and done, its lesson, how many answers were right, partial and wrong, and the scores it came to. They are the ones the learner liked, to do again.
+
+## Prompt: exercise_done
+
+All that is kept of an exercise the learner did, by the id of its session and its own, as sessions and favourites give them: how it was set up, with its options and your brief if you gave one; what it made, such as the sentences or the texts with their good translations; what the learner answered, with each grade, correction and note; its log; whether it is a favourite; and whether it can be done again exactly. Look at it before you talk about an exercise in detail, or before you make one from it.
+
+## Prompt: exercise_again
+
+Offer the learner an exercise they did, done again, ready to start; it appears under your message. With fresh false, it is done exactly as it was, with what it made, the same sentences or texts in the same order; with fresh true, with the same settings and brief but what it does made anew. Use it when the learner wants an exercise again, such as one of their favourites, rather than making one like it with exercise.
+
+## Prompt: session_id
+
+The id of the session, as sessions and favourites give it.
+
+## Prompt: exercise_of_session
+
+The exercise of that session, by its id, such as "translation".
+
+## Prompt: fresh
+
+False to do it exactly as it was; true for the same settings with what it does made anew.
 
 ## Prompt: logs
 
@@ -79,7 +103,7 @@ The mock exam was offered to the learner, who decides whether to start it; it ru
 
 ## Prompt: focus
 
-The brief of what the exercise is to contain, in English, which the models that make it follow before the lesson, the topics and everything else they know: the rule or the mistake it practises, what to leave out, and what each item is to be, one to a line, with the construction it practises, the words it uses and, where it matters, the answer it expects. They know nothing of the learner but this, so be detailed; they are told it as it is, and give it the form of the exercise. Empty only where the learner asked for the exercise as it is, with nothing to aim it at.
+The brief of what the exercise is to contain, in English, which the models that make it follow before the lesson, the topics and everything else they know: the rule or the mistake it practises, what to leave out, and what each item is to be, one to a line, with the construction it practises, the words it uses and, where it matters, the answer it expects. They know nothing of the learner but this, so be detailed; they are told it as it is, and give it the form of the exercise. Where there are several instances, say what each is to be by its number, such as "Set 1:", "Set 2:"; each is made by itself, told which it is. Never ask in it for other counts than `instances` and the options give. Empty only where the learner asked for the exercise as it is, with nothing to aim it at.
 
 ## Prompt: words
 
@@ -108,7 +132,7 @@ The exercise to offer, by its id.
 
 ## Prompt: exercise_theory
 
-It teaches a lesson rather than asks, and is called with the lesson alone.
+It teaches a lesson rather than asks, and is called with the lesson, and instances 1.
 
 ## Prompt: exercise_no_lesson
 
@@ -116,7 +140,7 @@ It practises no lesson, and is called with none.
 
 ## Prompt: exercise_once
 
-It is done once, and is called with no instances.
+It is done once, and is called with instances 1.
 
 ## Prompt: exercise_options
 
@@ -124,11 +148,19 @@ Options: $options.
 
 ## Prompt: option_choices
 
-$name, $label, one of $choices, the first unless another fits better
+$name ($label): one of $choices, written as text in quotes, the first unless another fits better
 
 ## Prompt: option_number
 
-$name, $label, from $least to $most, $usual unless another fits better
+$name ($label): a whole number from $least to $most, written without quotes, $usual unless another fits better
+
+## Prompt: option_is_number
+
+A whole number, written without quotes, within the bounds the exercise's line in the list of exercises gives.
+
+## Prompt: option_is_choice
+
+One of the values the exercise's line in the list of exercises gives, written as text in quotes.
 
 ## Prompt: options
 
@@ -140,7 +172,7 @@ The lesson to practise or to read, by its id as the lessons tool gives it; empty
 
 ## Prompt: instances
 
-How many times the exercise is to be done, 1 if left out.
+How many times the exercise is to be done, one after another: always give it, 1 for once. Each time is one instance, made and shown on its own, with the options for each: of a translation, one set of as many sentences or texts as its options say; of a cloze, one set of gaps. So three sets of ten sentences are 3 instances of 10 sentences, and twelve sentences one at a time are 12 instances of 1. Only this makes more than one: a brief that asks for several sets, rounds or groups gets one unless this says how many.
 
 ## Prompt: topics
 

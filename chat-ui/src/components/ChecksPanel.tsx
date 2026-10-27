@@ -3,7 +3,7 @@
 
 import { createPortal } from "react-dom";
 
-import { doubt, type LiveCheck, type Sentence, sentenceAtCaret } from "../lib/checker";
+import { type LiveCheck, type Sentence, sentenceAtCaret, wordTint } from "../lib/checker";
 import { t } from "../lib/i18n";
 import type { ModelChoice } from "../lib/models";
 import {
@@ -12,6 +12,7 @@ import {
     askedQuestions,
     describeAnswer,
     isAskable,
+    isUnsure,
     type ProfileQuestion,
     type Stars,
 } from "../lib/questions";
@@ -78,10 +79,16 @@ function Answers({ sentence, questions }: { sentence: Sentence; questions: Profi
         <dl className="answers">
             {questions.map((question) => {
                 const answer = profile.answers[question.id];
-                const stars = answer ? answerStars(question, answer) : null;
-                const fraction = answer && !stars ? answerFraction(question, answer) : null;
+                // a fault the model is not sure enough of is shown faint, without stars or a bar
+                const unsure = answer !== undefined && isUnsure(question, answer);
+                const stars = answer && !unsure ? answerStars(question, answer) : null;
+                const fraction = answer && !stars && !unsure ? answerFraction(question, answer) : null;
                 return (
-                    <div key={question.id} className="answer">
+                    <div
+                        key={question.id}
+                        className={unsure ? "answer unsure" : "answer"}
+                        title={unsure ? t("The model is not sure enough of this to count it as a fault") : undefined}
+                    >
                         <dt>{question.title}</dt>
                         <dd>
                             <span className="answer-value">
@@ -92,6 +99,7 @@ function Answers({ sentence, questions }: { sentence: Sentence; questions: Profi
                                     {Math.round(answer.confidence * 100)}%
                                 </span>
                             )}
+                            {unsure && <span className="answer-unsure">{t("unsure")}</span>}
                             {stars && <StarRow {...stars} />}
                             {fraction !== null && (
                                 <span className="answer-scale" aria-hidden="true">
@@ -117,7 +125,7 @@ function Words({ sentence }: { sentence: Sentence }) {
             {words.map((word, index) => (
                 <li
                     key={index}
-                    style={{ backgroundColor: `rgb(var(--doubt) / ${(doubt(word.value) * 0.6).toFixed(2)})` }}
+                    style={{ backgroundColor: wordTint(word.value) }}
                 >
                     {word.word}
                     <small>{word.value.toFixed(2)}</small>

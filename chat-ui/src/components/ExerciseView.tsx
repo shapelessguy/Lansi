@@ -14,11 +14,12 @@ import {
     type Learner,
     loadInterface,
     sentencesChecked,
+    sentencesCheckedAlong,
     stepExercise,
 } from "../lib/practice";
 import type { WordLists } from "../lib/sets";
 import type { Settings } from "../lib/settings";
-import { profilingOf } from "../lib/writing";
+import { type CheckedPlace, placeChecked, profilingOf } from "../lib/writing";
 import { SettingsChecksPanel } from "./ChecksPanel";
 import { SidePanel } from "./SidePanel";
 import { useWritingPlace } from "./WritingChecks";
@@ -30,6 +31,12 @@ interface Props {
     theory?: boolean;
     /** What the sentences written in it are checked by, if they are, as its manifest and the learner say. */
     settings: Settings;
+    /**
+     * The place whose choice of sentence checks it follows, rather than its
+     * own, such as the tutor's chat it was offered in; the sentences of an
+     * exercise whose manifest says they never are checked are not, still.
+     */
+    checksAlong?: CheckedPlace;
     /** What the keywords for words in the questions of the sentence checks stand for. */
     words: WordLists;
     /** Where to show the panel with the checks of the sentence under the caret, or null while it is closed. */
@@ -59,6 +66,7 @@ export function ExerciseView(
     {
         sessionId,
         exercise,
+        checksAlong,
         theory = false,
         settings,
         words,
@@ -87,12 +95,12 @@ export function ExerciseView(
     // manifest and the learner say, asked at each check, so that the
     // learner may turn them on and off as they write; what that uses is
     // counted under the session
+    const sentencesOn = checksAlong
+        ? sentencesCheckedAlong(exercise, placeChecked(checksAlong, settings))
+        : sentencesChecked(exercise, settings.exerciseSentenceChecks);
     const checked = useWritingPlace(
         host,
-        () =>
-            sentencesChecked(exercise, settings.exerciseSentenceChecks)
-                ? profilingOf(settings, words, sessionId)
-                : null,
+        () => sentencesOn ? profilingOf(settings, words, sessionId) : null,
         (used) => latest.current.onUsage([used]),
     );
 
@@ -182,7 +190,7 @@ export function ExerciseView(
                 hidden={!rendered || error !== null}
             />
             {checksSlot && createPortal(
-                sentencesChecked(exercise, settings.exerciseSentenceChecks)
+                sentencesOn
                     ? (
                         <SettingsChecksPanel
                             settings={settings}

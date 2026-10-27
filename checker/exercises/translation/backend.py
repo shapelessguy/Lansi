@@ -120,7 +120,7 @@ def make_set(
         lesson=describe_lesson(context),
         topics=describe_topics(context),
         words=describe_words(context),
-        guidance=describe_guidance(context),
+        guidance=describe_guidance(context, len(sets) + 1),
         made=describe_made([item["source"] for made in sets for item in made]),
     )
     reply = ask_json(model, [{"role": "user", "content": prompt}])

@@ -84,6 +84,8 @@ export interface Settings {
     exerciseTopicWords: boolean;
     /** What the options of each exercise were last set to, by exercise and option. */
     exerciseOptions: Record<string, Record<string, string | number>>;
+    /** Whether the sentences written in the chat, to the tutor and in the texts are checked, by place; on unless turned off. */
+    sentenceChecks: Record<string, boolean>;
     /** Whether the sentences are checked in each exercise that leaves it to the learner, by exercise. */
     exerciseSentenceChecks: Record<string, boolean>;
     /** How many times each exercise was last to be done, by exercise. */
@@ -144,6 +146,8 @@ const NAMED_WORDS = /\{\{words:([^}]+)\}\}/g;
 export const LANGUAGE_PLACEHOLDER = "{{language}}";
 /** Replaced in a prompt by the learner's level in that language. */
 export const LEVEL_PLACEHOLDER = "{{level}}";
+/** Replaced in a prompt by the language the learner reads, which what they select is translated into. */
+export const INTO_PLACEHOLDER = "{{into}}";
 
 /** What the speech model was always told before what it is told could be written in full. */
 const SPEAK_LANGUAGE = `Speak ${LANGUAGE_PLACEHOLDER}, with native ${LANGUAGE_PLACEHOLDER} pronunciation, `
@@ -217,6 +221,7 @@ export function defaultSettings(): Settings {
         exerciseVocabulary: {},
         exerciseTopicWords: true,
         exerciseOptions: {},
+        sentenceChecks: {},
         exerciseSentenceChecks: {},
         exerciseInstances: {},
         exerciseMinutes: {},
@@ -323,6 +328,7 @@ export function normalizeSettings(stored: unknown): Settings {
             ? candidate.exerciseTopicWords
             : defaults.exerciseTopicWords,
         exerciseOptions: exerciseOptionsOf(candidate.exerciseOptions),
+        sentenceChecks: booleansOf(candidate.sentenceChecks),
         exerciseSentenceChecks: booleansOf(candidate.exerciseSentenceChecks),
         exerciseInstances: numbersOf(candidate.exerciseInstances),
         exerciseMinutes: numbersOf(candidate.exerciseMinutes),
@@ -444,15 +450,23 @@ export function saveSettings(settings: Settings): void {
 
 /**
  * A prompt with every keyword filled in: the words of the sets it asks for,
- * the language being learned and the learner's level. Every prompt the
+ * the language being learned, the learner's level and the language
+ * translated into. Every prompt the
  * learner writes is filled in by this, whether it starts a chat, directs the
  * speech model or is a question about each sentence. A set that there is
  * not gives no words.
  */
-export function expandPrompt(prompt: string, words: WordLists, language: string, level: string): string {
+export function expandPrompt(
+    prompt: string,
+    words: WordLists,
+    language: string,
+    level: string,
+    into: string,
+): string {
     return prompt
         .replace(NAMED_WORDS, (_, name: string) => (words.named[name.trim().toLowerCase()] ?? []).join(", "))
         .replaceAll(WORDS_PLACEHOLDER, words.active.join(", "))
         .replaceAll(LANGUAGE_PLACEHOLDER, language)
-        .replaceAll(LEVEL_PLACEHOLDER, level);
+        .replaceAll(LEVEL_PLACEHOLDER, level)
+        .replaceAll(INTO_PLACEHOLDER, into);
 }

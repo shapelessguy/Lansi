@@ -38,6 +38,24 @@ const ICONS = {
             <circle cx="17" cy="18" r="2" />
         </>
     ),
+    speak: (
+        <>
+            <path d="M11 5 6 9H3v6h3l5 4Z" />
+            <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+        </>
+    ),
+    "sentence-checks": (
+        <>
+            <path d="M4 6h14M4 11h10M4 16h5" />
+            <path d="m13 17 3 3 5-6" />
+        </>
+    ),
+    "enter-sends": (
+        <>
+            <path d="M20 5v7a3 3 0 0 1-3 3H5" />
+            <path d="m9 11-4 4 4 4" />
+        </>
+    ),
     "log-out": (
         <>
             <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />

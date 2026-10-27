@@ -2500,9 +2500,52 @@ export const MESSAGES = {
         German: "die Sprache, die du lernst ({language})",
         Italian: "la lingua che stai imparando ({language})",
     },
+    "Nothing is written here. Open the chat in the library to see the checks of what you write in it.": {
+        German:
+            "Hier wird nichts geschrieben. Öffne den Chat in der Bibliothek, um die Prüfungen dessen zu sehen, was du dort schreibst.",
+        Italian: "Qui non si scrive nulla. Apri la chat nella biblioteca per vedere i controlli di ciò che vi scrivi.",
+    },
+    "The sentence check model checks each sentence you finish here, with the questions of your settings.": {
+        German:
+            "Das Modell für die Satzprüfung prüft jeden Satz, den du hier beendest, mit den Fragen deiner Einstellungen.",
+        Italian:
+            "Il modello di controllo delle frasi controlla ogni frase che finisci qui, con le domande delle tue impostazioni.",
+    },
+    "This exercise always has its sentences checked.": {
+        German: "In dieser Übung werden die Sätze immer geprüft.",
+        Italian: "In questo esercizio le frasi vengono sempre controllate.",
+    },
+    "This exercise does not have its sentences checked.": {
+        German: "In dieser Übung werden die Sätze nicht geprüft.",
+        Italian: "In questo esercizio le frasi non vengono controllate.",
+    },
+    "Stopped": {
+        German: "Angehalten",
+        Italian: "Interrotto",
+    },
+    "Again, exactly as it was": {
+        German: "Noch einmal, genau wie zuvor",
+        Italian: "Di nuovo, esattamente com'era",
+    },
+    "Again, made anew": {
+        German: "Noch einmal, neu erstellt",
+        Italian: "Di nuovo, creato da capo",
+    },
+    "unsure": {
+        German: "unsicher",
+        Italian: "incerto",
+    },
+    "The model is not sure enough of this to count it as a fault": {
+        German: "Das Modell ist sich dessen nicht sicher genug, um es als Fehler zu zählen",
+        Italian: "Il modello non ne è abbastanza sicuro da contarlo come errore",
+    },
     "your level in it ({level})": {
         German: "dein Niveau darin ({level})",
         Italian: "il tuo livello ({level})",
+    },
+    "the language things are translated into for you ({language})": {
+        German: "die Sprache, in die dir übersetzt wird ({language})",
+        Italian: "la lingua in cui si traduce per te ({language})",
     },
     "the words of the set in use, picked in the Vocabulary tab": {
         German: "die Wörter der verwendeten Gruppe, im Reiter „Wörter“ gewählt",

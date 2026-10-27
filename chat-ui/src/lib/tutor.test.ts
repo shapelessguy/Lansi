@@ -9,10 +9,12 @@ import {
     keptMessages,
     keptTurn,
     type Offer,
+    stoppedTurn,
     thinkingAbout,
     type TutorEvent,
     type TutorTurn,
     withEvent,
+    withoutReasoning,
 } from "./tutor";
 
 const OFFER: Offer = {
@@ -119,4 +121,49 @@ test("a kept answer is shown with its steps and the exercises it offered", () =>
     expect(turn.offers.map((offer) => offer.exercise)).toEqual(["cloze"]);
     expect(turn.busy).toBe(false);
     expect(keptTurn("Old.")).toEqual({ thinking: "", steps: [], offers: [], exams: [], text: "Old.", busy: false });
+});
+
+test("the reasoning of earlier answers is not sent again, and the rest of them is", () => {
+    const call = { id: "c1", type: "function", function: { name: "lessons", arguments: "{}" } };
+    const messages = [
+        { role: "user" as const, content: "Hallo" },
+        {
+            role: "assistant" as const,
+            content: null,
+            tool_calls: [call],
+            reasoning_details: [{ type: "reasoning.text", text: "The box is broken." }],
+        },
+        { role: "tool" as const, content: "[]", tool_call_id: "c1" },
+        { role: "assistant" as const, content: "Hallo!", reasoning_details: [{ type: "reasoning.text", text: "" }] },
+    ];
+
+    expect(withoutReasoning(messages)).toEqual([
+        { role: "user", content: "Hallo" },
+        { role: "assistant", content: null, tool_calls: [call] },
+        { role: "tool", content: "[]", tool_call_id: "c1" },
+        { role: "assistant", content: "Hallo!" },
+    ]);
+    expect(messages[1].reasoning_details).toHaveLength(1);
+});
+
+test("a turn that is stopped keeps what it thought and wrote, and nothing of it goes on", () => {
+    const turn = {
+        thinking: "Let me look at the logs.",
+        steps: [{ id: "1", doing: "Looking at the logs", status: "done" as const }, {
+            id: "2",
+            doing: "Preparing the exercise",
+            status: "running" as const,
+        }],
+        offers: [],
+        exams: [],
+        text: "So",
+        busy: true,
+    };
+
+    expect(stoppedTurn(turn)).toEqual({
+        ...turn,
+        busy: false,
+        stopped: true,
+        steps: [turn.steps[0], { ...turn.steps[1], status: "failed" }],
+    });
 });

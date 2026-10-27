@@ -98,14 +98,35 @@ const exerciseSentenceChecks = new Map<string, ExerciseInfo["sentence_checks"]>(
  * `chosen`, off at first. Those of one not listed yet are not.
  */
 export function sentencesChecked(id: string, chosen: Record<string, boolean>): boolean {
+    return sentencesCheckedOr(id, chosen[id] ?? false);
+}
+
+/**
+ * Whether the sentences written in the exercise `id` are checked, as its
+ * manifest says, or, if it leaves it to the learner, as `chosen` says.
+ * Those of one not listed yet are not.
+ */
+function sentencesCheckedOr(id: string, chosen: boolean): boolean {
     switch (exerciseSentenceChecks.get(id)) {
         case "always":
             return true;
         case "optional":
-            return chosen[id] ?? false;
+            return chosen;
         default:
             return false;
     }
+}
+
+/**
+ * Whether the sentences written in the exercise `id` are checked where it
+ * is done as part of something that has its own choice, `on`, such as an
+ * exercise the tutor offered, which follows what the tutor's chat is set
+ * to: as `on` says, unless the manifest says they never are. Those of one
+ * not listed yet are not.
+ */
+export function sentencesCheckedAlong(id: string, on: boolean): boolean {
+    const said = exerciseSentenceChecks.get(id);
+    return said !== undefined && said !== "never" && on;
 }
 
 /**

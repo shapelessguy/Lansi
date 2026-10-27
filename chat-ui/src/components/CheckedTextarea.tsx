@@ -8,7 +8,7 @@ import type { ProfileUsage } from "../lib/checker";
 import type { WordLists } from "../lib/sets";
 import type { Settings } from "../lib/settings";
 import type { UsageEntry } from "../lib/usage";
-import { profilingOf } from "../lib/writing";
+import { type CheckedPlace, placeChecked, profilingOf } from "../lib/writing";
 import { SettingsChecksPanel } from "./ChecksPanel";
 import { useWritingCheck } from "./WritingChecks";
 
@@ -21,6 +21,8 @@ export interface CheckedTextareaProps
     className: string;
     /** The box, for whoever must reach it, such as to focus it. */
     inputRef?: RefObject<HTMLTextAreaElement>;
+    /** Where the box is, whose sentences are checked as the learner chose there; the spelling is checked either way. */
+    place: CheckedPlace;
     /** What the sentences are profiled by, and what changes it from the panel of the checks. */
     settings: Settings;
     onSettingsChange: (settings: Settings) => void;
@@ -47,6 +49,7 @@ export function CheckedTextarea(
         onChange,
         className,
         inputRef,
+        place,
         settings,
         onSettingsChange,
         words,
@@ -60,7 +63,11 @@ export function CheckedTextarea(
 ) {
     const ownRef = useRef<HTMLTextAreaElement>(null);
     const box = inputRef ?? ownRef;
-    const profiling = useMemo(() => profilingOf(settings, words, usageId), [settings, words, usageId]);
+    const checked = placeChecked(place, settings);
+    const profiling = useMemo(
+        () => (checked ? profilingOf(settings, words, usageId) : null),
+        [checked, settings, words, usageId],
+    );
     const countProfiling = useCallback(
         (used: ProfileUsage) =>
             onUsage({

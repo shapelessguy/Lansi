@@ -2503,7 +2503,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 anki=anki_words is not None,
                 practised=practised_categories(language),
             ),
-            *exercise_tool(practice.exercises(), lessons, store.topics()),
+            *exercise_tool(practice.exercises(), lessons, store.topics(), store),
             *evaluation_tool(levels),
         ]
         told = instructions(

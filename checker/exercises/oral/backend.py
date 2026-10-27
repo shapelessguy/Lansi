@@ -128,7 +128,7 @@ def make_task(
         level=describe_level(context),
         topics=describe_topics(context),
         words=describe_words(context),
-        guidance=describe_guidance(context),
+        guidance=describe_guidance(context, len(tasks) + 1),
         exam=describe_exam(context),
         made=describe_made(tasks),
         count=prompts_of(context),

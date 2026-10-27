@@ -94,7 +94,7 @@ GUIDANCE_SESSIONS = 20
 MAX_GUIDANCE = 3000
 # the most an exercise is told of what to make when a session starts, as
 # the tutor briefs it
-MAX_STEERING = 4000
+MAX_STEERING = 10_000
 # how many of the words nearest the topics are printed when a session starts
 SHOWN_WORDS = 15
 # how many of the lessons practised last a session without a lesson reviews
@@ -313,11 +313,17 @@ def _read_options(value: object) -> dict[str, dict[str, Any]]:
         if not (_ID.fullmatch(name) and isinstance(option, dict)):
             continue
         label = str(option.get("label") or name)
+        # what the option is, for the models told of it, where the label
+        # shown to the learner says too little
+        about = option.get("about")
+        told = (
+            {"about": about.strip()} if isinstance(about, str) and about.strip() else {}
+        )
         filled = next(
             (kind for kind in FILLED_OPTIONS if option.get(kind) is True), None
         )
         if filled:
-            options[name] = {"label": label, filled: True, "choices": {}}
+            options[name] = {"label": label, filled: True, "choices": {}, **told}
             continue
         choices = option.get("choices")
         if (
@@ -325,7 +331,7 @@ def _read_options(value: object) -> dict[str, dict[str, Any]]:
             and choices
             and all(isinstance(each, str) for each in choices.values())
         ):
-            options[name] = {"label": label, "choices": choices}
+            options[name] = {"label": label, "choices": choices, **told}
             continue
         least, most, default = (option.get(each) for each in ("min", "max", "default"))
         if (
@@ -339,6 +345,7 @@ def _read_options(value: object) -> dict[str, dict[str, Any]]:
                 "min": least,
                 "max": most,
                 "default": default,
+                **told,
             }
     return options
 

@@ -114,7 +114,7 @@ interface Props {
 }
 
 /** The activities written in with a box whose sentences are checked, which have the panel of the checks. */
-const CHECKED_ACTIVITIES: readonly Activity[] = ["chat", "tutor", "texts", "practice", "evaluations"];
+const CHECKED_ACTIVITIES: readonly Activity[] = ["tutor", "texts", "practice", "evaluations"];
 
 /** What the usage of each kind of background task is counted under. */
 const TASK_CATEGORIES: Record<string, UsageCategory> = {
@@ -291,7 +291,14 @@ export function App({ user, initialSettings, initialChats }: Props) {
 
     function newChat() {
         setChatStore((store) => startChat(store, settings.defaultContextId, settings.language));
-        setActivity("chat");
+        openChat();
+    }
+
+    /** Shows the chat, in the library. */
+    function openChat() {
+        setLibraryOpen(true);
+        setLogsOpen(false);
+        setSidebarTab("chat");
     }
 
     const loadBooks = useCallback(() => {
@@ -562,7 +569,13 @@ export function App({ user, initialSettings, initialChats }: Props) {
             apiKey: settings.apiKey,
             model: settings.speechModel,
             voice: settings.speechVoice,
-            instructions: expandPrompt(settings.speechDirection, words, settings.language, settings.level).trim(),
+            instructions: expandPrompt(
+                settings.speechDirection,
+                words,
+                settings.language,
+                settings.level,
+                settings.translateInto,
+            ).trim(),
         }),
         [
             settings.apiKey,
@@ -624,10 +637,13 @@ export function App({ user, initialSettings, initialChats }: Props) {
         };
     }, [tasksRunning, followTasks]);
 
-    // the sentence checks belong to the chat, and the floating chat to a selection
-    // the checks are of what is written in the chat, to the tutor or in a text
-    const panel = (openPanel === "checks" && !CHECKED_ACTIVITIES.includes(activity))
-            || (openPanel === "subchat" && !asked)
+    // The chat is shown in the library, beside the activity. The checks are
+    // of what is written in the activity, or, where nothing is written in
+    // it, as in a book, in the chat.
+    const chatShown = libraryOpen && !logsOpen && sidebarTab === "chat";
+    const chatChecked = chatShown && !CHECKED_ACTIVITIES.includes(activity);
+    // the floating chat belongs to a selection
+    const panel = openPanel === "subchat" && !asked
         ? null
         : openPanel;
     // who answers what is asked about a selection, and who translates it, which may be a quicker model
@@ -690,6 +706,11 @@ export function App({ user, initialSettings, initialChats }: Props) {
     // an exercise the tutor offered is started as a session of its own, with no time limit
     const startOffer = useCallback(
         async (offer: Offer) => {
+            // one the learner did, done again as it was, settings and all
+            if (offer.again) {
+                const { session, exercise, fresh } = offer.again;
+                return { ...(await replayExercise(session, exercise, learner, fresh)), usage: [] };
+            }
             // the words the tutor chose, if it chose any, and else those the settings say
             const vocabulary = offer.words?.length ? "set" : exerciseVocabularyOf(settings, settings.language);
             const setWords = offer.words?.length
@@ -711,7 +732,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 offer.focus ? { [offer.exercise]: offer.focus } : {},
             );
         },
-        [settings, wordsOfSet],
+        [settings, wordsOfSet, learner],
     );
     // a mock exam the tutor offered is started, and opened in the tab of evaluations
     const [openingEvaluation, setOpeningEvaluation] = useState<{ evaluation: Evaluation; nonce: number } | null>(
@@ -910,6 +931,13 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                             && booksState.books.length}
                                     </span>
                                 </button>
+                                <button
+                                    role="tab"
+                                    aria-selected={sidebarTab === "chat"}
+                                    onClick={() => setSidebarTab("chat")}
+                                >
+                                    {t("Chat")}
+                                </button>
                             </div>
                         }
                     >
@@ -958,7 +986,14 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 <BookVersionEditor
                                     sourceId={chosenVersion(editingBook, chosenVersions)}
                                     settings={settings}
-                                    expand={(prompt) => expandPrompt(prompt, words, settings.language, settings.level)}
+                                    expand={(prompt) =>
+                                        expandPrompt(
+                                            prompt,
+                                            words,
+                                            settings.language,
+                                            settings.level,
+                                            settings.translateInto,
+                                        )}
                                     onSettingsChange={updateSettings}
                                     sourceName={[
                                         editingBook.title,
@@ -974,6 +1009,43 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     }}
                                 />
                             )}
+                        </div>
+                        {/* kept in place while hidden, so a reply still arriving is not cut off */}
+                        <div className="tab-panel" role="tabpanel" hidden={sidebarTab !== "chat"}>
+                            <Chat
+                                list={
+                                    <ChatList
+                                        chats={chats}
+                                        activeId={chat.id}
+                                        onSelect={(id) => setChatStore((store) => selectChat(store, id))}
+                                        onDelete={(id) =>
+                                            setChatStore((store) =>
+                                                deleteChat(store, id, settings.defaultContextId, settings.language)
+                                            )}
+                                        onNewChat={newChat}
+                                    />
+                                }
+                                key={chat.id}
+                                settings={settings}
+                                onSettingsChange={updateSettings}
+                                checksSlot={panel === "checks" && chatChecked ? panelSlot : null}
+                                onCloseChecks={() => setOpenPanel(null)}
+                                onEditQuestions={() => openSettings("questions")}
+                                words={words}
+                                loadWords={freshWordLists}
+                                picked={picked}
+                                onOpenSettings={() => openSettings("general")}
+                                onUsage={addUsageEntry}
+                                onReplied={() => setUsageRevision((revision) => revision + 1)}
+                                onSpeak={speakMessage}
+                                chat={chat}
+                                onMessages={changeMessages}
+                                onContext={(contextId) =>
+                                    setChatStore((store) =>
+                                        updateChat(store, chat.id, (current) => ({ ...current, contextId }))
+                                    )}
+                                onNewChat={newChat}
+                            />
                         </div>
                     </SidePanel>
                 </aside>
@@ -1017,9 +1089,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             >
                                 {t("Tutor")}
                             </button>
-                            <button role="tab" aria-selected={activity === "chat"} onClick={() => setActivity("chat")}>
-                                {t("Chat")}
-                            </button>
                             <button
                                 role="tab"
                                 aria-selected={activity === "books"}
@@ -1051,17 +1120,15 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         </div>
                         <div className="topbar-side end">
                             <div className="switch" role="group" aria-label={t("Panel on the right")}>
-                                {CHECKED_ACTIVITIES.includes(activity) && (
-                                    <button
-                                        className="icon-only"
-                                        aria-pressed={panel === "checks"}
-                                        onClick={() => togglePanel("checks")}
-                                        title={t("Checks")}
-                                        aria-label={t("Checks")}
-                                    >
-                                        <Icon name="checks" />
-                                    </button>
-                                )}
+                                <button
+                                    className="icon-only"
+                                    aria-pressed={panel === "checks"}
+                                    onClick={() => togglePanel("checks")}
+                                    title={t("Checks")}
+                                    aria-label={t("Checks")}
+                                >
+                                    <Icon name="checks" />
+                                </button>
                                 <button
                                     className="icon-only"
                                     aria-pressed={panel === "usage"}
@@ -1124,42 +1191,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             onCloseChecks={() => setOpenPanel(null)}
                             onEditQuestions={() => openSettings("questions")}
                             onCheckingUsage={addUsageEntry}
-                        />
-                    </div>
-                    <div className="pane" hidden={activity !== "chat"}>
-                        <Chat
-                            list={
-                                <ChatList
-                                    chats={chats}
-                                    activeId={chat.id}
-                                    onSelect={(id) => setChatStore((store) => selectChat(store, id))}
-                                    onDelete={(id) =>
-                                        setChatStore((store) =>
-                                            deleteChat(store, id, settings.defaultContextId, settings.language)
-                                        )}
-                                    onNewChat={newChat}
-                                />
-                            }
-                            key={chat.id}
-                            settings={settings}
-                            onSettingsChange={updateSettings}
-                            checksSlot={panel === "checks" && activity === "chat" ? panelSlot : null}
-                            onCloseChecks={() => setOpenPanel(null)}
-                            onEditQuestions={() => openSettings("questions")}
-                            words={words}
-                            loadWords={freshWordLists}
-                            picked={activity === "chat" ? picked : null}
-                            onOpenSettings={() => openSettings("general")}
-                            onUsage={addUsageEntry}
-                            onReplied={() => setUsageRevision((revision) => revision + 1)}
-                            onSpeak={speakMessage}
-                            chat={chat}
-                            onMessages={changeMessages}
-                            onContext={(contextId) =>
-                                setChatStore((store) =>
-                                    updateChat(store, chat.id, (current) => ({ ...current, contextId }))
-                                )}
-                            onNewChat={newChat}
                         />
                     </div>
                     <div className="pane texts-pane" hidden={activity !== "texts"}>
@@ -1279,18 +1310,28 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     hidden={panel === null || panel === "subchat"}
                     ref={setPanelSlot}
                 >
+                    {panel === "checks" && !CHECKED_ACTIVITIES.includes(activity) && !chatChecked && (
+                        <SidePanel
+                            title={t("Sentence checks")}
+                            onClose={() => setOpenPanel(null)}
+                        >
+                            <p className="checks-note">
+                                {t("Nothing is written here. Open the chat in the library to see the checks of what you write in it.")}
+                            </p>
+                        </SidePanel>
+                    )}
                     {panel === "usage" && (
                         <UsagePanel
                             revision={usageRevision}
                             currentLabel={activity === "tutor"
                                 ? t("Tutor")
-                                : activity === "books" || activity === "texts"
-                                ? null
                                 : activity === "practice"
                                 ? t("Practice")
                                 : activity === "evaluations"
                                 ? t("Evaluations")
-                                : t("This chat")}
+                                : chatShown
+                                ? t("This chat")
+                                : null}
                             chatId={activity === "tutor"
                                 ? TUTOR_USAGE_ID
                                 : activity === "practice"

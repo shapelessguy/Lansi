@@ -13,13 +13,13 @@ function lists(active: string[] = [], named: Record<string, string[]> = {}): Wor
 }
 
 test("the placeholder is replaced by the words of the set in use", () => {
-    const prompt = expandPrompt("Use only: {{words}}.", lists(["sitzen", "Film"]), "German", "B1");
+    const prompt = expandPrompt("Use only: {{words}}.", lists(["sitzen", "Film"]), "German", "B1", "English");
 
     expect(prompt).toBe("Use only: sitzen, Film.");
 });
 
 test("a prompt without the placeholder is left as written", () => {
-    expect(expandPrompt("You are a helpful assistant.", lists(["sitzen"]), "German", "B1")).toBe(
+    expect(expandPrompt("You are a helpful assistant.", lists(["sitzen"]), "German", "B1", "English")).toBe(
         "You are a helpful assistant.",
     );
 });
@@ -51,14 +51,16 @@ test("a default context that no longer exists falls back to the first one", () =
 });
 
 test("the placeholder is replaced by the language being learned", () => {
-    expect(expandPrompt("Talk with me in {{language}}.", lists(), "Italian", "B1")).toBe("Talk with me in Italian.");
+    expect(expandPrompt("Talk with me in {{language}}.", lists(), "Italian", "B1", "English")).toBe(
+        "Talk with me in Italian.",
+    );
 });
 
 test("a new chat is told the language being learned", () => {
     const settings = defaultSettings();
 
     expect(settings.language).toBe("German");
-    expect(expandPrompt(settings.contexts[0].prompt, lists(), settings.language, settings.level)).toContain(
+    expect(expandPrompt(settings.contexts[0].prompt, lists(), settings.language, settings.level, "English")).toContain(
         "Talk with me in German, which I am learning at level B1",
     );
 });
@@ -79,7 +81,11 @@ test("a language that can no longer be learned or translated into is stored as t
 });
 
 test("the placeholder is replaced by the level of the learner", () => {
-    expect(expandPrompt("Write for level {{level}}.", lists(), "German", "B2")).toBe("Write for level B2.");
+    expect(expandPrompt("Write for level {{level}}.", lists(), "German", "B2", "English")).toBe("Write for level B2.");
+});
+
+test("the language translated into is filled in for its keyword", () => {
+    expect(expandPrompt("Explain it in {{into}}.", lists(), "German", "B1", "Italian")).toBe("Explain it in Italian.");
 });
 
 test("a stored level that there is not gives the usual one", () => {
@@ -102,13 +108,14 @@ test("a set is asked for by its name, however the name is capitalised", () => {
         words,
         "German",
         "B1",
+        "English",
     );
 
     expect(prompt).toBe("All: sitzen. Trip: Zug, Reise. Home: Tisch.");
 });
 
 test("a set that there is not gives no words", () => {
-    expect(expandPrompt("Use: {{words:Gone}}.", lists(["sitzen"]), "German", "B1")).toBe("Use: .");
+    expect(expandPrompt("Use: {{words:Gone}}.", lists(["sitzen"]), "German", "B1", "English")).toBe("Use: .");
 });
 
 test("the app looks as it was set to, and as usual where what is stored is not a way to look", () => {
@@ -225,7 +232,15 @@ test("the reasoning model is kept, and names none for the chat model", () => {
 test("every keyword is filled in, as often as it is named", () => {
     const words = { active: ["Hund"], named: { travel: ["Zug", "Bahnhof"] } };
 
-    expect(expandPrompt("{{language}} at {{level}}: {{words}}; {{words:Travel}}; {{language}}", words, "German", "B1"))
+    expect(
+        expandPrompt(
+            "{{language}} at {{level}}: {{words}}; {{words:Travel}}; {{language}}",
+            words,
+            "German",
+            "B1",
+            "English",
+        ),
+    )
         .toBe("German at B1: Hund; Zug, Bahnhof; German");
 });
 

@@ -5,7 +5,6 @@ import { expect, test } from "vitest";
 
 import {
     applySuggestion,
-    doubt,
     inUtf16,
     type LiveCheck,
     markedParts,
@@ -14,6 +13,8 @@ import {
     sentenceParts,
     sentenceState,
     spellingIssues,
+    wordShade,
+    wordTint,
 } from "./checker";
 
 function sentence(text: string, start: number, spelling: Sentence["spelling"]): Sentence {
@@ -184,11 +185,16 @@ test("a rated word that is misspelled as well is one stretch with both", () => {
     ]);
 });
 
-test("a word is marked the more strongly the less right it is, and not at all when nearly right", () => {
-    expect(doubt(0)).toBe(1);
-    expect(doubt(0.425)).toBeCloseTo(0.5);
-    expect([0.85, 0.9, 1].map(doubt)).toEqual([0, 0, 0]);
-    expect(doubt(0.2)).toBeGreaterThan(doubt(0.6));
+test("a word is good from 0.9, unsure from 0.5 and wrong below", () => {
+    expect([1, 0.9, 0.89, 0.5, 0.49, 0].map(wordShade)).toEqual([
+        "good",
+        "good",
+        "unsure",
+        "unsure",
+        "wrong",
+        "wrong",
+    ]);
+    expect(wordTint(0.63)).toBe("var(--word-unsure)");
 });
 
 test("places the server counted in characters are counted as JavaScript counts, past an emoji", () => {

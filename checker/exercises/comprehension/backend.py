@@ -193,7 +193,7 @@ def make_text(
         lesson="" if context.get("exam") else describe_lesson(context),
         topics=describe_topics(context),
         words=describe_words(context),
-        guidance=describe_guidance(context),
+        guidance=describe_guidance(context, len(texts) + 1),
         exam=describe_exam(context),
         made=describe_made(texts),
         answers=PROMPTS(f"answering.{answers}", **_two(answer_words(context, answers))),

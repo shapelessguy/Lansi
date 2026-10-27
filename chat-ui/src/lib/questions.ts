@@ -190,6 +190,19 @@ export function answerFraction(question: ProfileQuestion, answer: ProfileAnswer)
     return place < 0 || question.options.length < 2 ? null : place / (question.options.length - 1);
 }
 
+/** How sure the model must be of an answer that finds fault for the fault to be shown as one. */
+export const SURE_ENOUGH = 0.5;
+
+/**
+ * Whether an answer finds fault, being short of the best there is, while
+ * the model is no more than SURE_ENOUGH of it: such an answer is not shown
+ * as a fault. An answer whose confidence is not known is taken as given.
+ */
+export function isUnsure(question: ProfileQuestion, answer: ProfileAnswer): boolean {
+    const fraction = answerFraction(question, answer);
+    return answer.confidence !== null && answer.confidence <= SURE_ENOUGH && fraction !== null && fraction < 1;
+}
+
 /** How an answer to a choice is drawn: so many stars, of which so many are filled. */
 export interface Stars {
     stars: number;

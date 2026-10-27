@@ -9,6 +9,7 @@ import type { Settings } from "../lib/settings";
 import { blocksOf, fetchText, type Inline, saveText, type Text } from "../lib/texts";
 import type { UsageEntry } from "../lib/usage";
 import { CheckedTextarea } from "./CheckedTextarea";
+import { PlaceSentenceChecks } from "./SentenceChecks";
 
 interface Props {
     id: string;
@@ -164,6 +165,7 @@ export function TextEditor(
             {/* made only once the text is there, as the box is registered for its sentences when it is made */}
             <CheckedTextarea
                 className="text-body"
+                place="texts"
                 value={text.content ?? ""}
                 placeholder={t("Write here")}
                 aria-label={t("Text")}
@@ -184,6 +186,7 @@ export function TextEditor(
                 {!locked
                     && ` · ${state === "saved" ? t("Saved") : state === "saving" ? t("Saving…") : t("Not saved yet")}`}
                 {error && <span className="error">· {error}</span>}
+                <PlaceSentenceChecks place="texts" settings={settings} onChangeSettings={onSettingsChange} />
             </div>
         </section>
     );

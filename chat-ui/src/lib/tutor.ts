@@ -43,6 +43,11 @@ export interface Offer {
     /** What the tutor wants it to aim at, and the words it is to be made of, if any. */
     focus?: string;
     words?: string[];
+    /**
+     * The exercise of a session the learner did that this does again: as
+     * it was, or, if `fresh`, with its settings and what it does made anew.
+     */
+    again?: { session: string; exercise: string; fresh: boolean };
 }
 
 /** A mock exam the tutor offered, ready to be started in the tab of evaluations. */
@@ -118,6 +123,24 @@ export interface TutorTurn {
     text: string;
     /** Whether it is still coming. */
     busy: boolean;
+    /** Whether the learner stopped it before it was over. */
+    stopped?: boolean;
+}
+
+/** What the tutor is told it answered, in later turns, to what the learner stopped before it wrote anything. */
+export const STOPPED_ANSWER = "[The learner stopped this answer before it was written.]";
+
+/**
+ * A turn the learner stopped, as it was when they did: what it thought and
+ * wrote so far is kept, and what it was doing is over.
+ */
+export function stoppedTurn(turn: TutorTurn): TutorTurn {
+    return {
+        ...turn,
+        busy: false,
+        stopped: true,
+        steps: turn.steps.map((step) => (step.status === "running" ? { ...step, status: "failed" } : step)),
+    };
 }
 
 /** Who asks the tutor, and who is asked. */
@@ -206,6 +229,18 @@ export function thinkingAbout(thinking: string): string {
 }
 
 /**
+ * The messages of earlier answers as they are sent again, without the
+ * reasoning that was handed back with them. The model needs its reasoning
+ * only while it goes on with the answer it is writing, between the tools it
+ * calls, which the server does in one request. Told again later, what it
+ * reasoned is paid for on every turn, and it keeps to what it concluded
+ * there rather than looking afresh. It is kept all the same, and shown.
+ */
+export function withoutReasoning(messages: TutorMessage[]): TutorMessage[] {
+    return messages.map(({ reasoning_details: _, ...rest }) => rest as TutorMessage);
+}
+
+/**
  * Has the tutor answer the last of `messages`, or tells it how an exercise
  * it offered went, if it was `practised`, keeping what was said in the
  * `chat` with that id, if one is given, and telling `onEvent` each event as
@@ -226,7 +261,7 @@ export async function askTutor(
             method: "POST",
             headers: asking.apiKey ? { "X-OpenRouter-Key": asking.apiKey } : {},
             body: JSON.stringify({
-                messages,
+                messages: withoutReasoning(messages),
                 model: modelRequest(asking.model),
                 language: asking.language,
                 into: asking.into,

@@ -29,6 +29,11 @@ taken unless another is chosen:
                 "questions": {"label": "Questions", "min": 1, "max": 8,
                               "default": 3}}
 
+An option may have an `about` besides its label: what it is, in English,
+for the models that are told of it, such as the tutor that offers the
+exercise, where the label shown to the learner says too little, such as
+that a set of "sentences" is of whole texts where a brief gives texts.
+
 An option may also be `{"label": "Text", "texts": true}`: one of the
 learner's own texts that are not corrected yet, such as their homework, by
 its id, which the app fills in as its choices. The exercise is told the
@@ -810,13 +815,19 @@ def describe_topics(context: dict[str, Any]) -> str:
     return PROMPTS("kit.topics.several", topics=listed)
 
 
-def describe_guidance(context: dict[str, Any]) -> str:
+def describe_guidance(context: dict[str, Any], instance: int | None = None) -> str:
     """What the app said the models are to heed, as a model is told it, on
     lines of its own, after the brief of the tutor, told as what comes
-    before everything else; nothing if it said nothing."""
+    before everything else; nothing if it said nothing. With `instance`,
+    the number of the instance being made, counted from 1, an exercise done
+    several times with a brief is told which it is making, so that a brief
+    that says what each is to be is followed one at a time."""
     brief = str(context.get("brief") or "").strip()
     guidance = str(context.get("guidance") or "").strip()
+    total = context.get("instances") or 1
     told = [PROMPTS("kit.brief", brief=brief)] if brief else []
+    if brief and instance is not None and total > 1:
+        told.append(PROMPTS("kit.instance", number=instance, total=total))
     told += [guidance] if guidance else []
     return "".join(f"\n{each}\n" for each in told)
 

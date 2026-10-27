@@ -17,7 +17,6 @@ import { createPortal } from "react-dom";
 
 import {
     applySuggestion,
-    doubt,
     type LiveCheck,
     type MarkedPart,
     type ProfileUsage,
@@ -26,6 +25,7 @@ import {
     sentenceState,
     type SpellingIssue,
     spellingIssues,
+    wordTint,
 } from "../lib/checker";
 import { t } from "../lib/i18n";
 import { markedAncestor } from "../lib/selection";
@@ -102,11 +102,11 @@ const WritingContext = createContext<Registry | null>(null);
 /**
  * Has the spelling of the text box that `box` is checked as every text box
  * where writing is marked is, and, with `profiling`, its sentences profiled
- * too. Returns what is known about it, for a panel that shows more of it.
+ * too; with null, the spelling alone. Returns what is known about it, for a panel that shows more of it.
  */
 export function useWritingCheck(
     box: RefObject<HTMLTextAreaElement>,
-    profiling: Profiling,
+    profiling: Profiling | null,
     onUsage: (usage: ProfileUsage) => void,
 ): Checked {
     const registry = useContext(WritingContext);
@@ -200,11 +200,10 @@ function sentenceStyle(state: SentenceState, rateWords: boolean): CSSProperties 
  * app do not reach, so it is styled where it is drawn.
  */
 function markedPart(part: MarkedPart, index: number) {
-    // a word that was rated is tinted red, the more the less right it is
-    const strength = part.value === null ? 0 : doubt(part.value);
-    const tint: CSSProperties = strength > 0
-        ? { backgroundColor: `rgb(var(--doubt) / ${(strength * 0.6).toFixed(2)})`, borderRadius: 3 }
-        : {};
+    // a word that was rated is tinted green, yellow or red by how right it is
+    const tint: CSSProperties = part.value === null
+        ? {}
+        : { backgroundColor: wordTint(part.value), borderRadius: 3 };
     return part.issue
         ? (
             <span
@@ -398,16 +397,28 @@ export function WritingChecks({ language, children }: { language: string; childr
 
     // a box is checked once it is written in, wherever it is
     useEffect(() => {
-        function onFocusIn(event: FocusEvent) {
+        // The shadow roots of the exercises, listened to as well: the caret
+        // going from one box of an exercise to another is not told outside
+        // it, as seen from there the focus stays on the exercise.
+        const roots = new Set<ShadowRoot>();
+        function onFocusIn(event: Event) {
             const box = checkedBox(event.composedPath() as unknown as HTMLElement[]);
             if (box instanceof HTMLTextAreaElement) {
                 // one in a place that has its boxes profiled is that place's
                 const place = markedAncestor<HTMLElement>(box, WRITING_ATTRIBUTE)?.marked;
                 attach(box, (place && places.current.get(place)) ?? null);
+                const root = box.getRootNode();
+                if (root instanceof ShadowRoot && !roots.has(root)) {
+                    roots.add(root);
+                    root.addEventListener("focusin", onFocusIn);
+                }
             }
         }
         document.addEventListener("focusin", onFocusIn);
-        return () => document.removeEventListener("focusin", onFocusIn);
+        return () => {
+            document.removeEventListener("focusin", onFocusIn);
+            roots.forEach((root) => root.removeEventListener("focusin", onFocusIn));
+        };
     }, [attach]);
 
     useEffect(() => {

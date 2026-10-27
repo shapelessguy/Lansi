@@ -5,16 +5,16 @@
 export type Panel = "checks" | "usage" | "settings";
 
 /** What the main area shows, as the tabs at the top choose it. */
-export type Activity = "tutor" | "chat" | "books" | "texts" | "practice" | "evaluations";
+export type Activity = "tutor" | "books" | "texts" | "practice" | "evaluations";
 
 /** Which panels are shown at the sides, and what the main area shows. */
-/** The tabs of the library, on the left. */
-export type LibraryTab = "words" | "vocabulary" | "books";
+/** The tabs of the library, on the left. The chat is among them, so that it can be used beside an activity. */
+export type LibraryTab = "words" | "vocabulary" | "books" | "chat";
 /** The tabs of the panel of the logs, on the left in place of the library. */
 export type LogsTab = "logs" | "memories" | "exercises" | "favourites" | "sessions" | "evaluations";
 
 export interface Layout {
-    /** Whether the panel on the left, with the words and the books, is shown. */
+    /** Whether the panel on the left, with the words, the books and the chat, is shown. */
     libraryOpen: boolean;
     /** Whether the logs are shown on the left, in place of the library. */
     logsOpen: boolean;
@@ -32,13 +32,13 @@ export interface Layout {
 
 const STORAGE_KEY = "chat-ui.layout";
 const PANELS: readonly unknown[] = ["checks", "usage", "settings"];
-const LIBRARY_TABS: readonly unknown[] = ["words", "vocabulary", "books"];
+const LIBRARY_TABS: readonly unknown[] = ["words", "vocabulary", "books", "chat"];
 const LOGS_TABS: readonly unknown[] = ["logs", "memories", "exercises", "favourites", "sessions", "evaluations"];
-const ACTIVITIES: readonly unknown[] = ["tutor", "chat", "books", "texts", "practice", "evaluations"];
+const ACTIVITIES: readonly unknown[] = ["tutor", "books", "texts", "practice", "evaluations"];
 
 /**
  * The layout for a window that wide, in pixels, when none has been chosen
- * yet. A panel covers part of the chat on a narrow window, so it starts
+ * yet. A panel covers part of what is open on a narrow window, so it starts
  * closed there.
  */
 export function defaultLayout(windowWidth: number): Layout {
@@ -48,7 +48,7 @@ export function defaultLayout(windowWidth: number): Layout {
         libraryTab: "vocabulary",
         logsTab: "logs",
         panel: windowWidth > 1300 ? "usage" : null,
-        activity: "chat",
+        activity: "tutor",
         text: null,
     };
 }
@@ -60,6 +60,15 @@ export function normalizeLayout(stored: unknown, windowWidth: number): Layout {
         return defaults;
     }
     const candidate = stored as Partial<Layout>;
+    // the chat was an activity once, and is now a tab of the library
+    if ((candidate.activity as unknown) === "chat") {
+        return {
+            ...normalizeLayout({ ...candidate, activity: undefined }, windowWidth),
+            libraryOpen: true,
+            logsOpen: false,
+            libraryTab: "chat",
+        };
+    }
     return {
         libraryOpen: typeof candidate.libraryOpen === "boolean" ? candidate.libraryOpen : defaults.libraryOpen,
         logsOpen: typeof candidate.logsOpen === "boolean" ? candidate.logsOpen : defaults.logsOpen,

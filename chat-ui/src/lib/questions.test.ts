@@ -10,6 +10,7 @@ import {
     describeAnswer,
     isAskable,
     isQuestion,
+    isUnsure,
     type ProfileQuestion,
     requestQuestions,
     upToDateQuestions,
@@ -100,6 +101,27 @@ test("a score is described by the nearest level and its place on the scale", () 
 
     expect(describeAnswer(clarity, answer)).toBe("Mostly clear (2.4 of 3)");
     expect(answerFraction(clarity, answer)).toBeCloseTo(0.8);
+});
+
+test("a fault is unsure when the model is no more than half sure of it", () => {
+    const answer = { kind: "choice" as const, choice: "one", score: null, max_score: null, confidence: 0.18 };
+
+    expect(isUnsure(grammar, answer)).toBe(true);
+    expect(isUnsure(grammar, { ...answer, confidence: 0.5 })).toBe(true);
+    expect(isUnsure(grammar, { ...answer, confidence: 0.51 })).toBe(false);
+});
+
+test("the best answer is never unsure, however unsure the model is of it", () => {
+    const answer = { kind: "choice" as const, choice: "none", score: null, max_score: null, confidence: 0.1 };
+
+    expect(isUnsure(grammar, answer)).toBe(false);
+});
+
+test("a score short of the top of its scale is unsure when the model is not sure of it", () => {
+    const answer = { kind: "score" as const, choice: null, score: 1.6, max_score: 3, confidence: 0.27 };
+
+    expect(isUnsure(clarity, answer)).toBe(true);
+    expect(isUnsure(clarity, { ...answer, confidence: null })).toBe(false);
 });
 
 function picked(choice: string) {

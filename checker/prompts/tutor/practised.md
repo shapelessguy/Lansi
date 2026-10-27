@@ -8,6 +8,7 @@ Variables:
 - `$results`: how many answers were right, partial and wrong, with the scores it came to, as JSON
 - `$grades`: each instance with its grade, as the log of an exercise is given it (logs/record.md)
 - `$log`: the log written of it, or `none` if there is none
+- `$made`: what the exercise made, as tutor/made.md tells it, when nothing of it was answered; empty otherwise
 
 ## Prompt
 
@@ -17,6 +18,7 @@ Results: $results
 
 What was answered:
 $grades
+$made
 
 Its log:
 $log

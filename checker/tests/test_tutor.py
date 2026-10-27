@@ -273,17 +273,74 @@ def test_the_exercises_are_one_tool_that_lists_each_with_its_options() -> None:
 
     assert tool.name == "exercise"
     # what is to be thought of on every call, which some models leave out unless required
-    assert tool.parameters["required"] == ["exercise", "lesson", "options", "focus"]
+    assert tool.parameters["required"] == [
+        "exercise",
+        "lesson",
+        "instances",
+        "options",
+        "focus",
+    ]
     properties = tool.parameters["properties"]
     assert properties["exercise"]["enum"] == ["cloze", "stories", "theory"]
     assert properties["lesson"]["enum"] == ["dative", "perfect", ""]
     assert properties["topics"]["items"]["enum"] == ["At the doctor's"]
     assert (
-        "- cloze: Fill the gaps. Fill in the gaps of sentences. Options: sentences,"
-        " Sentences in a set, from 1 to 10, 5 unless another fits better."
+        "- cloze: Fill the gaps. Fill in the gaps of sentences. Options: sentences"
+        " (Sentences in a set): a whole number from 1 to 10, written without quotes,"
+        " 5 unless another fits better."
     ) in tool.description
-    assert "then, Then, one of questions (Answer questions)" in tool.description
+    assert 'then (Then): one of "questions" (Answer questions)' in tool.description
     assert "- theory: Theory. Read the lesson. It teaches a lesson" in tool.description
+
+
+def test_the_options_of_the_exercises_say_in_the_schema_what_each_takes() -> None:
+    [tool] = exercise_tool([CLOZE, STORIES, THEORY], LESSONS, TOPICS)
+
+    options = tool.parameters["properties"]["options"]["properties"]
+
+    assert options["sentences"]["type"] == "integer"
+    assert options["then"] == {
+        **options["then"],
+        "type": "string",
+        "enum": ["questions", "retell"],
+    }
+
+
+def test_an_option_said_to_the_models_by_what_it_is_rather_than_by_its_label() -> None:
+    sentences = {"label": "Sentences in a set", "min": 1, "max": 10, "default": 5}
+    cloze = {
+        **CLOZE,
+        "options": {"sentences": {**sentences, "about": "items in a set"}},
+    }
+    [tool] = exercise_tool([cloze], LESSONS, TOPICS)
+
+    assert "sentences (items in a set): a whole number" in tool.description
+
+
+@pytest.mark.parametrize(
+    ("options", "taken"),
+    [
+        ({"sentences": "10"}, {"sentences": 10}),
+        ({"then": "retell"}, {"then": "retell"}),
+    ],
+)
+def test_an_option_written_as_text_is_taken_as_the_number_it_is(
+    options: dict[str, object], taken: dict[str, object]
+) -> None:
+    [tool] = exercise_tool([CLOZE, STORIES], LESSONS, TOPICS)
+    exercise = "cloze" if "sentences" in options else "stories"
+
+    offered = tool.run({"exercise": exercise, "lesson": "", "options": options}).shown
+
+    assert offered is not None
+    assert offered["options"] == taken
+
+
+def test_an_option_that_cannot_be_taken_is_refused_saying_what_was_given() -> None:
+    [tool] = exercise_tool([CLOZE], LESSONS, TOPICS)
+
+    with pytest.raises(ToolError, match='not "ten"'):
+        tool.run({"exercise": "cloze", "lesson": "", "options": {"sentences": "ten"}})
 
 
 def test_calling_an_exercise_offers_it_with_the_options_it_was_not_called_with_as_usual() -> (
@@ -339,11 +396,11 @@ def test_calling_an_exercise_offers_it_with_the_options_it_was_not_called_with_a
         ),
         (
             {"exercise": "stories", "lesson": "dative", "instances": 0},
-            "instances is a whole number from 1 to 50",
+            "instances is a whole number from 1 to 50, not 0",
         ),
         (
             {"exercise": "stories", "lesson": "dative", "options": {"then": "sing"}},
-            "then is one of questions, retell",
+            'then is one of "questions", "retell", written as text, not "sing"',
         ),
         (
             {"exercise": "stories", "lesson": "dative", "options": {"sentences": 3}},
@@ -399,6 +456,148 @@ def test_the_lessons_tool_says_which_lessons_were_practised(tmp_path: Path) -> N
     ]
 
 
+TRANSLATION = {
+    "id": "translation",
+    "title": "Translate",
+    "description": "Translate sentences.",
+    "theory": False,
+    "instance": {"type": "object"},
+    "options": {
+        "sentences": {"label": "Sentences in a set", "min": 1, "max": 10, "default": 5}
+    },
+}
+STORY = "Mia nonna si ricorda ancora del suo villaggio in Sicilia."
+
+
+def _did_a_translation(store: UserStore, session_id: str = "s1") -> str:
+    """A session of a translation of a story, answered and graded; its id."""
+    options: dict[str, Any] = {"translation": {"sentences": 1}}
+    session = store.start_session(
+        session_id,
+        "German",
+        "",
+        [],
+        {"translation": 1},
+        options=options,
+        briefs={"translation": "Use this story."},
+    )
+    store.add_instances(
+        session["id"],
+        "translation",
+        [{"items": [{"source": STORY, "reference": "Meine Oma erinnert sich."}]}],
+    )
+    store.add_grades(
+        session["id"],
+        "translation",
+        [
+            {
+                "result": "partial",
+                "task": STORY,
+                "answer": "Meine Oma erinnert sich an ihre Reise.",
+                "correction": "Meine Oma erinnert sich an ihr Dorf.",
+                "note": "villaggio is Dorf",
+            }
+        ],
+    )
+    return str(session["id"])
+
+
+def _data(store: UserStore) -> dict[str, Tool]:
+    return {tool.name: tool for tool in data_tools(store, lambda: LESSONS, "German")}
+
+
+def test_the_sessions_tool_gives_ids_and_which_exercises_are_favourites(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    session_id = _did_a_translation(store)
+    store.add_favourite(session_id, "translation")
+
+    [listed] = json.loads(_data(store)["sessions"].run({}).content)
+
+    assert listed["id"] == session_id
+    assert listed["exercises"]["translation"]["favourite"] is True
+
+
+def test_the_favourites_tool_lists_only_the_favourite_exercises(tmp_path: Path) -> None:
+    store = UserStore(tmp_path)
+    liked = _did_a_translation(store, "s1")
+    _did_a_translation(store, "s2")
+    store.add_favourite(liked, "translation")
+
+    listed = json.loads(_data(store)["favourites"].run({}).content)
+
+    assert [(each["session"], each["exercise"]) for each in listed] == [
+        (liked, "translation")
+    ]
+
+
+def test_an_exercise_done_is_looked_at_with_what_it_made_and_what_was_answered(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    session_id = _did_a_translation(store)
+
+    record = json.loads(
+        _data(store)["exercise_done"]
+        .run({"session": session_id, "exercise": "translation"})
+        .content
+    )
+
+    assert record["made"][0]["items"][0]["source"] == STORY
+    assert "an ihre Reise" in record["answered"]
+    assert "villaggio is Dorf" in record["answered"]
+    assert record["brief"] == "Use this story."
+    assert record["favourite"] is False
+    assert record["can_do_again_exactly"] is True
+
+
+def test_an_exercise_that_is_not_there_cannot_be_looked_at(tmp_path: Path) -> None:
+    store = UserStore(tmp_path)
+
+    with pytest.raises(ToolError, match="no such exercise"):
+        _data(store)["exercise_done"].run({"session": "s9", "exercise": "translation"})
+
+
+def test_an_exercise_done_is_offered_again_as_it_was(tmp_path: Path) -> None:
+    store = UserStore(tmp_path)
+    session_id = _did_a_translation(store)
+    again = {
+        tool.name: tool for tool in exercise_tool([TRANSLATION], LESSONS, TOPICS, store)
+    }["exercise_again"]
+
+    offered = again.run(
+        {"session": session_id, "exercise": "translation", "fresh": False}
+    ).shown
+
+    assert offered is not None
+    assert offered["again"] == {
+        "session": session_id,
+        "exercise": "translation",
+        "fresh": False,
+    }
+    assert offered["options"] == {"sentences": 1}
+    assert offered["focus"] == "Use this story."
+    assert again.offers
+
+
+def test_an_exercise_that_kept_nothing_is_offered_again_only_made_anew(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.start_session("s1", "German", "", [], {"translation": 1})
+    again = {
+        tool.name: tool for tool in exercise_tool([TRANSLATION], LESSONS, TOPICS, store)
+    }["exercise_again"]
+
+    with pytest.raises(ToolError, match="fresh"):
+        again.run({"session": "s1", "exercise": "translation", "fresh": False})
+    offered = again.run(
+        {"session": "s1", "exercise": "translation", "fresh": True}
+    ).shown
+    assert offered is not None and offered["again"]["fresh"] is True
+
+
 @pytest.mark.parametrize(
     "messages",
     [
@@ -442,6 +641,51 @@ def test_the_tutor_is_told_how_an_exercise_it_offered_went_with_its_log(
     assert '"wrong": 1' in said["content"]
     assert "einem" in said["content"]
     assert "The dative after seit was missed." in said["content"]
+
+
+def test_the_tutor_is_told_what_an_exercise_made_when_nothing_of_it_was_answered(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    session = store.start_session("s1", "German", "", [], {"translation": 1})
+    story = "Mia nonna si ricorda ancora del suo villaggio in Sicilia."
+    store.add_instances(
+        session["id"], "translation", [{"items": [{"source": story, "reference": "…"}]}]
+    )
+
+    said = practised(store, session["id"], "translation", "Translate")
+
+    assert "Nothing of it was answered" in said["content"]
+    assert story in said["content"]
+
+
+def test_the_tutor_is_not_told_what_an_exercise_made_when_it_was_answered(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    session = store.start_session("s1", "German", "", [], {"translation": 1})
+    store.add_instances(
+        session["id"],
+        "translation",
+        [{"items": [{"source": "Ciao.", "reference": "Hallo."}]}],
+    )
+    store.add_grades(
+        session["id"],
+        "translation",
+        [
+            {
+                "result": "right",
+                "task": "Ciao.",
+                "answer": "Hallo.",
+                "correction": "",
+                "note": "",
+            }
+        ],
+    )
+
+    said = practised(store, session["id"], "translation", "Translate")
+
+    assert "Nothing of it was answered" not in said["content"]
 
 
 def test_waiting_for_tasks_ends_once_none_of_them_is_running() -> None:
@@ -840,7 +1084,7 @@ def test_an_exercise_on_a_text_is_called_with_the_text_and_no_lesson() -> None:
     # done once, on no lesson, it is called with neither
     assert "It practises no lesson" in tool.description
     assert "It is done once" in tool.description
-    assert "one of t1 (Wochenende)" in tool.description
+    assert 'one of "t1" (Wochenende)' in tool.description
     assert offered.shown is not None and offered.shown["instances"] == 1
     assert offered.shown is not None
     assert (offered.shown["lesson"], offered.shown["labels"]) == (
@@ -871,6 +1115,15 @@ def test_an_answer_offers_one_exercise_and_the_calls_after_are_refused() -> None
         )
         == 2
     )
+
+
+def test_an_exercise_with_a_tool_of_its_own_is_called_with_how_many_times_to_do_it() -> (
+    None
+):
+    [own, _] = exercise_tool([{**CLOZE, "own_tool": True}, STORIES], LESSONS, TOPICS)
+
+    assert own.name == "cloze"
+    assert own.parameters["required"] == ["instances"]
 
 
 def test_an_exercise_on_a_text_is_not_offered_where_there_is_no_text() -> None:

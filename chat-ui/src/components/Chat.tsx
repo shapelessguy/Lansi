@@ -13,10 +13,11 @@ import type { WordLists } from "../lib/sets";
 import { expandPrompt, type Settings } from "../lib/settings";
 import { allowPlaying, speakMark } from "../lib/speaking";
 import type { UsageEntry } from "../lib/usage";
-import { Check } from "./Check";
 import { CheckedTextarea } from "./CheckedTextarea";
+import { PlaceSentenceChecks } from "./SentenceChecks";
 import { SideList } from "./SideList";
 import { T } from "./T";
+import { Toggle } from "./Toggle";
 
 interface Props {
     /** The chats, shown in the empty space on the left of the messages. */
@@ -138,7 +139,13 @@ export function Chat(
         try {
             // a set is worked out from the counts as they are now; if they cannot be had, from the last ones
             const lists = context.prompt.includes("{{words") ? await loadWords().catch(() => words) : words;
-            const system = expandPrompt(context.prompt, lists, settings.language, settings.level).trim();
+            const system = expandPrompt(
+                context.prompt,
+                lists,
+                settings.language,
+                settings.level,
+                settings.translateInto,
+            ).trim();
             await streamChat({
                 apiKey: settings.apiKey,
                 model: settings.model,
@@ -195,13 +202,14 @@ export function Chat(
                             ))}
                         </select>
                     </label>
-                    <Check
-                        checked={settings.speakReplies}
+                    <PlaceSentenceChecks place="chat" settings={settings} onChangeSettings={onSettingsChange} />
+                    <Toggle
+                        icon="speak"
+                        label={t("Speak replies")}
+                        on={settings.speakReplies}
                         title={t("Reads each reply aloud once it has arrived. The audio is kept.")}
-                        onChange={(checked) => onSettingsChange({ ...settings, speakReplies: checked })}
-                    >
-                        {t("Speak replies")}
-                    </Check>
+                        onChange={(speakReplies) => onSettingsChange({ ...settings, speakReplies })}
+                    />
                     <button onClick={onNewChat}>{t("New chat")}</button>
                 </header>
 
@@ -283,6 +291,7 @@ export function Chat(
                     <CheckedTextarea
                         className="composer-input"
                         inputRef={inputRef}
+                        place="chat"
                         rows={2}
                         placeholder={t("Write a message")}
                         aria-label={t("Message")}
@@ -300,15 +309,15 @@ export function Chat(
                         onEditQuestions={onEditQuestions}
                     />
                     <div className="composer-send">
-                        <Check
-                            checked={settings.enterSends}
+                        <Toggle
+                            icon="enter-sends"
+                            label={t("Enter sends")}
+                            on={settings.enterSends}
                             title={settings.enterSends
                                 ? t("Enter sends the message, and Shift+Enter starts a new line")
                                 : t("Enter starts a new line, and Shift+Enter sends the message")}
-                            onChange={(checked) => onSettingsChange({ ...settings, enterSends: checked })}
-                        >
-                            {t("Enter sends")}
-                        </Check>
+                            onChange={(enterSends) => onSettingsChange({ ...settings, enterSends })}
+                        />
                         {busy
                             ? <button type="button" onClick={() => abort.abort()}>{t("Stop")}</button>
                             : (

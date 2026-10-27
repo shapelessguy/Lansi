@@ -38,6 +38,19 @@ export function checkedBox<B extends Box>(path: readonly B[]): B | null {
 }
 
 /** What a text box is checked for, beyond its spelling: its sentences are profiled, as they are in the chat. */
+/** The places outside the exercises where the sentences written can be checked, each turned on and off by itself. */
+export type CheckedPlace = "chat" | "tutor" | "texts";
+
+/** Whether the sentences written in `place` are checked, as the learner last chose there: on unless turned off. */
+export function placeChecked(place: CheckedPlace, settings: Settings): boolean {
+    return settings.sentenceChecks[place] ?? true;
+}
+
+/** The settings with the sentences written in `place` checked or not. */
+export function withPlaceChecked(settings: Settings, place: CheckedPlace, checked: boolean): Settings {
+    return { ...settings, sentenceChecks: { ...settings.sentenceChecks, [place]: checked } };
+}
+
 export interface Profiling {
     apiKey: string;
     model: ModelChoice;
@@ -63,11 +76,14 @@ export function correctorOf(settings: Settings): ModelChoice {
  * under `usageId`.
  */
 export function profilingOf(settings: Settings, words: WordLists, usageId?: string): Profiling {
-    const { language, level } = settings;
+    const { language, level, translateInto } = settings;
     return {
         apiKey: settings.apiKey,
         model: settings.profileModel,
-        questions: requestQuestions(settings.questions, (text) => expandPrompt(text, words, language, level)),
+        questions: requestQuestions(
+            settings.questions,
+            (text) => expandPrompt(text, words, language, level, translateInto),
+        ),
         rateWords: settings.rateWords,
         correctWith: settings.correctSentences ? correctorOf(settings) : null,
         usageId,

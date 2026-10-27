@@ -299,14 +299,21 @@ export function sentenceState(sentence: Sentence): SentenceState {
     return sentence.profile_error ? "failed" : "done";
 }
 
+/** How right a word that was rated is: "good" from 0.9, "unsure" from 0.5, and "wrong" below. */
+export type WordShade = "good" | "unsure" | "wrong";
+
+/** How right a word rated `value`, from 0 to 1, is taken to be, as it is coloured. */
+export function wordShade(value: number): WordShade {
+    return value >= 0.9 ? "good" : value >= 0.5 ? "unsure" : "wrong";
+}
+
 /**
- * How strongly to mark a word that was rated `value`, from 0 for a word that
- * is right to 1 for one that is wrong. Words that are nearly right are not
- * marked at all, so that a sentence without mistakes stays clean.
+ * The colour a word rated `value` is tinted with, green, yellow or red, as
+ * the styles of the app set it; one that is drawn in the shadow root of an
+ * exercise is given it there, where the variables of the app reach.
  */
-export function doubt(value: number): number {
-    const CLEAR_FROM = 0.85;
-    return Math.min(1, Math.max(0, (CLEAR_FROM - value) / CLEAR_FROM));
+export function wordTint(value: number): string {
+    return `var(--word-${wordShade(value)})`;
 }
 
 /** A stretch of the text that is one sentence, or the space between two. */

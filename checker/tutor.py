@@ -84,7 +84,7 @@ MAX_TURNS = 8
 STREAMED = ("text", "summary", "arguments")
 # how long the focus an exercise is briefed with may be, and how many words
 # it may be given
-MAX_FOCUS = 4000
+MAX_FOCUS = 10_000
 MAX_WORDS = 30
 # how many tools called at once are run together at most
 MAX_AT_ONCE = 8
@@ -108,6 +108,9 @@ COMING_DAYS = 7
 MAX_PLANNED = 600
 # how many instances of an exercise may be offered, as practice allows
 MAX_INSTANCES = 50
+# how much the tutor is told of what an exercise made when nothing of it
+# was answered, in characters
+MAX_MADE = 8000
 # how long the log of an exercise done in the chat is waited for, and how
 # often whether it is written is looked at meanwhile
 LOG_WAIT_SECS = 120
@@ -703,6 +706,68 @@ def wait_for(
         pause(LOG_LOOK_SECS)
 
 
+def _favourite_keys(store: Any) -> set[tuple[str, str]]:
+    """The exercises of sessions kept among the favourites, each as its
+    session's id and its own."""
+    return {(each["session_id"], each["exercise"]) for each in store.favourites()}
+
+
+def exercise_record(store: Any, session_id: str, exercise: str) -> dict[str, Any]:
+    """Everything kept of an exercise of a session, as the tutor is told it:
+    how it was set up, what it made, what the learner answered and how it
+    was graded, its log, whether it is a favourite and whether it can be
+    done again exactly. What it made and what was answered are cut short
+    where they are long. Raises ToolError if there is no such exercise."""
+    session = store.session(session_id)
+    if session is None or exercise not in session["progress"]:
+        raise ToolError(
+            "there is no such exercise of a session; the sessions tool gives"
+            " the ids of the sessions and their exercises"
+        )
+    progress = session["progress"][exercise]
+    try:
+        made = store.instances(exercise, store.instance_ids(session_id, exercise))
+    except ValueError:
+        made = []
+    shown = json.dumps(made, ensure_ascii=False)
+    grades = store.grades(session_id, exercise)
+    log = store.logs(session_id).get(exercise)
+    return {
+        "session": session_id,
+        "exercise": exercise,
+        "language": session["language"],
+        "started": _date(session["started_at"]),
+        "status": progress.get("status", session["status"]),
+        "lesson": session["lesson"] or "review",
+        "options": session["options"].get(exercise, {}),
+        "instances": session["exercises"].get(exercise, 1),
+        "brief": session["briefs"].get(exercise, ""),
+        "results": progress["results"],
+        "scores": progress["scores"],
+        "favourite": (session_id, exercise) in _favourite_keys(store),
+        "can_do_again_exactly": bool(made),
+        "made": made if len(shown) <= MAX_MADE else shown[:MAX_MADE] + "…",
+        "answered": describe_record(
+            grades, {} if grades else store.written(session_id, exercise)
+        ),
+        "log": log or "",
+    }
+
+
+def _made_of(store: Any, session_id: str, exercise: str) -> str:
+    """What an exercise of a session made, as JSON, cut to MAX_MADE
+    characters; nothing if it made nothing, or what it made is gone."""
+    try:
+        made = store.instances(exercise, store.instance_ids(session_id, exercise))
+    except ValueError:
+        return ""
+    if not made:
+        return ""
+    said = json.dumps(made, ensure_ascii=False)
+    said = said if len(said) <= MAX_MADE else said[:MAX_MADE] + "…"
+    return PROMPTS("tutor.made", made=said)
+
+
 def practised(store: Any, session_id: str, exercise: str, title: str) -> dict[str, Any]:
     """What the tutor is told, as if the learner said it, once the
     `exercise` of a session it offered, which goes by `title`, has been
@@ -713,6 +778,7 @@ def practised(store: Any, session_id: str, exercise: str, title: str) -> dict[st
         raise ValueError("there is no such exercise of a session")
     progress = session["progress"][exercise]
     log = store.logs(session_id).get(exercise)
+    grades = store.grades(session_id, exercise)
     content = PROMPTS(
         "tutor.practised",
         title=title,
@@ -720,8 +786,11 @@ def practised(store: Any, session_id: str, exercise: str, title: str) -> dict[st
         results=json.dumps(
             {**progress["results"], "scores": progress["scores"]}, ensure_ascii=False
         ),
-        grades=describe_record(store.grades(session_id, exercise), {}),
+        grades=describe_record(grades, {}),
         log=log or "none",
+        # With nothing answered, the tutor would not know what the exercise
+        # was, and could take it for one that made nothing.
+        made="" if grades else _made_of(store, session_id, exercise),
     )
     return {"role": "user", "content": content}
 
@@ -758,8 +827,10 @@ def data_tools(
 
     def list_sessions(arguments: dict[str, Any]) -> Done:
         count = _count(arguments, MAX_SESSIONS)
+        favourites = _favourite_keys(store)
         listed = [
             {
+                "id": session["id"],
                 "started": _date(session["started_at"]),
                 "lesson": session["lesson"] or "review",
                 "status": session["status"],
@@ -767,6 +838,7 @@ def data_tools(
                     exercise: {
                         **progress["results"],
                         "scores": progress["scores"],
+                        "favourite": (session["id"], exercise) in favourites,
                     }
                     for exercise, progress in session["progress"].items()
                 },
@@ -775,6 +847,42 @@ def data_tools(
             if session["language"] == language and not session.get("hidden")
         ][:count]
         return Done(json.dumps(listed, ensure_ascii=False))
+
+    def list_favourites(arguments: dict[str, Any]) -> Done:
+        count = _count(arguments, MAX_SESSIONS)
+        listed = []
+        for favourite in store.favourites():
+            session = store.session(favourite["session_id"])
+            exercise = favourite["exercise"]
+            if (
+                session is None
+                or session["language"] != language
+                or exercise not in session["progress"]
+            ):
+                continue
+            progress = session["progress"][exercise]
+            listed.append(
+                {
+                    "session": session["id"],
+                    "exercise": exercise,
+                    "added": _date(favourite["added_at"]),
+                    "started": _date(session["started_at"]),
+                    "lesson": session["lesson"] or "review",
+                    **progress["results"],
+                    "scores": progress["scores"],
+                }
+            )
+        return Done(json.dumps(listed[:count], ensure_ascii=False))
+
+    def look_at_exercise(arguments: dict[str, Any]) -> Done:
+        record = exercise_record(
+            store,
+            str(arguments.get("session") or ""),
+            str(arguments.get("exercise") or ""),
+        )
+        if record["language"] != language:
+            raise ToolError("that session is of another language")
+        return Done(json.dumps(record, ensure_ascii=False))
 
     def list_logs(arguments: dict[str, Any]) -> Done:
         count, kind = _count(arguments, MAX_LOGS), arguments.get("kind")
@@ -824,6 +932,33 @@ def data_tools(
             {"type": "object", "properties": {"count": counted(MAX_SESSIONS)}},
             list_sessions,
             lambda _: "Looking at your latest sessions of practice",
+        ),
+        Tool(
+            "favourites",
+            PROMPTS("tutor.tools.favourites"),
+            {"type": "object", "properties": {"count": counted(MAX_SESSIONS)}},
+            list_favourites,
+            lambda _: "Looking at your favourite exercises",
+        ),
+        Tool(
+            "exercise_done",
+            PROMPTS("tutor.tools.exercise_done"),
+            {
+                "type": "object",
+                "properties": {
+                    "session": {
+                        "type": "string",
+                        "description": PROMPTS("tutor.tools.session_id"),
+                    },
+                    "exercise": {
+                        "type": "string",
+                        "description": PROMPTS("tutor.tools.exercise_of_session"),
+                    },
+                },
+                "required": ["session", "exercise"],
+            },
+            look_at_exercise,
+            lambda _: "Looking at an exercise you did",
         ),
         Tool(
             "logs",
@@ -1302,6 +1437,7 @@ def exercise_tool(
     manifests: list[dict[str, Any]],
     lessons: list[dict[str, Any]],
     topics: list[dict[str, Any]],
+    store: Any = None,
 ) -> list[Tool]:
     """The tool that offers the learner an exercise of `manifests`, which
     its description lists, each with its options, so that what every
@@ -1351,6 +1487,7 @@ def exercise_tool(
         },
         "options": {
             "type": "object",
+            "properties": _options_schema(offerable.values()),
             "description": PROMPTS("tutor.tools.options"),
         },
         # what steers it to what the learner needs now
@@ -1383,10 +1520,13 @@ def exercise_tool(
 
     catalog = "\n".join(_listed(manifest) for manifest in offerable.values())
     own_tools = [_own_tool(manifest, lesson_ids, titles, topic_ids) for manifest in own]
+    # those that make what they do, which can be done again as they were
+    again = [] if store is None else [_again_tool(manifests, store, titles, topic_ids)]
     if not offerable:
-        return own_tools
+        return [*own_tools, *again]
     return [
         *own_tools,
+        *again,
         Tool(
             "exercise",
             PROMPTS("tutor.tools.exercise", exercises=catalog),
@@ -1395,7 +1535,7 @@ def exercise_tool(
             {
                 "type": "object",
                 "properties": properties,
-                "required": ["exercise", "lesson", "options", "focus"],
+                "required": ["exercise", "lesson", "instances", "options", "focus"],
             },
             offer,
             lambda arguments: (
@@ -1406,6 +1546,102 @@ def exercise_tool(
             offers=True,
         ),
     ]
+
+
+def _again_tool(
+    manifests: list[dict[str, Any]],
+    store: Any,
+    titles: dict[str, str],
+    topic_ids: dict[str, str],
+) -> Tool:
+    """The tool that offers an exercise the learner did, done again: as it
+    was, with what it made, or with what it does made anew, its settings
+    kept."""
+    replayable = {
+        manifest["id"]: manifest
+        for manifest in manifests
+        if manifest.get("instance") is not None
+    }
+    topic_titles = {topic_id: title for title, topic_id in topic_ids.items()}
+
+    def offer(arguments: dict[str, Any]) -> Done:
+        session_id = str(arguments.get("session") or "")
+        exercise = str(arguments.get("exercise") or "")
+        fresh = arguments.get("fresh") is True
+        session = store.session(session_id)
+        if session is None or exercise not in session["progress"]:
+            raise ToolError(
+                "there is no such exercise of a session; the sessions and"
+                " favourites tools give the ids of the sessions and their exercises"
+            )
+        manifest = replayable.get(exercise)
+        if manifest is None:
+            raise ToolError(f"{exercise} makes nothing, and is not one to do again")
+        if not fresh and not store.instance_ids(session_id, exercise):
+            raise ToolError(
+                "nothing of that exercise was kept to do again exactly;"
+                " it can be done again with fresh set to true"
+            )
+        options = session["options"].get(exercise, {})
+        offered = {
+            "kind": "exercise",
+            "exercise": exercise,
+            "title": manifest["title"],
+            "theory": False,
+            "practises_lesson": manifest.get("lesson", True) is not False,
+            "lesson": session["lesson"],
+            "lesson_title": titles.get(session["lesson"], ""),
+            "instances": session["exercises"].get(exercise, 1),
+            "topics": list(session["topics"]),
+            "topic_titles": [
+                topic_titles[each] for each in session["topics"] if each in topic_titles
+            ],
+            "options": options,
+            "labels": {
+                name: option["choices"][options[name]]
+                for name, option in (manifest.get("options") or {}).items()
+                if "choices" in option and options.get(name) in option["choices"]
+            },
+            "focus": session["briefs"].get(exercise, ""),
+            "again": {"session": session_id, "exercise": exercise, "fresh": fresh},
+        }
+        told = {
+            name: value
+            for name, value in offered.items()
+            if name not in ("kind", "topics", "theory", "practises_lesson")
+        }
+        return Done(
+            PROMPTS(
+                "tutor.tools.offered", offered=json.dumps(told, ensure_ascii=False)
+            ),
+            offered,
+        )
+
+    return Tool(
+        "exercise_again",
+        PROMPTS("tutor.tools.exercise_again"),
+        {
+            "type": "object",
+            "properties": {
+                "session": {
+                    "type": "string",
+                    "description": PROMPTS("tutor.tools.session_id"),
+                },
+                "exercise": {
+                    "type": "string",
+                    "description": PROMPTS("tutor.tools.exercise_of_session"),
+                },
+                "fresh": {
+                    "type": "boolean",
+                    "description": PROMPTS("tutor.tools.fresh"),
+                },
+            },
+            "required": ["session", "exercise", "fresh"],
+        },
+        offer,
+        lambda _: "Preparing an exercise you did, to do it again",
+        offers=True,
+    )
 
 
 def _own_tool(
@@ -1461,7 +1697,13 @@ def _own_tool(
             title=manifest["title"],
             description=manifest["description"],
         ),
-        {"type": "object", "properties": properties},
+        {
+            "type": "object",
+            "properties": properties,
+            # a number left out is taken as 1, which a model leaves out
+            # where it meant more, having said so only in the brief
+            **({"required": ["instances"]} if "instances" in properties else {}),
+        },
         offer,
         lambda _: f"Preparing the exercise “{manifest['title']}”",
         offers=True,
@@ -1585,6 +1827,40 @@ def _offered(
     )
 
 
+def _options_schema(manifests: Any) -> dict[str, Any]:
+    """The options of `manifests`, by name, each with what it takes, as the
+    schema of the tool gives them: a whole number, or one of the values of
+    a choice, written as text. An option that is a number in one exercise
+    and a choice in another is left to the list of exercises."""
+    kinds: dict[str, set[str]] = {}
+    values: dict[str, list[str]] = {}
+    for manifest in manifests:
+        if manifest.get("theory"):
+            continue
+        for name, option in (manifest.get("options") or {}).items():
+            choices = option.get("choices")
+            kinds.setdefault(name, set()).add(
+                "choice" if "choices" in option else "number"
+            )
+            for value in choices or {}:
+                if value not in values.setdefault(name, []):
+                    values[name].append(value)
+    schema: dict[str, Any] = {}
+    for name, kind in kinds.items():
+        if kind == {"number"}:
+            schema[name] = {
+                "type": "integer",
+                "description": PROMPTS("tutor.tools.option_is_number"),
+            }
+        elif kind == {"choice"}:
+            schema[name] = {
+                "type": "string",
+                "enum": values.get(name, []),
+                "description": PROMPTS("tutor.tools.option_is_choice"),
+            }
+    return schema
+
+
 def _option_said(name: str, option: dict[str, Any]) -> str:
     """An option of a manifest as the tool that offers the exercise lists
     it: one of its choices, each said with its label, or a whole number
@@ -1593,15 +1869,16 @@ def _option_said(name: str, option: dict[str, Any]) -> str:
         return PROMPTS(
             "tutor.tools.option_choices",
             name=name,
-            label=option["label"],
+            label=option.get("about") or option["label"],
             choices=", ".join(
-                f"{value} ({label})" for value, label in option["choices"].items()
+                f"{json.dumps(value, ensure_ascii=False)} ({label})"
+                for value, label in option["choices"].items()
             ),
         )
     return PROMPTS(
         "tutor.tools.option_number",
         name=name,
-        label=option["label"],
+        label=option.get("about") or option["label"],
         least=option["min"],
         most=option["max"],
         usual=option["default"],
@@ -1614,8 +1891,17 @@ def _option_value(name: str, option: dict[str, Any], value: object) -> Any:
     if "choices" in option:
         if value is None:
             return next(iter(option["choices"]))
+        # a value such as "2" may come as the number 2
+        if not isinstance(value, bool) and isinstance(value, (int, float)):
+            value = str(value) if str(value) in option["choices"] else value
         if value not in option["choices"]:
-            raise ToolError(f"{name} is one of {', '.join(option['choices'])}")
+            listed = ", ".join(
+                json.dumps(each, ensure_ascii=False) for each in option["choices"]
+            )
+            raise ToolError(
+                f"{name} is one of {listed}, written as text,"
+                f" not {json.dumps(value, ensure_ascii=False)}"
+            )
         return value
     if value is None:
         return option["default"]
@@ -1623,12 +1909,24 @@ def _option_value(name: str, option: dict[str, Any], value: object) -> Any:
 
 
 def _whole(value: object, name: str, least: int, most: int) -> int:
+    """`value` as a whole number from `least` to `most`, which a model may
+    have written as text, such as "10". Raises ToolError, saying what was
+    given, so that the model can see what to change."""
+    given = value
+    if isinstance(value, str) and value.strip().isdigit():
+        value = int(value.strip())
+    elif isinstance(value, float) and value.is_integer():
+        value = int(value)
     if (
         isinstance(value, bool)
         or not isinstance(value, int)
         or not least <= value <= most
     ):
-        raise ToolError(f"{name} is a whole number from {least} to {most}")
+        quoted = ", written without quotes" if isinstance(given, str) else ""
+        raise ToolError(
+            f"{name} is a whole number from {least} to {most}{quoted},"
+            f" not {json.dumps(given, ensure_ascii=False)}"
+        )
     return value
 
 

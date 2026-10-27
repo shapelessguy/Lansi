@@ -12,19 +12,19 @@ test("a wide window starts with the library and the usage panel", () => {
         libraryTab: "vocabulary",
         logsTab: "logs",
         panel: "usage",
-        activity: "chat",
+        activity: "tutor",
         text: null,
     });
 });
 
-test("a narrow window starts without the panels that would cover the chat", () => {
+test("a narrow window starts without the panels that would cover what is open", () => {
     expect(defaultLayout(900)).toEqual({
         libraryOpen: true,
         logsOpen: false,
         libraryTab: "vocabulary",
         logsTab: "logs",
         panel: null,
-        activity: "chat",
+        activity: "tutor",
         text: null,
     });
     expect(defaultLayout(600)).toEqual({
@@ -33,7 +33,7 @@ test("a narrow window starts without the panels that would cover the chat", () =
         libraryTab: "vocabulary",
         logsTab: "logs",
         panel: null,
-        activity: "chat",
+        activity: "tutor",
         text: null,
     });
 });
@@ -56,6 +56,15 @@ test("a stored layout is kept as it was left", () => {
         panel: "checks",
         activity: "texts",
         text: "t1",
+    });
+});
+
+test("a layout stored when the chat was an activity opens the chat in the library", () => {
+    expect(normalizeLayout({ libraryOpen: false, logsOpen: true, activity: "chat" }, 1600)).toMatchObject({
+        libraryOpen: true,
+        logsOpen: false,
+        libraryTab: "chat",
+        activity: "tutor",
     });
 });
 

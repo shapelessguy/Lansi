@@ -122,6 +122,24 @@ def test_the_tutor_s_brief_is_told_before_what_the_app_says_to_heed() -> None:
     assert told.index("warten auf") < told.index("Do not use: Tisch")
 
 
+def test_an_exercise_done_several_times_with_a_brief_is_told_which_instance_it_makes() -> (
+    None
+):
+    told = describe_guidance(
+        context(brief="Set 1: warten auf\nSet 2: denken an", instances=3), 2
+    )
+
+    assert "instance 2 of 3" in told
+    assert told.index("Set 1: warten auf") < told.index("instance 2 of 3")
+
+
+def test_an_exercise_is_not_told_which_instance_it_makes_when_there_is_one_or_no_brief() -> (
+    None
+):
+    assert "instance" not in describe_guidance(context(brief="Set 1", instances=1), 1)
+    assert describe_guidance(context(instances=3), 2) == ""
+
+
 def test_a_lesson_is_described_by_its_points_without_its_pages_of_theory() -> None:
     lesson = {
         "title": "Trennbare Verben",

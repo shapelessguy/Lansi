@@ -214,7 +214,7 @@ def make_picture(
         level=_level(context),
         topics=describe_topics(context),
         words=describe_words(context),
-        guidance=describe_guidance(context),
+        guidance=describe_guidance(context, at + 1),
         count=min(max(THINGS_PER_PANEL * _panels(context), MIN_THINGS), MAX_THINGS),
         panels=_panels(context),
         avoid=avoid,

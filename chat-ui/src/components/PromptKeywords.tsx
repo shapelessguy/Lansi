@@ -2,7 +2,13 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { t } from "../lib/i18n";
-import { LANGUAGE_PLACEHOLDER, LEVEL_PLACEHOLDER, type Settings, WORDS_PLACEHOLDER } from "../lib/settings";
+import {
+    INTO_PLACEHOLDER,
+    LANGUAGE_PLACEHOLDER,
+    LEVEL_PLACEHOLDER,
+    type Settings,
+    WORDS_PLACEHOLDER,
+} from "../lib/settings";
 
 /** The keywords a prompt can have, each with what it is replaced by for this learner. */
 export function PromptKeywords({ settings }: { settings: Settings }) {
@@ -19,6 +25,16 @@ export function PromptKeywords({ settings }: { settings: Settings }) {
                     <code>{LEVEL_PLACEHOLDER}</code>
                 </dt>
                 <dd>{t("your level in it ({level})", { level: settings.level })}</dd>
+            </div>
+            <div>
+                <dt>
+                    <code>{INTO_PLACEHOLDER}</code>
+                </dt>
+                <dd>
+                    {t("the language things are translated into for you ({language})", {
+                        language: settings.translateInto,
+                    })}
+                </dd>
             </div>
             <div>
                 <dt>
