@@ -31,7 +31,7 @@ from typing import Any
 from books import PICTURE_ID
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 33
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -539,6 +539,24 @@ _BOOK_VERSIONS = """
 ALTER TABLE books ADD COLUMN parent_id TEXT;
 ALTER TABLE books ADD COLUMN version TEXT;
 """
+
+# What came with version 32: the brief the tutor gave an exercise it offered,
+# what it is to make, which comes before its lesson, topics and words.
+_BRIEFS = """
+ALTER TABLE session_exercises ADD COLUMN brief TEXT NOT NULL DEFAULT '';
+"""
+
+# What came with version 33: the exercises of sessions the learner keeps
+# among their favourites, to do again.
+_FAVOURITES = """
+CREATE TABLE favourites (
+    session_id TEXT NOT NULL REFERENCES sessions (id) ON DELETE CASCADE,
+    exercise TEXT NOT NULL,
+    -- in seconds since the epoch
+    added_at REAL NOT NULL,
+    PRIMARY KEY (session_id, exercise)
+);
+"""
 # how far an exercise the tutor offered got
 OFFER_STATUSES = ("running", "done", "abandoned")
 
@@ -783,6 +801,9 @@ class UserStore:
         # the pictures in the text of each book, which its versions show too
         self._pictures = self._directory / "pictures"
         self._speech = self._directory / "speech"
+        # what has been written of the transformed versions of each book
+        # that are not made yet, for one that failed to be taken up
+        self._drafts = self._directory / "drafts"
         self._icons = self._directory / "topics"
         self._instances = self._directory / "exercises"
         # the last request the tutor made to its model, for the inspector
@@ -857,6 +878,10 @@ class UserStore:
                 self._db.executescript(_BOOK_NAVIGATION)
             if version < 31:
                 self._db.executescript(_BOOK_VERSIONS)
+            if version < 32:
+                self._db.executescript(_BRIEFS)
+            if version < 33:
+                self._db.executescript(_FAVOURITES)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -1563,6 +1588,51 @@ class UserStore:
             (self._originals / f"{each}.epub").unlink(missing_ok=True)
             shutil.rmtree(self._speech / each, ignore_errors=True)
             shutil.rmtree(self._pictures / each, ignore_errors=True)
+            shutil.rmtree(self._drafts / each, ignore_errors=True)
+
+    def transform_drafts(self, book_id: str, key: str) -> dict[str, Any]:
+        """What has been written of the parts of the transformed version of
+        a book that `key` names, by the place of each part, as
+        `save_transform_draft` kept it; nothing if none was."""
+        if not (is_id(book_id) and is_id(key)):
+            return {}
+        with self._lock:
+            try:
+                found = json.loads(
+                    (self._drafts / book_id / f"{key}.json").read_text(encoding="utf-8")
+                )
+            except (OSError, ValueError):
+                return {}
+        return found if isinstance(found, dict) else {}
+
+    def save_transform_draft(
+        self, book_id: str, key: str, part: int, draft: dict[str, Any]
+    ) -> None:
+        """Keep what has been written of the part `part` of the transformed
+        version of a book that `key` names, in place of what was kept."""
+        if not (is_id(book_id) and is_id(key)):
+            return
+        folder = self._drafts / book_id
+        kept = folder / f"{key}.json"
+        with self._lock:
+            folder.mkdir(parents=True, exist_ok=True)
+            try:
+                found = json.loads(kept.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                found = {}
+            if not isinstance(found, dict):
+                found = {}
+            found[str(part)] = draft
+            written = kept.with_suffix(".tmp")
+            written.write_text(json.dumps(found, ensure_ascii=False), encoding="utf-8")
+            written.replace(kept)
+
+    def drop_transform_drafts(self, book_id: str, key: str) -> None:
+        """Forget what was written of the transformed version `key` names,
+        once it is made."""
+        if is_id(book_id) and is_id(key):
+            with self._lock:
+                (self._drafts / book_id / f"{key}.json").unlink(missing_ok=True)
 
     def save_speech(
         self,
@@ -1682,7 +1752,7 @@ class UserStore:
 
     # practice
 
-    def start_session(
+    def start_session(  # noqa: PLR0913, PLR0917
         self,
         session_id: str,
         language: str,
@@ -1696,10 +1766,12 @@ class UserStore:
         options: dict[str, dict[str, str]] | None = None,
         minutes: dict[str, int] | None = None,
         exams: dict[str, str] | None = None,
+        briefs: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Start a session of practice with the exercises given, each with
         how many instances of it there are to be, the `words` they are to
-        use, if any, and the `guidance` each is given, the `options` it was
+        use, if any, and the `guidance` each is given, the `briefs` the
+        tutor gave those it offered, the `options` it was
         chosen with, how many `minutes` it may take, none for no limit, and
         what an exam tells it of the part it is, by exercise, which makes it
         a part of an evaluation. A review has no `lesson`, and goes over
@@ -1709,6 +1781,7 @@ class UserStore:
         options = options or {}
         minutes = minutes or {}
         exams = exams or {}
+        briefs = briefs or {}
         if not is_id(session_id):
             raise ValueError("a session needs an id")
         if not exercises:
@@ -1739,8 +1812,8 @@ class UserStore:
             )
             self._db.executemany(
                 "INSERT INTO session_exercises (session_id, exercise, position,"
-                " instances, guidance, options, minutes, exam)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                " instances, guidance, options, minutes, exam, brief)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (
                         session_id,
@@ -1751,6 +1824,7 @@ class UserStore:
                         json.dumps(options.get(exercise, {}), ensure_ascii=False),
                         minutes.get(exercise, 0),
                         exams.get(exercise, ""),
+                        briefs.get(exercise, ""),
                     )
                     for position, (exercise, instances) in enumerate(exercises.items())
                 ],
@@ -1780,6 +1854,8 @@ class UserStore:
                 "exercises": {},
                 # what each exercise was told to heed, by exercise
                 "guidance": {},
+                # what the tutor told each exercise it offered to make
+                "briefs": {},
                 # the options each exercise was chosen with, by exercise
                 "options": {},
                 # how many minutes each exercise may take, 0 for no limit
@@ -1838,15 +1914,18 @@ class UserStore:
             started_at,
             scores,
             replay,
+            brief,
         ) in self._db.execute(
             "SELECT session_id, exercise, instances, state IS NOT NULL,"
             " finished_at IS NOT NULL, guidance, options, minutes, exam,"
-            " started_at, scores, replay FROM session_exercises ORDER BY position"
+            " started_at, scores, replay, brief FROM session_exercises"
+            " ORDER BY position"
         ):
             if session_id not in sessions:
                 continue
             sessions[session_id]["exercises"][exercise] = instances
             sessions[session_id]["guidance"][exercise] = guidance
+            sessions[session_id]["briefs"][exercise] = brief
             sessions[session_id]["options"][exercise] = json.loads(options)
             sessions[session_id]["minutes"][exercise] = minutes
             sessions[session_id]["exams"][exercise] = exam
@@ -2210,13 +2289,48 @@ class UserStore:
             )
 
     def logs(self, session_id: str) -> dict[str, str]:
-        """The logs of the exercises of a session that have one, by exercise."""
+        """The logs of the exercises of a session that have one, by exercise:
+        for one that does again exactly what another did, the log of that
+        one, which tells how each time went, if it has one."""
+        with self._lock:
+            replaying = [
+                exercise
+                for (exercise,) in self._db.execute(
+                    "SELECT exercise FROM session_exercises"
+                    " WHERE session_id = ? AND replay IS NOT NULL",
+                    (session_id,),
+                )
+            ]
+        logs = self._own_logs(session_id)
+        for exercise in replaying:
+            first = self.replayed_from(session_id, exercise)
+            found = None if first is None else self._own_logs(first).get(exercise)
+            # one done again before its log was added to has a log of its own
+            if found is not None:
+                logs[exercise] = found
+        return logs
+
+    def _own_logs(self, session_id: str) -> dict[str, str]:
+        """The logs kept under a session, by exercise."""
         with self._lock:
             rows = self._db.execute(
                 "SELECT exercise, content FROM logs WHERE session_id = ?",
                 (session_id,),
             ).fetchall()
         return dict(rows)
+
+    def replayed_from(self, session_id: str, exercise: str) -> str | None:
+        """The session that made what an exercise of a session does again
+        exactly, or None if it does not."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT instances.session_id FROM session_exercises"
+                " JOIN instances ON instances.id = json_extract(replay, '$[0]')"
+                " WHERE session_exercises.session_id = ?"
+                " AND session_exercises.exercise = ?",
+                (session_id, exercise),
+            ).fetchone()
+        return None if row is None else str(row[0])
 
     def add_log(
         self,
@@ -2279,6 +2393,49 @@ class UserStore:
                 (exercise, exercise, sessions),
             ).fetchall()
         return list(dict.fromkeys(text for (text,) in rows if text.strip()))
+
+    # favourites
+
+    def favourites(self) -> list[dict[str, Any]]:
+        """The exercises of sessions kept among the favourites, the latest
+        added first, each as `{"session_id": ..., "exercise": ...,
+        "added_at": ...}`."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT session_id, exercise, added_at FROM favourites"
+                " ORDER BY added_at DESC"
+            ).fetchall()
+        return [
+            {"session_id": session_id, "exercise": exercise, "added_at": added_at}
+            for session_id, exercise, added_at in rows
+        ]
+
+    def add_favourite(self, session_id: str, exercise: str) -> None:
+        """Keep an exercise of a session among the favourites. Raises
+        ValueError if the session has no such exercise."""
+        with self._lock, self._db:
+            if (
+                self._db.execute(
+                    "SELECT 1 FROM session_exercises"
+                    " WHERE session_id = ? AND exercise = ?",
+                    (session_id, exercise),
+                ).fetchone()
+                is None
+            ):
+                raise ValueError("there is no such exercise in the session")
+            self._db.execute(
+                "INSERT OR IGNORE INTO favourites (session_id, exercise, added_at)"
+                " VALUES (?, ?, ?)",
+                (session_id, exercise, self._now()),
+            )
+
+    def remove_favourite(self, session_id: str, exercise: str) -> None:
+        """Take an exercise of a session out of the favourites."""
+        with self._lock, self._db:
+            self._db.execute(
+                "DELETE FROM favourites WHERE session_id = ? AND exercise = ?",
+                (session_id, exercise),
+            )
 
     # evaluations
 

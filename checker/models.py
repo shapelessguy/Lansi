@@ -11,18 +11,23 @@ request goes to a path of its own under the address: `chat/completions`,
 
 A request names a model by its id on OpenRouter, or as `{"model": ...,
 "url": ..., "key": ...}` for one at an address of its own, whose key may
-be left out.
+be left out. A model of OpenRouter may come as `{"model": ..., "providers":
+[...]}`, the providers that alone are to serve it, which a chat request
+asks OpenRouter for as `provider.only` (`routed`); with none, any may.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import Any
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 # OpenRouter's decision models are asked apart from its others
 OPENROUTER_DECISIONS = "https://openrouter.ai/api/alpha/decisions"
 # more than an id or an address is ever long
 MAX_LENGTH = 500
+# more providers than a model is ever served by
+MAX_PROVIDERS = 50
 
 
 @dataclass(frozen=True)
@@ -37,6 +42,9 @@ class Model:
     # the key the requests go with: the learner's OpenRouter key, or one of
     # the server at `url`, which may need none
     key: str = ""
+    # the providers of OpenRouter that alone are to serve it, by their
+    # slugs; none for any
+    providers: tuple[str, ...] = ()
 
     @property
     def on_openrouter(self) -> bool:
@@ -52,6 +60,20 @@ class Model:
         if self.on_openrouter and path == "decisions":
             return OPENROUTER_DECISIONS
         return f"{(self.url or OPENROUTER_URL).rstrip('/')}/{path}"
+
+    def routed(self, body: dict[str, Any]) -> dict[str, Any]:
+        """A chat request `body`, told which providers alone are to serve
+        it, if it is asked on OpenRouter of some only."""
+        if not (self.on_openrouter and self.providers):
+            return body
+        provider = body.get("provider")
+        return {
+            **body,
+            "provider": {
+                **(provider if isinstance(provider, dict) else {}),
+                "only": list(self.providers),
+            },
+        }
 
     def headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.key}"} if self.key else {}
@@ -97,9 +119,19 @@ def read_model(value: object, openrouter_key: str = "") -> Model:
         url = url.strip().rstrip("/")
         if url and not url.startswith(("http://", "https://")):
             raise ValueError(f"{url} is not the address of a server")
+        providers = value.get("providers") or []
+        if not (
+            isinstance(providers, list)
+            and len(providers) <= MAX_PROVIDERS
+            and all(isinstance(each, str) and each.strip() for each in providers)
+        ):
+            raise ValueError("the providers of a model are a list of their slugs")
         return Model(
             name.strip()[:MAX_LENGTH],
             url[:MAX_LENGTH],
             key.strip() if url else openrouter_key,
+            ()
+            if url
+            else tuple(dict.fromkeys(each.strip()[:MAX_LENGTH] for each in providers)),
         )
     raise ValueError("a model is named by its id, or with its address")

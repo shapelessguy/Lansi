@@ -31,6 +31,7 @@ import { amount, modelFacts } from "../lib/inspect";
 import { modelRequest, orModel } from "../lib/models";
 import type { Settings } from "../lib/settings";
 import type { BackgroundTask } from "../lib/tasks";
+import { Check } from "./Check";
 import { PromptKeywords } from "./PromptKeywords";
 
 interface Props {
@@ -534,18 +535,16 @@ export function BookVersionEditor(
                                         <option value="left">{t("Left out")}</option>
                                     </select>
                                 </label>
-                                <label
+                                <Check
+                                    className=""
+                                    checked={think}
                                     title={t(
                                         "The model reasons before it writes each part: slower and dearer, and perhaps truer to the prompt",
                                     )}
+                                    onChange={setThink}
                                 >
-                                    <input
-                                        type="checkbox"
-                                        checked={think}
-                                        onChange={(event) => setThink(event.target.checked)}
-                                    />
                                     {t("Think first")}
-                                </label>
+                                </Check>
                                 <span className="version-stories">
                                     {t("Stories")}
                                     {book && (

@@ -31,6 +31,7 @@ import {
     startSession,
     stepExercise,
 } from "../lib/practice";
+import type { WordLists } from "../lib/sets";
 import { exerciseVocabularyOf, type Settings } from "../lib/settings";
 import type { BackgroundTask } from "../lib/tasks";
 import {
@@ -43,9 +44,11 @@ import {
     type Topic,
     updateTopic,
 } from "../lib/topics";
+import { NoChecks } from "./ChecksPanel";
 import { type ChosenExercise, ExerciseSettings } from "./ExerciseSettings";
 import { ExerciseView } from "./ExerciseView";
 import { LevelBadge } from "./Level";
+import { SentenceChecks } from "./SentenceChecks";
 import { TimeLeft } from "./TimeLeft";
 import { TopicList } from "./TopicList";
 
@@ -53,6 +56,12 @@ interface Props {
     /** Whether practice is on show, which is when the vocabulary is embedded for the topics. */
     active: boolean;
     settings: Settings;
+    /** What the keywords for words in the questions of the sentence checks stand for. */
+    words: WordLists;
+    /** Where to show the panel with the checks of the sentence under the caret, or null while it is closed. */
+    checksSlot: HTMLElement | null;
+    onCloseChecks: () => void;
+    onEditQuestions: () => void;
     learner: Learner;
     /** The words of the set of the vocabulary that goes by `id`, as they are now, or null if it is gone. */
     wordsOfSet: (id: string) => Promise<string[] | null>;
@@ -82,6 +91,10 @@ export function Practice(
     {
         active,
         settings,
+        words,
+        checksSlot,
+        onCloseChecks,
+        onEditQuestions,
         learner,
         wordsOfSet,
         topicsRevision,
@@ -492,6 +505,7 @@ export function Practice(
                     {/* where the player of a story read aloud goes */}
                     <span className="speech-dock" data-speech-dock="practice" />
                     <span className="practice-actions">
+                        <SentenceChecks exercise={info} settings={settings} onChangeSettings={onChangeSettings} />
                         {at + 1 < order.length && (
                             <button
                                 disabled={busy}
@@ -519,6 +533,12 @@ export function Practice(
                         sessionId={session.id}
                         exercise={exercise}
                         theory={info?.theory}
+                        settings={settings}
+                        words={words}
+                        checksSlot={checksSlot}
+                        onSettingsChange={onChangeSettings}
+                        onCloseChecks={onCloseChecks}
+                        onEditQuestions={onEditQuestions}
                         learner={learner}
                         onUsage={onUsage}
                         onFinish={() => next(session)}
@@ -544,6 +564,7 @@ export function Practice(
     const reviewed = lessons.status === "ready" ? lessonsToReview(history, lessons.items, language) : [];
     return (
         <div className="practice">
+            <NoChecks slot={checksSlot} onClose={onCloseChecks} />
             <div className="practice-body">
                 {ended && (
                     <p className="practice-note">

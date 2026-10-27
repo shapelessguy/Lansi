@@ -46,8 +46,13 @@ export function mount(root, exercise) {
     }
 
     function answering(show) {
-        const answers = show.sources.map(() =>
-            element("textarea", { placeholder: t("Your translation"), spellcheck: false, rows: 2 })
+        // as tall as the translation of its source may be, a sentence or a whole text
+        const answers = show.sources.map((source) =>
+            element("textarea", {
+                placeholder: t("Your translation"),
+                spellcheck: false,
+                rows: Math.min(12, Math.max(2, Math.ceil(String(source).length / 60))),
+            })
         );
         const check = element("button", { className: "primary", textContent: t("Check") });
         const submit = () => {

@@ -7,7 +7,9 @@ import { interfaceLanguage, locale, t } from "../lib/i18n";
 import {
     type ExerciseInfo,
     type ExerciseProgress,
+    type Favourite,
     fetchExercises,
+    fetchFavourites,
     fetchLessons,
     fetchSession,
     fetchSessions,
@@ -16,6 +18,7 @@ import {
     type Lesson,
     type PracticeSession,
     sessionTitleOf,
+    setFavourite,
 } from "../lib/practice";
 import { fetchTopics, type Topic } from "../lib/topics";
 import { GradeRound } from "./GradeRound";
@@ -32,6 +35,11 @@ interface Props {
      * as it was, or, if `fresh`, with the same settings and made anew.
      */
     onReplay: (session: PracticeSession, exercise: string, fresh?: boolean) => void;
+    /**
+     * Whether only the favourites are listed, each of which can be taken out
+     * of them; otherwise every exercise done is, each with a star that adds it.
+     */
+    favouritesOnly?: boolean;
 }
 
 interface Listed {
@@ -39,6 +47,7 @@ interface Listed {
     lessons: Lesson[];
     topics: Topic[];
     exercises: ExerciseInfo[];
+    favourites: Favourite[];
 }
 
 /** An exercise done in a session, as it is listed. */
@@ -84,7 +93,7 @@ function timeOf(seconds: number): string {
  * as a card of its own, what it gave and what was answered, with its log.
  * One whose instances were kept can be done again as it was.
  */
-export function ExercisesDone({ active, language, revision, onReplay }: Props) {
+export function ExercisesDone({ active, language, revision, onReplay, favouritesOnly = false }: Props) {
     const [listed, setListed] = useState<Listed | null>(null);
     const [error, setError] = useState<string | null>(null);
     // what was done in each session opened, by its id
@@ -110,10 +119,10 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
             return;
         }
         let current = true;
-        Promise.all([fetchSessions(), fetchLessons(language), fetchTopics(), fetchExercises()]).then(
-            ([sessions, lessons, topics, exercises]) => {
+        Promise.all([fetchSessions(), fetchLessons(language), fetchTopics(), fetchExercises(), fetchFavourites()]).then(
+            ([sessions, lessons, topics, exercises, favourites]) => {
                 if (current) {
-                    setListed({ sessions, lessons, topics, exercises });
+                    setListed({ sessions, lessons, topics, exercises, favourites });
                     // what was done is had again as it is opened
                     setOpened({});
                     setError(null);
@@ -138,15 +147,32 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
         );
     }
 
+    function favour(session: PracticeSession, exercise: string, kept: boolean) {
+        setFavourite(session.id, exercise, kept).then(
+            (favourites) => setListed((current) => current && { ...current, favourites }),
+            (failed: Error) => setError(failed.message),
+        );
+    }
+
     if (error) {
         return <p className="sidebar-note error">{error}</p>;
     }
     if (!listed) {
         return <p className="sidebar-note">{t("Loading…")}</p>;
     }
-    const done = doneOf(listed.sessions);
+    const isFavourite = (session: PracticeSession, exercise: string) =>
+        listed.favourites.some((each) => each.session_id === session.id && each.exercise === exercise);
+    const done = doneOf(listed.sessions).filter(({ session, exercise }) =>
+        !favouritesOnly || isFavourite(session, exercise)
+    );
     if (done.length === 0) {
-        return <p className="sidebar-note">{t("No exercise done yet.")}</p>;
+        return (
+            <p className="sidebar-note">
+                {favouritesOnly
+                    ? t("No favourite exercise yet: add one with its star under Exercises.")
+                    : t("No exercise done yet.")}
+            </p>
+        );
     }
     const lessonTitle = (id: string) => listed.lessons.find((lesson) => lesson.id === id)?.title || id;
     const info = (id: string) => listed.exercises.find((each) => each.id === id);
@@ -235,6 +261,11 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
                                                         <span className="log-time">
                                                             {timeOf(progress.started_at ?? session.started_at)}
                                                         </span>
+                                                        <FavouriteStar
+                                                            favourite={isFavourite(session, exercise)}
+                                                            removing={favouritesOnly}
+                                                            onChange={(kept) => favour(session, exercise, kept)}
+                                                        />
                                                     </span>
                                                     <span className="log-where">
                                                         {[
@@ -319,6 +350,37 @@ export function ExercisesDone({ active, language, revision, onReplay }: Props) {
                 ))}
             </div>
         </>
+    );
+}
+
+/**
+ * The star of an exercise done: under Exercises it adds it to the
+ * favourites, and is lit once it is among them; among the favourites, it
+ * takes it out.
+ */
+function FavouriteStar(
+    { favourite, removing, onChange }: { favourite: boolean; removing: boolean; onChange: (kept: boolean) => void },
+) {
+    const told = removing
+        ? t("Take it out of the favourites")
+        : favourite
+        ? t("Among the favourites")
+        : t("Add it to the favourites");
+    return (
+        <button
+            className={`favourite-star${favourite ? " lit" : ""}`}
+            aria-pressed={favourite}
+            aria-label={told}
+            title={told}
+            disabled={favourite && !removing}
+            onClick={(event) => {
+                // in the summary, it does not open the card
+                event.preventDefault();
+                onChange(!removing);
+            }}
+        >
+            {favourite ? "★" : "☆"}
+        </button>
     );
 }
 

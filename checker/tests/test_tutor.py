@@ -25,10 +25,10 @@ from tutor import (
     USUAL_RECAPS,
     Done,
     LastCall,
-    Remembered,
     Tool,
     ToolError,
     TutorError,
+    _call_all,
     _date,
     converse,
     data_tools,
@@ -39,7 +39,6 @@ from tutor import (
     practised,
     read_messages,
     recap,
-    remember,
     wait_for,
     words_tool,
 )
@@ -273,7 +272,8 @@ def test_the_exercises_are_one_tool_that_lists_each_with_its_options() -> None:
     [tool] = exercise_tool([CLOZE, STORIES, THEORY], LESSONS, TOPICS)
 
     assert tool.name == "exercise"
-    assert tool.parameters["required"] == ["exercise"]
+    # what is to be thought of on every call, which some models leave out unless required
+    assert tool.parameters["required"] == ["exercise", "lesson", "options", "focus"]
     properties = tool.parameters["properties"]
     assert properties["exercise"]["enum"] == ["cloze", "stories", "theory"]
     assert properties["lesson"]["enum"] == ["dative", "perfect", ""]
@@ -613,36 +613,6 @@ MEMORIES = [
 ]
 
 
-def test_what_is_remembered_of_a_chat_is_what_the_model_said_and_no_more() -> None:
-    told: list[list[dict[str, Any]]] = []
-
-    def ask(messages: list[dict[str, Any]]) -> tuple[str, Profile]:
-        told.append(messages)
-        said = {
-            "add": ["  Prefers   short answers. ", "", 7, "likes  FOOTBALL."],
-            "remove": [{"id": 4, "why": "no longer"}, {"id": 99, "why": "made up"}],
-        }
-        return f"```json\n{json.dumps(said)}\n```", Profile({}, id="gen-1")
-
-    chat = [
-        {"role": "user", "content": "Keep it short, please."},
-        {"role": "assistant", "content": "Sure."},
-    ]
-
-    remembered, used = remember(chat, MEMORIES, "German", ask)
-
-    assert remembered == Remembered(["Prefers short answers."], [(4, "no longer")])
-    assert used.id == "gen-1"
-    prompt = told[0][0]["content"]
-    assert "Learner: Keep it short, please.\n\nTutor: Sure." in prompt
-    assert "[id 3, 1971-01-01] Has the B1 exam on 2026-12-05." in prompt
-
-
-def test_a_reply_that_says_nothing_of_what_to_remember_is_an_error() -> None:
-    with pytest.raises(TutorError):
-        remember([], MEMORIES, "German", lambda _: ("I forgot.", Profile({})))
-
-
 def test_the_tutor_is_told_the_memories_it_has() -> None:
     told = instructions("German", "B1", MEMORIES)
 
@@ -796,6 +766,28 @@ def test_the_calendar_takes_no_day_gone_by_nor_one_that_is_not_a_day(
         tools["calendar"].run({"from": "tomorrow"})
 
 
+def test_a_fact_the_learner_asks_to_be_remembered_is_written_down_at_once_and_once(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    tools = {tool.name: tool for tool in memory_tools(store)}
+
+    first = json.loads(
+        tools["remember"].run({"what": " Wants  the words listed first. "}).content
+    )
+    again = json.loads(
+        tools["remember"].run({"what": "wants the words listed first."}).content
+    )
+    for what in ("", "  ", None, "x" * 601):
+        with pytest.raises(ToolError):
+            tools["remember"].run({"what": what})
+
+    assert [(each["content"], each["kind"]) for each in store.memories()] == [
+        ("Wants the words listed first.", "fact")
+    ]
+    assert again == {"id": first["id"], "already": True}
+
+
 def test_only_a_strategy_or_an_entry_of_the_calendar_is_crossed_out(
     tmp_path: Path,
 ) -> None:
@@ -857,6 +849,30 @@ def test_an_exercise_on_a_text_is_called_with_the_text_and_no_lesson() -> None:
     )
 
 
+def test_an_answer_offers_one_exercise_and_the_calls_after_are_refused() -> None:
+    [cloze] = exercise_tool([CLOZE], LESSONS, TOPICS)
+    calls = [
+        {
+            "id": f"call-{number}",
+            "function": {"name": "exercise", "arguments": '{"exercise": "cloze"}'},
+        }
+        for number in range(3)
+    ]
+    events: list[dict[str, Any]] = []
+
+    told = _call_all(calls, {"exercise": cloze}, events.append)
+
+    shown = [event["shown"] for event in events if event["type"] == "tool_done"]
+    assert sum(each is not None for each in shown) == 1
+    assert (
+        sum(
+            "offered something in this answer already" in each["content"]
+            for each in told
+        )
+        == 2
+    )
+
+
 def test_an_exercise_on_a_text_is_not_offered_where_there_is_no_text() -> None:
     none = {
         **CORRECTING,
@@ -874,14 +890,21 @@ def test_an_exercise_is_steered_by_a_focus_and_the_words_it_is_given() -> None:
             "exercise": "cloze",
             "lesson": "dative",
             "instances": 2,
-            "focus": "  Every sentence needs seit  with the dative. ",
+            "focus": "  Every sentence needs seit  with the dative. \n\n1. seit drei Jahren",
             "words": ["Jahr", "seit", "Jahr"],
         }
     )
 
-    assert "focus" in cloze.parameters["properties"]
+    # the length is checked on the call, as a provider may decode a call
+    # against a long maxLength badly
+    assert cloze.parameters["properties"]["focus"] == {
+        "type": "string",
+        "description": ANY,
+    }
     assert offered.shown is not None
-    assert offered.shown["focus"] == "Every sentence needs seit with the dative."
+    assert offered.shown["focus"] == (
+        "Every sentence needs seit with the dative.\n1. seit drei Jahren"
+    )
     assert offered.shown["words"] == ["Jahr", "seit"]
     assert "Every sentence needs seit" in offered.content
 

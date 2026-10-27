@@ -71,6 +71,12 @@ export interface ExerciseInfo {
     instance?: Record<string, unknown> | null;
     /** Its options, by their names. */
     options: Record<string, ExerciseOption>;
+    /**
+     * Whether the sentences written in its text boxes are checked by the
+     * sentence check model: always, never, or as the learner chooses in the
+     * bar of the session.
+     */
+    sentence_checks?: "always" | "optional" | "never";
     /** What it shows, in each language the interface is written in but English, by what it says in English. */
     messages?: ExerciseMessages;
 }
@@ -83,6 +89,24 @@ export type ExerciseMessages = Partial<Record<InterfaceLanguage, Record<string, 
 
 /** What each exercise shows in the other languages, by its id, as the server last listed them. */
 const exerciseMessages = new Map<string, ExerciseMessages>();
+/** Whether the sentences are checked in each exercise, by its id, as the server last listed them. */
+const exerciseSentenceChecks = new Map<string, ExerciseInfo["sentence_checks"]>();
+
+/**
+ * Whether the sentences written in the exercise `id` are checked, as its
+ * manifest says, or, if it leaves it to the learner, as they last chose in
+ * `chosen`, off at first. Those of one not listed yet are not.
+ */
+export function sentencesChecked(id: string, chosen: Record<string, boolean>): boolean {
+    switch (exerciseSentenceChecks.get(id)) {
+        case "always":
+            return true;
+        case "optional":
+            return chosen[id] ?? false;
+        default:
+            return false;
+    }
+}
 
 /**
  * `text` of the exercise `id` in the language of the interface, with each
@@ -272,7 +296,10 @@ export async function knowExercises(): Promise<void> {
 /** The exercises there are, in the language of the interface as it is now. */
 export async function fetchExercises(): Promise<ExerciseInfo[]> {
     const { exercises } = await call<{ exercises: ExerciseInfo[] }>("/exercises");
-    exercises.forEach((exercise) => exerciseMessages.set(exercise.id, exercise.messages ?? {}));
+    exercises.forEach((exercise) => {
+        exerciseMessages.set(exercise.id, exercise.messages ?? {});
+        exerciseSentenceChecks.set(exercise.id, exercise.sentence_checks);
+    });
     return exercises.map(shownExercise);
 }
 
@@ -532,6 +559,32 @@ export function replayExercise(
         `/sessions/${encodeURIComponent(sessionId)}/exercises/${encodeURIComponent(exercise)}/replay`,
         posting({ fresh }, learner),
     );
+}
+
+/** An exercise of a session kept among the favourites, to be done again. */
+export interface Favourite {
+    session_id: string;
+    exercise: string;
+    /** When it was added, in seconds since the epoch. */
+    added_at: number;
+}
+
+/** The favourite exercises, the latest added first. */
+export async function fetchFavourites(): Promise<Favourite[]> {
+    const { favourites } = await call<{ favourites: Favourite[] }>("/favourites");
+    return favourites;
+}
+
+/**
+ * Keeps an exercise of a session among the favourites, or, if not `kept`,
+ * takes it out of them, and resolves with the favourites as they are then.
+ */
+export async function setFavourite(sessionId: string, exercise: string, kept: boolean): Promise<Favourite[]> {
+    const { favourites } = await call<{ favourites: Favourite[] }>(
+        `/favourites/${encodeURIComponent(sessionId)}/${encodeURIComponent(exercise)}`,
+        { method: kept ? "PUT" : "DELETE" },
+    );
+    return favourites;
 }
 
 /** What a request of an exercise used, as the usage is counted. */

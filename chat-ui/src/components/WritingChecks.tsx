@@ -9,6 +9,7 @@ import {
     useCallback,
     useContext,
     useEffect,
+    useMemo,
     useRef,
     useState,
 } from "react";
@@ -27,13 +28,28 @@ import {
     spellingIssues,
 } from "../lib/checker";
 import { t } from "../lib/i18n";
-import { askedOf, checkedBox, checkText, mirrorStyle, type Profiling, type Sent, worthSending } from "../lib/writing";
+import { markedAncestor } from "../lib/selection";
+import {
+    askedOf,
+    checkedBox,
+    checkText,
+    mirrorStyle,
+    type Profiling,
+    type Sent,
+    worthSending,
+    WRITING_ATTRIBUTE,
+} from "../lib/writing";
 
-/** What a panel that registered a text box of its own is told, and asked. */
+/**
+ * What a panel that registered a text box of its own, or a place whose
+ * boxes are its own, is told, and asked: how the sentences of its boxes are
+ * profiled, or null to check their spelling alone.
+ */
 interface Owner {
-    profiling: () => Profiling;
+    profiling: () => Profiling | null;
     onUsage: (usage: ProfileUsage) => void;
-    onCheck: (checked: Checked) => void;
+    /** What is known about a box of its own, `element`, once it changes. */
+    onCheck: (checked: Checked, element: HTMLTextAreaElement) => void;
 }
 
 /** What is known about a text box a panel registered. */
@@ -75,7 +91,13 @@ interface Watch {
 const LOOK_MS = 100;
 const LOOKS_PER_CHECK = 3;
 
-const WritingContext = createContext<((element: HTMLTextAreaElement, owner: Owner) => () => void) | null>(null);
+/** How a panel registers a text box of its own, and a place whose boxes are its own, each until it lets it go. */
+interface Registry {
+    register: (element: HTMLTextAreaElement, owner: Owner) => () => void;
+    registerPlace: (place: HTMLElement, owner: Owner) => () => void;
+}
+
+const WritingContext = createContext<Registry | null>(null);
 
 /**
  * Has the spelling of the text box that `box` is checked as every text box
@@ -87,21 +109,61 @@ export function useWritingCheck(
     profiling: Profiling,
     onUsage: (usage: ProfileUsage) => void,
 ): Checked {
-    const register = useContext(WritingContext);
+    const registry = useContext(WritingContext);
     const [checked, setChecked] = useState<Checked>({ check: null, lastCaret: null });
     const latest = useRef({ profiling, onUsage });
     latest.current = { profiling, onUsage };
     useEffect(() => {
         const element = box.current;
-        if (!element || !register) {
+        if (!element || !registry) {
             return;
         }
-        return register(element, {
+        return registry.register(element, {
             profiling: () => latest.current.profiling,
             onUsage: (usage) => latest.current.onUsage(usage),
             onCheck: setChecked,
         });
-    }, [box, register]);
+    }, [box, registry]);
+    return checked;
+}
+
+/** What is known about the text box of a place the caret is in, or was last in, and the box. */
+export interface PlaceChecked extends Checked {
+    element: HTMLTextAreaElement | null;
+}
+
+/**
+ * Has the sentences of the text boxes in `place`, a place marked for
+ * writing whose boxes no panel registers, such as the interface of an
+ * exercise, profiled as `profiling` says when they are checked: asked each
+ * time, so that it may change, and null to check their spelling alone.
+ * Returns what is known about the box the caret is in, or was last in,
+ * for a panel that shows more of it.
+ */
+export function useWritingPlace(
+    place: RefObject<HTMLElement>,
+    profiling: () => Profiling | null,
+    onUsage: (usage: ProfileUsage) => void,
+): PlaceChecked {
+    const registry = useContext(WritingContext);
+    const latest = useRef({ profiling, onUsage });
+    latest.current = { profiling, onUsage };
+    const [checked, setChecked] = useState<PlaceChecked>({ check: null, lastCaret: null, element: null });
+    useEffect(() => {
+        const element = place.current;
+        if (!element || !registry) {
+            return;
+        }
+        return registry.registerPlace(element, {
+            profiling: () => latest.current.profiling(),
+            onUsage: (usage) => latest.current.onUsage(usage),
+            // what is shown is of the box the caret is in, or was last in
+            onCheck: (known, element) =>
+                setChecked((current) =>
+                    current.element === element || isFocused(element) ? { ...known, element } : current
+                ),
+        });
+    }, [place, registry]);
     return checked;
 }
 
@@ -200,6 +262,7 @@ interface Hint {
  */
 export function WritingChecks({ language, children }: { language: string; children: ReactNode }) {
     const watches = useRef(new Map<HTMLTextAreaElement, Watch>());
+    const places = useRef(new Map<HTMLElement, Owner>());
     const count = useRef(0);
     // counted up to draw the copies again
     const [, setDrawn] = useState(0);
@@ -338,7 +401,9 @@ export function WritingChecks({ language, children }: { language: string; childr
         function onFocusIn(event: FocusEvent) {
             const box = checkedBox(event.composedPath() as unknown as HTMLElement[]);
             if (box instanceof HTMLTextAreaElement) {
-                attach(box, null);
+                // one in a place that has its boxes profiled is that place's
+                const place = markedAncestor<HTMLElement>(box, WRITING_ATTRIBUTE)?.marked;
+                attach(box, (place && places.current.get(place)) ?? null);
             }
         }
         document.addEventListener("focusin", onFocusIn);
@@ -390,7 +455,7 @@ export function WritingChecks({ language, children }: { language: string; childr
                         return;
                     }
                     watch.check = { text: current.text, sentences: reply.sentences };
-                    watch.owner?.onCheck({ check: watch.check, lastCaret: watch.lastCaret });
+                    watch.owner?.onCheck({ check: watch.check, lastCaret: watch.lastCaret }, watch.element);
                     redraw();
                 },
                 () => {
@@ -418,7 +483,7 @@ export function WritingChecks({ language, children }: { language: string; childr
             watch.check = null;
             watch.sent = { ...watch.sent, asked: "" };
             watch.awaiting = true;
-            watch.owner?.onCheck({ check: null, lastCaret: watch.lastCaret });
+            watch.owner?.onCheck({ check: null, lastCaret: watch.lastCaret }, watch.element);
         });
         setHint(null);
         redraw();
@@ -427,10 +492,20 @@ export function WritingChecks({ language, children }: { language: string; childr
     // the boxes are given back as they were when this goes
     useEffect(() => () => watches.current.forEach((watch) => watch.detach()), []);
 
-    const register = useCallback((element: HTMLTextAreaElement, owner: Owner) => {
-        attach(element, owner);
-        return () => detach(element);
-    }, [attach, detach]);
+    const registry = useMemo<Registry>(() => ({
+        register: (element, owner) => {
+            attach(element, owner);
+            return () => detach(element);
+        },
+        registerPlace: (place, owner) => {
+            places.current.set(place, owner);
+            return () => {
+                if (places.current.get(place) === owner) {
+                    places.current.delete(place);
+                }
+            };
+        },
+    }), [attach, detach]);
 
     useEffect(() => () => clearTimeout(hintTimer.current), []);
 
@@ -487,7 +562,7 @@ export function WritingChecks({ language, children }: { language: string; childr
         : undefined;
 
     return (
-        <WritingContext.Provider value={register}>
+        <WritingContext.Provider value={registry}>
             {children}
             {[...watches.current.values()].map((watch) =>
                 createPortal(<Mirror watch={watch} />, watch.mirror, String(watch.id))

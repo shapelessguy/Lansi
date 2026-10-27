@@ -51,7 +51,7 @@ from grammar import Grammar
 from instances import instance_problem, schema_problem
 from intake import read_usage
 from languages import language_of
-from logs import LogError, Task, has_anything, write_log
+from logs import LogError, Task, has_anything, write_again, write_log
 from models import Model
 from profiling import Profile, ProfileError, spent, spent_by
 from storage import UserStore
@@ -92,9 +92,9 @@ MAX_EMBEDDED_AT_START = 1000
 # it was answered with, and how long what it is told of them may be.
 GUIDANCE_SESSIONS = 20
 MAX_GUIDANCE = 3000
-# the most an exercise is told of what to aim at when a session starts, as
-# the tutor steers it
-MAX_STEERING = 1500
+# the most an exercise is told of what to make when a session starts, as
+# the tutor briefs it
+MAX_STEERING = 4000
 # how many of the words nearest the topics are printed when a session starts
 SHOWN_WORDS = 15
 # how many of the lessons practised last a session without a lesson reviews
@@ -219,6 +219,15 @@ class Manifest:
     # interface, in each language the app is shown in but English, by the
     # English name of the language and then by what it says in English.
     messages: dict[str, dict[str, str]] = field(default_factory=dict)
+    # Whether the sentences written in its text boxes are checked by the
+    # sentence check model, as those of the chat are: "always", "never", or
+    # "optional", as the learner chooses with a checkbox in the bar of the
+    # session, off at first.
+    sentence_checks: str = "never"
+
+
+# Whether the sentences written in an exercise may be checked.
+SENTENCE_CHECKS = ("always", "optional", "never")
 
 
 def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
@@ -259,6 +268,9 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
                     (path / "ui" / "icon.svg").is_file(),
                     instance,
                     _read_translations(data.get("messages")),
+                    data["sentence_checks"]
+                    if data.get("sentence_checks") in SENTENCE_CHECKS
+                    else "never",
                 )
             )
     return sorted(
@@ -332,12 +344,21 @@ def _read_options(value: object) -> dict[str, dict[str, Any]]:
 
 
 def _steering_of(steering: dict[str, str] | None, exercise: str) -> str:
-    """What `steering` says an exercise is to aim at, cut to `MAX_STEERING`
-    characters. Raises ValueError for one that is not text."""
+    """The brief `steering` gives an exercise, with its lines kept, as it
+    may list what each thing made is to be, cut to `MAX_STEERING` characters.
+    Raises ValueError for one that is not text."""
     said = (steering or {}).get(exercise, "")
     if not isinstance(said, str):
         raise ValueError("what an exercise is steered with is text")
-    return " ".join(said.split())[:MAX_STEERING]
+    return lines_of(said)[:MAX_STEERING]
+
+
+def lines_of(text: str) -> str:
+    """`text` with the spaces of each line made one, and without empty
+    lines."""
+    return "\n".join(
+        " ".join(line.split()) for line in text.splitlines() if line.strip()
+    )
 
 
 def default_of(option: dict[str, Any]) -> Any:
@@ -873,8 +894,9 @@ class Practice:
         theory comes first, with no instances and no time limit, as it is
         not answered. Without a lesson, the session reviews the lessons
         practised last, or those `reviewing` names, and has no theory.
-        What `steering` says of an exercise, such as what the tutor wants
-        it to aim at, is told to it first, among what it is to heed.
+        What `steering` says of an exercise is the brief the tutor gave it,
+        what it is to make, which it follows before its lesson, topics and
+        words.
 
         A session with an `exam` is a part of an evaluation: what the exam
         says the part is like is told to every exercise of it, and what is
@@ -954,17 +976,7 @@ class Practice:
             chosen,
             words,
             choosing.mix_topics and len(topics) > 1,
-            {
-                exercise: "\n\n".join(
-                    each
-                    for each in (
-                        _steering_of(steering, exercise),
-                        self.guidance(exercise),
-                    )
-                    if each
-                )
-                for exercise in chosen
-            },
+            {exercise: self.guidance(exercise) for exercise in chosen},
             reviewed,
             values,
             {
@@ -974,6 +986,7 @@ class Practice:
                 for exercise in chosen
             },
             {exercise: exam for exercise in chosen} if exam else {},
+            {exercise: _steering_of(steering, exercise) for exercise in chosen},
         )
         return session, used
 
@@ -1185,7 +1198,7 @@ class Practice:
     ) -> dict[str, Any]:
         """Start a session that does again an exercise of a session exactly
         as it was: the same instances, in the same order, with the same
-        lesson, topics, words and options; or, if `fresh`, with all of
+        lesson, topics, words, options and brief; or, if `fresh`, with all of
         those but instances made anew, as many as it had. Only an exercise
         that makes what it does, as its manifest says, is done again. Raises
         ValueError for any other, and for one that kept nothing to do again
@@ -1216,6 +1229,7 @@ class Practice:
             session["lessons"],
             {exercise: session["options"].get(exercise, {})},
             {exercise: session["minutes"].get(exercise, 0)},
+            briefs={exercise: session["briefs"].get(exercise, "")},
         )
         if ids:
             self._store.set_replay(again["id"], exercise, ids)
@@ -1267,7 +1281,9 @@ class Practice:
         ask: Asker,
     ) -> None:
         """Have the log of an exercise that is over written in the
-        background, if the learner did anything in it."""
+        background, if the learner did anything in it. One that did again
+        exactly what another did adds to the log of that one, which has
+        then how each time went, and has no log of its own."""
         manifest = next(
             (each for each in self._manifests() if each.id == exercise), None
         )
@@ -1296,9 +1312,21 @@ class Practice:
         ended = self._store.session(session["id"])
         scores = ended["progress"][exercise]["scores"] if ended else None
 
+        first = self._store.replayed_from(session["id"], exercise)
+        lesson = context["lesson"].get("title", "")
+        subject = f"{title}: {lesson}" if lesson else title
+
         def write() -> list[Profile]:
+            before = (
+                self._store.logs(first).get(exercise) if first is not None else None
+            )
             try:
-                content, used = write_log(ask, task, grades, written)
+                if before:
+                    added, used = write_again(ask, task, before, grades, written)
+                    day = datetime.fromtimestamp(self._now()).strftime("%Y-%m-%d")
+                    content = f"{before}\nDone again on {day}: {added}"
+                else:
+                    content, used = write_log(ask, task, grades, written)
             except (LogError, TranslationError) as error:
                 raise spent(
                     ExerciseError(f"the log of {title} could not be written: {error}"),
@@ -1306,9 +1334,7 @@ class Practice:
                 ) from None
             if scores:
                 content += "\n" + describe_scores(scores)
-            lesson = context["lesson"].get("title", "")
-            subject = f"{title}: {lesson}" if lesson else title
-            self._store.set_log(session["id"], exercise, content, subject)
+            self._store.set_log(first or session["id"], exercise, content, subject)
             return [used]
 
         self._later(title, write)
@@ -1456,6 +1482,7 @@ class Practice:
             "instances": session["exercises"][exercise],
             "options": session["options"].get(exercise, {}),
             "guidance": session["guidance"].get(exercise, ""),
+            "brief": session["briefs"].get(exercise, ""),
             "minutes": session["minutes"].get(exercise, 0),
             "exam": exam,
             # what it made before, which it does again, or None

@@ -2,9 +2,11 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { type CheckReply, fetchCheck } from "./checker";
-import { type ModelChoice, onOpenRouter } from "./models";
-import type { RequestQuestions } from "./questions";
+import { type ModelChoice, onOpenRouter, orModel } from "./models";
+import { type RequestQuestions, requestQuestions } from "./questions";
 import { type Climbing, markedAncestor } from "./selection";
+import type { WordLists } from "./sets";
+import { expandPrompt, type Settings } from "./settings";
 
 /**
  * The attribute that a panel puts on where text is written in it, to have
@@ -45,6 +47,31 @@ export interface Profiling {
     correctWith: ModelChoice | null;
     /** What the server counts what profiling used under: the chat or the text the box is of. */
     usageId?: string;
+}
+
+/**
+ * The model that writes each sentence as it should be, as a selection is
+ * translated: the translation model, or else the chat model.
+ */
+export function correctorOf(settings: Settings): ModelChoice {
+    return orModel(settings.translationModel, settings.model);
+}
+
+/**
+ * How the sentences of a text box are profiled, as the settings say, with
+ * the keywords for words in the questions standing for `words`, counted
+ * under `usageId`.
+ */
+export function profilingOf(settings: Settings, words: WordLists, usageId?: string): Profiling {
+    const { language, level } = settings;
+    return {
+        apiKey: settings.apiKey,
+        model: settings.profileModel,
+        questions: requestQuestions(settings.questions, (text) => expandPrompt(text, words, language, level)),
+        rateWords: settings.rateWords,
+        correctWith: settings.correctSentences ? correctorOf(settings) : null,
+        usageId,
+    };
 }
 
 /** What was last sent about a text box, or is about to be. */

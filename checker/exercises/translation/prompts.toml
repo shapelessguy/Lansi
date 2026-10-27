@@ -1,13 +1,15 @@
 making = """
 You write translation exercises for someone learning $language. Write \
-$count different sentences in $into which, translated into $language, \
-need the rules below, and keep to the topics below. $level
+$count different items in $into which, translated into $language, need \
+the rules below, and keep to the topics below: each a sentence, unless \
+what you are told below gives the items as longer texts, such as short \
+stories, when each item is one whole text, as it is given. $level
 
 $lesson
 $topics
 $words$guidance$made
 
-Give each sentence with a good translation into $language.
+Give each item with a good translation into $language.
 
 Reply with JSON alone: {"items": [{"source": "...", "reference": "..."}]}"""
 
@@ -17,7 +19,7 @@ The lesson they practise:
 
 $lesson
 
-The sentences, each in $into, with a good translation and the learner's:
+The sentences or texts, each in $into, with a good translation and the learner's:
 
 $sentences
 
@@ -29,7 +31,7 @@ correction is the learner's translation with as few changes as make it \
 right, or "" if it is right. The note says in a sentence of $into what was \
 wrong, or "" if nothing was.
 
-Reply with JSON alone, with a verdict for each sentence in turn: \
+Reply with JSON alone, with a verdict for each sentence or text in turn: \
 {"verdicts": [{"result": "...", "correction": "...", "note": "..."}]}"""
 
 sentence = """

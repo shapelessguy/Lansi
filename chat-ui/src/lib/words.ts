@@ -11,6 +11,8 @@ export interface Word {
     /** The day the word is next due, as YYYY-MM-DD. */
     due: string;
     intervalDays: number;
+    /** The deck of one of its cards in review, by its id. */
+    deckId: number;
 }
 
 export type SortKey = "due" | "word" | "meaning" | "interval" | "partOfSpeech";

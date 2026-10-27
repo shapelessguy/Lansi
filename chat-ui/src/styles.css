@@ -2119,6 +2119,7 @@ div.book-cover {
 }
 
 .toggle small.error,
+.anki-decks small.error,
 .import-status.error {
     color: var(--danger);
 }
@@ -2181,41 +2182,214 @@ div.book-cover {
 }
 
 /* the decks of the collection, those inside another indented under it */
+/* the decks of the Anki tab, each ticked or not, whose words alone can be shown */
 .anki-decks {
-    display: grid;
-    gap: 2px;
     min-width: 0;
-    max-height: 280px;
-    margin: 0 0 14px;
+    max-height: 40vh;
     padding: 6px 10px 8px;
     overflow-y: auto;
     border: 1px solid var(--border);
     border-radius: 8px;
 }
 
-.anki-decks legend {
-    padding: 0 4px;
+.anki-decks summary {
     font-weight: 600;
+    cursor: pointer;
+    user-select: none;
 }
 
-.anki-decks .check {
+.anki-decks .deck {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 4px 0;
+    gap: 6px;
+    padding: 2px 0;
+}
+
+.anki-decks .deck-check {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+}
+
+.anki-decks .deck-name {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 6px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
     cursor: pointer;
 }
 
-.anki-decks .check span {
+.anki-decks .deck small {
+    flex: none;
+}
+
+.anki-decks .deck .icon-button {
+    flex: none;
+    padding: 2px 6px;
+    border-color: transparent;
+    background: none;
+    line-height: 1.2;
+}
+
+.anki-decks .deck-name:hover {
+    background: var(--panel);
+}
+
+.anki-decks .deck.shown .deck-name {
+    background: var(--panel);
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.anki-decks small {
+    color: var(--muted);
+    font-size: 0.87rem;
+}
+
+/* every note of a deck, a row each, by the fields of its notetype */
+.deck-explorer h2 {
     flex: 1;
     min-width: 0;
+    margin: 0;
+    font-size: 1.15rem;
     overflow-wrap: anywhere;
 }
 
-.anki-decks .check small,
-.anki-decks > small {
+.deck-explorer .overlay-header input[type="search"] {
+    width: min(260px, 30vw);
+}
+
+.column-picker {
+    position: relative;
+}
+
+.column-picker summary {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+
+.column-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 3;
+    display: grid;
+    gap: 2px;
+    width: max-content;
+    min-width: 220px;
+    max-height: 60vh;
+    padding: 8px 10px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.column-list .check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    cursor: pointer;
+}
+
+.column-list .check span {
+    flex: 1;
+}
+
+.column-list .check small {
     color: var(--muted);
-    font-size: 0.87rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.deck-pages {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 8px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    font-variant-numeric: tabular-nums;
+}
+
+.deck-table {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.deck-table table {
+    width: max-content;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+}
+
+.deck-table th,
+.deck-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+}
+
+/* a column is as wide as what it holds, between these, and the table scrolls sideways */
+.note-field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    min-width: 6em;
+    max-width: 26em;
+    overflow-wrap: break-word;
+}
+
+.note-field > span {
+    min-width: 0;
+}
+
+.note-picture {
+    display: block;
+    width: 72px;
+    height: 54px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: var(--panel);
+}
+
+.deck-table .note-sound {
+    padding: 1px 7px;
+    font-size: 0.8rem;
+}
+
+.deck-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel);
+    white-space: nowrap;
+}
+
+.deck-table .note-state {
+    white-space: nowrap;
+    color: var(--muted);
+}
+
+.deck-table .state-2 {
+    color: var(--accent);
 }
 
 .vocabulary-flat {
@@ -3612,6 +3786,26 @@ div.book-cover {
     font-variant-numeric: tabular-nums;
 }
 
+/* the star that adds an exercise done to the favourites */
+.favourite-star {
+    flex: none;
+    padding: 0 2px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.favourite-star.lit {
+    color: var(--accent);
+}
+
+.favourite-star:disabled {
+    cursor: default;
+}
+
 .log-content {
     margin: 4px 0 0;
     font-size: 0.9em;
@@ -3933,7 +4127,17 @@ div.book-cover {
 .tutor-offer-focus {
     margin-top: 4px;
     font-size: 0.87rem;
+}
+
+.tutor-offer-focus summary {
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.tutor-offer-brief {
+    margin-top: 4px;
     font-style: italic;
+    white-space: pre-line;
 }
 
 .tutor-offer-state {
@@ -4898,6 +5102,78 @@ div.book-cover {
     border-color: var(--danger);
     background: var(--danger-bg);
     color: var(--danger);
+}
+
+/* the providers that serve a model, to choose those that alone are to */
+.dialog.providers-dialog {
+    width: min(760px, 100%);
+    max-height: calc(100vh - 32px);
+    /* the table scrolls, the heading and the buttons stay in sight */
+    display: flex;
+    flex-direction: column;
+}
+
+.providers-table {
+    flex: 1 1 auto;
+    overflow: auto;
+    min-height: 0;
+    /* the last column clear of the scroll bar */
+    scrollbar-gutter: stable;
+    padding-right: 8px;
+}
+
+.providers-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+}
+
+.providers-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.87rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.providers-table th,
+.providers-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.providers-table th:nth-child(-n + 2),
+.providers-table td:nth-child(-n + 2) {
+    text-align: left;
+}
+
+.providers-table tbody tr {
+    cursor: pointer;
+}
+
+.providers-table tbody tr.chosen {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.providers-sort {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.providers-variant {
+    margin-left: 6px;
+    color: var(--muted);
+}
+
+.providers-no,
+.providers-gone td {
+    color: var(--muted);
 }
 
 /* where a new version of a book is made */

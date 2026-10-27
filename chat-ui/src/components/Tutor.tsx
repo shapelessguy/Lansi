@@ -39,6 +39,7 @@ import {
     withEvent,
 } from "../lib/tutor";
 import type { UsageEntry } from "../lib/usage";
+import { Check } from "./Check";
 import { CheckedTextarea } from "./CheckedTextarea";
 import { ContextRing } from "./ContextRing";
 import { ExerciseView } from "./ExerciseView";
@@ -429,14 +430,13 @@ export function Tutor(
             <header className="chat-header">
                 <h2 className="tutor-title">{t("Tutor")}</h2>
                 <ContextRing trace={trace} onOpen={() => setInspecting(true)} />
-                <label className="check" title={t("Reads each answer aloud once it has arrived. The audio is kept.")}>
-                    <input
-                        type="checkbox"
-                        checked={speakReplies}
-                        onChange={(event) => onSpeakReplies(event.target.checked)}
-                    />
+                <Check
+                    checked={speakReplies}
+                    title={t("Reads each answer aloud once it has arrived. The audio is kept.")}
+                    onChange={onSpeakReplies}
+                >
                     {t("Speak replies")}
-                </label>
+                </Check>
                 {chats.length > 0 && (
                     <select
                         aria-label={t("Chats with the tutor")}
@@ -555,6 +555,8 @@ export function Tutor(
                                                         sessionId={state.sessionId}
                                                         exercise={offer.exercise}
                                                         theory={offer.theory}
+                                                        settings={settings}
+                                                        words={words}
                                                         learner={learner}
                                                         onUsage={onPracticeUsage}
                                                         onFinish={() =>
@@ -766,8 +768,12 @@ function OfferCard(
             <div className="tutor-offer-about">
                 <strong>{exerciseText(offer.exercise, offer.title)}</strong>
                 <div className="tutor-offer-what">{said.join(" · ")}</div>
+                {/* folded, as the brief may say what the answers are */}
                 {offer.focus && (
-                    <div className="tutor-offer-focus">{t("Aimed at: {focus}", { focus: offer.focus })}</div>
+                    <details className="tutor-offer-focus">
+                        <summary>{t("The tutor's brief (it may give the answers away)")}</summary>
+                        <div className="tutor-offer-brief">{offer.focus}</div>
+                    </details>
                 )}
                 {offer.words && offer.words.length > 0 && (
                     <div className="tutor-offer-what">

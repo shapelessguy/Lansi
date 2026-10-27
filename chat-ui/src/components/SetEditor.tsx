@@ -20,6 +20,7 @@ import {
     type WordSet,
 } from "../lib/sets";
 import { countWords, labelOf, type ListedWord, type Vocabulary } from "../lib/vocabulary";
+import { Check } from "./Check";
 import { T } from "./T";
 
 interface Props {
@@ -227,14 +228,9 @@ export function SetEditor({ set: initial, kept, vocabulary, onSave, onDelete, on
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
                         />
-                        <label>
-                            <input
-                                type="checkbox"
-                                checked={onlyMembers}
-                                onChange={(event) => setOnlyMembers(event.target.checked)}
-                            />
+                        <Check className="" checked={onlyMembers} onChange={setOnlyMembers}>
                             {t("Only the words of the set")}
-                        </label>
+                        </Check>
                         <span className="count">{t("{count} shown", { count: shown.length })}</span>
                     </div>
                     <div className="set-table">

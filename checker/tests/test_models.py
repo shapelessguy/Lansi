@@ -57,6 +57,19 @@ def test_a_model_on_openrouter_cannot_be_asked_without_a_key() -> None:
     assert Model("m", "http://host/v1").or_keyed("kept").key == ""
 
 
+def test_a_model_on_openrouter_may_be_served_only_by_the_providers_it_names() -> None:
+    model = read_model(
+        {"model": "some/model", "providers": [" deepseek ", "deepseek", "groq"]}, "k"
+    )
+    body = model.routed({"model": "some/model", "provider": {"sort": "price"}})
+
+    assert model.providers == ("deepseek", "groq")
+    assert body["provider"] == {"sort": "price", "only": ["deepseek", "groq"]}
+    assert read_model("some/model").routed({"a": 1}) == {"a": 1}
+    at_address = read_model({"model": "m", "url": "http://h/v1", "providers": ["x"]})
+    assert at_address.routed({"a": 1}) == {"a": 1}
+
+
 @pytest.mark.parametrize(
     "named",
     [
@@ -64,6 +77,8 @@ def test_a_model_on_openrouter_cannot_be_asked_without_a_key() -> None:
         {"model": 3},
         {"model": "m", "url": "ftp://host"},
         {"model": "m", "url": "host:8000"},
+        {"model": "m", "providers": "deepseek"},
+        {"model": "m", "providers": [""]},
     ],
 )
 def test_read_model_refuses_what_names_no_model(named: object) -> None:

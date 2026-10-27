@@ -112,6 +112,16 @@ def test_what_the_app_says_to_heed_is_told_on_lines_of_its_own() -> None:
     assert describe_guidance(context()) == ""
 
 
+def test_the_tutor_s_brief_is_told_before_what_the_app_says_to_heed() -> None:
+    told = describe_guidance(
+        context(brief="1. warten auf\n2. denken an", guidance="Do not use: Tisch")
+    )
+
+    assert "comes before everything else" in told
+    assert "Brief:\n1. warten auf\n2. denken an\n" in told
+    assert told.index("warten auf") < told.index("Do not use: Tisch")
+
+
 def test_a_lesson_is_described_by_its_points_without_its_pages_of_theory() -> None:
     lesson = {
         "title": "Trennbare Verben",
@@ -228,6 +238,23 @@ def test_a_review_centres_what_is_made_on_each_of_its_lessons() -> None:
 
     assert focuses({"lesson": lesson}) == ["One (a; c)", "Two (b)"]
     assert "another side" not in describe_plan({"lesson": lesson}, 2)
+
+
+def test_the_tutor_s_brief_takes_the_place_of_the_plan_when_it_gives_one() -> None:
+    lesson = {"title": "L", "level": "A1", "points": [point("a"), point("b")]}
+
+    assert describe_plan({"lesson": lesson, "brief": "1. warten auf"}, 2) == ""
+
+
+def test_a_review_is_not_told_when_the_tutor_gives_a_brief() -> None:
+    review = {"id": "", "title": "Review", "level": "A2", "points": [point("a")]}
+    chosen = {**review, "id": "dativ"}
+
+    assert (
+        describe_lesson(context(lesson=review, brief="Verbs with a preposition")) == ""
+    )
+    assert describe_lesson(context(lesson=review)) != ""
+    assert describe_lesson(context(lesson=chosen, brief="Verbs")) != ""
 
 
 def test_a_lesson_without_points_to_practise_leaves_the_model_free() -> None:

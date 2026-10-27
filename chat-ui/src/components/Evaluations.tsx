@@ -20,15 +20,24 @@ import {
 } from "../lib/evaluations";
 import { interfaceLanguage, languageName, plural, t } from "../lib/i18n";
 import { type ExerciseInfo, fetchExercises, fetchSession, type Learner, type PracticeSession } from "../lib/practice";
+import type { WordLists } from "../lib/sets";
 import type { Settings } from "../lib/settings";
 import type { BackgroundTask } from "../lib/tasks";
+import { NoChecks } from "./ChecksPanel";
 import { EvaluationReview, passedOf } from "./EvaluationsDone";
 import { ExerciseView } from "./ExerciseView";
 import { LevelBadge } from "./Level";
+import { SentenceChecks } from "./SentenceChecks";
 import { TimeLeft } from "./TimeLeft";
 
 interface Props {
     settings: Settings;
+    /** What the keywords for words in the questions of the sentence checks stand for. */
+    words: WordLists;
+    /** Where to show the panel with the checks of the sentence under the caret, or null while it is closed. */
+    checksSlot: HTMLElement | null;
+    onCloseChecks: () => void;
+    onEditQuestions: () => void;
     learner: Learner;
     onUsage: (used: ProfileUsage[]) => void;
     onTask: (task: BackgroundTask) => void;
@@ -52,7 +61,21 @@ type Loaded<T> = { status: "loading" } | { status: "error"; message: string } | 
  * server has its log written, with the scores.
  */
 export function Evaluations(
-    { settings, learner, onUsage, onTask, onChangeSettings, onOpenSettings, onReadAloud, onEnded, opening }: Props,
+    {
+        settings,
+        words,
+        checksSlot,
+        onCloseChecks,
+        onEditQuestions,
+        learner,
+        onUsage,
+        onTask,
+        onChangeSettings,
+        onOpenSettings,
+        onReadAloud,
+        onEnded,
+        opening,
+    }: Props,
 ) {
     const language = settings.language;
     const level = settings.level;
@@ -203,6 +226,7 @@ export function Evaluations(
         const running = part && session && part.status === "running" && part.session === session.id;
         return (
             <div className="practice evaluation">
+                {!running && <NoChecks slot={checksSlot} onClose={onCloseChecks} />}
                 <div className="practice-bar">
                     <span>
                         <strong>{evaluation.plan.exam}</strong>
@@ -225,6 +249,13 @@ export function Evaluations(
                     {/* where the player of a text that is heard goes, which never shows the text */}
                     <span className="speech-dock" data-speech-dock="evaluation" />
                     <span className="practice-actions">
+                        {running && (
+                            <SentenceChecks
+                                exercise={exercises.find((each) => each.id === part.exercise)}
+                                settings={settings}
+                                onChangeSettings={onChangeSettings}
+                            />
+                        )}
                         {running && (
                             <button
                                 disabled={busy}
@@ -265,6 +296,12 @@ export function Evaluations(
                                     key={session.id}
                                     sessionId={session.id}
                                     exercise={part.exercise}
+                                    settings={settings}
+                                    words={words}
+                                    checksSlot={checksSlot}
+                                    onSettingsChange={onChangeSettings}
+                                    onCloseChecks={onCloseChecks}
+                                    onEditQuestions={onEditQuestions}
                                     learner={examined}
                                     onUsage={onUsage}
                                     onFinish={() => finish(evaluation, at!)}
@@ -298,6 +335,7 @@ export function Evaluations(
 
     return (
         <div className="practice evaluation">
+            <NoChecks slot={checksSlot} onClose={onCloseChecks} />
             <div className="practice-body">
                 {ended && (
                     <section className="evaluation-result">

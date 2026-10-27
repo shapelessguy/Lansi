@@ -359,10 +359,18 @@ class DeckStatus(BaseHTTPRequestHandler):
                 self._answer({"linked": True})
             else:
                 self._answer("AnkiWeb ID or password was incorrect", 400)
+        elif self.path == "/users/ada/sql" and "from notetypes" in asked["sql"]:
+            self._answer([[7, "Basic"], [8, "Verb"]])
         elif self.path == "/users/ada/sql":
             DeckStatus.sql = asked["sql"]
+            if "group by n.id order by n.id limit" in asked["sql"]:
+                self._answer([[1, 7, "Hund\x1fdog", 2], [2, 8, "gehen\x1fgo", 0]])
+                return
             self._answer(
-                [[1, 7, "Hund", "Hund\x1fdog", 99, 30], [2, 8, "gehen", "", 98, 4]]
+                [
+                    [1, 7, "Hund", "Hund\x1fdog", 99, 30, 1],
+                    [2, 8, "gehen", "", 98, 4, 2],
+                ]
             )
         elif self.path == "/users/ada/api/getFieldNames":
             self._answer({"vals": [f"Front of {asked['ntid']}", "Back"]})
@@ -423,6 +431,26 @@ def test_the_cards_of_the_decks_left_out_are_not_asked_for(deck_status: str) -> 
     assert "not (c.did in (1, 2) or c.odid in (1, 2))" in without_two
     assert "not (c.did in (3) or c.odid in (3))" in without_one
     assert "c.did" not in with_all
+
+
+def test_the_notes_of_a_deck_are_those_of_it_and_the_decks_inside_it_whatever_state(
+    deck_status: str,
+) -> None:
+    notes = AnkiLink("ada", deck_status).deck_notes(1)
+
+    assert "where c.did in (1, 2) or c.odid in (1, 2)" in DeckStatus.sql
+    assert "c.type in (2, 3)" not in DeckStatus.sql.split("where")[1]
+    assert notes == {
+        "name": "Deutsch",
+        "rows": [[1, 7, "Hund\x1fdog", 2], [2, 8, "gehen\x1fgo", 0]],
+        "more": False,
+        "notetypes": {
+            "7": {"name": "Basic", "fields": ["Front of 7", "Back"]},
+            "8": {"name": "Verb", "fields": ["Front of 8", "Back"]},
+        },
+    }
+    with pytest.raises(AnkiRefused, match="no deck"):
+        AnkiLink("ada", deck_status).deck_notes(9)
 
 
 def test_the_state_of_an_account_says_whether_it_is_linked_and_when_it_synced(

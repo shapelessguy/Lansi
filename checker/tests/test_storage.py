@@ -11,12 +11,15 @@ import pytest
 from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore
 
-# What came with versions 24 to 31, taken out of a store to make it as one
+# What came with versions 24 to 33, taken out of a store to make it as one
 # was before: the instances the exercises made, what each replays, whether
 # a session is hidden, the parts of a grade and what it is about, the size
 # of an evaluation, which was a length, when a message of the tutor was
-# processed, what a book lists of itself, and the versions of books.
+# processed, what a book lists of itself, the versions of books, the brief
+# the tutor gave an exercise, and the favourite exercises.
 BEFORE_INSTANCES = """
+DROP TABLE favourites;
+ALTER TABLE session_exercises DROP COLUMN brief;
 ALTER TABLE books DROP COLUMN version;
 ALTER TABLE books DROP COLUMN parent_id;
 ALTER TABLE books DROP COLUMN navigation;
@@ -393,6 +396,27 @@ def test_a_book_that_is_removed_is_gone(store: UserStore) -> None:
     assert store.book("book-1") is None
 
 
+def test_what_is_written_of_a_transformed_version_is_kept_by_part_until_dropped(
+    store: UserStore,
+) -> None:
+    store.add_book("book-1", "Der Hund", "", "", [{"text": "Text.", "size": 1}])
+    first = {"notes": "Short.", "written": {"0": "Text."}, "finished": 1}
+
+    store.save_transform_draft("book-1", "abc", 0, {"notes": "", "written": {}})
+    store.save_transform_draft("book-1", "abc", 0, first)
+    store.save_transform_draft("book-1", "abc", 2, {"notes": "Plain."})
+    kept = store.transform_drafts("book-1", "abc")
+    store.drop_transform_drafts("book-1", "abc")
+    dropped = store.transform_drafts("book-1", "abc")
+    store.save_transform_draft("book-1", "abc", 0, first)
+    store.delete_book("book-1")
+
+    assert kept == {"0": first, "2": {"notes": "Plain."}}
+    assert dropped == {}
+    assert store.transform_drafts("book-1", "abc") == {}
+    assert store.transform_drafts("../x", "abc") == {}
+
+
 def test_books_can_be_kept_where_things_were_kept_before_there_were_books(
     tmp_path: Path,
 ) -> None:
@@ -594,6 +618,7 @@ def test_a_session_says_how_far_each_of_its_exercises_got(tmp_path: Path) -> Non
         "hidden": False,
         "exercises": {"cloze": 3, "translation": 2},
         "guidance": {"cloze": "", "translation": ""},
+        "briefs": {"cloze": "", "translation": ""},
         "options": {"cloze": {}, "translation": {}},
         "minutes": {"cloze": 0, "translation": 0},
         "exams": {"cloze": "", "translation": ""},
@@ -1497,3 +1522,20 @@ def test_a_book_is_removed_with_its_versions_and_a_version_alone(
         (book["id"], [version["id"] for version in book["versions"]])
         for book in store.books()
     ] == [("book-2", ["v-3"])]
+
+
+def test_an_exercise_kept_as_a_favourite_is_listed_until_it_is_taken_out(
+    store: UserStore,
+) -> None:
+    store.start_session("s1", "German", "l", [], {"cloze": 1, "translation": 1})
+
+    store.add_favourite("s1", "cloze")
+    store.add_favourite("s1", "cloze")
+
+    assert [(each["session_id"], each["exercise"]) for each in store.favourites()] == [
+        ("s1", "cloze")
+    ]
+    with pytest.raises(ValueError):
+        store.add_favourite("s1", "picture")
+    store.remove_favourite("s1", "cloze")
+    assert store.favourites() == []

@@ -10,6 +10,10 @@ learner, so it states what happened, plainly and without sparing them.
 How long it may be follows how much the learner wrote: a few lines for an
 exercise of gaps, more for one of answers or a retelling, and more again
 for a conversation.
+
+An exercise done again exactly as it was has no log of its own: the log of
+the first time is kept, and each time after adds a few sentences to it, on
+what went better than before and what did not (`write_again`).
 """
 
 from __future__ import annotations
@@ -35,6 +39,8 @@ MAX_WORKED = 3
 MAX_FAILED = 5
 # how much of what was written the model is shown, in characters
 MAX_WRITTEN = 20_000
+# how many sentences an exercise done again adds to its log
+MAX_AGAIN = 4
 
 
 class LogError(Exception):
@@ -158,6 +164,39 @@ def write_log(
         return format_log(read_log(said)), used
     except LogError as error:
         raise spent(error, [used]) from None
+
+
+def write_again(
+    ask: Asker,
+    task: Task,
+    before: str,
+    grades: list[dict[str, str]],
+    written: dict[str, list[str]],
+) -> tuple[str, Profile]:
+    """The few sentences added to the log `before` of an exercise done
+    again exactly as it was, on what went better and what did not, with
+    what asking for them used. Raises LogError, which carries what asking
+    used, and TranslationError."""
+    prompt = PROMPTS(
+        "logs.again",
+        language=task.language,
+        task=describe_task(task),
+        before=before,
+        record=describe_record(grades, written),
+        lines=MAX_AGAIN,
+    )
+    said, used = ask([{"role": "user", "content": prompt}])
+    try:
+        found = read_json(said)
+        if not isinstance(found, dict) or not isinstance(found.get("summary"), list):
+            raise LogError("the model did not write what changed as it was asked")
+        lines = [" ".join(str(line).split()) for line in found["summary"]]
+        lines = [line for line in lines if line][:MAX_AGAIN]
+        if not lines:
+            raise LogError("the model wrote nothing of what changed")
+    except LogError as error:
+        raise spent(error, [used]) from None
+    return " ".join(lines), used
 
 
 def read_json(said: str) -> Any:

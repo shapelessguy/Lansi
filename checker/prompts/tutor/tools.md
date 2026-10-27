@@ -1,6 +1,6 @@
 # The tutor's tools
 
-What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `agree_strategy` writes down a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `exercise` offers the learner an exercise of practice, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `size` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
+What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `remember` writes down a fact about the learner, called with `remember_what`, `agree_strategy` a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `exercise` offers the learner an exercise of practice, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `size` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
 
 Variables:
 - `$exercises`: the exercises there are, one to a line as "- id: title. what it is", with what `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say of it after
@@ -79,7 +79,7 @@ The mock exam was offered to the learner, who decides whether to start it; it ru
 
 ## Prompt: focus
 
-What the models that make the exercise are to aim it at, besides the lesson, the topics and the options, as you would brief a colleague in a sentence or two of English: a mistake that keeps coming back, a rule, a kind of sentence, what to leave out. They are told it as it is.
+The brief of what the exercise is to contain, in English, which the models that make it follow before the lesson, the topics and everything else they know: the rule or the mistake it practises, what to leave out, and what each item is to be, one to a line, with the construction it practises, the words it uses and, where it matters, the answer it expects. They know nothing of the learner but this, so be detailed; they are told it as it is, and give it the form of the exercise. Empty only where the learner asked for the exercise as it is, with nothing to aim it at.
 
 ## Prompt: words
 
@@ -132,7 +132,7 @@ $name, $label, from $least to $most, $usual unless another fits better
 
 ## Prompt: options
 
-The options of the exercise, as its line in the list of exercises gives them, such as {"sentences": 5}; one left out is as usual.
+The options of the exercise, as its line in the list of exercises gives them, such as {"sentences": 5}; one left out is as usual, and {} leaves them all as usual.
 
 ## Prompt: lesson
 
@@ -181,6 +181,14 @@ The strategy, whole, as you agreed on it, in a sentence or two of English, such 
 ## Prompt: replaces
 
 The ids of the strategies this one takes the place of, which are crossed out; leave it out when it adds to them.
+
+## Prompt: remember
+
+Write down a fact about the learner at once, for every lesson to come: whenever they ask you to remember something, and whenever they tell you something about themselves that lasts, such as their name, their work, a goal, an exam and its date, or how they always want to be taught or talked to. Never tell them you noted or will remember something without calling it, or agree_strategy or plan for what belongs there: a way of holding the lessons is a strategy, a day set for something goes on the calendar.
+
+## Prompt: remember_what
+
+What to remember, as one short sentence of English about the learner, such as "Wants every exercise to list the words it uses before it starts." or "Has the B1 exam on 2026-12-05."
 
 ## Prompt: plan
 

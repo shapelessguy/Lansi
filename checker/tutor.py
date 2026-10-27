@@ -64,7 +64,7 @@ from anki_import import AnkiUnavailable
 from categories import CATEGORIES
 from intake import CHAT_TIMEOUT_SECS, read_usage
 from known import ORDERS, Asked, Known
-from logs import describe_record, read_json
+from logs import describe_record
 from models import Model
 from profiling import Profile, ProfileError, error_message, spent
 from prompts import PROMPTS
@@ -82,9 +82,9 @@ MAX_TURNS = 8
 # what comes a bit at a time in the pieces of a streamed response: the text
 # of reasoning or its summary, and the arguments of a call of a tool
 STREAMED = ("text", "summary", "arguments")
-# how long the focus an exercise is steered with may be, and how many words
+# how long the focus an exercise is briefed with may be, and how many words
 # it may be given
-MAX_FOCUS = 600
+MAX_FOCUS = 4000
 MAX_WORDS = 30
 # how many tools called at once are run together at most
 MAX_AT_ONCE = 8
@@ -147,6 +147,9 @@ class Tool:
     run: Callable[[dict[str, Any]], Done]
     # what it does, for the learner, by what it was called with
     doing: Callable[[dict[str, Any]], str]
+    # whether calling it offers the learner something, such as an exercise,
+    # of which an answer offers one at most
+    offers: bool = False
 
     def described(self) -> dict[str, Any]:
         """The tool as a chat request gives it to the model."""
@@ -252,71 +255,6 @@ def recap(
     return "\n".join(lines), used
 
 
-@dataclass
-class Remembered:
-    """What the tutor is to remember of a chat: new memories, and those to
-    forget by their ids, each with why."""
-
-    add: list[str]
-    remove: list[tuple[int, str]]
-
-
-def remember(
-    chat: list[dict[str, str]],
-    memories: list[dict[str, Any]],
-    language: str,
-    ask: Callable[[list[dict[str, Any]]], tuple[str, Profile]],
-) -> tuple[Remembered, Profile]:
-    """What the tutor is to remember of a `chat` that is over, what the
-    learner wrote and what it answered, with the `memories` it has, as the
-    model `ask` asks decides, and what asking it used. A memory to forget
-    that the tutor does not have is left out. Raises TutorError."""
-    said = _said(chat)
-    listed = "\n".join(
-        f"- [id {memory['id']}, {_day(memory['createdAt'])}] {memory['content']}"
-        for memory in memories
-    )
-    prompt = PROMPTS(
-        "tutor.remembering",
-        language=language,
-        today=time.strftime("%Y-%m-%d"),
-        memories=listed or "none",
-        chat=said,
-    )
-    try:
-        reply, used = ask([{"role": "user", "content": prompt}])
-    except TranslationError as error:
-        raise TutorError(str(error)) from None
-    found = read_json(reply)
-    if not isinstance(found, dict):
-        raise spent(
-            TutorError("the model did not say what to remember as it was asked"),
-            [used],
-        )
-    added = found.get("add")
-    removed = found.get("remove")
-    have = {memory["id"] for memory in memories}
-    # what the tutor remembers already is not remembered twice
-    known = {" ".join(memory["content"].split()).casefold() for memory in memories}
-    return (
-        Remembered(
-            [
-                " ".join(each.split())
-                for each in (added if isinstance(added, list) else [])
-                if isinstance(each, str)
-                and each.strip()
-                and " ".join(each.split()).casefold() not in known
-            ],
-            [
-                (each["id"], str(each.get("why") or ""))
-                for each in (removed if isinstance(removed, list) else [])
-                if isinstance(each, dict) and each.get("id") in have
-            ],
-        ),
-        used,
-    )
-
-
 def _day(seconds: float) -> str:
     return time.strftime("%Y-%m-%d", time.localtime(seconds))
 
@@ -366,6 +304,7 @@ def _converse(
     used: list[Profile],
 ) -> tuple[list[dict[str, Any]], list[Profile]]:
     """The turns of `converse`, which adds to `added` and `used` as it goes."""
+    offering = _Offering()
     for turn in range(MAX_TURNS):
         body: dict[str, Any] = {
             "model": model.name,
@@ -385,7 +324,7 @@ def _converse(
         calls = message.get("tool_calls") or []
         if not calls:
             return added, used
-        added += _call_all(calls, by_name, emit)
+        added += _call_all(calls, by_name, emit, offering)
     raise TutorError("the model kept calling tools and never answered")
 
 
@@ -602,12 +541,40 @@ def _merge(into: dict[str, Any], piece: dict[str, Any]) -> None:
             into[name] = value
 
 
+class _Offering:
+    """Whether an answer offered the learner something already, which it
+    does once at most: one exercise at a time."""
+
+    def __init__(self) -> None:
+        self.made = False
+        self.lock = threading.Lock()
+
+    def run(self, tool: Tool, arguments: dict[str, Any]) -> Done:
+        """Run a tool that offers something, unless something was offered
+        already. Raises ToolError."""
+        with self.lock:
+            if self.made:
+                raise ToolError(
+                    "you offered something in this answer already, and the"
+                    " learner is offered one thing at a time: this was not offered"
+                )
+            done = tool.run(arguments)
+            self.made = True
+            return done
+
+
 def _call_all(
-    calls: list[dict[str, Any]], tools: dict[str, Tool], emit: Emit
+    calls: list[dict[str, Any]],
+    tools: dict[str, Tool],
+    emit: Emit,
+    offering: _Offering | None = None,
 ) -> list[dict[str, Any]]:
     """Run the tools the model called at once, all together, telling `emit`
     what each does as it starts and as it ends, and return the messages
-    that tell the model what they came to, in the order they were called."""
+    that tell the model what they came to, in the order they were called.
+    Of the tools that offer something, only the first that does is run in
+    an answer, as `offering` keeps."""
+    offering = offering or _Offering()
     lock = threading.Lock()
 
     def told(event: dict[str, Any]) -> None:
@@ -615,12 +582,14 @@ def _call_all(
             emit(event)
 
     if len(calls) == 1:
-        return [_call(calls[0], tools, told)]
+        return [_call(calls[0], tools, told, offering)]
     with ThreadPoolExecutor(max_workers=min(len(calls), MAX_AT_ONCE)) as pool:
-        return list(pool.map(lambda call: _call(call, tools, told), calls))
+        return list(pool.map(lambda call: _call(call, tools, told, offering), calls))
 
 
-def _call(call: dict[str, Any], tools: dict[str, Tool], emit: Emit) -> dict[str, Any]:
+def _call(
+    call: dict[str, Any], tools: dict[str, Tool], emit: Emit, offering: _Offering
+) -> dict[str, Any]:
     """Run the tool a model called, telling `emit` what it does, and return
     the message that tells the model what it came to."""
     name = call["function"]["name"]
@@ -646,7 +615,7 @@ def _call(call: dict[str, Any], tools: dict[str, Tool], emit: Emit) -> dict[str,
             raise ToolError(f"there is no tool {name}")
         if not isinstance(arguments, dict):
             raise ToolError("a tool is called with a JSON object")
-        done = tool.run(arguments)
+        done = offering.run(tool, arguments) if tool.offers else tool.run(arguments)
     except ToolError as error:
         done, failed = Done(f"error: {error}"), True
     else:
@@ -672,7 +641,7 @@ def stream_chat(
     Raises ProfileError."""
     request = urllib.request.Request(
         model.endpoint("chat/completions"),
-        data=json.dumps(body).encode(),
+        data=json.dumps(model.routed(body)).encode(),
         headers={**model.headers(), "Content-Type": "application/json"},
         method="POST",
     )
@@ -883,9 +852,10 @@ def data_tools(
 
 def memory_tools(store: Any) -> list[Tool]:
     """The tools with which the tutor looks up, in `store`, the recaps of
-    the latest chats, the strategy and its calendar, and with which it
-    writes down a strategy and an entry of the calendar as soon as the
-    learner agrees on it, and crosses either out."""
+    the latest chats, the strategy and its calendar, with which it writes
+    down a strategy and an entry of the calendar as soon as the learner
+    agrees on it, and crosses either out, and with which it remembers a
+    fact as soon as the learner asks it to."""
 
     def kept(memory: dict[str, Any]) -> dict[str, Any]:
         return {"id": memory["id"], "agreed": _day(memory["createdAt"])}
@@ -968,6 +938,18 @@ def memory_tools(store: Any) -> list[Tool]:
             )
         return Done(json.dumps({"id": memory_id, "replaced": replaces}))
 
+    def remember_now(arguments: dict[str, Any]) -> Done:
+        what = arguments.get("what")
+        if not isinstance(what, str) or not what.strip():
+            raise ToolError("what is what to remember, in a sentence")
+        if len(what) > MAX_PLANNED:
+            raise ToolError(f"what is at most {MAX_PLANNED} characters long")
+        what = " ".join(what.split())
+        for memory in store.memories(kind="fact"):
+            if " ".join(memory["content"].split()).casefold() == what.casefold():
+                return Done(json.dumps({"id": memory["id"], "already": True}))
+        return Done(json.dumps({"id": store.add_memory(what)}))
+
     def plan(arguments: dict[str, Any]) -> Done:
         what = said(arguments)
         try:
@@ -1043,6 +1025,17 @@ def memory_tools(store: Any) -> list[Tool]:
             },
             agree,
             lambda _: "Writing down the strategy",
+        ),
+        Tool(
+            "remember",
+            PROMPTS("tutor.tools.remember"),
+            {
+                "type": "object",
+                "properties": {"what": text("remember_what")},
+                "required": ["what"],
+            },
+            remember_now,
+            lambda _: "Writing it down",
         ),
         Tool(
             "plan",
@@ -1300,6 +1293,7 @@ def evaluation_tool(levels: list[dict[str, Any]]) -> list[Tool]:
             lambda arguments: (
                 f"Preparing a mock exam of {arguments.get('level', 'your level')}"
             ),
+            offers=True,
         )
     ]
 
@@ -1362,7 +1356,6 @@ def exercise_tool(
         # what steers it to what the learner needs now
         "focus": {
             "type": "string",
-            "maxLength": MAX_FOCUS,
             "description": PROMPTS("tutor.tools.focus"),
         },
         "words": {
@@ -1397,13 +1390,20 @@ def exercise_tool(
         Tool(
             "exercise",
             PROMPTS("tutor.tools.exercise", exercises=catalog),
-            {"type": "object", "properties": properties, "required": ["exercise"]},
+            # what is to be thought of on every call is required, as some
+            # models leave out of a call whatever is not
+            {
+                "type": "object",
+                "properties": properties,
+                "required": ["exercise", "lesson", "options", "focus"],
+            },
             offer,
             lambda arguments: (
                 f"Preparing the exercise “{offerable[arguments['exercise']]['title']}”"
                 if arguments.get("exercise") in offerable
                 else "Preparing an exercise"
             ),
+            offers=True,
         ),
     ]
 
@@ -1464,6 +1464,7 @@ def _own_tool(
         {"type": "object", "properties": properties},
         offer,
         lambda _: f"Preparing the exercise “{manifest['title']}”",
+        offers=True,
     )
 
 
@@ -1568,7 +1569,10 @@ def _offered(
             and all(isinstance(each, str) and each.strip() for each in words)
         ):
             raise ToolError(f"words are at most {MAX_WORDS} words")
-        offered["focus"] = " ".join(focus.split())
+        # its lines kept, as it may list what each thing made is to be
+        offered["focus"] = "\n".join(
+            " ".join(line.split()) for line in focus.splitlines() if line.strip()
+        )
         offered["words"] = list(dict.fromkeys(each.strip() for each in words))
     told = {
         name: value

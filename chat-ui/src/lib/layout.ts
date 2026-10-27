@@ -11,7 +11,7 @@ export type Activity = "tutor" | "chat" | "books" | "texts" | "practice" | "eval
 /** The tabs of the library, on the left. */
 export type LibraryTab = "words" | "vocabulary" | "books";
 /** The tabs of the panel of the logs, on the left in place of the library. */
-export type LogsTab = "logs" | "memories" | "exercises" | "sessions" | "evaluations";
+export type LogsTab = "logs" | "memories" | "exercises" | "favourites" | "sessions" | "evaluations";
 
 export interface Layout {
     /** Whether the panel on the left, with the words and the books, is shown. */
@@ -33,7 +33,7 @@ export interface Layout {
 const STORAGE_KEY = "chat-ui.layout";
 const PANELS: readonly unknown[] = ["checks", "usage", "settings"];
 const LIBRARY_TABS: readonly unknown[] = ["words", "vocabulary", "books"];
-const LOGS_TABS: readonly unknown[] = ["logs", "memories", "exercises", "sessions", "evaluations"];
+const LOGS_TABS: readonly unknown[] = ["logs", "memories", "exercises", "favourites", "sessions", "evaluations"];
 const ACTIVITIES: readonly unknown[] = ["tutor", "chat", "books", "texts", "practice", "evaluations"];
 
 /**

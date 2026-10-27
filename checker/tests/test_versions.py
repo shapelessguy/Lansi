@@ -14,10 +14,12 @@ from profiling import ProfileError, spent_by
 from sections import Section
 from tokens import count
 from versions import (
+    Drafts,
     Keys,
     PartProgress,
     TransformError,
     kept_stretches,
+    marked,
     matches,
     part_blocks,
     part_sections,
@@ -215,7 +217,7 @@ def test_a_transformed_version_keeps_the_structure_the_model_wrote_when_it_chang
 
 
 def test_a_part_is_sent_as_its_blocks_by_their_places_with_the_instructions() -> None:
-    chat = answering('```json\n{"2": "Chapter 1", "3": "Once there was a dog."}\n```')
+    chat = answering("```\n[[2]]\nChapter 1\n[[3]]\nOnce there was a dog.\n```")
     blocks = part_blocks(BOOK, [(2, 4)])
 
     written, used = transform_part(
@@ -234,12 +236,12 @@ def test_a_part_is_sent_as_its_blocks_by_their_places_with_the_instructions() ->
     assert "at most 16000 tokens to reason in" in planning
     for each in (planning, prompt):
         assert "Translate it into English." in each
-        assert json.dumps(blocks, ensure_ascii=False, indent=0) in each
+        assert "[[2]]\nKapitel 1\n[[3]]\nEs war einmal ein Hund." in each
         assert "\n\n\n" not in each
     # what is the same in both is sent first, for the model to keep it
     assert planning[: planning.index("The part is going")] in prompt
     assert PLAN in prompt
-    assert 'from the key "2" to the key "3"' in prompt
+    assert "from [[2]] to [[3]]" in prompt
     assert [(each.input_tokens, each.output_tokens, each.cost) for each in used] == [
         (9, 3, 0.01),
         (9, 3, 0.01),
@@ -249,8 +251,8 @@ def test_a_part_is_sent_as_its_blocks_by_their_places_with_the_instructions() ->
 def test_a_part_is_written_a_section_at_a_time_each_knowing_those_before() -> None:
     blocks = {"0": "Vorwort", "1": "Danke.", "2": "Kapitel 1", "3": "Ein Hund."}
     chat = answering(
-        '{"0": "Foreword", "1": "Thanks.", "2": "Chapter 1"}',
-        '{"2": "Chapter 1", "3": "A dog."}',
+        "[[0]]\nForeword\n[[1]]\nThanks.\n[[2]]\nChapter 1",
+        "[[2]]\nChapter 1\n[[3]]\nA dog.",
     )
     progress = PartProgress()
 
@@ -267,11 +269,11 @@ def test_a_part_is_written_a_section_at_a_time_each_knowing_those_before() -> No
     assert written == {"0": "Foreword", "1": "Thanks.", "2": "Chapter 1", "3": "A dog."}
     assert (len(chat.planned), len(used)) == (1, 3)
     first, second = (body["messages"][0]["content"] for body in chat.sent)
-    assert 'from the key "0" to the key "1"' in first
+    assert "from [[0]] to [[1]]" in first
     assert "(nothing yet)" in first
-    assert 'from the key "2" to the key "3"' in second
-    assert '"0": "Foreword",\n"1": "Thanks."' in second
-    assert '"2": "Chapter 1"' not in second
+    assert "from [[2]] to [[3]]" in second
+    assert "[[0]]\nForeword\n[[1]]\nThanks.\n\n" in second
+    assert "[[2]]\nChapter 1" not in second
     assert (progress.sections, progress.finished, progress.round) == (2, 2, 2)
 
 
@@ -294,19 +296,121 @@ def test_a_part_is_divided_by_the_highest_sections_it_has_more_than_one_of() -> 
     assert part_sections([0, 1], []) == [[0, 1]]
 
 
-def test_what_the_model_wrote_of_a_part_is_read_as_text_by_key() -> None:
-    assert read_part('{"1": "Eins", "2": 2, "3": null}') == {"1": "Eins", "2": "2"}
-    with pytest.raises(TransformError, match="JSON object"):
-        read_part("Here is the story: once upon a time")
+def test_what_the_model_wrote_of_a_part_is_read_as_text_after_each_marker() -> None:
+    said = (
+        "Here it is:\n```text\n[[1]]\nEr sagte: „Hallo\\“.\n\n"
+        "Zwei Zeilen.\n[[2]] Zwei\n[[3]]\n\n```"
+    )
+
+    assert read_part(said) == {
+        "1": "Er sagte: „Hallo\\“.\n\nZwei Zeilen.",
+        "2": "Zwei",
+        "3": "",
+    }
+    assert read_part("Here is the story: once upon a time") == {}
+    assert marked({"1": "Eins", "2": "Zwei"}) == "[[1]]\nEins\n[[2]]\nZwei"
 
 
-def test_a_part_the_model_did_not_write_as_json_fails_with_what_asking_used() -> None:
-    with pytest.raises(TransformError) as raised:
+def test_a_part_the_model_did_not_write_after_markers_fails_with_what_it_used() -> None:
+    with pytest.raises(TransformError, match="3 answers") as raised:
         transform_part(
-            "Translate it.", {"0": "Hallo"}, MODEL, stream=answering("Hello")
+            "Translate it.",
+            {"0": "Hallo"},
+            MODEL,
+            stream=answering("Hello", "Hello", "Hello"),
         )
 
-    assert [used.input_tokens for used in spent_by(raised.value)] == [9, 9]
+    # it is planned once, and the section asked for three times
+    assert [used.input_tokens for used in spent_by(raised.value)] == [9] * 4
+
+
+def test_a_section_that_could_not_be_read_is_asked_for_again() -> None:
+    chat = answering("Hello", "[[0]]\nHello")
+
+    written, used = transform_part("Translate it.", {"0": "Hallo"}, MODEL, stream=chat)
+
+    assert written == {"0": "Hello"}
+    assert (len(chat.sent), len(used)) == (2, 3)
+
+
+def test_a_section_with_quotation_marks_and_backslashes_is_read_as_written() -> None:
+    blocks = {"0": "Vorwort", "1": "Er sagte „Hallo“."}
+    chat = answering('[[0]]\nForeword\n[[1]]\nHe said "Hello" \\ waved.')
+
+    written, _ = transform_part("Translate it.", blocks, MODEL, stream=chat)
+
+    assert written == {"0": "Foreword", "1": 'He said "Hello" \\ waved.'}
+    assert len(chat.sent) == 1
+
+
+def test_a_section_whose_answer_failed_is_asked_for_again() -> None:
+    answer = answering("[[0]]\nHello")
+    tries: list[None] = []
+
+    def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+        if "Write none of the part itself" not in body["messages"][0]["content"]:
+            tries.append(None)
+            if len(tries) == 1:
+                raise ProfileError("OpenRouter could not be reached")
+        result: Iterator[dict[str, Any]] = answer(body, model)
+        return result
+
+    written, _ = transform_part("Translate it.", {"0": "Hallo"}, MODEL, stream=stream)
+
+    assert (written, len(tries)) == ({"0": "Hello"}, 2)
+
+
+def test_a_part_begun_before_is_taken_up_where_it_stopped_and_kept_as_it_goes() -> None:
+    blocks = {"0": "Vorwort", "1": "Danke.", "2": "Kapitel 1", "3": "Ein Hund."}
+    sections = [["0", "1"], ["2", "3"]]
+    chat = answering("[[2]]\nChapter 1\n[[3]]\nA dog.")
+    drafts: list[dict[str, Any]] = []
+    progress = PartProgress()
+
+    written, used = transform_part(
+        "Translate it.",
+        blocks,
+        MODEL,
+        progress=progress,
+        stream=chat,
+        sections=sections,
+        begun={
+            "notes": "Keep it short.",
+            "written": {"0": "Foreword", "1": "Thanks."},
+            "finished": 1,
+        },
+        keep=drafts.append,
+    )
+
+    assert written == {"0": "Foreword", "1": "Thanks.", "2": "Chapter 1", "3": "A dog."}
+    # neither the plan nor the first section is asked for again
+    assert (len(chat.planned), len(chat.sent), len(used)) == (0, 1, 1)
+    prompt = chat.sent[0]["messages"][0]["content"]
+    assert "Keep it short." in prompt
+    assert "from [[2]] to [[3]]" in prompt
+    assert drafts == [{"notes": "Keep it short.", "written": written, "finished": 2}]
+    assert (progress.finished, progress.sections) == (2, 2)
+
+
+def test_what_is_written_of_a_part_is_kept_once_planned_and_after_each_section() -> (
+    None
+):
+    drafts: list[dict[str, Any]] = []
+
+    transform_part(
+        "Translate it.",
+        {"0": "Vorwort", "1": "Danke."},
+        MODEL,
+        stream=answering("[[0]]\nForeword", "[[1]]\nThanks."),
+        sections=[["0"], ["1"]],
+        keep=drafts.append,
+    )
+
+    assert drafts == [
+        {"notes": PLAN, "written": {}, "finished": 0},
+        {"notes": PLAN, "written": {"0": "Foreword"}, "finished": 1},
+        {"notes": PLAN, "written": {"0": "Foreword", "1": "Thanks."}, "finished": 2},
+    ]
 
 
 def test_a_part_is_not_sent_without_a_model_or_a_key() -> None:
@@ -321,7 +425,7 @@ def test_the_parts_are_each_written_and_a_failed_one_fails_them_all_with_all_use
 ):
     steps: list[None] = []
     reports: list[list[dict[str, Any]]] = []
-    chat = answering('{"0": "Foreword"}', '{"2": "Chapter 1"}')
+    chat = answering("[[0]]\nForeword", "[[2]]\nChapter 1")
 
     written, used = transform_parts(
         "Translate it.",
@@ -332,6 +436,16 @@ def test_the_parts_are_each_written_and_a_failed_one_fails_them_all_with_all_use
         reports.append,
         stream=chat,
     )
+    first = answering("[[0]]\nForeword")
+    unreadable = answering("no blocks", "no blocks", "no blocks")
+
+    def failing(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
+        result: Iterator[dict[str, Any]] = (
+            first if "[[0]]\nVorwort" in body["messages"][0]["content"] else unreadable
+        )(body, model)
+        return result
+
+    kept: list[tuple[int, dict[str, Any]]] = []
     with pytest.raises(TransformError) as raised:
         transform_parts(
             "Translate it.",
@@ -339,13 +453,17 @@ def test_the_parts_are_each_written_and_a_failed_one_fails_them_all_with_all_use
             [[(0, 1)], [(2, 3)]],
             MODEL,
             lambda: None,
-            stream=answering('{"0": "Foreword"}', "no JSON"),
+            stream=failing,
+            drafts=Drafts({}, lambda place, draft: kept.append((place, draft))),
         )
 
     assert sorted(written, key=list) == [{"0": "Foreword"}, {"2": "Chapter 1"}]
     # each part is planned, and then written
     assert (len(used), len(steps)) == (4, 2)
-    assert len(spent_by(raised.value)) == 4
+    # the part that failed was asked for three times
+    assert len(spent_by(raised.value)) == 6
+    # what the other part wrote is kept all the same
+    assert (0, {"notes": PLAN, "written": {"0": "Foreword"}, "finished": 1}) in kept
     assert [each["state"] for each in reports[0]] == ["waiting", "waiting"]
     assert [each["state"] for each in reports[-1]] == ["done", "done"]
 
@@ -353,7 +471,7 @@ def test_the_parts_are_each_written_and_a_failed_one_fails_them_all_with_all_use
 def test_the_tokens_a_part_is_reasoned_and_written_in_are_counted_as_they_stream() -> (
     None
 ):
-    answer = '{"0": "Foreword"}'
+    answer = "[[0]]\nForeword"
     progress = PartProgress()
     seen: list[tuple[str, int, int]] = []
 
@@ -376,10 +494,9 @@ def test_the_tokens_a_part_is_reasoned_and_written_in_are_counted_as_they_stream
     assert seen[4] == ("writing", thought, 0)
     assert seen[-1] == ("done", thought, progress.written)
     assert progress.estimated == progress.written
-    assert progress.written == count(answer[:8]) + count(answer[8:])
-    assert progress.expected == count(
-        json.dumps({"0": "Vorwort"}, ensure_ascii=False, indent=0)
-    )
+    half = len(answer) // 2
+    assert progress.written == count(answer[:half]) + count(answer[half:])
+    assert progress.expected == count("[[0]]\nVorwort")
 
 
 def test_the_tokens_a_part_is_written_in_are_estimated_once_a_later_key_is_begun() -> (
@@ -391,12 +508,9 @@ def test_the_tokens_a_part_is_written_in_are_estimated_once_a_later_key_is_begun
     }
     progress = PartProgress()
     follow = Keys(blocks, progress)
-    sent = [
-        count(json.dumps({key: value}, ensure_ascii=False))
-        for key, value in blocks.items()
-    ]
+    sent = [count(marked({key: value})) for key, value in blocks.items()]
 
-    for piece in ('```json\n{"0": "A sho', 'rt sentence."', ', "1": "Ano'):
+    for piece in ("[[0]]\nA sho", "rt sentence.\n[[", "1]]\nAno"):
         estimated = progress.estimated
         progress.written += count(piece)
         follow(piece)
@@ -408,7 +522,7 @@ def test_the_tokens_a_part_is_written_in_are_estimated_once_a_later_key_is_begun
 def test_a_part_is_reasoned_over_in_at_most_16k_tokens_whatever_budget_it_is_given() -> (
     None
 ):
-    chat = answering('{"0": "Foreword"}')
+    chat = answering("[[0]]\nForeword")
     progress = PartProgress()
 
     transform_part(
@@ -424,7 +538,7 @@ def test_a_part_is_reasoned_over_in_at_most_16k_tokens_whatever_budget_it_is_giv
         {"0": "Vorwort"},
         MODEL,
         think=False,
-        stream=answering('{"0": "Foreword"}'),
+        stream=answering("[[0]]\nForeword"),
         budget=100_000,
     )
 
@@ -434,12 +548,11 @@ def test_a_part_is_reasoned_over_in_at_most_16k_tokens_whatever_budget_it_is_giv
 
 
 def test_the_blocks_written_whole_are_read_of_an_answer_that_broke_off() -> None:
-    assert read_begun('```json\n{"1": "Eins", "2": "Zw\\"ei", "3": "Dr') == {
+    assert read_begun('```\n[[1]]\nEins\n[[2]]\nZw"ei\n[[3]]\nDr') == {
         "1": "Eins",
         "2": 'Zw"ei',
     }
-    assert read_begun('{"1": "Eins", "2"') == {"1": "Eins"}
-    assert read_begun('{\n"1": "Eins"\n}') == {"1": "Eins"}
+    assert read_begun("[[1]]\nEins\n[[2") == {}
     assert read_begun("Here it is") == {}
 
 
@@ -448,8 +561,8 @@ def test_an_answer_that_broke_off_is_taken_up_without_reasoning_where_it_stopped
 ):
     blocks = {"0": "Vorwort", "1": "Danke.", "2": "Kapitel 1"}
     chat = answering(
-        '{"0": "Foreword", "1": "Thank',
-        '{"1": "Thanks.", "2": "Chapter 1"}',
+        "[[0]]\nForeword\n[[1]]\nThank",
+        "[[1]]\nThanks.\n[[2]]\nChapter 1",
         reasoning="Short and plain.",
         cut=1,
     )
@@ -464,10 +577,10 @@ def test_an_answer_that_broke_off_is_taken_up_without_reasoning_where_it_stopped
     first, second = chat.sent
     assert first["reasoning"] == second["reasoning"] == {"enabled": False}
     taken_up = second["messages"][0]["content"]
-    assert 'from the key "1"' in taken_up
+    assert "from [[1]]" in taken_up
     assert "Short and plain." in taken_up
-    assert '"0": "Foreword"' in taken_up
-    assert 'Thank"' not in taken_up
+    assert "[[0]]\nForeword" in taken_up
+    assert "Thank\n" not in taken_up
 
 
 def test_an_answer_that_breaks_off_before_a_whole_block_fails_the_part() -> None:
@@ -476,7 +589,7 @@ def test_an_answer_that_breaks_off_before_a_whole_block_fails_the_part() -> None
             "Translate it.",
             {"0": "Vorwort", "1": "Danke."},
             MODEL,
-            stream=answering('{"0": "Fore', cut=1),
+            stream=answering("[[0]]\nFore", cut=1),
         )
 
     assert len(spent_by(raised.value)) == 2
@@ -486,7 +599,7 @@ def test_a_part_is_written_without_reasoning_if_asked_or_with_it_if_the_model_mu
     None
 ):
     sent: list[dict[str, Any]] = []
-    answer = answering('{"0": "Foreword"}')
+    answer = answering("[[0]]\nForeword")
 
     def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
         sent.append(json.loads(json.dumps(body)))
@@ -530,7 +643,7 @@ def test_a_picture_is_not_sent_to_the_model_and_stays_where_it_was() -> None:
 
 
 def test_a_part_of_pictures_alone_is_kept_without_asking_the_model() -> None:
-    stream = answering('{"2": "Chapter 1"}')
+    stream = answering("[[2]]\nChapter 1")
 
     written, used = transform_parts(
         "Translate.",

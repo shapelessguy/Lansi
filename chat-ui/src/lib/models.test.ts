@@ -21,6 +21,15 @@ test("the checker server is told a model of OpenRouter by its id, and one at an 
     expect(modelRequest(AT_HOME)).toEqual(AT_HOME);
 });
 
+test("a model of OpenRouter is told with the providers that alone are to serve it, and kept with them", () => {
+    const chosen = { ...onOpenRouter("some/model"), providers: ["deepseek"] };
+
+    expect(modelRequest(chosen)).toEqual({ model: "some/model", url: "", key: "", providers: ["deepseek"] });
+    expect(modelRequest({ ...AT_HOME, providers: ["deepseek"] })).toEqual(AT_HOME);
+    expect(readModelChoice({ ...chosen, providers: ["deepseek", 3, ""] }, onOpenRouter("usual"))).toEqual(chosen);
+    expect(readModelChoice(onOpenRouter("some/model"), onOpenRouter("usual"))).toEqual(onOpenRouter("some/model"));
+});
+
 test("a model that names none stands aside for another", () => {
     expect(orModel(onOpenRouter(""), AT_HOME)).toEqual(AT_HOME);
     expect(orModel(onOpenRouter("mine"), AT_HOME)).toEqual(onOpenRouter("mine"));

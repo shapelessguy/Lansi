@@ -1,6 +1,7 @@
 {
     "title": "Translate",
-    "description": "Translate sentences that need the lesson into the language you learn. Each instance is a set of sentences, checked together.",
+    "description": "Translate sentences that need the lesson into the language you learn, or whole texts, such as short stories, where a brief gives them. Each instance is a set of them, checked together.",
+    "sentence_checks": "optional",
     "options": {
         "sentences": {
             "label": "Sentences in a set",
@@ -41,7 +42,7 @@
     "messages": {
         "German": {
             "Translate": "Übersetzen",
-            "Translate sentences that need the lesson into the language you learn. Each instance is a set of sentences, checked together.": "Übersetze Sätze, die die Lektion brauchen, in die Sprache, die du lernst. Jede Runde ist eine Gruppe von Sätzen, die zusammen geprüft werden.",
+            "Translate sentences that need the lesson into the language you learn, or whole texts, such as short stories, where a brief gives them. Each instance is a set of them, checked together.": "Übersetze Sätze, die die Lektion brauchen, in die Sprache, die du lernst, oder ganze Texte, etwa kurze Geschichten, wo eine Vorgabe sie gibt. Jede Runde ist eine Gruppe davon, die zusammen geprüft wird.",
             "Sentences in a set": "Sätze pro Gruppe",
             "Right": "Richtig",
             "Almost": "Fast",
@@ -60,7 +61,7 @@
         },
         "Italian": {
             "Translate": "Tradurre",
-            "Translate sentences that need the lesson into the language you learn. Each instance is a set of sentences, checked together.": "Traduci nella lingua che impari frasi che richiedono la lezione. Ogni turno è un gruppo di frasi, corrette insieme.",
+            "Translate sentences that need the lesson into the language you learn, or whole texts, such as short stories, where a brief gives them. Each instance is a set of them, checked together.": "Traduci nella lingua che impari frasi che richiedono la lezione, o testi interi, come brevi storie, dove delle istruzioni li danno. Ogni turno è un gruppo di questi, corretti insieme.",
             "Sentences in a set": "Frasi per gruppo",
             "Right": "Giusto",
             "Almost": "Quasi",

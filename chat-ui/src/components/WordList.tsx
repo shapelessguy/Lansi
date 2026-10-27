@@ -1,16 +1,20 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { WordsState } from "../App";
+import { type AnkiDeck, chooseAnkiDecks, fetchAnkiDecks } from "../lib/anki";
 import { t } from "../lib/i18n";
 import { filterWords, type SortKey, sortLabels, sortWords, type Word } from "../lib/words";
+import { AnkiDecks, deckAndInside, DeckExplorer } from "./AnkiDecks";
 
 interface Props {
     state: WordsState;
     onReload: () => void;
     onPick: (word: Word) => void;
+    /** Says that other decks were ticked, whose words are to be fetched. */
+    onDecks: () => void;
 }
 
 function today(): string {
@@ -19,21 +23,84 @@ function today(): string {
     return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-export function WordList({ state, onReload, onPick }: Props) {
+export function WordList({ state, onReload, onPick, onDecks }: Props) {
     const [sortKey, setSortKey] = useState<SortKey>("due");
     const [descending, setDescending] = useState(false);
     const [query, setQuery] = useState("");
+    const [decks, setDecks] = useState<AnkiDeck[] | null>(null);
+    const [decksError, setDecksError] = useState<string | null>(null);
+    // the deck whose words alone are shown, or null for every deck ticked
+    const [shownDeck, setShownDeck] = useState<number | null>(null);
+    const [explored, setExplored] = useState<AnkiDeck | null>(null);
 
     const words = state.status === "ready" ? state.words : null;
+
+    // the decks are asked for again with the words, as after a sync
+    useEffect(() => {
+        if (!words) {
+            return;
+        }
+        let current = true;
+        fetchAnkiDecks().then(
+            (listed) => {
+                if (current) {
+                    setDecks(listed);
+                    setDecksError(null);
+                }
+            },
+            (failed: Error) => current && setDecksError(failed.message),
+        );
+        return () => {
+            current = false;
+        };
+    }, [words]);
+
+    function toggle(deck: AnkiDeck) {
+        if (!decks) {
+            return;
+        }
+        // the decks inside it go with it, and can be changed one by one afterwards
+        const ticked = !deck.chosen;
+        const goes = deckAndInside(decks, deck);
+        const chosen = decks.filter((each) => (goes.has(each.id) ? ticked : each.chosen)).map((each) => each.id);
+        setDecksError(null);
+        chooseAnkiDecks(chosen).then(
+            (listed) => {
+                setDecks(listed);
+                onDecks();
+            },
+            (failed: Error) => setDecksError(failed.message),
+        );
+    }
+
+    const inDeck = useMemo(() => {
+        const deck = decks?.find((each) => each.id === shownDeck);
+        return deck && decks ? deckAndInside(decks, deck) : null;
+    }, [decks, shownDeck]);
     const shown = useMemo(
-        () => (words ? sortWords(filterWords(words, query), sortKey, descending) : []),
-        [words, query, sortKey, descending],
+        () =>
+            words
+                ? sortWords(
+                    filterWords(inDeck ? words.filter((word) => inDeck.has(word.deckId)) : words, query),
+                    sortKey,
+                    descending,
+                )
+                : [],
+        [words, inDeck, query, sortKey, descending],
     );
     const dueBy = today();
 
     return (
         <>
             <div className="sidebar-controls">
+                <AnkiDecks
+                    decks={decks}
+                    error={decksError}
+                    shown={shownDeck}
+                    onShow={setShownDeck}
+                    onToggle={toggle}
+                    onExplore={setExplored}
+                />
                 <input
                     type="search"
                     placeholder={t("Filter words")}
@@ -68,7 +135,7 @@ export function WordList({ state, onReload, onPick }: Props) {
                         ↻
                     </button>
                 </div>
-                {words && query && (
+                {words && (query || inDeck) && (
                     <span className="count">
                         {t("{shown} of {count}", { shown: shown.length, count: words.length })}
                     </span>
@@ -82,7 +149,7 @@ export function WordList({ state, onReload, onPick }: Props) {
                 </div>
             )}
             {words && shown.length === 0 && (
-                <p className="sidebar-note">{query ? t("No words match.") : t("No Anki words yet.")}</p>
+                <p className="sidebar-note">{query || inDeck ? t("No words match.") : t("No Anki words yet.")}</p>
             )}
             <ul className="word-list">
                 {shown.map((word) => (
@@ -103,6 +170,7 @@ export function WordList({ state, onReload, onPick }: Props) {
                     </li>
                 ))}
             </ul>
+            {explored && <DeckExplorer deck={explored} onClose={() => setExplored(null)} />}
         </>
     );
 }

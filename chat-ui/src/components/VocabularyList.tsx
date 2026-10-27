@@ -31,6 +31,7 @@ import {
     type VocabularyEntry,
 } from "../lib/vocabulary";
 import type { TranslationsStatus, WordTranslations } from "../lib/wordTranslations";
+import { Check } from "./Check";
 
 interface Props {
     /** Whether the list is on show. It is fetched again each time it comes on show. */
@@ -266,10 +267,9 @@ export function VocabularyList(
                         ↻
                     </button>
                 </div>
-                <label className="vocabulary-flat">
-                    <input type="checkbox" checked={flat} onChange={(event) => changeFlat(event.target.checked)} />
+                <Check className="vocabulary-flat" checked={flat} onChange={changeFlat}>
                     {t("One list, without categories")}
-                </label>
+                </Check>
                 <div className="sort-row">
                     <select
                         aria-label={t("The set of words given to the model")}

@@ -114,7 +114,7 @@ interface Props {
 }
 
 /** The activities written in with a box whose sentences are checked, which have the panel of the checks. */
-const CHECKED_ACTIVITIES: readonly Activity[] = ["chat", "tutor", "texts"];
+const CHECKED_ACTIVITIES: readonly Activity[] = ["chat", "tutor", "texts", "practice", "evaluations"];
 
 /** What the usage of each kind of background task is counted under. */
 const TASK_CATEGORIES: Record<string, UsageCategory> = {
@@ -805,6 +805,13 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 </button>
                                 <button
                                     role="tab"
+                                    aria-selected={logsTab === "favourites"}
+                                    onClick={() => setLogsTab("favourites")}
+                                >
+                                    {t("Favourites")}
+                                </button>
+                                <button
+                                    role="tab"
                                     aria-selected={logsTab === "sessions"}
                                     onClick={() => setLogsTab("sessions")}
                                 >
@@ -836,6 +843,15 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 language={settings.language}
                                 revision={logsRevision}
                                 onReplay={replay}
+                            />
+                        </div>
+                        <div className="tab-panel" role="tabpanel" hidden={logsTab !== "favourites"}>
+                            <ExercisesDone
+                                active={logsOpen && logsTab === "favourites"}
+                                language={settings.language}
+                                revision={logsRevision}
+                                onReplay={replay}
+                                favouritesOnly
                             />
                         </div>
                         <div className="tab-panel" role="tabpanel" hidden={logsTab !== "evaluations"}>
@@ -904,6 +920,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     state={wordsState}
                                     onReload={loadWords}
                                     onPick={(word) => setPicked({ word: word.word, nonce: Date.now() })}
+                                    onDecks={() => setDecksRevision((revision) => revision + 1)}
                                 />
                             </div>
                         )}
@@ -1216,6 +1233,10 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             resuming={resuming}
                             active={activity === "practice"}
                             settings={settings}
+                            words={words}
+                            checksSlot={panel === "checks" && activity === "practice" ? panelSlot : null}
+                            onCloseChecks={() => setOpenPanel(null)}
+                            onEditQuestions={() => openSettings("questions")}
                             learner={learner}
                             wordsOfSet={wordsOfSet}
                             topicsRevision={topicsRevision}
@@ -1235,6 +1256,10 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         <Evaluations
                             opening={openingEvaluation}
                             settings={settings}
+                            words={words}
+                            checksSlot={panel === "checks" && activity === "evaluations" ? panelSlot : null}
+                            onCloseChecks={() => setOpenPanel(null)}
+                            onEditQuestions={() => openSettings("questions")}
                             learner={learner}
                             onUsage={addEvaluationUsage}
                             onTask={addTask}
@@ -1281,7 +1306,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             settings={settings}
                             anki={anki}
                             onAnki={setAnki}
-                            onDecks={() => setDecksRevision((revision) => revision + 1)}
                             sets={sets}
                             tab={settingsTab}
                             onTab={setSettingsTab}

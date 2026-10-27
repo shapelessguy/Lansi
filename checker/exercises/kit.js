@@ -44,8 +44,9 @@
 // Text the interface shows can be selected to have it translated or
 // taken into the vocabulary, as anywhere in the app, without anything done
 // for it here. So is the spelling of what is written in a <textarea>,
-// unless it has the attribute data-no-check; boxes of one line, <input>,
-// are left alone.
+// unless it has the attribute data-no-check, and its sentences are checked
+// by the sentence check model as the `sentence_checks` of the manifest
+// say, as kit.py describes; boxes of one line, <input>, are left alone.
 //
 // What `mount` returns is called when the exercise is taken away, to undo
 // what it did outside `root`, such as listening to the document. The

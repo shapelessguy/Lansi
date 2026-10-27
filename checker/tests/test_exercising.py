@@ -449,6 +449,32 @@ def test_what_an_exercise_shows_in_other_languages_is_listed_without_what_is_not
     assert echo.messages == {"German": {"Echo": "Echo auf Deutsch"}}
 
 
+def test_the_sentences_of_an_exercise_are_checked_only_if_its_manifest_says_so(
+    directory: Path,
+) -> None:
+    manifest = directory / "echo" / "manifest.json"
+    said = {}
+    for checks in ('"optional"', '"always"', '"sometimes"', "null"):
+        manifest.write_text(
+            f'{{"title": "Echo", "sentence_checks": {checks}}}', encoding="utf-8"
+        )
+        (echo,) = exercises(directory)
+        said[checks] = echo.sentence_checks
+
+    assert said == {
+        '"optional"': "optional",
+        '"always"': "always",
+        '"sometimes"': "never",
+        "null": "never",
+    }
+
+
+def test_translating_leaves_checking_the_sentences_to_the_learner() -> None:
+    (translation,) = [each for each in exercises() if each.id == "translation"]
+
+    assert translation.sentence_checks == "optional"
+
+
 def test_the_exercises_that_are_kept_say_their_title_in_each_language_of_the_app() -> (
     None
 ):
@@ -604,6 +630,45 @@ def making(directory: Path) -> None:
     (directory / "echo" / "manifest.json").write_text(
         json.dumps({"title": "Echo", "instance": ECHO_INSTANCE}), encoding="utf-8"
     )
+
+
+def test_an_exercise_done_again_exactly_adds_to_the_log_of_the_first_time(
+    directory: Path, tmp_path: Path
+) -> None:
+    making(directory)
+    jobs: list[Any] = []
+    practice = Practice(
+        UserStore(tmp_path / "user"),
+        directory=directory,
+        later=lambda title, job: jobs.append(job),
+    )
+    asked: list[str] = []
+
+    def ask(messages: list[dict[str, Any]]) -> tuple[str, Profile]:
+        asked.append(messages[0]["content"])
+        reply = '{"summary": ["Better."]}' if len(asked) > 1 else LOG_REPLY
+        return reply, Profile({}, id="gen-log", model="some/model")
+
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 1})
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "make", LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "Eins.", LEARNER, answering())
+    practice.end_session(session["id"], "finished", LEARNER, ask)
+    jobs.pop()()
+    first = practice._store.logs(session["id"])["echo"]
+
+    again = practice.replay(session["id"], "echo")
+    practice.step(again["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(again["id"], "echo", "act", "Zwei.", LEARNER, answering())
+    practice.end_session(again["id"], "finished", LEARNER, ask)
+    jobs.pop()()
+
+    grown = practice._store.logs(session["id"])["echo"]
+    assert first in asked[1] and "Zwei." in asked[1]
+    assert grown.startswith(first + "\nDone again on ")
+    assert grown.endswith(": Better.")
+    assert practice._store.logs(again["id"]) == {"echo": grown}
+    assert practice._store._own_logs(again["id"]) == {}
 
 
 def test_what_an_exercise_makes_is_kept_and_done_again_exactly(
@@ -1251,7 +1316,7 @@ def test_a_text_of_the_learner_is_corrected_in_a_session_of_no_lesson_and_locked
         )
 
 
-def test_what_an_exercise_is_steered_with_is_told_first_among_what_it_heeds(
+def test_what_an_exercise_is_steered_with_is_kept_as_its_brief_with_its_lines(
     practice: Practice,
 ) -> None:
     session, _ = practice.start_session(
@@ -1259,10 +1324,41 @@ def test_what_an_exercise_is_steered_with_is_told_first_among_what_it_heeds(
         LESSON,
         [],
         {"echo": 1},
-        steering={"echo": "  Every sentence needs   seit with the dative. "},
+        steering={"echo": "  Every sentence needs   seit.\n\n1. seit drei Jahren "},
     )
 
-    assert session["guidance"]["echo"] == "Every sentence needs seit with the dative."
+    assert (
+        session["briefs"]["echo"] == "Every sentence needs seit.\n1. seit drei Jahren"
+    )
+    assert session["guidance"]["echo"] == ""
+
+
+def test_an_exercise_is_told_the_brief_the_tutor_gave_it(
+    practice: Practice, directory: Path
+) -> None:
+    told: list[dict[str, Any]] = []
+
+    class Recording(Runner):
+        def run(
+            self,
+            exercise: str,
+            request: dict[str, Any],
+            ask: Any,
+            draw: Any = None,
+            look: Any = None,
+            anki: Any = None,
+            timed: Any = None,
+        ) -> Any:
+            told.append(request["context"])
+            return {"state": {}, "show": None, "graded": []}, []
+
+    practice._runner = Recording(directory)
+    session, _ = practice.start_session(
+        "German", LESSON, [], {"echo": 1}, steering={"echo": "1. warten auf"}
+    )
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+
+    assert told[0]["brief"] == "1. warten auf"
     with pytest.raises(ValueError):
         practice.start_session("German", LESSON, [], {"echo": 1}, steering={"echo": 3})  # type: ignore[dict-item]
 

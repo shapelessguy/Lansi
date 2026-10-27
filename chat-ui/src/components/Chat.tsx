@@ -13,6 +13,7 @@ import type { WordLists } from "../lib/sets";
 import { expandPrompt, type Settings } from "../lib/settings";
 import { allowPlaying, speakMark } from "../lib/speaking";
 import type { UsageEntry } from "../lib/usage";
+import { Check } from "./Check";
 import { CheckedTextarea } from "./CheckedTextarea";
 import { SideList } from "./SideList";
 import { T } from "./T";
@@ -194,17 +195,13 @@ export function Chat(
                             ))}
                         </select>
                     </label>
-                    <label
-                        className="check"
+                    <Check
+                        checked={settings.speakReplies}
                         title={t("Reads each reply aloud once it has arrived. The audio is kept.")}
+                        onChange={(checked) => onSettingsChange({ ...settings, speakReplies: checked })}
                     >
-                        <input
-                            type="checkbox"
-                            checked={settings.speakReplies}
-                            onChange={(event) => onSettingsChange({ ...settings, speakReplies: event.target.checked })}
-                        />
                         {t("Speak replies")}
-                    </label>
+                    </Check>
                     <button onClick={onNewChat}>{t("New chat")}</button>
                 </header>
 
@@ -303,20 +300,15 @@ export function Chat(
                         onEditQuestions={onEditQuestions}
                     />
                     <div className="composer-send">
-                        <label
-                            className="check"
+                        <Check
+                            checked={settings.enterSends}
                             title={settings.enterSends
                                 ? t("Enter sends the message, and Shift+Enter starts a new line")
                                 : t("Enter starts a new line, and Shift+Enter sends the message")}
+                            onChange={(checked) => onSettingsChange({ ...settings, enterSends: checked })}
                         >
-                            <input
-                                type="checkbox"
-                                checked={settings.enterSends}
-                                onChange={(event) =>
-                                    onSettingsChange({ ...settings, enterSends: event.target.checked })}
-                            />
                             {t("Enter sends")}
-                        </label>
+                        </Check>
                         {busy
                             ? <button type="button" onClick={() => abort.abort()}>{t("Stop")}</button>
                             : (

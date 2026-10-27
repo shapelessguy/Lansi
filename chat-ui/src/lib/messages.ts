@@ -11,6 +11,22 @@ interface Translations {
 }
 
 export const MESSAGES = {
+    "The checks of the sentence you write are shown here once an exercise starts.": {
+        German: "Die Prüfungen des Satzes, den du schreibst, erscheinen hier, sobald eine Übung beginnt.",
+        Italian: "I controlli della frase che scrivi compaiono qui quando inizia un esercizio.",
+    },
+    "The sentences of this exercise are not checked. Turn on Sentence checks above, where the exercise has them.": {
+        German: "Die Sätze dieser Übung werden nicht geprüft. Schalte oben die Satzprüfung ein, wo die Übung sie hat.",
+        Italian:
+            "Le frasi di questo esercizio non vengono controllate. Attiva il Controllo delle frasi qui sopra, dove l'esercizio lo prevede.",
+    },
+    "The sentence check model checks each sentence you finish here, as in the chat, with the questions of your settings.":
+        {
+            German:
+                "Das Satzprüfungsmodell prüft jeden Satz, den du hier beendest, wie im Chat, mit den Fragen deiner Einstellungen.",
+            Italian:
+                "Il modello di controllo delle frasi controlla ogni frase che finisci qui, come nella chat, con le domande delle tue impostazioni.",
+        },
     "The mock exam could not be started.": {
         German: "Die Probeprüfung konnte nicht gestartet werden.",
         Italian: "Non è stato possibile avviare la simulazione d'esame.",
@@ -2118,11 +2134,69 @@ export const MESSAGES = {
         German: "{count} Karten",
         Italian: "{count} carte",
     },
-    "The words of unticked decks are left out of the Anki tab and the import. Decks made later are ticked.": {
-        German:
-            "Die Wörter nicht angehakter Stapel bleiben aus dem Anki-Reiter und dem Import heraus. Später erstellte Stapel werden angehakt.",
-        Italian:
-            "Le parole dei mazzi non spuntati restano fuori dalla scheda Anki e dall'importazione. I mazzi creati in seguito vengono spuntati.",
+    "Include {deck}": {
+        German: "{deck} einbeziehen",
+        Italian: "Includi {deck}",
+    },
+    "Show only the words of {deck}": {
+        German: "Nur die Wörter von {deck} zeigen",
+        Italian: "Mostra solo le parole di {deck}",
+    },
+    "Explore {deck}": {
+        German: "{deck} erkunden",
+        Italian: "Esplora {deck}",
+    },
+    "Learning": {
+        German: "Im Lernen",
+        Italian: "In apprendimento",
+    },
+    "In review": {
+        German: "In Wiederholung",
+        Italian: "In ripasso",
+    },
+    "{count} note": {
+        German: "{count} Notiz",
+        Italian: "{count} nota",
+    },
+    "{count} notes": {
+        German: "{count} Notizen",
+        Italian: "{count} note",
+    },
+    "Columns ({shown} of {count})": {
+        German: "Spalten ({shown} von {count})",
+        Italian: "Colonne ({shown} di {count})",
+    },
+    "Filled in {count} notes": {
+        German: "In {count} Notizen ausgefüllt",
+        Italian: "Compilato in {count} note",
+    },
+    "{first}–{last} of {count}": {
+        German: "{first}–{last} von {count}",
+        Italian: "{first}–{last} di {count}",
+    },
+    "Notetype": {
+        German: "Notiztyp",
+        Italian: "Tipo di nota",
+    },
+    "Filter notes": {
+        German: "Notizen filtern",
+        Italian: "Filtra le note",
+    },
+    "Loading the notes…": {
+        German: "Notizen werden geladen…",
+        Italian: "Caricamento delle note…",
+    },
+    "Only the first {count} notes are shown.": {
+        German: "Nur die ersten {count} Notizen werden gezeigt.",
+        Italian: "Sono mostrate solo le prime {count} note.",
+    },
+    "State": {
+        German: "Stand",
+        Italian: "Stato",
+    },
+    "No notes match.": {
+        German: "Keine Notiz passt.",
+        Italian: "Nessuna nota corrisponde.",
     },
     "Asking whether an Anki account is linked…": {
         German: "Es wird gefragt, ob ein Anki-Konto verknüpft ist…",
@@ -2683,9 +2757,9 @@ export const MESSAGES = {
         German: "{count}-mal",
         Italian: "{count} volte",
     },
-    "Aimed at: {focus}": {
-        German: "Ziel: {focus}",
-        Italian: "Obiettivo: {focus}",
+    "The tutor's brief (it may give the answers away)": {
+        German: "Die Vorgabe des Tutors (sie kann die Lösungen verraten)",
+        Italian: "Le istruzioni del tutor (possono svelare le soluzioni)",
     },
     "With the words: {words}": {
         German: "Mit den Wörtern: {words}",
@@ -3037,6 +3111,94 @@ export const MESSAGES = {
     "Do it again exactly as it was, with nothing made anew": {
         German: "Genau so wiederholen, wie sie war, ohne etwas neu zu erstellen",
         Italian: "Rifallo esattamente com'era, senza creare niente di nuovo",
+    },
+    "Providers": {
+        German: "Anbieter",
+        Italian: "Provider",
+    },
+    "Providers of {model}": {
+        German: "Anbieter von {model}",
+        Italian: "Provider di {model}",
+    },
+    "Any of them may serve it. Tick those that alone are to serve it.": {
+        German: "Jeder von ihnen kann es bedienen. Hak die an, die es allein bedienen sollen.",
+        Italian: "Può servirlo uno qualsiasi. Spunta quelli che devono servirlo da soli.",
+    },
+    "Only those ticked serve it.": {
+        German: "Nur die angehakten bedienen es.",
+        Italian: "Lo servono solo quelli spuntati.",
+    },
+    "In / 1M": {
+        German: "Ein / 1 Mio.",
+        Italian: "Input / 1M",
+    },
+    "Out / 1M": {
+        German: "Aus / 1 Mio.",
+        Italian: "Output / 1M",
+    },
+    "Latency": {
+        German: "Latenz",
+        Italian: "Latenza",
+    },
+    "Uptime": {
+        German: "Verfügbarkeit",
+        Italian: "Disponibilità",
+    },
+    "Tools": {
+        German: "Tools",
+        Italian: "Strumenti",
+    },
+    "{slug}: not listed now": {
+        German: "{slug}: derzeit nicht gelistet",
+        Italian: "{slug}: ora non in elenco",
+    },
+    "{count} tok/s": {
+        German: "{count} Tok./s",
+        Italian: "{count} tok/s",
+    },
+    "takes tools": {
+        German: "nimmt Tools an",
+        Italian: "accetta strumenti",
+    },
+    "takes no tools": {
+        German: "nimmt keine Tools an",
+        Italian: "non accetta strumenti",
+    },
+    "OpenRouter gives no latency or speed for these providers now.": {
+        German: "OpenRouter gibt für diese Anbieter derzeit keine Latenz oder Geschwindigkeit an.",
+        Italian: "OpenRouter ora non indica latenza né velocità per questi provider.",
+    },
+    "Any provider": {
+        German: "Beliebiger Anbieter",
+        Italian: "Qualsiasi provider",
+    },
+    "{label}: providers": {
+        German: "{label}: Anbieter",
+        Italian: "{label}: provider",
+    },
+    "Providers: {count}": {
+        German: "Anbieter: {count}",
+        Italian: "Provider: {count}",
+    },
+    "Favourites": {
+        German: "Favoriten",
+        Italian: "Preferiti",
+    },
+    "No favourite exercise yet: add one with its star under Exercises.": {
+        German: "Noch keine Lieblingsübung: Füg eine mit ihrem Stern unter Übungen hinzu.",
+        Italian: "Ancora nessun esercizio preferito: aggiungine uno con la sua stella in Esercizi.",
+    },
+    "Take it out of the favourites": {
+        German: "Aus den Favoriten nehmen",
+        Italian: "Togli dai preferiti",
+    },
+    "Among the favourites": {
+        German: "Unter den Favoriten",
+        Italian: "Tra i preferiti",
+    },
+    "Add it to the favourites": {
+        German: "Zu den Favoriten hinzufügen",
+        Italian: "Aggiungi ai preferiti",
     },
     "Same": {
         German: "Gleich",

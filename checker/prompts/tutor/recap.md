@@ -1,6 +1,6 @@
 # Recapping a chat
 
-What reads a chat with the tutor once it is closed, and writes a short recap of it, which the tutor is told in the chats to come, with those of the chats before, as memories.md says. Unlike the memories that remembering.md decides on, every chat has a recap, however little was said in it.
+What reads a chat with the tutor once it is closed, and writes a short recap of it, which the tutor is told in the chats to come, with those of the chats before, as memories.md says. Every chat has a recap, however little was said in it; what the tutor is to remember of the learner, it writes down in the chat with its tool `remember`, as tools.md says.
 
 Variables:
 - `$language`: the language the learner is learning, such as German

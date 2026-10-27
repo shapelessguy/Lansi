@@ -61,6 +61,26 @@ export async function chooseAnkiDecks(ids: number[]): Promise<AnkiDeck[]> {
     return (await ankiReply<{ decks: AnkiDeck[] }>(asked)).decks;
 }
 
+/** How far the furthest card of a note has come. */
+export type NoteState = 0 | 1 | 2;
+
+/** A note of a deck, whatever its cards are doing: its id, its notetype, its fields joined by \x1f and its state. */
+export type DeckNoteRow = [noteId: number, notetypeId: number, fields: string, state: NoteState];
+
+/** Every note of a deck and of the decks inside it, as the explorer of a deck shows them. */
+export interface DeckNotes {
+    name: string;
+    rows: DeckNoteRow[];
+    /** Whether the deck has more notes than were given. */
+    more: boolean;
+    /** The name and the names of the fields of each notetype, by its id. */
+    notetypes: Record<string, { name: string; fields: string[] }>;
+}
+
+export function fetchDeckNotes(deckId: number): Promise<DeckNotes> {
+    return ankiReply(checkerFetch(`/anki/decks/${deckId}/notes`));
+}
+
 /** How many files of the media of the collection are kept in the page at once. */
 const KEPT_MEDIA = 100;
 /** The files of the media fetched last, by their names, the latest last. */
@@ -136,6 +156,7 @@ type KnownWordRow = [
     fields: string,
     due: number,
     interval: number,
+    deckId: number,
 ];
 
 /** Converts the day a card is due into a calendar date, as YYYY-MM-DD. */
@@ -173,7 +194,7 @@ export function wordsFromRows(
     fieldNamesByNotetype: Map<number, string[]>,
     timing: Timing,
 ): Word[] {
-    return rows.map(([noteId, notetypeId, sortField, joinedFields, due, intervalDays]) => {
+    return rows.map(([noteId, notetypeId, sortField, joinedFields, due, intervalDays, deckId]) => {
         const fields = joinedFields.split("\x1f");
         const names = fieldNamesByNotetype.get(notetypeId) ?? [];
         const meaningIdx = fieldIndex(names, /^(english|meaning|translation|definition|back)$/i);
@@ -185,6 +206,7 @@ export function wordsFromRows(
             partOfSpeech: plainText(fields[partOfSpeechIdx] ?? ""),
             due: dueDate(due, timing),
             intervalDays,
+            deckId,
         };
     });
 }

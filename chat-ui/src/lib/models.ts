@@ -17,6 +17,11 @@ export interface ModelChoice {
     url: string;
     /** The key of the server at `url`, which may need none. */
     key: string;
+    /**
+     * The providers of OpenRouter that alone are to serve it, by their slugs;
+     * none, or left out, for any.
+     */
+    providers?: string[];
 }
 
 /** The kinds of model there are, which the checker server lists the models of OpenRouter by. */
@@ -35,17 +40,30 @@ export function readModelChoice(stored: unknown, usual: ModelChoice): ModelChoic
     if (typeof stored !== "object" || stored === null) {
         return usual;
     }
-    const { model, url, key } = stored as Partial<Record<keyof ModelChoice, unknown>>;
+    const { model, url, key, providers } = stored as Partial<Record<keyof ModelChoice, unknown>>;
+    const chosen = Array.isArray(providers)
+        ? providers.filter((each): each is string => typeof each === "string" && each !== "")
+        : [];
     return {
         model: typeof model === "string" ? model.trim() : usual.model,
         url: typeof url === "string" ? url.trim() : "",
         key: typeof key === "string" ? key.trim() : "",
+        ...(chosen.length > 0 ? { providers: chosen } : {}),
     };
 }
 
-/** A model as the checker server is told it: by its id on OpenRouter, or with its address. */
+/**
+ * A model as the checker server is told it: by its id on OpenRouter, with
+ * the providers that alone are to serve it if there are any, or with its
+ * address.
+ */
 export function modelRequest(choice: ModelChoice): string | ModelChoice {
-    return choice.url ? choice : choice.model;
+    if (choice.url) {
+        return { model: choice.model, url: choice.url, key: choice.key };
+    }
+    return choice.providers?.length
+        ? { model: choice.model, url: "", key: "", providers: choice.providers }
+        : choice.model;
 }
 
 /** `choice`, or `instead` if it names no model. */
@@ -84,6 +102,46 @@ export async function fetchOpenRouterModels(kind: ModelKind | "all"): Promise<Li
         );
     }
     return reply.models;
+}
+
+/**
+ * A provider that serves a model on OpenRouter: its slug, which a request
+ * names it by, its name, what it asks for each token in and out, in dollars,
+ * the seconds to its first token and the tokens a second it wrote lately, the
+ * percentage of requests it answered lately, whether it takes tools and
+ * reasoning, and how much context it takes, with what is not known null.
+ */
+export interface Provider {
+    slug: string;
+    name: string;
+    promptPrice: number | null;
+    completionPrice: number | null;
+    latency: number | null;
+    throughput: number | null;
+    uptime: number | null;
+    tools: boolean;
+    reasoning: boolean;
+    contextLength: number | null;
+    quantization: string | null;
+}
+
+/**
+ * The providers that serve a model on OpenRouter, as the checker server lists
+ * them, asked with `apiKey`, without which it is not known how quick they are.
+ */
+export async function fetchProviders(model: string, apiKey: string): Promise<Provider[]> {
+    const response = await checkerFetch(`/models/openrouter/providers?model=${encodeURIComponent(model)}`, {
+        headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {},
+    });
+    const reply = await response.json();
+    if (!response.ok) {
+        throw new Error(
+            typeof reply.error === "string"
+                ? reply.error
+                : t("The server answered {status}.", { status: response.status }),
+        );
+    }
+    return reply.providers;
 }
 
 /** The ids of the models the server at `url` has, as it lists them; asked through the checker server. */

@@ -40,7 +40,7 @@ test("plain text drops markup and sound tags", () => {
 
 test("the meaning and part of speech are taken from the fields with those names", () => {
     const fieldNames = new Map([[1, ["German", "Picture", "English", "Part of Speech"]]]);
-    const row = [10, 1, "sitzen", ["sitzen", "", "to sit", "verb"].join("\x1f"), 98, 60] as const;
+    const row = [10, 1, "sitzen", ["sitzen", "", "to sit", "verb"].join("\x1f"), 98, 60, 5] as const;
 
     const [word] = wordsFromRows([[...row]], fieldNames, timing);
 
@@ -51,13 +51,14 @@ test("the meaning and part of speech are taken from the fields with those names"
         partOfSpeech: "verb",
         due: "2026-09-03",
         intervalDays: 60,
+        deckId: 5,
     });
 });
 
 test("the second field is the meaning when no field name says so", () => {
     const fieldNames = new Map([[2, ["Front", "Rückseite"]]]);
 
-    const [word] = wordsFromRows([[11, 2, "hola", "hola\x1fhello", 137, 3]], fieldNames, timing);
+    const [word] = wordsFromRows([[11, 2, "hola", "hola\x1fhello", 137, 3, 1]], fieldNames, timing);
 
     expect(word.meaning).toBe("hello");
     expect(word.partOfSpeech).toBe("");

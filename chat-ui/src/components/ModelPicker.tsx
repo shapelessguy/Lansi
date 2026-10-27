@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { t } from "../lib/i18n";
 import { fetchModelsAt, type ModelChoice } from "../lib/models";
+import { ProvidersDialog } from "./ProvidersDialog";
 
 /** What the list says in place of an id for a value that is typed, or asked at an address. */
 const CUSTOM = "\0custom";
@@ -22,6 +23,12 @@ interface Props {
     listed: string[];
     /** What stands in for no model, such as "the chat model", where one may be named. */
     none?: string;
+    /** Whether the providers that serve a model of OpenRouter can be chosen, as for a model that chats. */
+    providers?: boolean;
+    /** Whether it is shown which providers take tools, for a model that is called with them. */
+    tools?: boolean;
+    /** The OpenRouter key, which the providers are listed with. */
+    apiKey?: string;
 }
 
 /**
@@ -30,7 +37,10 @@ interface Props {
  * server that takes OpenAI's requests, such as one on this machine, with
  * what OpenRouter has of the kind after them.
  */
-export function ModelPicker({ label, value, onChange, listed, none }: Props) {
+export function ModelPicker(
+    { label, value, onChange, listed, none, providers = false, tools = false, apiKey = "" }: Props,
+) {
+    const [choosingProviders, setChoosingProviders] = useState(false);
     const [mode, setMode] = useState<Mode>(() =>
         value.url ? "address" : !value.model || listed.length === 0 || listed.includes(value.model) ? "list" : "custom"
     );
@@ -79,10 +89,32 @@ export function ModelPicker({ label, value, onChange, listed, none }: Props) {
                     spellCheck={false}
                     placeholder="provider/model"
                     value={value.model}
-                    onChange={(event) => onChange({ ...value, model: event.target.value.trim() })}
+                    // the providers of one model are not those of another
+                    onChange={(event) => onChange({ ...value, model: event.target.value.trim(), providers: [] })}
                 />
             )}
             {mode === "address" && <AtAddress label={label} value={value} onChange={onChange} />}
+            {providers && mode !== "address" && value.model && (
+                <button
+                    className="chip"
+                    aria-label={t("{label}: providers", { label })}
+                    onClick={() => setChoosingProviders(true)}
+                >
+                    {value.providers?.length
+                        ? t("Providers: {count}", { count: value.providers.length })
+                        : t("Any provider")}
+                </button>
+            )}
+            {choosingProviders && (
+                <ProvidersDialog
+                    model={value.model}
+                    chosen={value.providers ?? []}
+                    tools={tools}
+                    apiKey={apiKey}
+                    onChange={(chosen) => onChange({ ...value, providers: chosen })}
+                    onClose={() => setChoosingProviders(false)}
+                />
+            )}
         </>
     );
 }

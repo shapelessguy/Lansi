@@ -169,7 +169,7 @@ def send_chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
 def _post_chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
     return post(
         model.endpoint("chat/completions"),
-        body,
+        model.routed(body),
         model.headers(),
         model.where,
         CHAT_TIMEOUT_SECS,

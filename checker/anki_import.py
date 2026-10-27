@@ -56,14 +56,30 @@ _SINGLE_WORD = re.compile(r"[^\W\d_]+(?:['’-][^\W\d_]+)*")
 
 
 # One row per note that has a card in review or being relearned, with the
-# earliest day one of those cards is due and the longest interval, for the
-# words the chat lists.
+# earliest day one of those cards is due, the longest interval and the deck
+# of one of them, for the words the chat lists. A card moved into a filtered
+# deck still belongs to its own one.
 KNOWN_WORDS_SQL = (
     "select n.id, n.mid, n.sfld, n.flds,"
-    " min(case when c.odue > 0 then c.odue else c.due end), max(c.ivl)"
+    " min(case when c.odue > 0 then c.odue else c.due end), max(c.ivl),"
+    " min(case when c.odid > 0 then c.odid else c.did end)"
     " from cards c join notes n on n.id = c.nid"
     " where c.type in (2, 3){decks} group by n.id"
 )
+
+# One row per note with a card in the decks listed, whatever its cards are
+# doing, with its fields and how far the furthest of its cards has come: 0
+# new, 1 learning, 2 in review or being relearned.
+DECK_NOTES_SQL = (
+    "select n.id, n.mid, n.flds,"
+    " max(case when c.type in (2, 3) then 2 else c.type end)"
+    " from cards c join notes n on n.id = c.nid"
+    " where c.did in ({decks}) or c.odid in ({decks})"
+    " group by n.id order by n.id limit {limit}"
+)
+NOTETYPES_SQL = "select id, name from notetypes where id in ({ids})"
+# the most notes of a deck that are shown at once
+MAX_DECK_NOTES = 20_000
 
 
 class AnkiUnavailable(Exception):
@@ -216,6 +232,65 @@ class AnkiLink:
             for ntid in notetypes
         }
         return {"rows": rows, "timing": timing, "field_names": field_names}
+
+    def deck_notes(self, deck_id: int) -> dict[str, Any]:
+        """Every note of the deck `deck_id` and of the decks inside it, as
+        rows of DECK_NOTES_SQL, up to MAX_DECK_NOTES of them, with the name
+        and the names of the fields of each of their notetypes. Raises
+        AnkiUnavailable, or AnkiRefused for a deck there is not."""
+        decks = self.decks()
+        found = next((deck for deck in decks if deck.get("id") == deck_id), None)
+        if found is None:
+            raise AnkiRefused(f"there is no deck {deck_id}")
+        name = str(found.get("name"))
+        listed = ", ".join(
+            str(int(deck["id"]))
+            for deck in decks
+            if isinstance(deck.get("id"), int)
+            and (
+                deck.get("name") == name
+                or str(deck.get("name")).startswith(f"{name}::")
+            )
+        )
+        rows = self._ask(
+            "/sql",
+            {"sql": DECK_NOTES_SQL.format(decks=listed, limit=MAX_DECK_NOTES + 1)},
+        )
+        try:
+            notetypes = list(dict.fromkeys(int(row[1]) for row in rows))
+            names = (
+                {
+                    str(int(row[0])): str(row[1])
+                    for row in self._ask(
+                        "/sql",
+                        {
+                            "sql": NOTETYPES_SQL.format(
+                                ids=", ".join(map(str, notetypes))
+                            )
+                        },
+                    )
+                }
+                if notetypes
+                else {}
+            )
+        except (TypeError, ValueError, IndexError):
+            raise AnkiUnavailable(
+                "the deck-status server gave rows of another shape"
+            ) from None
+        return {
+            "name": name,
+            "rows": rows[:MAX_DECK_NOTES],
+            "more": len(rows) > MAX_DECK_NOTES,
+            "notetypes": {
+                str(ntid): {
+                    "name": names.get(str(ntid), ""),
+                    "fields": self._ask("/api/getFieldNames", {"ntid": ntid}).get(
+                        "vals", []
+                    ),
+                }
+                for ntid in notetypes
+            },
+        }
 
     def _ask(
         self,

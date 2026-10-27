@@ -11,6 +11,7 @@ It also takes lists of words into the vocabulary, and shows what is in it.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -79,6 +80,7 @@ from profiling import (
     WordRating,
     describe_usage,
     read_questions,
+    spent,
     spent_by,
 )
 from prompts import PROMPTS
@@ -124,7 +126,6 @@ from tutor import (
     memory_tools,
     practised,
     recap,
-    remember,
     wait_for,
     words_tool,
 )
@@ -133,6 +134,8 @@ from users import Users, take_vocabulary, user_directory
 from versions import MAX_NAME as MAX_VERSION_NAME
 from versions import (
     TRANSFORM_PROMPTS,
+    Drafts,
+    TransformError,
     kept_stretches,
     matches,
     stream_transforming,
@@ -418,10 +421,6 @@ class Account:
     evaluations: Evaluations | None = None
     # what translates the stored words into another language
     words: WordTranslator | None = None
-    # held while what the tutor is to remember of a chat is decided, so that
-    # chats closed together are remembered one after another, each with the
-    # memories that came of those before it
-    remembering: threading.Lock = field(default_factory=threading.Lock)
 
     def study(self, language: str) -> None:
         """Have every part go by `language`, given by its English name."""
@@ -499,7 +498,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 return
             if self._books("PUT") or self._speech("PUT") or self._texts("PUT"):
                 return
-            if self._topics("PUT"):
+            if self._topics("PUT") or self._practice("PUT"):
                 return
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
@@ -513,7 +512,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         if self._books("DELETE") or self._speech("DELETE") or self._topics("DELETE"):
             return
-        if self._anki("DELETE"):
+        if self._anki("DELETE") or self._practice("DELETE"):
             return
         self._reply(HTTPStatus.NOT_FOUND, {"error": "no such path"})
 
@@ -936,21 +935,45 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if budget is not None and (type(budget) is not int or budget < 1):
             raise ValueError("the reasoning budget is a number of tokens")
 
+        # What is written is kept as it is written, under what the version
+        # is made of and how, so that asking for the same again, after it
+        # failed, takes it up where it stopped rather than paying for it twice.
+        draft_key = hashlib.sha256(
+            json.dumps(
+                [source["id"], prompt, parts, model.name, think, budget],
+                ensure_ascii=False,
+            ).encode()
+        ).hexdigest()
+
         def make(step: Step) -> tuple[list[Any], list[Any]]:
-            written, used = transform_parts(
-                prompt,
-                source,
-                parts,
-                model,
-                step,
-                step.report,
-                think,
-                stream_transforming,
-                titles,
-                budget,
-                outline(source["blocks"], source["contents"]),
-                step.used,
-            )
+            try:
+                written, used = transform_parts(
+                    prompt,
+                    source,
+                    parts,
+                    model,
+                    step,
+                    step.report,
+                    think,
+                    stream_transforming,
+                    titles,
+                    budget,
+                    step.used,
+                    Drafts(
+                        store.transform_drafts(source["id"], draft_key),
+                        lambda place, draft: store.save_transform_draft(
+                            source["id"], draft_key, place, draft
+                        ),
+                    ),
+                )
+            except Exception as error:
+                raise spent(
+                    TransformError(
+                        f"{error}. What was written is kept: transforming it again"
+                        " with the same prompt, parts and model goes on from there."
+                    ),
+                    spent_by(error),
+                ) from error
             blocks, contents, landmarks = transformed(
                 source, parts, written, untouched_kept
             )
@@ -968,6 +991,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 contents,
                 landmarks,
             )
+            store.drop_transform_drafts(source["id"], draft_key)
             log(
                 f"{datetime.now():%H:%M:%S} version made of {source['title']}:"
                 f" {name}, transformed in {len(parts)} parts by {model.name}"
@@ -1297,6 +1321,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                          with `{"fresh": true}`, with the
                                          same settings and what it does
                                          made anew; the reply is the session
+            GET /favourites              the exercises of sessions kept as
+                                         favourites, the latest added first
+            PUT /favourites/S/ID         keep the exercise ID of the session
+                                         S among the favourites
+            DELETE /favourites/S/ID      take it out of them
 
         A POST that starts a session may bring `"guidance": {ID: ...}`, what
         each exercise is to aim at, such as the tutor steers it to, which it
@@ -1313,9 +1342,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
         one = re.fullmatch(r"/sessions/([^/]+)", url.path)
         end = re.fullmatch(r"/sessions/([^/]+)/end", url.path)
         step = re.fullmatch(r"/sessions/([^/]+)/exercises/([^/]+)/([a-z]+)", url.path)
-        listed = url.path in ("/lessons", "/exercises", "/sessions")
+        favourite = re.fullmatch(r"/favourites/([^/]+)/([^/]+)", url.path)
+        listed = url.path in ("/lessons", "/exercises", "/sessions", "/favourites")
         store = self.account.store
-        if practice is None or store is None or not (listed or one or end or step):
+        if (
+            practice is None
+            or store is None
+            or not (listed or one or end or step or favourite)
+        ):
             return False
         try:
             if method == "GET" and url.path == "/lessons":
@@ -1340,6 +1374,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     )
             elif method == "POST" and url.path == "/sessions":
                 self._start_session(practice, api_key)
+            elif method == "GET" and url.path == "/favourites":
+                self._reply(HTTPStatus.OK, {"favourites": store.favourites()})
+            elif method == "PUT" and favourite:
+                store.add_favourite(favourite.group(1), favourite.group(2))
+                self._reply(HTTPStatus.OK, {"favourites": store.favourites()})
+            elif method == "DELETE" and favourite:
+                store.remove_favourite(favourite.group(1), favourite.group(2))
+                self._reply(HTTPStatus.OK, {"favourites": store.favourites()})
             elif method == "POST" and step and step.group(3) == "replay":
                 fresh = self._read_body().get("fresh") is True
                 self._reply(
@@ -1741,17 +1783,27 @@ class CheckerHandler(BaseHTTPRequestHandler):
             PUT /anki/decks    choose the `{"decks": [id, ...]}` that are
                                sent, and no other of the decks there are;
                                those made later are chosen
+            GET /anki/decks/ID/notes
+                               every note of a deck and of those inside it,
+                               whatever its cards are doing, with the
+                               fields of each notetype
             GET /anki/media/NAME
                                a file of the media of the collection, such
                                as a picture of a card that is studied
         """
         path = urlsplit(self.path).path
         media = re.fullmatch(r"/anki/media/([^/]+)", path)
-        if not media and path not in (
-            "/anki",
-            "/anki/link",
-            "/anki/words",
-            "/anki/decks",
+        deck_notes = re.fullmatch(r"/anki/decks/(\d{1,20})/notes", path)
+        if (
+            not media
+            and not deck_notes
+            and path
+            not in (
+                "/anki",
+                "/anki/link",
+                "/anki/words",
+                "/anki/decks",
+            )
         ):
             return False
         store = self.account.store
@@ -1784,6 +1836,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "private, max-age=3600")
                 self.end_headers()
                 self.wfile.write(data)
+            elif method == "GET" and deck_notes:
+                self._reply(HTTPStatus.OK, anki.deck_notes(int(deck_notes.group(1))))
             elif method == "GET" and path == "/anki/words":
                 skipped = store.skipped_anki_decks() if store else []
                 self._reply(HTTPStatus.OK, anki.known_words(skipped))
@@ -1813,7 +1867,9 @@ class CheckerHandler(BaseHTTPRequestHandler):
             else:
                 return False
         except AnkiRefused as error:
-            status = HTTPStatus.NOT_FOUND if media else HTTPStatus.BAD_REQUEST
+            status = (
+                HTTPStatus.NOT_FOUND if media or deck_notes else HTTPStatus.BAD_REQUEST
+            )
             self._reply(status, {"error": str(error)})
         except AnkiUnavailable as error:
             self._reply(HTTPStatus.BAD_GATEWAY, {"error": str(error)})
@@ -1824,7 +1880,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         if not self._find_account() or self._kept("GET") or self._sets("GET"):
             return
-        if self._known() or self._openrouter_models():
+        if self._known() or self._openrouter_models(self.headers.get(KEY_HEADER)):
             return
         if self._tutor_chats("GET") or self._texts("GET"):
             return
@@ -1961,7 +2017,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         request = urllib.request.Request(
             model.endpoint("chat/completions"),
             data=json.dumps(
-                {**body, "model": model.name, "usage": {"include": True}}
+                model.routed({**body, "model": model.name, "usage": {"include": True}})
             ).encode(),
             headers={**model.headers(), "Content-Type": "application/json"},
             method="POST",
@@ -2026,15 +2082,25 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 daemon=True,
             ).start()
 
-    def _openrouter_models(self) -> bool:
+    def _openrouter_models(self, api_key: str | None = None) -> bool:
         """Answers `GET /models/openrouter?kind=...`, the models OpenRouter
-        has of a kind, as relaying.py describes them, and returns whether
-        the request was one."""
+        has of a kind, and `GET /models/openrouter/providers?model=...`, the
+        providers that serve a model, asked with the learner's `api_key`, as
+        relaying.py describes them, and returns whether the request was
+        one."""
         url = urlsplit(self.path)
-        if url.path != "/models/openrouter":
+        if url.path not in ("/models/openrouter", "/models/openrouter/providers"):
             return False
-        kind = parse_qs(url.query).get("kind", ["all"])[0]
+        query = parse_qs(url.query)
         try:
+            if url.path == "/models/openrouter/providers":
+                model = query.get("model", [""])[0]
+                self._reply(
+                    HTTPStatus.OK,
+                    {"providers": OPENROUTER_MODELS.providers(model, api_key or "")},
+                )
+                return True
+            kind = query.get("kind", ["all"])[0]
             self._reply(HTTPStatus.OK, {"models": OPENROUTER_MODELS.models(kind)})
         except ValueError as error:
             self._reply(HTTPStatus.BAD_REQUEST, {"error": str(error)})
@@ -2212,11 +2278,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
             POST /tutor/chats/ID/close
                                       close a chat, after which nothing more
                                       is said in it, with `{"model": ...}`,
-                                      which then decides in the background
-                                      what the tutor is to remember of it,
-                                      and writes a recap of it, kept as a
-                                      memory of the kind "recap"; the reply
-                                      has the `tasks` it started
+                                      which then writes a recap of it in the
+                                      background, kept as a memory of the
+                                      kind "recap"; the reply has the
+                                      `tasks` it started. What the tutor
+                                      remembers of the learner it writes
+                                      down in the chat, with a tool.
             GET /tutor/chats/ID/request
                                       the last request the tutor made to its
                                       model, `{"request": {"label": ...,
@@ -2338,8 +2405,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
     def _close_tutor_chat(
         self, store: UserStore, chat_id: str, api_key: str | None
     ) -> None:
-        """Close a chat with the tutor, and start what decides what the
-        tutor is to remember of it, if it was open and anything was said."""
+        """Close a chat with the tutor, and start writing a recap of it, if
+        it was open and anything was said."""
         model = read_model(self._read_body().get("model"), api_key or "")
         chat = store.tutor_chat(chat_id)
         if chat is None:
@@ -2349,35 +2416,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
         if store.close_tutor_chat(chat_id) and chat["messages"]:
             ask = model_asker(send_chat, model)
 
-            remembering = self.account.remembering
-
-            def job(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
-                with remembering:
-                    # the recaps are written apart, and the strategy and the
-                    # calendar by the tutor as it agrees on them
-                    remembered, used = remember(
-                        chat["messages"],
-                        store.memories(kind="fact"),
-                        chat["language"],
-                        ask,
-                    )
-                    for content in remembered.add:
-                        store.add_memory(content, chat_id)
-                    for memory_id, why in remembered.remove:
-                        store.remove_memory(memory_id, why, "tutor")
-                step()
-                return [asdict(remembered)], [describe_usage(used)]
-
             def recap_job(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
                 written, used = recap(chat["messages"], chat["language"], ask)
                 store.add_memory(written, chat_id, kind="recap")
                 step()
                 return [written], [describe_usage(used)]
 
-            # the two are asked of the model at the same time
-            started.append(
-                self.account.tasks.start("memories", "Memories of the chat", 1, job)
-            )
             started.append(
                 self.account.tasks.start("memories", "Recap of the chat", 1, recap_job)
             )

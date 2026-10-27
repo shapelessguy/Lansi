@@ -6,7 +6,16 @@ import { expect, test } from "vitest";
 import { filterWords, sortWords, type Word } from "./words";
 
 function word(fields: Partial<Word>): Word {
-    return { noteId: 0, word: "", meaning: "", partOfSpeech: "", due: "2026-01-01", intervalDays: 1, ...fields };
+    return {
+        noteId: 0,
+        word: "",
+        meaning: "",
+        partOfSpeech: "",
+        due: "2026-01-01",
+        intervalDays: 1,
+        deckId: 1,
+        ...fields,
+    };
 }
 
 const sitzen = word({ word: "sitzen", meaning: "to sit", due: "2026-09-03", intervalDays: 60 });

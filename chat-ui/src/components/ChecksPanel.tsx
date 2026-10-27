@@ -1,7 +1,9 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { doubt, type Sentence } from "../lib/checker";
+import { createPortal } from "react-dom";
+
+import { doubt, type LiveCheck, type Sentence, sentenceAtCaret } from "../lib/checker";
 import { t } from "../lib/i18n";
 import type { ModelChoice } from "../lib/models";
 import {
@@ -13,6 +15,8 @@ import {
     type ProfileQuestion,
     type Stars,
 } from "../lib/questions";
+import type { Settings } from "../lib/settings";
+import { correctorOf } from "../lib/writing";
 import { SidePanel } from "./SidePanel";
 
 interface Props {
@@ -284,5 +288,68 @@ export function ChecksPanel(
                 </p>
             </div>
         </SidePanel>
+    );
+}
+
+interface SettingsProps {
+    /** What the sentences are checked by, which the panel changes. */
+    settings: Settings;
+    onSettingsChange: (settings: Settings) => void;
+    /** What is known about the text box the checks are of, and what is written in it. */
+    check: LiveCheck | null;
+    lastCaret: number | null;
+    text: string;
+    onEditQuestions: () => void;
+    onClose: () => void;
+}
+
+/**
+ * The checks of the sentence under the caret of a text box, with the
+ * questions, the rating of words and the corrections turned on and off in
+ * the settings, wherever the box is: the chat, the tutor, a text or an
+ * exercise.
+ */
+export function SettingsChecksPanel(
+    { settings, onSettingsChange, check, lastCaret, text, onEditQuestions, onClose }: SettingsProps,
+) {
+    return (
+        <ChecksPanel
+            questions={settings.questions}
+            onToggle={(question) =>
+                onSettingsChange({
+                    ...settings,
+                    questions: settings.questions.map((each) =>
+                        each.id === question ? { ...each, enabled: !each.enabled } : each
+                    ),
+                })}
+            rateWords={settings.rateWords}
+            onRateWords={(rateWords) => onSettingsChange({ ...settings, rateWords })}
+            corrector={correctorOf(settings)}
+            correct={settings.correctSentences}
+            onCorrect={(correctSentences) => onSettingsChange({ ...settings, correctSentences })}
+            // the panel goes on showing the sentence the caret was on after a click in it
+            sentence={text ? sentenceAtCaret(check, lastCaret) : null}
+            hasText={text.trim() !== ""}
+            checkerRunning={check !== null}
+            hasKey={settings.apiKey !== ""}
+            model={settings.profileModel}
+            onEditQuestions={onEditQuestions}
+            onClose={onClose}
+        />
+    );
+}
+
+/**
+ * What the panel of the checks says in `slot`, while it is open, where no
+ * text box is being written in yet, such as before an exercise starts.
+ */
+export function NoChecks({ slot, onClose }: { slot: HTMLElement | null; onClose: () => void }) {
+    return slot && createPortal(
+        <SidePanel title={t("Sentence checks")} onClose={onClose}>
+            <p className="checks-note">
+                {t("The checks of the sentence you write are shown here once an exercise starts.")}
+            </p>
+        </SidePanel>,
+        slot,
     );
 }

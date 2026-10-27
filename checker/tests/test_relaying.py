@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 from models import Model
-from relaying import Listing, Watched, described
+from relaying import Listing, Watched, described, endpoint
 
 MODEL = Model("thinker", key="key")
 
@@ -76,3 +77,58 @@ def test_a_model_of_openrouter_is_described_with_what_is_not_known_null() -> Non
 def test_a_kind_of_model_there_is_not_is_refused() -> None:
     with pytest.raises(ValueError):
         Listing().models("smells")
+
+
+def test_a_provider_of_a_model_is_described_by_its_slug_with_its_median_figures() -> (
+    None
+):
+    listed = {
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8",
+        "pricing": {"prompt": "0.0000003", "completion": "0.0000012"},
+        "latency_last_30m": {"p50": 850, "p90": 2000},
+        "throughput_last_30m": {"p50": 61.5},
+        "uptime_last_30m": 99.2,
+        "supported_parameters": ["tools", "temperature"],
+        "context_length": 131072,
+        "quantization": "fp8",
+    }
+
+    assert endpoint(listed) == {
+        "slug": "deepinfra/fp8",
+        "name": "DeepInfra",
+        "promptPrice": 0.0000003,
+        "completionPrice": 0.0000012,
+        "latency": 0.85,
+        "throughput": 61.5,
+        "uptime": 99.2,
+        "tools": True,
+        "reasoning": False,
+        "contextLength": 131072,
+        "quantization": "fp8",
+    }
+    assert endpoint({"provider_name": "Lone"})["latency"] is None
+
+
+def test_the_providers_of_what_is_no_id_of_a_model_are_not_asked_for() -> None:
+    with pytest.raises(ValueError):
+        Listing().providers("../../keys")
+
+
+def test_the_providers_are_listed_again_when_a_key_asks_as_without_one_less_is_known(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked: list[str] = []
+
+    def served_by(model: str, key: str = "") -> list[dict[str, Any]]:
+        asked.append(key)
+        return []
+
+    monkeypatch.setattr("relaying.served_by", served_by)
+    listing = Listing()
+
+    listing.providers("some/model")
+    listing.providers("some/model")
+    listing.providers("some/model", "the-key")
+
+    assert asked == ["", "the-key"]

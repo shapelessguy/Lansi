@@ -84,6 +84,8 @@ export interface Settings {
     exerciseTopicWords: boolean;
     /** What the options of each exercise were last set to, by exercise and option. */
     exerciseOptions: Record<string, Record<string, string | number>>;
+    /** Whether the sentences are checked in each exercise that leaves it to the learner, by exercise. */
+    exerciseSentenceChecks: Record<string, boolean>;
     /** How many times each exercise was last to be done, by exercise. */
     exerciseInstances: Record<string, number>;
     /** How many minutes each exercise was last to take, 0 for no limit, by exercise. */
@@ -215,6 +217,7 @@ export function defaultSettings(): Settings {
         exerciseVocabulary: {},
         exerciseTopicWords: true,
         exerciseOptions: {},
+        exerciseSentenceChecks: {},
         exerciseInstances: {},
         exerciseMinutes: {},
         evaluationSize: 3,
@@ -320,6 +323,7 @@ export function normalizeSettings(stored: unknown): Settings {
             ? candidate.exerciseTopicWords
             : defaults.exerciseTopicWords,
         exerciseOptions: exerciseOptionsOf(candidate.exerciseOptions),
+        exerciseSentenceChecks: booleansOf(candidate.exerciseSentenceChecks),
         exerciseInstances: numbersOf(candidate.exerciseInstances),
         exerciseMinutes: numbersOf(candidate.exerciseMinutes),
         evaluationSize: typeof candidate.evaluationSize === "number"
@@ -353,6 +357,14 @@ function numbersOf(stored: unknown): Record<string, number> {
     return Object.fromEntries(
         Object.entries(stored).filter(([, value]) => typeof value === "number" && Number.isFinite(value)),
     );
+}
+
+/** The yes or no of stored settings kept by exercise, those that are neither left out. */
+function booleansOf(stored: unknown): Record<string, boolean> {
+    if (typeof stored !== "object" || stored === null) {
+        return {};
+    }
+    return Object.fromEntries(Object.entries(stored).filter(([, value]) => typeof value === "boolean"));
 }
 
 /** The options of the exercises in stored settings, those that are not text or numbers left out. */

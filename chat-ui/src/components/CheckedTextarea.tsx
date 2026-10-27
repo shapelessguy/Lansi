@@ -4,13 +4,12 @@
 import { type RefObject, type TextareaHTMLAttributes, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 
-import { type ProfileUsage, sentenceAtCaret } from "../lib/checker";
-import { orModel } from "../lib/models";
-import { requestQuestions } from "../lib/questions";
+import type { ProfileUsage } from "../lib/checker";
 import type { WordLists } from "../lib/sets";
-import { expandPrompt, type Settings } from "../lib/settings";
+import type { Settings } from "../lib/settings";
 import type { UsageEntry } from "../lib/usage";
-import { ChecksPanel } from "./ChecksPanel";
+import { profilingOf } from "../lib/writing";
+import { SettingsChecksPanel } from "./ChecksPanel";
 import { useWritingCheck } from "./WritingChecks";
 
 export interface CheckedTextareaProps
@@ -61,17 +60,7 @@ export function CheckedTextarea(
 ) {
     const ownRef = useRef<HTMLTextAreaElement>(null);
     const box = inputRef ?? ownRef;
-    const { language, level } = settings;
-    const questions = useMemo(
-        () => requestQuestions(settings.questions, (text) => expandPrompt(text, words, language, level)),
-        [settings.questions, words, language, level],
-    );
-    // as a selection is translated: by the translation model, or else the chat model
-    const corrector = useMemo(
-        () => orModel(settings.translationModel, settings.model),
-        [settings.translationModel, settings.model],
-    );
-    const correctWith = settings.correctSentences ? corrector : null;
+    const profiling = useMemo(() => profilingOf(settings, words, usageId), [settings, words, usageId]);
     const countProfiling = useCallback(
         (used: ProfileUsage) =>
             onUsage({
@@ -86,18 +75,7 @@ export function CheckedTextarea(
             }),
         [usageId, onUsage],
     );
-    const { check, lastCaret } = useWritingCheck(
-        box,
-        {
-            apiKey: settings.apiKey,
-            model: settings.profileModel,
-            questions,
-            rateWords: settings.rateWords,
-            correctWith,
-            usageId,
-        },
-        countProfiling,
-    );
+    const { check, lastCaret } = useWritingCheck(box, profiling, countProfiling);
     return (
         <>
             <div className={className} data-writing>
@@ -111,26 +89,12 @@ export function CheckedTextarea(
                 />
             </div>
             {checksSlot && createPortal(
-                <ChecksPanel
-                    questions={settings.questions}
-                    onToggle={(question) =>
-                        onSettingsChange({
-                            ...settings,
-                            questions: settings.questions.map((each) =>
-                                each.id === question ? { ...each, enabled: !each.enabled } : each
-                            ),
-                        })}
-                    rateWords={settings.rateWords}
-                    onRateWords={(rateWords) => onSettingsChange({ ...settings, rateWords })}
-                    corrector={corrector}
-                    correct={settings.correctSentences}
-                    onCorrect={(correctSentences) => onSettingsChange({ ...settings, correctSentences })}
-                    // the panel goes on showing the sentence the caret was on after a click in it
-                    sentence={value ? sentenceAtCaret(check, lastCaret) : null}
-                    hasText={value.trim() !== ""}
-                    checkerRunning={check !== null}
-                    hasKey={settings.apiKey !== ""}
-                    model={settings.profileModel}
+                <SettingsChecksPanel
+                    settings={settings}
+                    onSettingsChange={onSettingsChange}
+                    check={check}
+                    lastCaret={lastCaret}
+                    text={value}
                     onEditQuestions={onEditQuestions}
                     onClose={onCloseChecks}
                 />,

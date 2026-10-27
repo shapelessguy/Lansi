@@ -87,6 +87,16 @@ shown as the app has it, if it does, and in English otherwise:
     "messages": {"German": {"Then": "Danach", "Retell it": "Nacherzählen"},
                  "Italian": {"Then": "Poi", "Retell it": "Riraccontala"}}
 
+The spelling of what is written in the text boxes of several lines of the
+interface is always checked, as kit.js describes. The `sentence_checks` of
+a manifest are whether the sentence check model also profiles each
+sentence written in them once it is finished, rating its words and
+correcting it, as it does those of the chat, with the questions of the
+learner's settings: `"never"`, as for one that does not say; `"always"`;
+or `"optional"`, such as for translating, where the learner turns them on
+and off with a checkbox in the bar of the session, off at first, and the
+app remembers what they chose for the next time.
+
 An exercise whose manifest has `"theory": true` teaches rather than asks:
 it is listed first and done first in a session, is not done a number of
 times, and is graded on nothing.
@@ -119,6 +129,7 @@ The context is the same for every call:
      "instances": 10,
      "options": {"then": "questions"},
      "guidance": "...",
+     "brief": "...",
      "minutes": 0,
      "exam": "",
      "replay": None,
@@ -133,7 +144,7 @@ it has no `more_info`.
 What each sentence, or whatever an exercise makes, is centred on is best
 not left to the model: `focuses` are the parts of the lesson to go through
 in turn, and `describe_plan` tells a model which of them each thing it
-makes is to practise.
+makes is to practise, unless the exercise has a `brief`.
 
 `topics` are those the session is about: one, or several to be brought
 together if `mix_topics`. `words` are words of the learner's vocabulary,
@@ -145,6 +156,13 @@ the models it asks to heed besides the lesson, the topics and the words,
 such as what the exercise was answered with in the sessions before. It may
 come from anything in the app, and may be empty. Every exercise is to put
 it into what it asks the models that make it, as `describe_guidance` does.
+
+`brief` is what the tutor, who offered the exercise in a chat with the
+learner, wants it to make, or empty for one the learner started: it knows
+what the learner needs now, and the exercise does not, so the brief comes
+before everything else the exercise is told. With a brief, the lesson's
+plan is not told, nor the lessons of a review, which the tutor did not
+choose; `describe_guidance` tells it, as the rule over the rest.
 
 `options` has a value for each option of the manifest, as the learner
 chose it, which `option` gives.
@@ -664,8 +682,12 @@ def describe_lesson(
 ) -> str:
     """The points of the lesson that have one of `roles`, as a model is told
     them: the rule, and when it applies. The pages of theory in `more_info`
-    are left out: they are long, and the points say what is practised."""
+    are left out: they are long, and the points say what is practised.
+    Nothing for a review where the tutor gave a brief, which says what to
+    practise in its place."""
     lesson = context["lesson"]
+    if briefed(context) and is_review(context):
+        return ""
     lines = [
         PROMPTS("kit.lesson.heading", title=lesson["title"], level=lesson["level"])
     ]
@@ -681,6 +703,17 @@ def describe_lesson(
                 )
             )
     return "\n".join(lines)
+
+
+def briefed(context: dict[str, Any]) -> bool:
+    """Whether the tutor gave the exercise a brief of what to make."""
+    return bool(str(context.get("brief") or "").strip())
+
+
+def is_review(context: dict[str, Any]) -> bool:
+    """Whether the lesson is a review of the lessons practised last, which
+    nobody chose for the exercise."""
+    return bool(context["lesson"].get("id") == "")
 
 
 def focuses(context: dict[str, Any]) -> list[str]:
@@ -707,7 +740,10 @@ def describe_plan(context: dict[str, Any], count: int, start: int = 0) -> str:
     """What each of `count` things a model makes is to practise, as it is
     told: the `focuses` in turn, from the one `start` things made before
     reached, over again when there are fewer than `count`. Nothing when
-    the lesson has none, which leaves the model free within the lesson."""
+    the lesson has none, which leaves the model free within the lesson,
+    or when the exercise has a brief, which plans it in place of the lesson."""
+    if briefed(context):
+        return ""
     parts = focuses(context)
     if not parts:
         return ""
@@ -776,9 +812,13 @@ def describe_topics(context: dict[str, Any]) -> str:
 
 def describe_guidance(context: dict[str, Any]) -> str:
     """What the app said the models are to heed, as a model is told it, on
-    lines of its own; nothing if it said nothing."""
+    lines of its own, after the brief of the tutor, told as what comes
+    before everything else; nothing if it said nothing."""
+    brief = str(context.get("brief") or "").strip()
     guidance = str(context.get("guidance") or "").strip()
-    return f"\n{guidance}\n" if guidance else ""
+    told = [PROMPTS("kit.brief", brief=brief)] if brief else []
+    told += [guidance] if guidance else []
+    return "".join(f"\n{each}\n" for each in told)
 
 
 def describe_words(context: dict[str, Any]) -> str:

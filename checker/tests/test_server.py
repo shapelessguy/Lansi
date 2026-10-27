@@ -39,6 +39,7 @@ from test_translating import FakeModel
 from tokens import count
 from translating import Translator
 from users import Users, user_directory
+from versions import marked, read_part
 from vocabulary import Form, Vocabularies, Vocabulary
 from word_translations import WordTranslator
 
@@ -965,6 +966,24 @@ def send(
             return response.status, response.read(), response.headers["Content-Type"]
     except urllib.error.HTTPError as error:
         return error.code, error.read(), ""
+
+
+def test_an_exercise_done_is_kept_as_a_favourite_until_it_is_taken_out(
+    with_users: str, tmp_path: Path
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    UserStore(user_directory(tmp_path, "ada")).start_session(
+        "s1", "German", "l", [], {"cloze": 1}
+    )
+
+    added, kept, _ = send(f"{with_users}/favourites/s1/cloze", "PUT", ada)
+    refused, _, _ = send(f"{with_users}/favourites/s1/picture", "PUT", ada)
+    removed, _, _ = send(f"{with_users}/favourites/s1/cloze", "DELETE", ada)
+    _, left, _ = send(f"{with_users}/favourites", "GET", ada)
+
+    assert (added, refused, removed) == (200, 400, 200)
+    assert [each["exercise"] for each in json.loads(kept)["favourites"]] == ["cloze"]
+    assert json.loads(left) == {"favourites": []}
 
 
 def test_a_chat_that_is_kept_is_there_for_its_user_only(with_users: str) -> None:
@@ -2261,7 +2280,7 @@ def recapping(body: dict[str, Any]) -> dict[str, Any] | None:
     return {"choices": [{"message": {"content": RECAP}}]}
 
 
-def test_a_closed_chat_with_the_tutor_takes_nothing_more_and_leaves_memories(
+def test_a_closed_chat_with_the_tutor_takes_nothing_more_and_leaves_a_recap(
     with_users: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
@@ -2270,11 +2289,10 @@ def test_a_closed_chat_with_the_tutor_takes_nothing_more_and_leaves_memories(
     asked: list[dict[str, Any]] = []
 
     def chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
-        if recapped := recapping(body):
-            return recapped
         asked.append(body)
-        said = {"add": ["Has the B1 exam on 2026-12-05."], "remove": [{"id": 99}]}
-        return {"choices": [{"message": {"content": json.dumps(said)}}]}
+        recapped = recapping(body)
+        assert recapped is not None
+        return recapped
 
     monkeypatch.setattr("tutor.stream_chat", stream)
     monkeypatch.setattr("server.send_chat", chat)
@@ -2299,18 +2317,17 @@ def test_a_closed_chat_with_the_tutor_takes_nothing_more_and_leaves_memories(
     _, memories, _ = send(f"{with_users}/tutor/memories", "GET", ada)
 
     assert [task["title"] for task in json.loads(closed)["tasks"]] == [
-        "Memories of the chat",
-        "Recap of the chat",
+        "Recap of the chat"
     ]
     assert refused == 400
-    assert "Learner: My exam is on 5 December." in asked[0]["messages"][0]["content"]
-    assert sorted(
+    assert len(asked) == 1
+    assert [
         (each["kind"], each["content"]) for each in json.loads(memories)["memories"]
-    ) == [("fact", "Has the B1 exam on 2026-12-05."), ("recap", RECAP)]
+    ] == [("recap", RECAP)]
 
 
 def test_the_tutor_is_told_its_memories_and_forgets_one_the_learner_deletes(
-    with_users: str, monkeypatch: pytest.MonkeyPatch
+    with_users: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     asked: list[dict[str, Any]] = []
 
@@ -2319,10 +2336,9 @@ def test_the_tutor_is_told_its_memories_and_forgets_one_the_learner_deletes(
         yield {"choices": [{"delta": {"content": "Hi."}}]}
 
     def chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
-        if recapped := recapping(body):
-            return recapped
-        said = {"add": ["Likes football."], "remove": []}
-        return {"choices": [{"message": {"content": json.dumps(said)}}]}
+        recapped = recapping(body)
+        assert recapped is not None
+        return recapped
 
     monkeypatch.setattr("tutor.stream_chat", stream)
     monkeypatch.setattr("server.send_chat", chat)
@@ -2344,6 +2360,8 @@ def test_the_tutor_is_told_its_memories_and_forgets_one_the_learner_deletes(
         ada,
         json.dumps({"model": model}).encode(),
     )
+    # as the tutor writes it down with its tool
+    UserStore(user_directory(tmp_path, "ada")).add_memory("Likes football.")
     talk("chat-2")
     _, listed, _ = send(f"{with_users}/tutor/memories", "GET", ada)
     [memory] = [
@@ -2357,52 +2375,12 @@ def test_the_tutor_is_told_its_memories_and_forgets_one_the_learner_deletes(
     # the recap is looked up, not told
     assert "Agreed to practise the dative." not in asked[1]["messages"][0]["content"]
     assert "1 in all" in asked[1]["messages"][0]["content"]
-    assert {"recaps", "strategy", "calendar", "plan"} <= {
+    assert {"recaps", "strategy", "calendar", "plan", "remember"} <= {
         tool["function"]["name"] for tool in asked[1]["tools"]
     }
     assert deleted == 200
     assert [each["kind"] for each in json.loads(after)["memories"]] == ["recap"]
     assert [each["removedBy"] for each in json.loads(after)["removed"]] == ["learner"]
-
-
-def test_chats_closed_one_after_another_do_not_leave_the_same_memory_twice(
-    with_users: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
-        yield {"choices": [{"delta": {"content": "Hi."}}]}
-
-    def chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
-        if recapped := recapping(body):
-            return recapped
-        said = {"add": ["Likes football."], "remove": []}
-        return {"choices": [{"message": {"content": json.dumps(said)}}]}
-
-    monkeypatch.setattr("tutor.stream_chat", stream)
-    monkeypatch.setattr("server.send_chat", chat)
-    ada = log_in(with_users, "ada", "a password")
-    model = {"model": "thinker", "url": "http://127.0.0.1:1"}
-    for chat_id in ("chat-1", "chat-2"):
-        body = {
-            "chat": chat_id,
-            "messages": [{"role": "user", "content": "I play football."}],
-            "model": model,
-        }
-        send(f"{with_users}/tutor/chat", "POST", ada, json.dumps(body).encode())
-    for chat_id in ("chat-1", "chat-2"):
-        send(
-            f"{with_users}/tutor/chats/{chat_id}/close",
-            "POST",
-            ada,
-            json.dumps({"model": model}).encode(),
-        )
-
-    _, listed, _ = send(f"{with_users}/tutor/memories", "GET", ada)
-
-    assert [each["content"] for each in json.loads(listed)["memories"]] == [
-        "Likes football.",
-        RECAP,
-        RECAP,
-    ]
 
 
 def test_a_text_is_kept_listed_and_deleted_and_one_corrected_is_not_changed(
@@ -2647,9 +2625,9 @@ def test_a_transformed_version_is_made_in_the_background_as_its_book_was_written
     def stream(body: dict[str, Any], model: Model) -> Iterator[dict[str, Any]]:
         sent.append(body)
         part = body["messages"][0]["content"].split("The part:\n")[1]
-        blocks, _ = json.JSONDecoder().raw_decode(part)
-        written = {key: text.upper() for key, text in blocks.items()}
-        yield {"choices": [{"delta": {"content": json.dumps(written)}}]}
+        blocks = read_part(part.split("\n\n")[0])
+        written = marked({key: text.upper() for key, text in blocks.items()})
+        yield {"choices": [{"delta": {"content": written}}]}
         yield {"usage": {"prompt_tokens": 9, "completion_tokens": 3}}
 
     monkeypatch.setattr("server.stream_transforming", stream)
