@@ -87,6 +87,12 @@ interface Watch {
     detach: () => void;
 }
 
+/**
+ * What tells the boxes of this page from those of another open at the same
+ * time, which the checker server, shared by both, is told with each box.
+ */
+const PAGE = Math.random().toString(36).slice(2, 10);
+
 /** How often the text boxes are looked at for changes, and how many of those go by between checks, in milliseconds. */
 const LOOK_MS = 100;
 const LOOKS_PER_CHECK = 3;
@@ -455,7 +461,7 @@ export function WritingChecks({ language, children }: { language: string; childr
             }
             watch.sent = current;
             watch.awaiting = false;
-            checkText(current.text, current.caret, latestLanguage.current, profiling).then(
+            checkText(current.text, current.caret, latestLanguage.current, profiling, `${PAGE}:${watch.id}`).then(
                 (reply) => {
                     // The server reports a request only once, so it is counted
                     // even if the rest of this answer is no longer of use.

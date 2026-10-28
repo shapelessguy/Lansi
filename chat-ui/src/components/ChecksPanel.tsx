@@ -139,9 +139,18 @@ function Words({ sentence }: { sentence: Sentence }) {
 function Correction({ sentence }: { sentence: Sentence }) {
     let shown;
     if (sentence.correction) {
-        shown = sentence.correction === sentence.text
-            ? <p className="checks-note">{t("Nothing to correct.")}</p>
-            : <blockquote className="checks-sentence checks-correction">{sentence.correction}</blockquote>;
+        shown = (
+            <>
+                {sentence.correction === sentence.text
+                    ? <p className="checks-note">{t("Nothing to correct.")}</p>
+                    : <blockquote className="checks-sentence checks-correction">{sentence.correction}</blockquote>}
+                {sentence.correction_translation && (
+                    <p className="checks-translation" title={t("What the sentence as it should be means")}>
+                        {sentence.correction_translation}
+                    </p>
+                )}
+            </>
+        );
     } else if (sentence.correction_error) {
         shown = <p className="checks-note error">{sentence.correction_error}</p>;
     } else {

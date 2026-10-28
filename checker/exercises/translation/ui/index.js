@@ -6,6 +6,12 @@ import { element } from "../../kit.js";
 const LABELS = { right: "Right", partial: "Almost", wrong: "Not quite" };
 const MARKS = { right: "✓", partial: "~", wrong: "✗" };
 
+/** Whether two translations read the same, whatever the spaces between their words. */
+function same(one, other) {
+    const words = (text) => String(text ?? "").split(/\s+/).filter(Boolean).join(" ");
+    return words(one) !== "" && words(one) === words(other);
+}
+
 /** How one translation of a set went, told with `t`. */
 function feedbackOf(feedback, t) {
     const box = element("li", { className: `feedback ${feedback.result}` });
@@ -16,6 +22,10 @@ function feedbackOf(feedback, t) {
     }
     if (feedback.note) {
         box.append(element("div", { className: "muted", textContent: feedback.note }));
+    }
+    // another way that is the same as what was written says nothing more
+    if (same(feedback.reference, feedback.answer) || same(feedback.reference, feedback.correction)) {
+        return box;
     }
     box.append(element("div", { className: "muted", textContent: t("Another way: {text}", { text: feedback.reference }) }));
     return box;

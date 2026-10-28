@@ -240,3 +240,19 @@ def test_a_set_done_again_is_taken_from_those_made_before_and_only_judged() -> N
     assert started.show["sources"] == [item["source"] for item in made[0]["items"]]
     # the only request is the one that judges what was translated
     assert len(model.asked) == 1
+
+
+def test_the_sets_not_made_before_are_made_once_those_done_again_run_out() -> None:
+    made = start(CONTEXT, FakeModel(ITEMS)).made
+    # three sets were to be made, and the learner left after the first
+    again = {**CONTEXT, "instances": 3, "replay": made}
+    model = FakeModel({"verdicts": [RIGHT] * 4}, ITEMS)
+
+    started = start(again, model)
+    judged = act(again, started.state, {"answers": ANSWERS}, model)
+    prepared = act(again, judged.state, {"prepare": True}, model)
+
+    # the first is done again, and the second made, and reported as made
+    assert started.made == []
+    assert len(prepared.made) == 1
+    assert len(model.asked) == 2

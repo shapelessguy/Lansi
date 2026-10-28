@@ -60,6 +60,8 @@ export interface Profiling {
     correctWith: ModelChoice | null;
     /** What the server counts what profiling used under: the chat or the text the box is of. */
     usageId?: string;
+    /** The language each correction is translated into, the one the learner reads. */
+    into: string;
 }
 
 /**
@@ -87,6 +89,7 @@ export function profilingOf(settings: Settings, words: WordLists, usageId?: stri
         rateWords: settings.rateWords,
         correctWith: settings.correctSentences ? correctorOf(settings) : null,
         usageId,
+        into: translateInto,
     };
 }
 
@@ -102,7 +105,14 @@ export interface Sent {
 export function askedOf(language: string, profiling: Profiling | null): string {
     return JSON.stringify(
         profiling
-            ? [language, profiling.model, profiling.questions, profiling.rateWords, profiling.correctWith]
+            ? [
+                language,
+                profiling.model,
+                profiling.questions,
+                profiling.rateWords,
+                profiling.correctWith,
+                profiling.into,
+            ]
             : [language],
     );
 }
@@ -119,12 +129,18 @@ export function worthSending(sent: Sent, current: Sent, awaiting: boolean): bool
     return awaiting || !unchanged;
 }
 
-/** Has the checker server check `text`: its spelling alone, or, with `profiling`, its sentences too. */
+/**
+ * Has the checker server check `text`, of the text box `box`: its spelling
+ * alone, or, with `profiling`, its sentences too. The server checks the
+ * boxes of a page in turn, and gives up what it asked about a box's
+ * sentences only when that box changed them, which it tells by `box`.
+ */
 export function checkText(
     text: string,
     caret: number | null,
     language: string,
     profiling: Profiling | null,
+    box = "",
 ): Promise<CheckReply> {
     return profiling
         ? fetchCheck(
@@ -138,6 +154,8 @@ export function checkText(
             profiling.correctWith,
             true,
             profiling.usageId,
+            profiling.into,
+            box,
         )
         : fetchCheck(text, caret, "", onOpenRouter(""), {}, false, language, null, false);
 }

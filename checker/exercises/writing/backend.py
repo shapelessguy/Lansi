@@ -22,7 +22,8 @@ criterion that of its ratings.
 
 Each task is an instance, reported as made in the step it is made in; when
 the exercise is done again, the tasks it made are taken in order from
-`replay` in place of being made.
+`replay` in place of being made, and those it
+had not made yet when it was left are made as before.
 """
 
 from __future__ import annotations
@@ -129,7 +130,8 @@ def make_task(
     if len(tasks) > len(state["done"]) or len(tasks) >= context["instances"]:
         return []
     replay = context.get("replay")
-    if replay:
+    # what was made before is done again, and what was not made then is made now
+    if replay and len(tasks) < len(replay):
         tasks.append(json.loads(json.dumps(replay[len(tasks)])))
         return []
     kind = kind_of(context)

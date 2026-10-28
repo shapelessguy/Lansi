@@ -9,10 +9,12 @@ import pytest
 from models import Model
 from profiling import ProfileError
 from translating import (
+    Corrected,
     Passage,
     TranslationError,
     Translator,
     passage_of,
+    read_corrected,
     read_messages,
 )
 
@@ -183,18 +185,48 @@ def test_messages_that_are_not_a_chat_ending_with_the_user_are_refused(
         read_messages(messages)
 
 
-def test_correct_sends_the_sentence_alone_and_gives_back_what_the_model_wrote() -> None:
-    fake = FakeModel(says="Ich habe einen Hund.")
-
-    correction, used = Translator(fake).correct(
-        "Ich habe ein Hund.", "German", SOME_MODEL
+def test_correct_sends_the_sentence_alone_and_gives_back_it_corrected_and_translated() -> (
+    None
+):
+    fake = FakeModel(
+        says='{"correction": "Ich habe einen Hund.", "translation": "Ho un cane."}'
     )
 
-    assert correction == "Ich habe einen Hund."
+    corrected, used = Translator(fake).correct(
+        "Ich habe ein Hund.", "German", SOME_MODEL, "Italian"
+    )
+
+    assert corrected == Corrected("Ich habe einen Hund.", "Ho un cane.")
     assert used.cost == 0.001
     system, user = fake.bodies[0]["messages"]
-    assert "German" in system["content"]
+    assert "German" in system["content"] and "Italian" in system["content"]
     assert user == {"role": "user", "content": "Ich habe ein Hund."}
+
+
+@pytest.mark.parametrize(
+    ("said", "read"),
+    [
+        (
+            '```json\n{"correction": "Er ist gut.", "translation": "He is good."}\n```',
+            Corrected("Er ist gut.", "He is good."),
+        ),
+        ('{"correction": "Er ist gut."}', Corrected("Er ist gut.")),
+        (
+            '{"correction": Sie leidet unter der Entfernung, "translation": Lei'
+            " soffre per la distanza}",
+            Corrected("Sie leidet unter der Entfernung", "Lei soffre per la distanza"),
+        ),
+        (
+            '{"correction": "Er ist gut.", "translation": He is good.}',
+            Corrected("Er ist gut.", "He is good."),
+        ),
+        ("Er ist gut.", Corrected("Er ist gut.")),
+    ],
+)
+def test_what_a_model_wrote_of_a_correction_is_read_however_it_wrote_it(
+    said: str, read: Corrected
+) -> None:
+    assert read_corrected(said) == read
 
 
 def test_correct_fails_when_the_model_cannot_be_reached() -> None:

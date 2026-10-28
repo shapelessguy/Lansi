@@ -22,7 +22,7 @@ from profiling import (
 )
 from sentences import Sentence
 from spelling import Speller
-from translating import TranslationError
+from translating import Corrected, TranslationError
 
 WORDS = ["ich", "habe", "einen", "hund", "er", "ist", "gut", "sehr"]
 KEY = "test-key"
@@ -979,16 +979,16 @@ class FakeCorrector:
     model, and records what it was asked."""
 
     def __init__(self) -> None:
-        self.asked: list[tuple[str, str, Model]] = []
+        self.asked: list[tuple[str, str, Model, str]] = []
         self.failing = False
 
     def __call__(
-        self, sentence: str, language: str, model: Model
-    ) -> tuple[str, Profile]:
-        self.asked.append((sentence, language, model))
+        self, sentence: str, language: str, model: Model, into: str
+    ) -> tuple[Corrected, Profile]:
+        self.asked.append((sentence, language, model, into))
         if self.failing:
             raise TranslationError("no credit left")
-        return f"Correct: {sentence}", Profile(
+        return Corrected(f"Correct: {sentence}", f"In {into}: {sentence}"), Profile(
             {}, cost=0.003, id=f"correction-{len(self.asked)}", input_tokens=50
         )
 
@@ -1030,7 +1030,7 @@ def test_the_questions_and_the_correction_are_sent_at_the_same_time() -> None:
         job()
 
     assert profiler.asked == ["Er ist gut."]
-    assert [sentence for sentence, _, _ in corrector.asked] == ["Er ist gut."]
+    assert [sentence for sentence, *_ in corrector.asked] == ["Er ist gut."]
 
 
 def test_the_words_wait_for_the_correction_and_are_rated_with_it() -> None:
@@ -1076,9 +1076,29 @@ def test_a_sentence_is_corrected_alongside_its_questions_when_the_caret_leaves_i
     correct(checker, "Ich habe ein Hund.")
     (sentence,) = correct(checker, "Ich habe ein Hund.")
 
-    assert corrector.asked == [("Ich habe ein Hund.", "German", WRITER)]
+    assert corrector.asked == [("Ich habe ein Hund.", "German", WRITER, "English")]
     assert sentence.correction == "Correct: Ich habe ein Hund."
+    assert sentence.correction_translation == "In English: Ich habe ein Hund."
     assert sentence.profile is not None
+
+
+def test_a_sentence_is_corrected_again_when_it_is_to_be_translated_into_another_language() -> (
+    None
+):
+    corrector = FakeCorrector()
+    checker = correcting(corrector)
+
+    for into in ("Italian", "English"):
+        checker.check(
+            "Er ist gut.", None, KEYED, POLITE, correct_with=WRITER, into=into
+        )
+    # what was asked is read back the next time
+    (sentence,) = checker.check(
+        "Er ist gut.", None, KEYED, POLITE, correct_with=WRITER, into="English"
+    )
+
+    assert [into for *_, into in corrector.asked] == ["Italian", "English"]
+    assert sentence.correction_translation == "In English: Er ist gut."
 
 
 def test_a_sentence_is_not_corrected_unless_it_is_asked_for() -> None:
@@ -1186,3 +1206,47 @@ def test_nothing_is_corrected_without_a_key() -> None:
     checker.check("Er ist gut.", correct_with=Model("some/writer"))
 
     assert corrector.asked == []
+
+
+def test_boxes_checked_in_turn_leave_alone_what_is_out_about_each_other() -> None:
+    waiting: list[Callable[[], None]] = []
+    profiler, corrector = FakeProfiler(), FakeCorrector()
+    checker = correcting(corrector, background=waiting.append, profiler=profiler)
+
+    # two boxes of an exercise, checked again and again while all is out
+    for _ in range(5):
+        for box, text in (("a", "Er ist gut."), ("b", "Sie ist klug.")):
+            checker.check(text, None, KEYED, POLITE, correct_with=WRITER, box=box)
+    for job in waiting:
+        job()
+    (first,) = checker.check(
+        "Er ist gut.", None, KEYED, POLITE, correct_with=WRITER, box="a"
+    )
+
+    assert sorted(sentence for sentence, *_ in corrector.asked) == [
+        "Er ist gut.",
+        "Sie ist klug.",
+    ]
+    assert sorted(profiler.asked) == ["Er ist gut.", "Sie ist klug."]
+    assert first.correction == "Correct: Er ist gut."
+
+
+def test_a_box_gives_up_what_is_out_about_its_own_sentence_once_it_changed() -> None:
+    waiting: list[Callable[[], None]] = []
+    announced: list[tuple[str, bool]] = []
+    checker = correcting(
+        FakeCorrector(),
+        background=waiting.append,
+        on_corrected=lambda sentence, _correction, _error, dropped: announced.append(
+            (sentence, dropped)
+        ),
+    )
+
+    checker.check("Er ist gut.", None, KEYED, POLITE, correct_with=WRITER, box="a")
+    checker.check("Sie ist klug.", None, KEYED, POLITE, correct_with=WRITER, box="b")
+    checker.check("Er ist sehr gut.", None, KEYED, POLITE, correct_with=WRITER, box="a")
+    for job in waiting:
+        job()
+
+    assert ("Er ist gut.", True) in announced
+    assert ("Sie ist klug.", False) in announced

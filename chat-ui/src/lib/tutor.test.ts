@@ -123,7 +123,25 @@ test("a kept answer is shown with its steps and the exercises it offered", () =>
     expect(keptTurn("Old.")).toEqual({ thinking: "", steps: [], offers: [], exams: [], text: "Old.", busy: false });
 });
 
-test("the reasoning of earlier answers is not sent again, and the rest of them is", () => {
+test("only the reasoning of the latest answers is sent again, and the rest of them is", () => {
+    const reasoned = (text: string) => ({
+        role: "assistant" as const,
+        content: text,
+        reasoning_details: [{ type: "reasoning.text", text }],
+    });
+    const messages = ["a", "b", "c", "d"].flatMap((text) => [{ role: "user" as const, content: "?" }, reasoned(text)]);
+
+    const sent = withoutReasoning(messages, 3);
+
+    expect(sent.filter((message) => message.reasoning_details).map((message) => message.content)).toEqual([
+        "b",
+        "c",
+        "d",
+    ]);
+    expect(sent.map((message) => message.content)).toEqual(messages.map((message) => message.content));
+});
+
+test("the reasoning of earlier answers is not sent again when none is to be kept", () => {
     const call = { id: "c1", type: "function", function: { name: "lessons", arguments: "{}" } };
     const messages = [
         { role: "user" as const, content: "Hallo" },
@@ -137,7 +155,7 @@ test("the reasoning of earlier answers is not sent again, and the rest of them i
         { role: "assistant" as const, content: "Hallo!", reasoning_details: [{ type: "reasoning.text", text: "" }] },
     ];
 
-    expect(withoutReasoning(messages)).toEqual([
+    expect(withoutReasoning(messages, 0)).toEqual([
         { role: "user", content: "Hallo" },
         { role: "assistant", content: null, tool_calls: [call] },
         { role: "tool", content: "[]", tool_call_id: "c1" },

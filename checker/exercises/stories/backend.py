@@ -21,7 +21,8 @@ reported as written by them, and the corrections as written by the model.
 
 Each story, with its questions, is an instance, reported as made in the
 step it is written in; when the exercise is done again, the stories it
-wrote are taken in order from `replay` in place of being written.
+wrote are taken in order from `replay` in place of being written, and those it
+had not made yet when it was left are made as before.
 """
 
 from __future__ import annotations
@@ -146,7 +147,8 @@ def make_story(
     if len(stories) > len(state["done"]) or len(stories) >= context["instances"]:
         return []
     replay = context.get("replay")
-    if replay:
+    # what was made before is done again, and what was not made then is made now
+    if replay and len(stories) < len(replay):
         stories.append(json.loads(json.dumps(replay[len(stories)])))
         return []
     mode = mode_of(context)

@@ -2046,6 +2046,24 @@ class UserStore:
                 (json.dumps(ids), session_id, exercise),
             )
 
+    def extend_replay(self, session_id: str, exercise: str, ids: list[str]) -> None:
+        """Add the instances of `ids` to those an exercise of a session does
+        again, after them: those it made after them, as what it did again was
+        left before all were made."""
+        with self._lock, self._db:
+            row = self._db.execute(
+                "SELECT replay FROM session_exercises"
+                " WHERE session_id = ? AND exercise = ?",
+                (session_id, exercise),
+            ).fetchone()
+            if row is None or row[0] is None:
+                raise ValueError("that exercise does nothing again")
+            self._db.execute(
+                "UPDATE session_exercises SET replay = ?"
+                " WHERE session_id = ? AND exercise = ?",
+                (json.dumps([*json.loads(row[0]), *ids]), session_id, exercise),
+            )
+
     def instance_ids(self, session_id: str, exercise: str) -> list[str]:
         """The ids of the instances an exercise of a session is made of, in
         order: those it replays, or else those it made."""

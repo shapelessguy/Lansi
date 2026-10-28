@@ -25,6 +25,7 @@ from profiling import (
     spent,
     spent_by,
     weigh_ratings,
+    word_question,
 )
 
 
@@ -481,3 +482,10 @@ def test_an_error_carries_what_was_used_before_it_once_each() -> None:
 
     assert spent_by(error) == [first, second]
     assert spent_by(ValueError("never asked")) == []
+
+
+def test_a_word_is_rated_without_the_punctuation_beside_it() -> None:
+    instructions = word_question(3, "weil")["instructions"]
+
+    assert '"weil" (word 3 of the sentence)' in instructions
+    assert "Leave punctuation out" in instructions

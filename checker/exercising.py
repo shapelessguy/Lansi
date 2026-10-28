@@ -1181,8 +1181,10 @@ class Practice:
     ) -> None:
         """Keep what an exercise made in a step, each instance checked to be
         of the shape its manifest declares; one that does again what was
-        made before makes nothing new. Raises ExerciseError."""
-        if not made or session["progress"][exercise]["replays"]:
+        made before makes nothing new, and what one makes after it, as it
+        was left before it made it, is kept to be done again in its turn.
+        Raises ExerciseError."""
+        if not made:
             return
         manifest = next(
             (each for each in exercises(self._directory) if each.id == exercise), None
@@ -1196,7 +1198,9 @@ class Practice:
                     f"{exercise} made an instance unlike its own: {problem}"
                 )
         try:
-            self._store.add_instances(session["id"], exercise, made)
+            ids = self._store.add_instances(session["id"], exercise, made)
+            if session["progress"][exercise]["replays"]:
+                self._store.extend_replay(session["id"], exercise, ids)
         except ValueError as error:
             raise ExerciseError(str(error)) from None
 
@@ -1206,7 +1210,8 @@ class Practice:
         """Start a session that does again an exercise of a session exactly
         as it was: the same instances, in the same order, with the same
         lesson, topics, words, options and brief; or, if `fresh`, with all of
-        those but instances made anew, as many as it had. Only an exercise
+        those but instances made anew. It has as many as it was to have, so
+        that one left before it made them all makes the rest as it goes. Only an exercise
         that makes what it does, as its manifest says, is done again. Raises
         ValueError for any other, and for one that kept nothing to do again
         exactly."""
@@ -1229,7 +1234,7 @@ class Practice:
             session["language"],
             session["lesson"],
             session["topics"],
-            {exercise: len(ids) or session["exercises"][exercise]},
+            {exercise: max(len(ids), session["exercises"][exercise])},
             session["words"],
             session["mix_topics"],
             {exercise: session["guidance"].get(exercise, "")},

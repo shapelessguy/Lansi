@@ -63,9 +63,11 @@ instance it makes, in the step it makes it, as `made`: what it made for the
 learner, of that shape, with nothing of what the learner answered, so that
 the same can be done again exactly. The app keeps each, after checking it
 is of that shape. When the exercise is done again, the context has under
-`replay` the instances it made, in order, as many as there are instances
-to do, which it does in place of making new ones, reporting none as made;
-`replay` is None otherwise. One that makes nothing, such as reviewing the
+`replay` the instances it made, in order, which it does in place of making
+new ones, reporting none as made. There may be fewer than there are
+instances to do, as when the learner left it before it made them all: it
+makes those after them as it would have, reporting them as made, and they
+are kept to be done again in their turn. `replay` is None otherwise. One that makes nothing, such as reviewing the
 learner's Anki cards or reading theory, declares no instance.
 
 An exercise whose manifest has `"topics": false` is not about the topics

@@ -341,7 +341,10 @@ def word_question(number: int, word: str) -> dict[str, Any]:
             " place. Answer no if it is the word, or one of the words, that"
             " an error is in. If a `correction` is given, it is the sentence"
             " as a language model corrected it: a word it changed may be"
-            " wrong, though the correction can be wrong too."
+            " wrong, though the correction can be wrong too. Leave punctuation"
+            " out: a comma, a full stop or any other mark that is missing,"
+            " extra or wrong is no error of the word beside it, and a"
+            " correction that differs only in punctuation changed no word."
         ),
     }
 

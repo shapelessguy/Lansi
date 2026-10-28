@@ -38,6 +38,8 @@ export interface Sentence {
     rating_words?: boolean;
     /** The sentence as it should be, once a model has written it, if that was asked for. */
     correction?: string | null;
+    /** The correction in the language the learner reads, if the model wrote it. */
+    correction_translation?: string | null;
     /** True while the correction is being written. */
     correcting?: boolean;
     /** Why the correction could not be had, if it could not. */
@@ -112,6 +114,10 @@ export async function fetchCheck(
     profile = true,
     /** What the server counts what the requests used under, such as the chat the text is of. */
     usageId?: string,
+    /** The language the correction is translated into, the one the learner reads. */
+    into?: string,
+    /** The text box the text is of, which alone gives up what was asked about its sentences. */
+    box?: string,
 ): Promise<CheckReply> {
     const response = await checkerFetch("/sentences", {
         method: "POST",
@@ -127,6 +133,8 @@ export async function fetchCheck(
             correct: correctWith && modelRequest(correctWith),
             profile,
             usage: usageId,
+            into,
+            box,
         }),
     });
     if (!response.ok) {

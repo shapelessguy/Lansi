@@ -29,7 +29,7 @@ from profiling import (
 )
 from sentences import Sentence, split_sentences
 from spelling import Speller, StudySpeller
-from translating import TranslationError
+from translating import Corrected, TranslationError
 
 # Runs a job without making the caller wait for it.
 Background = Callable[[Callable[[], None]], None]
@@ -41,9 +41,10 @@ OnProfiled = Callable[[str, "Profile | None", "str | None", bool], None]
 # ratings or else why there are none, and whether they were dropped.
 OnRated = Callable[[str, "list[WordRating] | None", "str | None", bool], None]
 # Writes a sentence, by someone learning a language, as it should be, with
-# what asking for it used: the sentence, the language and the model to ask.
-# Raises TranslationError.
-Corrector = Callable[[str, str, Model], tuple[str, Profile]]
+# what it means and what asking for it used: the sentence, the language, the
+# model to ask and the language it is translated into. Raises
+# TranslationError.
+Corrector = Callable[[str, str, Model, str], tuple[Corrected, Profile]]
 # Told when a sentence has been corrected: the sentence, the correction or
 # else why there is none, and whether it was dropped.
 OnCorrected = Callable[[str, "str | None", "str | None", bool], None]
@@ -70,12 +71,16 @@ class _Asked:
     answer: Answer | None = None
     # The ratings, when what was asked is how right each word is.
     words: list[WordRating] | None = None
-    # The sentence as it should be, when that is what was asked.
+    # The sentence as it should be, when that is what was asked, and what it
+    # means in the language the learner reads.
     correction: str | None = None
+    translation: str | None = None
     error: str | None = None
     # The sentence was changed or gone back to while the question was out.
     # Its answer is not kept when it comes back.
     dropped: bool = False
+    # The text box whose sentence it was asked about, which alone gives it up.
+    box: str = ""
 
 
 # A question that is to be asked, where its answer is kept, and the answer.
@@ -102,6 +107,9 @@ class LiveChecker:
     If a sentence is changed, or the caret goes back onto it, while questions
     about it are out, their answers are dropped when they arrive: the threads
     end by themselves and leave nothing behind but what the requests cost.
+    Several text boxes may be checked in turn, each named by the `box` it
+    is sent with: a box gives up only what was asked about its own
+    sentences, and leaves what is out about those of the others alone.
 
     Once every question about a sentence is answered, its words can be rated
     as well: the model is asked again, with the answers it gave to go by, how
@@ -159,6 +167,8 @@ class LiveChecker:
         questions: Questions | None = None,
         rate_words: bool = False,
         correct_with: Model | None = None,
+        into: str = "English",
+        box: str = "",
     ) -> list[Sentence]:
         """Split `text` into sentences and fill in what is known about each.
 
@@ -170,8 +180,11 @@ class LiveChecker:
         all, nothing is profiled. With `rate_words`, the words of each sentence
         are rated once it has been profiled. With `correct_with`, the
         language model that writes each finished sentence as it should be,
-        it is asked to alongside the questions, and the words are rated with
-        what it wrote."""
+        it is asked to alongside the questions, with what it wrote translated
+        `into` the language the learner reads, and the words are rated with
+        what it wrote. `box` names the text box the text is of: what is out
+        about the sentences of another box is left to it, as the boxes of a
+        page are checked in turn."""
         sentences = split_sentences(text, caret)
         if questions is None:
             questions = QUESTIONS
@@ -184,8 +197,11 @@ class LiveChecker:
         can_ask = bool(self._profiler and model and model.problem() is None)
         # a model that names none is the corrector's usual one
         can_correct = bool(self._corrector and correct_with and correct_with.has_key)
+        # what it is translated into is part of what is asked
         correcting_model = (
-            f"{correct_with.url} {correct_with.name} {language}" if correct_with else ""
+            f"{correct_with.url} {correct_with.name} {language} {into}"
+            if correct_with
+            else ""
         )
         # one at an address of the learner's own is asked all at once
         together = bool(model and not model.on_openrouter)
@@ -234,11 +250,12 @@ class LiveChecker:
                     if corrected:
                         self._asked.move_to_end(correction_key)
                     elif can_correct and has_words(sentence.text):
-                        corrected = self._asked[correction_key] = _Asked()
+                        corrected = self._asked[correction_key] = _Asked(box=box)
                         self._asking[correction_key] = corrected
                         to_correct.append((sentence.text, correction_key, corrected))
                     if corrected:
                         sentence.correction = corrected.correction
+                        sentence.correction_translation = corrected.translation
                         sentence.correcting = corrected.state == "asking"
                         sentence.correction_error = corrected.error
                 # the correction is out alongside the questions, and the words
@@ -250,7 +267,7 @@ class LiveChecker:
                     if key in self._asked:
                         self._asked.move_to_end(key)
                     elif can_ask:
-                        asked = self._asked[key] = self._asking[key] = _Asked()
+                        asked = self._asked[key] = self._asking[key] = _Asked(box=box)
                         new[name] = (questions[name], key, asked)
                 if together and new:
                     to_ask.append((sentence.text, new))
@@ -271,7 +288,9 @@ class LiveChecker:
                     and not waiting
                     and has_words(sentence.text)
                 ):
-                    rated = self._asked[words_key] = self._asking[words_key] = _Asked()
+                    rated = self._asked[words_key] = self._asking[words_key] = _Asked(
+                        box=box
+                    )
                     answers = sentence.profile.answers
                     to_rate.append(
                         (
@@ -289,7 +308,7 @@ class LiveChecker:
                     sentence.profile_error = rated.error
                 elif waiting and can_ask and sentence.profile:
                     sentence.rating_words = True
-            self._drop_unwanted(wanted)
+            self._drop_unwanted(wanted, box)
             self._forget_the_oldest()
             self._in_flight += len(to_ask) + len(to_rate) + len(to_correct)
         for sentence_text, correction_key, corrected in to_correct:
@@ -302,6 +321,7 @@ class LiveChecker:
                     correction_key,
                     corrected,
                     correct_with,
+                    into,
                 )
             )
         for sentence_text, new in to_ask:
@@ -380,6 +400,7 @@ class LiveChecker:
             del self._asked[key]
         elif corrected and corrected.correction:
             sentence.correction = corrected.correction
+            sentence.correction_translation = corrected.translation
 
     def _fill_in(self, sentence: Sentence, keys: dict[str, _Key]) -> None:
         """Say where the profile of a finished sentence stands."""
@@ -396,10 +417,16 @@ class LiveChecker:
             errors = [one.error for one in asked.values() if one and one.error]
             sentence.profile_error = errors[0] if errors else None
 
-    def _drop_unwanted(self, wanted: set[_Key]) -> None:
-        """Give up on the questions that are out about sentences which have
-        since been changed or gone back to."""
-        for key in [key for key in self._asking if key not in wanted]:
+    def _drop_unwanted(self, wanted: set[_Key], box: str) -> None:
+        """Give up on the questions that are out about sentences of `box`
+        which have since been changed or gone back to. Those about the
+        sentences of other boxes are theirs to give up: each box is checked
+        by itself, and a sentence it does not have is not one it changed."""
+        for key in [
+            key
+            for key, asked in self._asking.items()
+            if key not in wanted and asked.box == box
+        ]:
             self._asking.pop(key).dropped = True
             del self._asked[key]
 
@@ -489,13 +516,17 @@ class LiveChecker:
         key: _Key,
         corrected: _Asked,
         model: Model,
+        into: str,
     ) -> None:
-        """Have a sentence written as it should be and keep what was written,
-        unless the sentence was changed or gone back to while waiting."""
+        """Have a sentence written as it should be, and translated `into` the
+        language the learner reads, and keep what was written, unless the
+        sentence was changed or gone back to while waiting."""
         assert self._corrector
-        correction, used, error = None, None, None
+        correction, translation, used, error = None, None, None, None
         try:
-            correction, used = self._corrector(sentence_text, language, model)
+            written, used = self._corrector(sentence_text, language, model, into)
+            correction = written.sentence or None
+            translation = written.translation or None
         except TranslationError as failure:
             error = str(failure)
         finally:
@@ -508,6 +539,7 @@ class LiveChecker:
                 if not corrected.dropped:
                     corrected.state = "answered" if correction else "failed"
                     corrected.correction = correction
+                    corrected.translation = translation
                     corrected.error = error
         if self._on_corrected:
             self._on_corrected(sentence_text, correction, error, corrected.dropped)

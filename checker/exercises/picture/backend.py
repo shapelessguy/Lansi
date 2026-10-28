@@ -23,7 +23,8 @@ they never wait for it.
 
 A picture is reported as made once it is shown: its image, its scene and
 what was planned. When the exercise is done again, the pictures are
-taken in order from `replay` in place of being drawn.
+taken in order from `replay` in place of being drawn, and those it
+had not made yet when it was left are made as before.
 """
 
 from __future__ import annotations

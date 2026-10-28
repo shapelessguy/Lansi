@@ -2531,6 +2531,10 @@ export const MESSAGES = {
         German: "Noch einmal, neu erstellt",
         Italian: "Di nuovo, creato da capo",
     },
+    "What the sentence as it should be means": {
+        German: "Was der Satz, wie er sein sollte, bedeutet",
+        Italian: "Che cosa significa la frase come dovrebbe essere",
+    },
     "unsure": {
         German: "unsicher",
         Italian: "incerto",

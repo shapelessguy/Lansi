@@ -228,16 +228,27 @@ export function thinkingAbout(thinking: string): string {
     return `${cut.slice(0, cut.lastIndexOf(" ") > 0 ? cut.lastIndexOf(" ") : ABOUT_LENGTH)}…`;
 }
 
+/** How many of the latest messages that have reasoning handed back with them keep it when they are sent again. */
+export const REASONING_KEPT = 3;
+
 /**
- * The messages of earlier answers as they are sent again, without the
- * reasoning that was handed back with them. The model needs its reasoning
- * only while it goes on with the answer it is writing, between the tools it
- * calls, which the server does in one request. Told again later, what it
- * reasoned is paid for on every turn, and it keeps to what it concluded
- * there rather than looking afresh. It is kept all the same, and shown.
+ * The messages of earlier answers as they are sent again, with the
+ * reasoning handed back with the latest `kept` of those that have it, and
+ * without that of the others. The latest let the model go on from what it
+ * was thinking; told all of it, it would pay for every turn's again, and
+ * keep to what it concluded long ago rather than looking afresh. It is kept
+ * all the same, and shown.
  */
-export function withoutReasoning(messages: TutorMessage[]): TutorMessage[] {
-    return messages.map(({ reasoning_details: _, ...rest }) => rest as TutorMessage);
+export function withoutReasoning(messages: TutorMessage[], kept = REASONING_KEPT): TutorMessage[] {
+    const reasoned = messages.flatMap((message, at) => (message.reasoning_details ? [at] : []));
+    const keeping = new Set(kept > 0 ? reasoned.slice(-kept) : []);
+    return messages.map((message, at) => {
+        if (keeping.has(at)) {
+            return message;
+        }
+        const { reasoning_details: _, ...rest } = message;
+        return rest as TutorMessage;
+    });
 }
 
 /**

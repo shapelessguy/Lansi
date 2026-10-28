@@ -25,11 +25,17 @@ $sentences
 
 Judge each translation of the learner, not how close it is to the good one: \
 another wording that is right is right. "right" if it is correct $language \
-and means the sentence, "partial" if it has small mistakes, "wrong" if it \
-has mistakes in the rules of the lesson or does not mean the sentence. The \
-correction is the learner's translation with as few changes as make it \
-right, or "" if it is right. The note says in a sentence of $into what was \
-wrong, or "" if nothing was.
+that a native speaker would accept and means the sentence, however it \
+differs from the good translation in wording, word order or style. \
+"partial" only for a real mistake, such as a wrong ending or article, that \
+leaves the meaning as it is. "wrong" for a mistake in the rules of the \
+lesson, or a translation that means something else. Where the sentence can \
+be read in more than one way, a translation of any of those readings means \
+it. Something that would merely sound better is no mistake: say it in the \
+note, and leave the result as it is. The correction is the learner's \
+translation with as few changes as make it right, or "" if it is right. \
+The note says in a sentence of $into what was wrong, or what would sound \
+better, or "" if there is nothing to say.
 
 Reply with JSON alone, with a verdict for each sentence or text in turn: \
 {"verdicts": [{"result": "...", "correction": "...", "note": "..."}]}"""

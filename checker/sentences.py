@@ -57,6 +57,8 @@ class Sentence:
     # The sentence as it should be, once a model has written it, which is
     # asked alongside the profile when correcting is asked for.
     correction: str | None = None
+    # The correction in the language the learner reads, if the model said.
+    correction_translation: str | None = None
     # True while the correction is being written.
     correcting: bool = False
     # Why the correction could not be had, if it could not.

@@ -17,7 +17,8 @@ written by the model.
 
 Each set is an instance, reported as made in the step it is made in, as
 `{"items": [...]}`; when the exercise is done again, the sets it made are
-taken in order from `replay` in place of being made.
+taken in order from `replay` in place of being made, and those it
+had not made yet when it was left are made as before.
 """
 
 from __future__ import annotations
@@ -108,7 +109,8 @@ def make_set(
     if len(sets) > len(state["checked"]) or len(sets) >= context["instances"]:
         return []
     replay = context.get("replay")
-    if replay:
+    # what was made before is done again, and what was not made then is made now
+    if replay and len(sets) < len(replay):
         sets.append([dict(item) for item in replay[len(sets)]["items"]])
         return []
     prompt = PROMPTS(

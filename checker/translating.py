@@ -12,6 +12,8 @@ goes to it with the same passage and the translation it gave.
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -41,6 +43,58 @@ MARKS = ("[[", "]]")
 
 class TranslationError(Exception):
     """A translation or an answer could not be had. The message says why."""
+
+
+@dataclass
+class Corrected:
+    """A sentence as it should be, and what it means in the language the
+    learner reads, empty if the model did not say."""
+
+    sentence: str
+    translation: str = ""
+
+
+def read_corrected(said: str) -> Corrected:
+    """What a model wrote of a sentence it corrected: the JSON of its
+    correction and translation, which it may have put in a fenced block or
+    among words of its own, or written with its values not in quotes; or,
+    where there is none to read, all it wrote, as the correction alone."""
+    start, end = said.find("{"), said.rfind("}")
+    if 0 <= start < end:
+        try:
+            read = json.loads(said[start : end + 1])
+        except ValueError:
+            read = None
+        if isinstance(read, dict) and isinstance(read.get("correction"), str):
+            translation = read.get("translation")
+            return Corrected(
+                read["correction"].strip(),
+                translation.strip() if isinstance(translation, str) else "",
+            )
+        # such as {"correction": Er ist gut., "translation": He is good.}
+        loose = _LOOSE_CORRECTED.search(said[start : end + 1])
+        if loose:
+            return Corrected(
+                _unquoted(loose.group("correction")),
+                _unquoted(loose.group("translation") or ""),
+            )
+    return Corrected(said.strip())
+
+
+# what a model wrote as JSON with the values not in quotes, or not all of them
+_LOOSE_CORRECTED = re.compile(
+    r'\{\s*"?correction"?\s*:\s*(?P<correction>.*?)\s*'
+    r'(?:,\s*"?translation"?\s*:\s*(?P<translation>.*?))?\s*\}\s*$',
+    re.DOTALL,
+)
+
+
+def _unquoted(value: str) -> str:
+    """A value of loose JSON without the quotes it may have."""
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        value = value[1:-1]
+    return value.strip()
 
 
 @dataclass
@@ -140,16 +194,17 @@ class Translator:
         )
 
     def correct(
-        self, sentence: str, language: str, model: Model
-    ) -> tuple[str, Profile]:
+        self, sentence: str, language: str, model: Model, into: str = "English"
+    ) -> tuple[Corrected, Profile]:
         """`sentence`, written by someone learning `language`, as it should
-        be, or as it is if nothing in it is wrong, with what asking for it
-        used. Raises TranslationError."""
-        return self._ask(
-            PROMPTS("correcting", language=language),
+        be, or as it is if nothing in it is wrong, translated into `into`,
+        with what asking for it used. Raises TranslationError."""
+        said, used = self._ask(
+            PROMPTS("correcting", language=language, into=into),
             [{"role": "user", "content": sentence}],
             model,
         )
+        return read_corrected(said), used
 
     def answer(
         self,

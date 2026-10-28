@@ -2758,9 +2758,18 @@ class CheckerHandler(BaseHTTPRequestHandler):
         self._reply(HTTPStatus.OK, {"task": task})
 
     def _check_sentences(self, api_key: str | None) -> None:
-        text, caret, model, questions, rate_words, profile, correct_with, usage_id = (
-            self._read_request(api_key)
-        )
+        (
+            text,
+            caret,
+            model,
+            questions,
+            rate_words,
+            profile,
+            correct_with,
+            usage_id,
+            into,
+            box,
+        ) = self._read_request(api_key)
         if not profile:
             # the spelling of a text box whose sentences are not profiled;
             # the requests to the model are left to be reported to the one
@@ -2776,7 +2785,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             )
             return
         sentences = self.account.checker.check(
-            text, caret, model, questions, rate_words, correct_with
+            text, caret, model, questions, rate_words, correct_with, into, box
         )
         log(f"{datetime.now():%H:%M:%S}\n{describe(sentences)}")
         used, pending = self.account.checker.billing()
@@ -2796,15 +2805,30 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
     def _read_request(
         self, api_key: str | None
-    ) -> tuple[str, int | None, Model, Questions | None, bool, bool, Model | None, str]:
+    ) -> tuple[
+        str,
+        int | None,
+        Model,
+        Questions | None,
+        bool,
+        bool,
+        Model | None,
+        str,
+        str,
+        str,
+    ]:
         """The parts of a `{"text": ..., "caret": ..., "model": ...,
-        "questions": ..., "words": ..., "profile": ..., "correct": ...}`
+        "questions": ..., "words": ..., "profile": ..., "correct": ...,
+        "into": ..., "box": ...}`
         request body. The caret may be left out or null, for when the text
         box is not in use, and so may the model and the questions, for the
         model the server was started with and the usual questions. With
         `"profile": false` only the spelling is checked. `correct` is the
         language model that writes each finished sentence as it should be,
-        if that is wanted, and null or left out if not. `usage` is what what
+        if that is wanted, and null or left out if not, and `into` the
+        language what it writes is translated into, English if left out.
+        `box` names the text box the text is of, so that what is out about
+        the sentences of one box is not given up when another is checked. `usage` is what what
         the requests to the models used is counted under, such as the chat
         the text box is of, "checking" if it is left out."""
         body = self._read_body()
@@ -2830,6 +2854,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
         usage_id = body.get("usage")
         if not isinstance(usage_id, str) or not usage_id:
             usage_id = "checking"
+        into = body.get("into")
+        if into is not None and not isinstance(into, str):
+            raise ValueError("into must be text or null")
+        into = (into or "").strip()[:MAX_LANGUAGE_LENGTH] or DEFAULT_INTO
+        box = body.get("box")
+        if box is not None and not isinstance(box, str):
+            raise ValueError("box must be text or null")
+        box = (box or "")[:MAX_USAGE_ID]
         return (
             text,
             caret,
@@ -2839,6 +2871,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             profile,
             correct_with,
             usage_id[:MAX_USAGE_ID],
+            into,
+            box,
         )
 
     def _read_body(self) -> dict[str, Any]:

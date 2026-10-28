@@ -693,16 +693,18 @@ def test_what_an_exercise_makes_is_kept_and_done_again_exactly(
     kept = practice._store.session(session["id"])
     assert kept and kept["progress"]["echo"]["kept"] == 2
     assert shown == [{"text": "Ich stehe auf."}, {"text": "Ich stehe auf."}]
+    # as many as it was to have, though it was left before it made the third
     assert (again["lesson"], again["exercises"], again["minutes"]) == (
         LESSON,
-        {"echo": 2},
+        {"echo": 3},
         {"echo": 5},
     )
     assert again["progress"]["echo"]["replays"]
-    # what a replay makes is not kept, and doing it again does the same
-    assert practice._store.instance_ids(
-        once_more["id"], "echo"
-    ) == practice._store.instance_ids(session["id"], "echo")
+    # what the replay made after what it did again is kept, and done again too
+    first = practice._store.instance_ids(session["id"], "echo")
+    then = practice._store.instance_ids(once_more["id"], "echo")
+    assert (len(then), then[:2]) == (3, first)
+    assert once_more["exercises"] == {"echo": 3}
 
 
 def test_an_instance_unlike_the_shape_of_its_exercise_is_refused(
@@ -736,7 +738,8 @@ def test_a_session_left_untouched_is_kept_hidden_for_what_it_made(
     kept = practice._store.session(session["id"])
     assert ended["hidden"] and kept and kept["hidden"]
     assert practised == []
-    assert again["exercises"] == {"echo": 1}
+    # it is to make the two it did not, as it goes
+    assert again["exercises"] == {"echo": 3}
 
 
 def test_an_exercise_that_kept_nothing_is_done_again_only_made_anew(

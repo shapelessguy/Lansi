@@ -4085,6 +4085,13 @@ div.book-cover {
 }
 
 /* what says that the learner stopped the answer, after what came of it */
+/* what the sentence as it should be means, under the correction */
+.checks-translation {
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-style: italic;
+}
+
 .tutor-stopped {
     margin: 6px 0 0;
     color: var(--muted);

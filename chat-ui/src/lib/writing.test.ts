@@ -50,6 +50,7 @@ const profiling: Profiling = {
     questions: {},
     rateWords: false,
     correctWith: null,
+    into: "English",
 };
 
 test("a text box is checked again when its text, its caret or what is asked about it changes", () => {
@@ -80,4 +81,8 @@ test("the copy behind a text box lays out its text as the box does, see-through,
     expect(copied.paddingRight).toBe("calc(12px + 8px)");
     expect(copied.backgroundColor).toBe("rgb(1, 2, 3)");
     expect([copied.color, copied.borderColor, copied.pointerEvents]).toEqual(["transparent", "transparent", "none"]);
+});
+
+test("a text box is checked again when its corrections are to be translated into another language", () => {
+    expect(askedOf("German", { ...profiling, into: "Italian" })).not.toBe(askedOf("German", profiling));
 });
