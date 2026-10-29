@@ -20,7 +20,9 @@ A language-learning chat built on an Anki collection. Three parts:
 - `checker/`: Python server that splits typed text into sentences,
   spell-checks them and profiles finished sentences with a decision model.
   It also keeps everything a user has, in `checker/data/users/<name>/`:
-  the chats, books, sessions of practice and settings (`storage.py`) and a vocabulary for
+  the chats, books, sessions of practice and settings (`storage.py`), the
+  notes the tutor writes for itself, each with a SQLite database of its own
+  that it works in with SQL (`notes.py`), and a vocabulary for
   each language (`intake.py`, `vocabulary.py`); a book is an EPUB file, kept as
   it is and read into its text, how each part is written and its table of
   contents (`books.py`), with each picture in it a block of its own that names

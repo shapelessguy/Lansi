@@ -844,6 +844,71 @@ export const MESSAGES = {
         Italian:
             "Non c'è niente in programma. Quando tu e il tutor decidete di fare qualcosa in un certo giorno, come una simulazione d'esame, viene segnato qui.",
     },
+    "Notes": {
+        German: "Notizen",
+        Italian: "Note",
+    },
+    "The tutor has no notes. What it works out and needs again, such as a table of the words your exercises used, it writes in a note here, to read again rather than make again.":
+        {
+            German:
+                "Der Tutor hat keine Notizen. Was er erarbeitet und wieder braucht, etwa eine Tabelle der Wörter, die deine Übungen verwendet haben, schreibt er hier in eine Notiz, um sie wieder zu lesen, statt sie neu zu erstellen.",
+            Italian:
+                "Il tutor non ha note. Ciò che elabora e gli servirà di nuovo, come una tabella delle parole usate nei tuoi esercizi, lo scrive qui in una nota, per rileggerlo invece di rifarlo.",
+        },
+    "The tables of the note could not be read.": {
+        German: "Die Tabellen der Notiz konnten nicht gelesen werden.",
+        Italian: "Non è stato possibile leggere le tabelle della nota.",
+    },
+    "{name}, {count} rows": {
+        German: "{name}, {count} Zeilen",
+        Italian: "{name}, {count} righe",
+    },
+    "Show more ({count} left)": {
+        German: "Mehr zeigen (noch {count})",
+        Italian: "Mostra altro (ancora {count})",
+    },
+    "Delete the folder {name}?": {
+        German: "Den Ordner {name} löschen?",
+        Italian: "Eliminare la cartella {name}?",
+    },
+    "The folders in it are deleted too, and its {count} exercises are taken out of the favourites.": {
+        German:
+            "Die Ordner darin werden ebenfalls gelöscht, und seine {count} Übungen werden aus den Favoriten entfernt.",
+        Italian:
+            "Anche le cartelle al suo interno vengono eliminate, e i suoi {count} esercizi vengono tolti dai preferiti.",
+    },
+    "The folders in it are deleted too.": {
+        German: "Die Ordner darin werden ebenfalls gelöscht.",
+        Italian: "Anche le cartelle al suo interno vengono eliminate.",
+    },
+    "New folder in it": {
+        German: "Neuer Ordner darin",
+        Italian: "Nuova cartella al suo interno",
+    },
+    "Rename": {
+        German: "Umbenennen",
+        Italian: "Rinomina",
+    },
+    "Delete the folder": {
+        German: "Ordner löschen",
+        Italian: "Elimina la cartella",
+    },
+    "New folder": {
+        German: "Neuer Ordner",
+        Italian: "Nuova cartella",
+    },
+    "Name of the folder": {
+        German: "Name des Ordners",
+        Italian: "Nome della cartella",
+    },
+    "Move to a folder": {
+        German: "In einen Ordner verschieben",
+        Italian: "Sposta in una cartella",
+    },
+    "Top": {
+        German: "Oberste Ebene",
+        Italian: "Livello principale",
+    },
     "Recaps of the lessons": {
         German: "Zusammenfassungen der Lektionen",
         Italian: "Riepiloghi delle lezioni",

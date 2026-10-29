@@ -51,11 +51,12 @@ from __future__ import annotations
 import itertools
 import json
 import re
+import shutil
 import threading
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
@@ -66,6 +67,7 @@ from intake import CHAT_TIMEOUT_SECS, read_usage
 from known import ORDERS, Asked, Known
 from logs import describe_record
 from models import Model
+from notes import PAGE_ROWS, NoteError, run, tables
 from profiling import Profile, ProfileError, error_message, spent
 from prompts import PROMPTS
 from storage import LOG_KINDS, read_day
@@ -76,6 +78,10 @@ from translating import TranslationError
 Stream = Callable[[dict[str, Any], Model], Iterator[dict[str, Any]]]
 Emit = Callable[[dict[str, Any]], None]
 
+# the longest the title of a note of the tutor may be, in characters, as
+# the titles are told in every chat; what a note says may be as long as it
+# needs
+MAX_NOTE_TITLE = 120
 # how many times the model may be asked for one answer, calling tools in
 # between; the last time, it is given no tools, so that it answers
 MAX_TURNS = 8
@@ -182,6 +188,7 @@ def instructions(
     strategies = [memory for memory in memories if memory.get("kind") == "strategy"]
     recaps = [memory for memory in memories if memory.get("kind") == "recap"]
     days = [memory["day"] for memory in memories if memory.get("kind") == "calendar"]
+    notes = [memory for memory in memories if memory.get("kind") == "note"]
     coming = time.strftime(
         "%Y-%m-%d", time.localtime(time.time() + COMING_DAYS * 86400)
     )
@@ -211,6 +218,9 @@ def instructions(
         PROMPTS("tutor.memories.strategy")
         if strategies
         else PROMPTS("tutor.memories.no_strategy"),
+        PROMPTS("tutor.memories.notes", notes=_titles(notes))
+        if notes
+        else PROMPTS("tutor.memories.no_notes"),
     ]
     told_all = PROMPTS(
         "tutor.system",
@@ -222,6 +232,62 @@ def instructions(
     )
     # a part that was left out leaves no gap
     return re.sub(r"\n{3,}", "\n\n", told_all)
+
+
+def _titles(notes: list[dict[str, Any]]) -> str:
+    """The `notes` of the tutor, one to a line as "- #id [date] title"."""
+    return "\n".join(
+        f"- #{note['id']} [{_day(note['createdAt'])}] {_title(note)}" for note in notes
+    )
+
+
+def _title(note: dict[str, Any]) -> str:
+    return str(note["content"]).partition("\n")[0]
+
+
+def with_notes(
+    recap: str,
+    notes: list[dict[str, Any]],
+    chat_id: str,
+    chat: Sequence[dict[str, Any]] = (),
+) -> str:
+    """A `recap` of the chat `chat_id`, with the `notes` the tutor wrote in
+    it and those it read or worked in, as the tools it called in the
+    messages of the `chat` say, of those it still has after it, by their
+    ids, so that it can find them again."""
+    used = _notes_used(chat)
+    written = [note for note in notes if note.get("chat") == chat_id]
+    others = [note for note in notes if note["id"] in used and note not in written]
+    told = [recap]
+    for name, listed in (("notes_written", written), ("notes_used", others)):
+        if listed:
+            titles = "; ".join(f"#{note['id']} {_title(note)}" for note in listed)
+            told.append(PROMPTS(f"tutor.memories.{name}", notes=titles))
+    return "\n".join(told)
+
+
+def _notes_used(chat: Sequence[dict[str, Any]]) -> set[object]:
+    """The ids of the notes the tutor read or worked in, in the messages of
+    a kept `chat`, as the tools it called say."""
+    used: set[object] = set()
+    for message in chat:
+        turn = message.get("turn") or {}
+        for told in turn.get("messages") or []:
+            for call in told.get("tool_calls") or []:
+                function = call.get("function") or {}
+                if function.get("name") not in ("read_note", "sql"):
+                    continue
+                try:
+                    arguments = json.loads(function.get("arguments") or "{}")
+                except ValueError:
+                    continue
+                if isinstance(arguments, dict):
+                    note_id = arguments.get("note", arguments.get("id"))
+                    # a model may write the id as text, such as "7"
+                    if isinstance(note_id, str) and note_id.strip().isdigit():
+                        note_id = int(note_id)
+                    used.add(note_id)
+    return used
 
 
 def _said(chat: list[dict[str, str]]) -> str:
@@ -738,7 +804,7 @@ def exercise_record(store: Any, session_id: str, exercise: str) -> dict[str, Any
         "language": session["language"],
         "started": _date(session["started_at"]),
         "status": progress.get("status", session["status"]),
-        "lesson": session["lesson"] or "review",
+        "lesson": _lesson_of(session),
         "options": session["options"].get(exercise, {}),
         "instances": session["exercises"].get(exercise, 1),
         "brief": session["briefs"].get(exercise, ""),
@@ -832,7 +898,7 @@ def data_tools(
             {
                 "id": session["id"],
                 "started": _date(session["started_at"]),
-                "lesson": session["lesson"] or "review",
+                "lesson": _lesson_of(session),
                 "status": session["status"],
                 "exercises": {
                     exercise: {
@@ -850,6 +916,15 @@ def data_tools(
 
     def list_favourites(arguments: dict[str, Any]) -> Done:
         count = _count(arguments, MAX_SESSIONS)
+        folders = {folder["id"]: folder for folder in store.favourite_folders()}
+
+        def path(folder: int | None) -> str:
+            names = []
+            while folder is not None and folder in folders:
+                names.append(folders[folder]["name"])
+                folder = folders[folder]["parent"]
+            return " / ".join(reversed(names))
+
         listed = []
         for favourite in store.favourites():
             session = store.session(favourite["session_id"])
@@ -865,9 +940,10 @@ def data_tools(
                 {
                     "session": session["id"],
                     "exercise": exercise,
+                    "folder": path(favourite.get("folder")),
                     "added": _date(favourite["added_at"]),
                     "started": _date(session["started_at"]),
-                    "lesson": session["lesson"] or "review",
+                    "lesson": _lesson_of(session),
                     **progress["results"],
                     "scores": progress["scores"],
                 }
@@ -985,12 +1061,13 @@ def data_tools(
     ]
 
 
-def memory_tools(store: Any) -> list[Tool]:
+def memory_tools(store: Any, chat_id: str | None = None) -> list[Tool]:
     """The tools with which the tutor looks up, in `store`, the recaps of
     the latest chats, the strategy and its calendar, with which it writes
     down a strategy and an entry of the calendar as soon as the learner
-    agrees on it, and crosses either out, and with which it remembers a
-    fact as soon as the learner asks it to."""
+    agrees on it, and crosses either out, with which it remembers a
+    fact as soon as the learner asks it to, and with which it writes a note
+    for itself, as written in the chat `chat_id`, and reads one again."""
 
     def kept(memory: dict[str, Any]) -> dict[str, Any]:
         return {"id": memory["id"], "agreed": _day(memory["createdAt"])}
@@ -1105,6 +1182,66 @@ def memory_tools(store: Any) -> list[Tool]:
         store.remove_memory(memory["id"], " ".join(why.split()), "tutor")
         return Done(json.dumps({"crossed_out": memory["id"]}))
 
+    def write_note(arguments: dict[str, Any]) -> Done:
+        title, content = arguments.get("title"), arguments.get("content")
+        if not isinstance(title, str) or not title.strip():
+            raise ToolError("title is what the note is, in a few words")
+        title = " ".join(title.split())
+        if len(title) > MAX_NOTE_TITLE:
+            raise ToolError(f"title is at most {MAX_NOTE_TITLE} characters long")
+        if not isinstance(content, str) or not content.strip():
+            raise ToolError("content is what the note says")
+        replaces = arguments.get("replaces")
+        replaced = None if replaces is None else held(replaces, ("note",))
+        note_id = store.add_memory(
+            f"{title}\n{content.strip('\r\n')}", chat_id, kind="note"
+        )
+        if replaced:
+            # the new note goes on with the tables of the one it replaces
+            kept = store.note_base(replaced["id"])
+            if kept.exists():
+                shutil.copyfile(kept, store.note_base(note_id))
+            store.remove_memory(
+                replaced["id"], f"replaced by the note {note_id}", "tutor"
+            )
+        return Done(json.dumps({"id": note_id, "replaced": replaces}))
+
+    def note_of(note_id: object) -> dict[str, Any]:
+        # a model may write the id as text, such as "7"
+        if isinstance(note_id, str) and note_id.strip().isdigit():
+            note_id = int(note_id)
+        notes: list[dict[str, Any]] = store.memories(kind="note")
+        for note in notes:
+            if note["id"] == note_id and not isinstance(note_id, bool):
+                return note
+        raise ToolError(f"there is no note {note_id!r}")
+
+    def read_note(arguments: dict[str, Any]) -> Done:
+        note = note_of(arguments.get("id"))
+        title, _, content = note["content"].partition("\n")
+        read = {
+            "id": note["id"],
+            "written": _day(note["createdAt"]),
+            "title": title,
+            "content": content,
+            "tables": tables(store.note_base(note["id"])),
+        }
+        return Done(json.dumps(read, ensure_ascii=False))
+
+    def query_note(arguments: dict[str, Any]) -> Done:
+        note = note_of(arguments.get("note"))
+        query = arguments.get("query")
+        if not isinstance(query, str):
+            raise ToolError("query is an SQL statement")
+        offset = arguments.get("offset") or 0
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ToolError("offset is a whole number from 0, as next_offset gives it")
+        try:
+            given = run(store.note_base(note["id"]), query, offset)
+        except NoteError as error:
+            raise ToolError(str(error)) from None
+        return Done(json.dumps(given, ensure_ascii=False))
+
     def text(name: str) -> dict[str, Any]:
         return {"type": "string", "description": PROMPTS(f"tutor.tools.{name}")}
 
@@ -1200,6 +1337,62 @@ def memory_tools(store: Any) -> list[Tool]:
             cross_out,
             lambda _: "Crossing it out",
         ),
+        Tool(
+            "write_note",
+            PROMPTS("tutor.tools.write_note"),
+            {
+                "type": "object",
+                "properties": {
+                    "title": text("note_title"),
+                    "content": text("note_content"),
+                    "replaces": {
+                        "type": "integer",
+                        "description": PROMPTS("tutor.tools.note_replaces"),
+                    },
+                },
+                "required": ["title", "content"],
+            },
+            write_note,
+            lambda arguments: f"Writing the note {arguments.get('title')}",
+        ),
+        Tool(
+            "read_note",
+            PROMPTS("tutor.tools.read_note"),
+            {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "description": PROMPTS("tutor.tools.note_id"),
+                    }
+                },
+                "required": ["id"],
+            },
+            read_note,
+            lambda arguments: f"Reading the note {arguments.get('id')}",
+        ),
+        Tool(
+            "sql",
+            PROMPTS("tutor.tools.sql", page=PAGE_ROWS),
+            {
+                "type": "object",
+                "properties": {
+                    "note": {
+                        "type": "integer",
+                        "description": PROMPTS("tutor.tools.note_id"),
+                    },
+                    "query": text("sql_query"),
+                    "offset": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": PROMPTS("tutor.tools.sql_offset"),
+                    },
+                },
+                "required": ["note", "query"],
+            },
+            query_note,
+            lambda arguments: f"Working in the note {arguments.get('note')}",
+        ),
     ]
 
 
@@ -1228,6 +1421,9 @@ def words_tool(
         for name, value in flags.items():
             if not isinstance(value, bool):
                 raise ToolError(f"{name} is true or false")
+        offset = arguments.get("offset") or 0
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ToolError("offset is a whole number from 0, as next_offset gives it")
         try:
             words, total = known(
                 Asked(
@@ -1239,6 +1435,7 @@ def words_tool(
                     limit=_count(arguments, MAX_KNOWN_WORDS)
                     if arguments.get("count") is not None
                     else USUAL_KNOWN_WORDS,
+                    offset=offset,
                 )
             )
         except (ValueError, LookupError, AnkiUnavailable) as error:
@@ -1254,7 +1451,10 @@ def words_tool(
             }
             for word in words
         ]
-        return Done(json.dumps({"total": total, "words": listed}, ensure_ascii=False))
+        given: dict[str, Any] = {"total": total, "words": listed}
+        if offset + len(words) < total:
+            given["next_offset"] = offset + len(words)
+        return Done(json.dumps(given, ensure_ascii=False))
 
     properties: dict[str, Any] = {
         "categories": {
@@ -1268,6 +1468,11 @@ def words_tool(
             "description": PROMPTS("tutor.tools.sorted_by"),
         },
         "reverse": {"type": "boolean", "description": PROMPTS("tutor.tools.reverse")},
+        "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "description": PROMPTS("tutor.tools.words_offset"),
+        },
         "count": {
             "type": "integer",
             "minimum": 1,
@@ -1476,7 +1681,7 @@ def exercise_tool(
         },
         "lesson": {
             "type": "string",
-            "enum": [*lesson_ids, ""],
+            "enum": [*lesson_ids, "", "none"],
             "description": PROMPTS("tutor.tools.lesson"),
         },
         "instances": {
@@ -1657,7 +1862,7 @@ def _own_tool(
     if manifest.get("lesson", True) is not False:
         properties["lesson"] = {
             "type": "string",
-            "enum": [*lesson_ids, ""],
+            "enum": [*lesson_ids, "", "none"],
             "description": PROMPTS("tutor.tools.lesson"),
         }
     if not manifest.get("once") and not manifest.get("theory"):
@@ -1751,6 +1956,14 @@ def _offered(
     lessons = manifest.get("lesson", True) is not False
     options = manifest.get("options") or {}
     lesson = arguments.get("lesson") or "" if lessons else ""
+    # one made from its brief alone practises no lesson, and reviews none
+    if lessons and lesson == "none" and not theory:
+        focus = arguments.get("focus")
+        if not isinstance(focus, str) or not focus.strip():
+            raise ToolError(
+                "an exercise of no lesson is made from its brief alone: give it one"
+            )
+        lessons, lesson = False, ""
     if lessons and (
         not isinstance(lesson, str)
         or lesson not in lesson_ids
@@ -1906,6 +2119,13 @@ def _option_value(name: str, option: dict[str, Any], value: object) -> Any:
     if value is None:
         return option["default"]
     return _whole(value, name, option["min"], option["max"])
+
+
+def _lesson_of(session: dict[str, Any]) -> str:
+    """What a session practised, as the tutor is told it: its lesson, a
+    review of the lessons practised last, or none, for one whose exercises
+    were made from their brief alone."""
+    return session["lesson"] or ("review" if session.get("lessons") else "none")
 
 
 def _whole(value: object, name: str, least: int, most: int) -> int:

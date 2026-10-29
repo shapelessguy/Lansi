@@ -366,6 +366,8 @@ export function startSession(
     options: Record<string, Record<string, OptionValue>> = {},
     minutes: Record<string, number> = {},
     guidance: Record<string, string> = {},
+    /** The lessons a session without a lesson reviews: those practised last if left out, none if empty. */
+    reviewing?: string[],
 ): Promise<PracticeSession & { usage: ProfileUsage[] }> {
     const chosenOptions = Object.fromEntries(Object.entries(options).filter(([id]) => id in exercises));
     const chosenMinutes = Object.fromEntries(Object.entries(minutes).filter(([id]) => id in exercises));
@@ -378,6 +380,7 @@ export function startSession(
         minutes: chosenMinutes,
         // what each exercise is to aim at, as the tutor steers it
         guidance,
+        ...(reviewing ? { reviewing } : {}),
         ...choosing,
     });
     return call("/sessions", { ...init, headers: apiKey ? { "X-OpenRouter-Key": apiKey } : {} });
@@ -588,24 +591,75 @@ export interface Favourite {
     exercise: string;
     /** When it was added, in seconds since the epoch. */
     added_at: number;
+    /** The folder it is kept in; null, or missing from a server before folders, at the top. */
+    folder?: number | null;
 }
 
-/** The favourite exercises, the latest added first. */
-export async function fetchFavourites(): Promise<Favourite[]> {
-    const { favourites } = await call<{ favourites: Favourite[] }>("/favourites");
-    return favourites;
+/** A folder the learner keeps favourites in, in the folder `parent`, null at the top. */
+export interface FavouriteFolder {
+    id: number;
+    name: string;
+    parent: number | null;
+}
+
+/** The favourite exercises, the latest added first, and the folders they are kept in. */
+export interface Favourites {
+    favourites: Favourite[];
+    folders: FavouriteFolder[];
+}
+
+function favouritesOf(reply: Partial<Favourites>): Favourites {
+    return { favourites: reply.favourites ?? [], folders: reply.folders ?? [] };
+}
+
+/** The favourite exercises and their folders. */
+export async function fetchFavourites(): Promise<Favourites> {
+    return favouritesOf(await call<Partial<Favourites>>("/favourites"));
 }
 
 /**
  * Keeps an exercise of a session among the favourites, or, if not `kept`,
  * takes it out of them, and resolves with the favourites as they are then.
  */
-export async function setFavourite(sessionId: string, exercise: string, kept: boolean): Promise<Favourite[]> {
-    const { favourites } = await call<{ favourites: Favourite[] }>(
-        `/favourites/${encodeURIComponent(sessionId)}/${encodeURIComponent(exercise)}`,
-        { method: kept ? "PUT" : "DELETE" },
+export async function setFavourite(sessionId: string, exercise: string, kept: boolean): Promise<Favourites> {
+    return favouritesOf(
+        await call<Partial<Favourites>>(
+            `/favourites/${encodeURIComponent(sessionId)}/${encodeURIComponent(exercise)}`,
+            { method: kept ? "PUT" : "DELETE" },
+        ),
     );
-    return favourites;
+}
+
+function putting(body: object): RequestInit {
+    return { method: "PUT", body: JSON.stringify(body) };
+}
+
+/** Puts a favourite in `folder`, or at the top with null. */
+export async function fileFavourite(sessionId: string, exercise: string, folder: number | null): Promise<Favourites> {
+    return favouritesOf(
+        await call<Partial<Favourites>>(
+            `/favourites/${encodeURIComponent(sessionId)}/${encodeURIComponent(exercise)}/folder`,
+            putting({ folder }),
+        ),
+    );
+}
+
+/** Makes a folder of the favourites called `name` in `parent`, or at the top with null. */
+export async function addFavouriteFolder(name: string, parent: number | null): Promise<Favourites> {
+    return favouritesOf(await call<Partial<Favourites>>("/favourite-folders", posting({ name, parent })));
+}
+
+/** Renames a folder of the favourites, or moves it into `parent`, null for the top. */
+export async function changeFavouriteFolder(
+    id: number,
+    change: { name?: string; parent?: number | null },
+): Promise<Favourites> {
+    return favouritesOf(await call<Partial<Favourites>>(`/favourite-folders/${id}`, putting(change)));
+}
+
+/** Deletes a folder of the favourites with the folders in it, taking what is in them out of the favourites. */
+export async function deleteFavouriteFolder(id: number): Promise<Favourites> {
+    return favouritesOf(await call<Partial<Favourites>>(`/favourite-folders/${id}`, { method: "DELETE" }));
 }
 
 /** What a request of an exercise used, as the usage is counted. */

@@ -284,6 +284,8 @@ class Asked:
     reverse: bool = False
     # as many as this at most; 0 for all
     limit: int = 0
+    # leaving out as many as this first, to page through them
+    offset: int = 0
 
     def __post_init__(self) -> None:
         unknown = sorted(self.categories - set(CATEGORIES))
@@ -293,6 +295,8 @@ class Asked:
             raise ValueError(f"sorted_by must be one of {', '.join(ORDERS)}")
         if self.limit < 0:
             raise ValueError("limit must be a whole number")
+        if self.offset < 0:
+            raise ValueError("offset must be a whole number")
 
 
 def known_words(
@@ -300,8 +304,8 @@ def known_words(
     asked: Asked,
     anki_words: Callable[[], list[str]] | None = None,
 ) -> tuple[list[Known], int]:
-    """The words of `vocabulary` that are `asked` for, with how many there
-    were before they were cut down to the limit. `anki_words` gives the
+    """The words of `vocabulary` that are `asked` for, from its offset, with
+    how many there were before they were cut down to the limit. `anki_words` gives the
     words of the notes with a card in review, in the language of the
     vocabulary, and is None where there is no Anki. Raises LookupError for
     a set there is not, or for the Anki words where there is no Anki; and
@@ -337,4 +341,5 @@ def known_words(
         asked.order,
         asked.reverse,
     )
-    return (picked[: asked.limit] if asked.limit else picked), len(picked)
+    end = asked.offset + asked.limit if asked.limit else None
+    return picked[asked.offset : end], len(picked)

@@ -31,7 +31,7 @@ from typing import Any
 from books import PICTURE_ID
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 33
+SCHEMA_VERSION = 34
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -557,14 +557,32 @@ CREATE TABLE favourites (
     PRIMARY KEY (session_id, exercise)
 );
 """
+
+# What came with version 34: the folders the learner keeps their favourites
+# in, one in another as they like. A folder that is deleted takes what is in
+# it out of the favourites, and the folders in it with it.
+_FAVOURITE_FOLDERS = """
+CREATE TABLE favourite_folders (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    -- the folder it is in; NULL for one at the top
+    parent_id INTEGER REFERENCES favourite_folders (id) ON DELETE CASCADE
+);
+ALTER TABLE favourites ADD COLUMN folder_id INTEGER
+    REFERENCES favourite_folders (id) ON DELETE CASCADE;
+"""
+# the longest the name of a folder of the favourites may be, in characters
+MAX_FOLDER_NAME = 100
 # how far an exercise the tutor offered got
 OFFER_STATUSES = ("running", "done", "abandoned")
 
 # The kinds of memories: a "fact" of the learner that lasts, a "strategy",
 # a way of holding the lessons the tutor and the learner agreed on, an
 # entry of the "calendar", something they planned to do on a day, or the
-# "recap" of a chat. Each line of a recap is kept, as there are a few.
-MEMORY_KINDS = ("fact", "strategy", "calendar", "recap")
+# "recap" of a chat, or a "note" the tutor wrote for itself, such as a
+# list of words, to read again rather than make again. Each line of a
+# recap is kept, as there are a few, and a note as it was written.
+MEMORY_KINDS = ("fact", "strategy", "calendar", "recap", "note")
 
 # the longest a text and its title may be, in characters
 MAX_TEXT = 200_000
@@ -692,6 +710,19 @@ class Unprocessed:
     changed_at: float
 
 
+def _folder_name(name: str) -> str:
+    """The name of a folder of the favourites, its spaces evened out. Raises
+    ValueError for one that is empty or too long."""
+    name = " ".join(name.split())
+    if not name:
+        raise ValueError("a folder has a name")
+    if len(name) > MAX_FOLDER_NAME:
+        raise ValueError(
+            f"the name of a folder is at most {MAX_FOLDER_NAME} characters"
+        )
+    return name
+
+
 def is_id(value: object) -> bool:
     return isinstance(value, str) and bool(_ID.fullmatch(value))
 
@@ -806,6 +837,8 @@ class UserStore:
         self._drafts = self._directory / "drafts"
         self._icons = self._directory / "topics"
         self._instances = self._directory / "exercises"
+        # the database of each note of the tutor, by its id
+        self._notes = self._directory / "notes"
         # the last request the tutor made to its model, for the inspector
         self._last_request = self._directory / "tutor-request.json"
         self._now = now
@@ -882,6 +915,8 @@ class UserStore:
                 self._db.executescript(_BRIEFS)
             if version < 33:
                 self._db.executescript(_FAVOURITES)
+            if version < 34:
+                self._db.executescript(_FAVOURITE_FOLDERS)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -1179,10 +1214,14 @@ class UserStore:
             day = read_day(day)
         else:
             day = None
-        lines = [" ".join(line.split()) for line in content.splitlines()]
-        content = "\n".join(line for line in lines if line)
-        if kind != "recap":
-            content = " ".join(content.split())
+        if kind == "note":
+            # a note is laid out as the tutor wrote it, such as a list
+            content = "\n".join(line.rstrip() for line in content.strip().splitlines())
+        else:
+            lines = [" ".join(line.split()) for line in content.splitlines()]
+            content = "\n".join(line for line in lines if line)
+            if kind != "recap":
+                content = " ".join(content.split())
         if not content:
             raise ValueError("a memory says something")
         with self._lock, self._db:
@@ -1193,6 +1232,12 @@ class UserStore:
             )
         assert cursor.lastrowid is not None
         return cursor.lastrowid
+
+    def note_base(self, note_id: int) -> Path:
+        """Where the database of the note `note_id` of the tutor is, which
+        is made once the tutor first writes in it."""
+        self._notes.mkdir(exist_ok=True)
+        return self._notes / f"{int(note_id)}.db"
 
     def remove_memory(self, memory_id: int, why: str, by: str) -> bool:
         """Remove a memory the tutor has, `by` the tutor or the learner, and
@@ -2417,16 +2462,115 @@ class UserStore:
     def favourites(self) -> list[dict[str, Any]]:
         """The exercises of sessions kept among the favourites, the latest
         added first, each as `{"session_id": ..., "exercise": ...,
-        "added_at": ...}`."""
+        "added_at": ..., "folder": ...}`, the folder it is in None at the
+        top."""
         with self._lock:
             rows = self._db.execute(
-                "SELECT session_id, exercise, added_at FROM favourites"
+                "SELECT session_id, exercise, added_at, folder_id FROM favourites"
                 " ORDER BY added_at DESC"
             ).fetchall()
         return [
-            {"session_id": session_id, "exercise": exercise, "added_at": added_at}
-            for session_id, exercise, added_at in rows
+            {
+                "session_id": session_id,
+                "exercise": exercise,
+                "added_at": added_at,
+                "folder": folder,
+            }
+            for session_id, exercise, added_at, folder in rows
         ]
+
+    def favourite_folders(self) -> list[dict[str, Any]]:
+        """The folders of the favourites, by their names, each as `{"id":
+        ..., "name": ..., "parent": ...}`, the parent None for one at the
+        top."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT id, name, parent_id FROM favourite_folders"
+                " ORDER BY name COLLATE NOCASE, id"
+            ).fetchall()
+        return [
+            {"id": folder_id, "name": name, "parent": parent}
+            for folder_id, name, parent in rows
+        ]
+
+    def add_favourite_folder(self, name: str, parent: int | None = None) -> int:
+        """Make a folder of the favourites in `parent`, or at the top, and
+        return its id. Raises ValueError for a name that is empty or too
+        long, or a parent there is not."""
+        name = _folder_name(name)
+        with self._lock, self._db:
+            self._held_folder(parent)
+            cursor = self._db.execute(
+                "INSERT INTO favourite_folders (name, parent_id) VALUES (?, ?)",
+                (name, parent),
+            )
+        assert cursor.lastrowid is not None
+        return cursor.lastrowid
+
+    def rename_favourite_folder(self, folder: int, name: str) -> None:
+        """Rename a folder of the favourites. Raises ValueError for a name
+        that is empty or too long, or a folder there is not."""
+        name = _folder_name(name)
+        with self._lock, self._db:
+            self._held_folder(folder, required=True)
+            self._db.execute(
+                "UPDATE favourite_folders SET name = ? WHERE id = ?", (name, folder)
+            )
+
+    def move_favourite_folder(self, folder: int, parent: int | None) -> None:
+        """Put a folder of the favourites in `parent`, or at the top. Raises
+        ValueError for a folder or a parent there is not, or a parent that
+        is the folder or is in it."""
+        with self._lock, self._db:
+            self._held_folder(folder, required=True)
+            self._held_folder(parent)
+            above = parent
+            while above is not None:
+                if above == folder:
+                    raise ValueError("a folder cannot go into itself")
+                (above,) = self._db.execute(
+                    "SELECT parent_id FROM favourite_folders WHERE id = ?", (above,)
+                ).fetchone()
+            self._db.execute(
+                "UPDATE favourite_folders SET parent_id = ? WHERE id = ?",
+                (parent, folder),
+            )
+
+    def remove_favourite_folder(self, folder: int) -> None:
+        """Delete a folder of the favourites, with the folders in it, taking
+        the exercises in them out of the favourites."""
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM favourite_folders WHERE id = ?", (folder,))
+
+    def move_favourite(
+        self, session_id: str, exercise: str, folder: int | None
+    ) -> None:
+        """Put a favourite in `folder`, or at the top. Raises ValueError for
+        a favourite or a folder there is not."""
+        with self._lock, self._db:
+            self._held_folder(folder)
+            moved = self._db.execute(
+                "UPDATE favourites SET folder_id = ?"
+                " WHERE session_id = ? AND exercise = ?",
+                (folder, session_id, exercise),
+            )
+            if moved.rowcount == 0:
+                raise ValueError("there is no such favourite")
+
+    def _held_folder(self, folder: int | None, required: bool = False) -> None:
+        """Raise ValueError unless `folder` is a folder of the favourites,
+        or None where that is not `required`. Called holding the lock."""
+        if folder is None:
+            if required:
+                raise ValueError("a folder is named by its id")
+            return
+        if (
+            self._db.execute(
+                "SELECT 1 FROM favourite_folders WHERE id = ?", (folder,)
+            ).fetchone()
+            is None
+        ):
+            raise ValueError(f"there is no folder {folder}")
 
     def add_favourite(self, session_id: str, exercise: str) -> None:
         """Keep an exercise of a session among the favourites. Raises

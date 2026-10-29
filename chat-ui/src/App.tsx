@@ -730,6 +730,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 { [offer.exercise]: offer.options },
                 { [offer.exercise]: 0 },
                 offer.focus ? { [offer.exercise]: offer.focus } : {},
+                // one made from the tutor's brief alone reviews no lessons
+                offer.practises_lesson === false ? [] : undefined,
             );
         },
         [settings, wordsOfSet, learner],

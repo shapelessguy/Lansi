@@ -1,6 +1,6 @@
 # The tutor's tools
 
-What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `remember` writes down a fact about the learner, called with `remember_what`, `agree_strategy` a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse` and `count`; `favourites` lists the exercises the learner keeps among their favourites and `exercise_done` gives all of one they did, called with `session_id` and `exercise_of_session`; `exercise` offers the learner an exercise of practice, and `exercise_again` one they did, done again, called with those and `fresh`, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, and in the schema of `options` as `option_is_number` or `option_is_choice` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `size` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
+What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `remember` writes down a fact about the learner, called with `remember_what`, `agree_strategy` a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `write_note` writes a note the tutor keeps for itself, called with `note_title`, `note_content` and `note_replaces`, `read_note` reads one again, called with `note_id`, and `sql` runs a statement on the database of one, called with `note_id`, `sql_query` and `sql_offset`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse`, `count` and `words_offset`; `favourites` lists the exercises the learner keeps among their favourites and `exercise_done` gives all of one they did, called with `session_id` and `exercise_of_session`; `exercise` offers the learner an exercise of practice, and `exercise_again` one they did, done again, called with those and `fresh`, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, and in the schema of `options` as `option_is_number` or `option_is_choice` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `size` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
 
 Variables:
 - `$exercises`: the exercises there are, one to a line as "- id: title. what it is", with what `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say of it after
@@ -14,6 +14,7 @@ Variables:
 - `$offered`: the exercise or the mock exam offered, with what it was called with, as JSON
 - `$levels`: the levels there are mock exams of, joined by commas
 - `$sizes`: how long the mock exam of each level takes at each size, from the first, as "A1: 43 min, 50 min, …", the levels joined by semicolons
+- `$page`: how many rows of what a query gives sql gives at once
 - `$usual`: how many words, or recaps, the tool gives when it is not told how many
 - `$practised`: the categories whose words practice is best built on, joined by commas, as the categories of the language say
 
@@ -27,7 +28,7 @@ The learner's latest sessions of practice, the latest first: each with its id, w
 
 ## Prompt: favourites
 
-The exercises the learner keeps among their favourites, the latest added first: each with the id of its session and its own, when it was added and done, its lesson, how many answers were right, partial and wrong, and the scores it came to. They are the ones the learner liked, to do again.
+The exercises the learner keeps among their favourites, the latest added first: each with the id of its session and its own, the folder the learner keeps it in, as a path such as "Anki / B1 sets", empty at the top, when it was added and done, its lesson, how many answers were right, partial and wrong, and the scores it came to. They are the ones the learner liked, to do again.
 
 ## Prompt: exercise_done
 
@@ -60,6 +61,10 @@ The mock exams there are, by level, each with its modules and how long it takes 
 ## Prompt: words_known
 
 The words the learner knows, as their vocabulary has them: every word they met in the chats, the exercises and what they read, and those of their Anki cards. With each, its categories, as a word spelt alike in several categories is one word, how often the learner used it in what they wrote ("used") and how often it came up in what a model wrote to them ("seen"), and the day each last did; and how many words there are in all of those asked for. Use it to pick the words an exercise is to build on: those they have not used for long, those they see but never write, or those of a set or of Anki. Build on words of these categories, asking for them by name: $practised. The words of the others are few and come up in every sentence anyway. Ask for $usual words, which is what you are given if you do not say, unless what you and your student agreed on needs more or fewer.
+
+## Prompt: words_offset
+
+How many of the words in this order to skip, to page through all of them: next_offset gives where the next ones start whenever there are more. Ask as many pages as you need, in the same order and with the same choice. With sorted_by random every call is a new draw, so page in another order.
 
 ## Prompt: categories
 
@@ -168,7 +173,7 @@ The options of the exercise, as its line in the list of exercises gives them, su
 
 ## Prompt: lesson
 
-The lesson to practise or to read, by its id as the lessons tool gives it; empty to review the lessons practised last, except for one that teaches a lesson.
+The lesson to practise or to read, by its id as the lessons tool gives it; empty to review the lessons practised last, except for one that teaches a lesson; "none" for an exercise made from its brief alone, that practises no grammar lesson, such as sentences built on a list of words.
 
 ## Prompt: instances
 
@@ -204,7 +209,7 @@ The last day to give the entries of, as YYYY-MM-DD; leave it out for every day a
 
 ## Prompt: agree_strategy
 
-Write down a strategy, as soon as you and the learner agree on it: how the lessons are to be held from now on, such as what a lesson is made of and in what order. Call it only once they plainly agreed, never for a way you merely suggested, and never for what you do in this lesson alone. A day set for something, such as a mock exam, goes on the calendar instead.
+Write down a strategy, as soon as you and the learner agree on it: how the lessons are to be held from now on, such as what a lesson is made of and in what order. Call it only once they plainly agreed, never for a way you merely suggested, and never for what you do in this lesson alone. A day set for something, such as a mock exam, goes on the calendar instead. How a single piece of work is done, such as the rules for keeping a note, is not a strategy. A strategy that replaces others replaces them whole, so keep in it everything of them that still holds.
 
 ## Prompt: strategy_what
 
@@ -233,6 +238,42 @@ The day, as YYYY-MM-DD, worked out from what the learner said, such as "next Fri
 ## Prompt: plan_what
 
 What is to be done on the day, in a sentence of English, such as "A mock exam of A2, in full."
+
+## Prompt: write_note
+
+Write a note for yourself, kept for every lesson to come, of something that took work to make and that you will need again, such as the words your exercises used, or the plan of a series of exercises: read it later with read_note, by the id this gives, rather than make it again. Each note has a SQLite database of its own, which you work in with sql: keep what is a list or a table there, such as words with how often they were used, and in what the note says only what it is for and how its tables are kept. Its title, with its id, is in what you are told before every lesson; what it says is not. To change what a note says, write it anew with replaces: the new note goes on with its tables. The rules of the work a note is for, such as how its table is kept and used, go in the note itself, not in a strategy. Facts about the learner go to remember, not here.
+
+## Prompt: note_title
+
+What the note is, in a few words, such as "Food words for the B1 exam".
+
+## Prompt: note_content
+
+What the note says, laid out as it is easiest for you to read again: what it is for, and what each of its tables holds and how it is kept up.
+
+## Prompt: note_replaces
+
+The id of the note this one replaces, which is then crossed out; leave it out for a new note.
+
+## Prompt: read_note
+
+Read a note you wrote, by its id: its title, the day it was written, what it says, and the tables of its database, each with its columns and how many rows it has, but not the rows, which sql gives. When what it was made of may have changed since, such as the words the learner knows, think whether it still holds before you use it.
+
+## Prompt: note_id
+
+The id of the note, as the list of your notes or a recap gives it.
+
+## Prompt: sql
+
+Run one SQLite statement on the database of a note: CREATE TABLE to set up a table, INSERT, UPDATE or DELETE to change rows, SELECT to find them. Each statement is kept as soon as it runs. Ask for what you need rather than for everything, such as the words with the fewest uses, with WHERE, ORDER BY and LIMIT, and change many rows in one statement, such as `UPDATE usage SET used = used + 1 WHERE word IN (...)`. A query gives its rows $page at a time, with how many there are in all; the next ones come with offset. It reaches the note's own database alone: no ATTACH or PRAGMA.
+
+## Prompt: sql_query
+
+The SQLite statement, one alone.
+
+## Prompt: sql_offset
+
+The row to start from, as next_offset gives it when a query has more rows than it gave; leave it out for the first ones.
 
 ## Prompt: cross_out
 

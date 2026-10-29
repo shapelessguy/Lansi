@@ -900,7 +900,9 @@ class Practice:
         about `topics`, with the words `choosing` says. An exercise of
         theory comes first, with no instances and no time limit, as it is
         not answered. Without a lesson, the session reviews the lessons
-        practised last, or those `reviewing` names, and has no theory.
+        practised last, or those `reviewing` names, and has no theory; with
+        `reviewing` empty, it reviews none, which only exercises that each
+        have a brief in `steering` can, as they are made from it alone.
         What `steering` says of an exercise is the brief the tutor gave it,
         what it is to make, which it follows before its lesson, topics and
         words.
@@ -924,7 +926,12 @@ class Practice:
             if any(exercise in known and known[exercise].theory for exercise in chosen):
                 raise ValueError("theory is that of a lesson: choose one")
             reviewed = self.practised(language) if reviewing is None else reviewing
-            if not reviewed and not exam:
+            briefed = all(_steering_of(steering, exercise) for exercise in chosen)
+            if reviewing == [] and not briefed and not exam:
+                raise ValueError(
+                    "an exercise of no lesson is made from its brief alone"
+                )
+            if not reviewed and not exam and reviewing != []:
                 raise ValueError(
                     "a review goes over the lessons practised last: practise one first"
                 )

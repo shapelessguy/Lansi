@@ -23,6 +23,7 @@ from exercising import Practice, Runner
 from intake import Intake
 from live import LiveChecker
 from models import Model
+from notes import run as run_note
 from profiling import Answer, Profile, Profiler, Questions, WordRating
 from sentences import Sentence
 from server import Account, Accounts, describe, in_background, make_server
@@ -985,7 +986,7 @@ def test_an_exercise_done_is_kept_as_a_favourite_until_it_is_taken_out(
 
     assert (added, refused, removed) == (200, 400, 200)
     assert [each["exercise"] for each in json.loads(kept)["favourites"]] == ["cloze"]
-    assert json.loads(left) == {"favourites": []}
+    assert json.loads(left) == {"favourites": [], "folders": []}
 
 
 def test_a_chat_that_is_kept_is_there_for_its_user_only(with_users: str) -> None:
@@ -2691,3 +2692,76 @@ def test_a_transformed_version_is_made_in_the_background_as_its_book_was_written
         ("Ende", "done"),
     ]
     assert (refused, json.loads(reason)) == (400, {"error": "no block is in two parts"})
+
+
+def test_the_tables_of_a_note_of_the_tutor_and_their_rows_are_read_a_page_at_a_time(
+    with_users: str, tmp_path: Path
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    store = UserStore(user_directory(tmp_path, "ada"))
+    note = store.add_memory("Words\nUsage of words.", kind="note")
+    run_note(store.note_base(note), "CREATE TABLE usage (word TEXT, used INTEGER)")
+    run_note(store.note_base(note), "INSERT INTO usage VALUES ('Brot', 1)")
+    fact = store.add_memory("Likes football.")
+
+    _, listed, _ = send(f"{with_users}/tutor/memories/{note}/tables", "GET", ada)
+    _, rows, _ = send(
+        f"{with_users}/tutor/memories/{note}/tables?table=usage&offset=0", "GET", ada
+    )
+    missing, _, _ = send(
+        f"{with_users}/tutor/memories/{note}/tables?table=nothing", "GET", ada
+    )
+    not_a_note, _, _ = send(f"{with_users}/tutor/memories/{fact}/tables", "GET", ada)
+
+    assert [table["name"] for table in json.loads(listed)["tables"]] == ["usage"]
+    assert json.loads(rows) == {
+        "columns": ["word", "used"],
+        "rows": [["Brot", 1]],
+        "total": 1,
+    }
+    assert (missing, not_a_note) == (404, 404)
+
+
+def test_the_favourites_are_put_in_folders_that_are_made_renamed_moved_and_deleted(
+    with_users: str, tmp_path: Path
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    UserStore(user_directory(tmp_path, "ada")).start_session(
+        "s1", "German", "l", [], {"cloze": 1}
+    )
+    send(f"{with_users}/favourites/s1/cloze", "PUT", ada)
+
+    def asked(path: str, method: str, body: object | None = None) -> Any:
+        status, reply, _ = send(
+            f"{with_users}{path}",
+            method,
+            ada,
+            None if body is None else json.dumps(body).encode(),
+        )
+        assert status == 200, reply
+        return json.loads(reply)
+
+    [anki] = asked("/favourite-folders", "POST", {"name": "Anki"})["folders"]
+    made = asked("/favourite-folders", "POST", {"name": "Sets", "parent": anki["id"]})
+    [inner] = [each for each in made["folders"] if each["name"] == "Sets"]
+    filed = asked("/favourites/s1/cloze/folder", "PUT", {"folder": inner["id"]})
+    asked(f"/favourite-folders/{inner['id']}", "PUT", {"name": "B1", "parent": None})
+    into_itself, _, _ = send(
+        f"{with_users}/favourite-folders/{anki['id']}",
+        "PUT",
+        ada,
+        json.dumps({"parent": anki["id"]}).encode(),
+    )
+    after = asked("/favourites", "GET")
+    deleted = asked(f"/favourite-folders/{inner['id']}", "DELETE")
+
+    assert filed["favourites"][0]["folder"] == inner["id"]
+    assert into_itself == 400
+    assert {(each["name"], each["parent"]) for each in after["folders"]} == {
+        ("Anki", None),
+        ("B1", None),
+    }
+    assert deleted == {
+        "favourites": [],
+        "folders": [{"id": anki["id"], "name": "Anki", "parent": None}],
+    }

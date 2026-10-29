@@ -1488,3 +1488,15 @@ def test_a_backend_cannot_ask_of_anki_without_a_collection(directory: Path) -> N
 
     with pytest.raises(ExerciseError, match="no Anki collection"):
         Runner(directory).run("anki_review", request, answering())
+
+
+def test_a_session_reviewing_no_lessons_is_made_from_its_briefs_alone(
+    practice: Practice,
+) -> None:
+    session, _ = practice.start_session(
+        "German", "", [], {"echo": 1}, reviewing=[], steering={"echo": "Use: Brot."}
+    )
+
+    assert session["lessons"] == []
+    with pytest.raises(ValueError, match="brief alone"):
+        practice.start_session("German", "", [], {"echo": 1}, reviewing=[])

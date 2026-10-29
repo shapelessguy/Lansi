@@ -28,7 +28,7 @@ export interface Offer {
     title: string;
     /** Whether it teaches the lesson rather than asks. */
     theory: boolean;
-    /** Whether it practises a lesson, as one that corrects a text does not. */
+    /** Whether it practises a lesson, as one that corrects a text, or one the tutor made from its brief alone, does not. */
     practises_lesson?: boolean;
     /** The lesson by its id, empty to review the lessons practised last. */
     lesson: string;
@@ -437,9 +437,10 @@ export interface Memory {
     /**
      * Something of the learner that lasts, a way of holding the lessons the
      * tutor and the learner agreed on, something they planned to do on a day,
-     * or the recap of a chat, a few lines long.
+     * the recap of a chat, a few lines long, or a note the tutor wrote for
+     * itself, its title on the first line.
      */
-    kind: "fact" | "strategy" | "calendar" | "recap";
+    kind: "fact" | "strategy" | "calendar" | "recap" | "note";
     /** The day an entry of the calendar is for, as YYYY-MM-DD; null, or missing from a server before it, for the others. */
     day?: string | null;
 }
@@ -449,6 +450,40 @@ export async function fetchMemories(): Promise<{ memories: Memory[]; removed: Me
     const response = await checkerFetch("/tutor/memories");
     if (!response.ok) {
         throw new Error(t("The memories of the tutor could not be listed."));
+    }
+    return response.json();
+}
+
+/** A table of the database of a note of the tutor, with its columns and how many rows it has. */
+export interface NoteTable {
+    name: string;
+    columns: { name: string; type: string }[];
+    rows: number;
+}
+
+/** Rows of a table of a note, from where they were asked, with how many there are in all and where the next start, if there are more. */
+export interface NoteRows {
+    columns: string[];
+    rows: unknown[][];
+    total: number;
+    next_offset?: number;
+}
+
+/** The tables of the database of the note `id` of the tutor. */
+export async function fetchNoteTables(id: number): Promise<NoteTable[]> {
+    const response = await checkerFetch(`/tutor/memories/${id}/tables`);
+    if (!response.ok) {
+        throw new Error(t("The tables of the note could not be read."));
+    }
+    return (await response.json()).tables;
+}
+
+/** The rows of the table `table` of the note `id`, a page from `offset`. */
+export async function fetchNoteRows(id: number, table: string, offset = 0): Promise<NoteRows> {
+    const query = new URLSearchParams({ table, offset: String(offset) });
+    const response = await checkerFetch(`/tutor/memories/${id}/tables?${query}`);
+    if (!response.ok) {
+        throw new Error(t("The tables of the note could not be read."));
     }
     return response.json();
 }

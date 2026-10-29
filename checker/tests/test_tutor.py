@@ -40,6 +40,7 @@ from tutor import (
     read_messages,
     recap,
     wait_for,
+    with_notes,
     words_tool,
 )
 from vocabulary import Vocabulary
@@ -282,7 +283,7 @@ def test_the_exercises_are_one_tool_that_lists_each_with_its_options() -> None:
     ]
     properties = tool.parameters["properties"]
     assert properties["exercise"]["enum"] == ["cloze", "stories", "theory"]
-    assert properties["lesson"]["enum"] == ["dative", "perfect", ""]
+    assert properties["lesson"]["enum"] == ["dative", "perfect", "", "none"]
     assert properties["topics"]["items"]["enum"] == ["At the doctor's"]
     assert (
         "- cloze: Fill the gaps. Fill in the gaps of sentences. Options: sentences"
@@ -1320,6 +1321,21 @@ def test_the_words_tool_gives_the_words_known_as_they_are_asked_for() -> None:
     assert [word["word"] for word in verbs["words"]] == ["gehen"]
 
 
+def test_the_words_tool_pages_through_all_the_words_by_their_offset() -> None:
+    words = words_tool(
+        partial(known_words, known_vocabulary()), [], anki=False, practised=PRACTISED
+    )
+
+    first = json.loads(words.run({"count": 2}).content)
+    rest = json.loads(words.run({"count": 2, "offset": first["next_offset"]}).content)
+
+    assert [word["word"] for word in first["words"]] == ["Katze", "Hund"]
+    assert ([word["word"] for word in rest["words"]], rest["total"]) == (["gehen"], 3)
+    assert "next_offset" not in rest
+    with pytest.raises(ToolError):
+        words.run({"offset": -1})
+
+
 def test_the_words_tool_offers_the_sets_and_anki_only_where_there_are_any() -> None:
     bare = words_tool(partial(known_words, None), [], anki=False, practised=PRACTISED)
     full = words_tool(
@@ -1393,3 +1409,185 @@ def test_the_tutor_does_not_see_a_session_left_before_anything_was_done_in_it(
 
     assert sessions == []
     assert not any(lesson["practised"] for lesson in lessons)
+
+
+def test_a_note_is_written_laid_out_as_it_is_and_read_again_by_its_id(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    tools = {tool.name: tool for tool in memory_tools(store, "chat-1")}
+
+    written = json.loads(
+        tools["write_note"]
+        .run({"title": " Food  words ", "content": "\ndas Brot\n  die Milch\n"})
+        .content
+    )
+    read = json.loads(tools["read_note"].run({"id": written["id"]}).content)
+
+    assert read == {
+        "id": written["id"],
+        "written": ANY,
+        "title": "Food words",
+        "content": "das Brot\n  die Milch",
+        "tables": [],
+    }
+    assert store.memories(kind="note")[0]["chat"] == "chat-1"
+
+
+def test_a_note_written_anew_crosses_out_the_one_it_replaces(tmp_path: Path) -> None:
+    store = UserStore(tmp_path)
+    tools = {tool.name: tool for tool in memory_tools(store)}
+    first = json.loads(
+        tools["write_note"].run({"title": "Words", "content": "das Brot"}).content
+    )
+
+    second = json.loads(
+        tools["write_note"]
+        .run(
+            {
+                "title": "Words",
+                "content": "das Brot\ndie Milch",
+                "replaces": first["id"],
+            }
+        )
+        .content
+    )
+
+    assert [note["id"] for note in store.memories(kind="note")] == [second["id"]]
+    with pytest.raises(ToolError):
+        tools["read_note"].run({"id": first["id"]})
+
+
+def test_a_note_without_a_title_or_with_a_long_one_or_replacing_a_fact_is_refused(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    fact = store.add_memory("Likes football.")
+    tools = {tool.name: tool for tool in memory_tools(store)}
+
+    for arguments in (
+        {"title": " ", "content": "das Brot"},
+        {"title": "Words", "content": ""},
+        {"title": "x" * 121, "content": "das Brot"},
+        {"title": "Words", "content": "das Brot", "replaces": fact},
+    ):
+        with pytest.raises(ToolError):
+            tools["write_note"].run(arguments)
+    assert store.memories(kind="note") == []
+
+
+def test_the_tutor_is_told_the_titles_of_its_notes_but_not_what_they_say() -> None:
+    notes = [
+        {
+            "id": 7,
+            "kind": "note",
+            "content": "Food words\ndas Brot",
+            "createdAt": MADE_AT,
+        }
+    ]
+
+    told = instructions("German", "B1", MEMORIES + notes)
+
+    assert "- #7 [1971-01-01] Food words" in told
+    assert "das Brot" not in told
+    assert "You have no notes yet." in instructions("German", "B1", MEMORIES)
+
+
+def test_a_recap_lists_the_notes_written_in_its_chat_by_their_ids() -> None:
+    notes = [
+        {"id": 7, "content": "Food words\ndas Brot", "chat": "chat-1"},
+        {"id": 8, "content": "Old words\ndie Milch", "chat": "chat-0"},
+        {"id": 9, "content": "Verbs\ngehen", "chat": "chat-1"},
+    ]
+
+    assert with_notes("Talked about food.", notes, "chat-1") == (
+        "Talked about food.\nNotes written: #7 Food words; #9 Verbs"
+    )
+    assert with_notes("Talked about food.", notes, "chat-2") == "Talked about food."
+
+
+def test_a_recap_lists_the_notes_read_or_worked_in_apart_from_those_written() -> None:
+    notes = [
+        {"id": 7, "content": "Food words\ndas Brot", "chat": "chat-0"},
+        {"id": 8, "content": "Verbs\ngehen", "chat": "chat-1"},
+        {"id": 9, "content": "Untouched\n", "chat": "chat-0"},
+    ]
+    calls = [
+        {
+            "function": {
+                "name": "sql",
+                "arguments": '{"note": "7", "query": "SELECT 1"}',
+            }
+        },
+        {"function": {"name": "read_note", "arguments": '{"id": 8}'}},
+    ]
+    chat = [{"role": "assistant", "turn": {"messages": [{"tool_calls": calls}]}}]
+
+    assert with_notes("Set 1 done.", notes, "chat-1", chat) == (
+        "Set 1 done.\nNotes written: #8 Verbs\nNotes read or worked in: #7 Food words"
+    )
+
+
+def test_the_tutor_works_in_the_tables_of_a_note_which_one_replacing_it_keeps(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    tools = {tool.name: tool for tool in memory_tools(store)}
+    first = json.loads(
+        tools["write_note"]
+        .run({"title": "Words", "content": "Usage of words."})
+        .content
+    )["id"]
+    tools["sql"].run({"note": first, "query": "CREATE TABLE usage (word TEXT)"})
+    tools["sql"].run({"note": first, "query": "INSERT INTO usage VALUES ('Brot')"})
+
+    second = json.loads(
+        tools["write_note"]
+        .run({"title": "Words", "content": "Usage, by set.", "replaces": first})
+        .content
+    )["id"]
+    read = json.loads(tools["read_note"].run({"id": second}).content)
+    found = json.loads(
+        tools["sql"].run({"note": second, "query": "SELECT word FROM usage"}).content
+    )
+
+    assert read["tables"] == [
+        {"name": "usage", "columns": [{"name": "word", "type": "TEXT"}], "rows": 1}
+    ]
+    assert found["rows"] == [["Brot"]]
+    for arguments in (
+        {"note": first, "query": "SELECT 1"},
+        {"note": second, "query": "ATTACH DATABASE 'x.db' AS x"},
+        {"note": second, "query": "SELECT 1", "offset": -1},
+    ):
+        with pytest.raises(ToolError):
+            tools["sql"].run(arguments)
+
+
+def test_the_favourites_tool_says_the_folder_each_is_kept_in(tmp_path: Path) -> None:
+    store = UserStore(tmp_path)
+    liked = _did_a_translation(store, "s1")
+    store.add_favourite(liked, "translation")
+    anki = store.add_favourite_folder("Anki")
+    store.move_favourite(liked, "translation", store.add_favourite_folder("B1", anki))
+
+    [listed] = json.loads(_data(store)["favourites"].run({}).content)
+
+    assert listed["folder"] == "Anki / B1"
+
+
+def test_an_exercise_of_no_lesson_is_offered_practising_none_with_its_brief() -> None:
+    [tool] = exercise_tool([CLOZE, STORIES, THEORY], LESSONS, TOPICS)
+
+    offered = tool.run(
+        {"exercise": "cloze", "lesson": "none", "focus": "Use: Brot, Milch."}
+    ).shown
+
+    assert offered is not None
+    assert (offered["lesson"], offered["practises_lesson"]) == ("", False)
+    for arguments in (
+        {"exercise": "cloze", "lesson": "none", "focus": " "},
+        {"exercise": "theory", "lesson": "none", "focus": "Use: Brot."},
+    ):
+        with pytest.raises(ToolError):
+            tool.run(arguments)

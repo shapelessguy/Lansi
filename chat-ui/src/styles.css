@@ -3851,6 +3851,183 @@ div.book-cover {
     cursor: default;
 }
 
+/* the favourites in their folders: a tree of quiet rows, each folder
+   folded under a chevron, its actions shown as it is pointed at; what is
+   dragged is dropped on a folder, or on the top */
+.favourite-tree-bar {
+    display: flex;
+    margin-bottom: 8px;
+}
+
+.favourite-new {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    padding: 3px 10px;
+    border: 1px dashed var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.favourite-new:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.folder-glyph {
+    flex: none;
+    width: 15px;
+    height: 15px;
+}
+
+.favourite-tree ul,
+.favourite-tree li {
+    list-style: none;
+}
+
+.favourite-folder-items {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+}
+
+.favourite-folder > details > .favourite-folder-items {
+    margin: 6px 0 4px 7px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+}
+
+.favourite-folder > details > summary {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    min-height: 28px;
+    padding: 2px 6px 2px 2px;
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.9rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.favourite-folder > details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.favourite-folder > details > summary:hover {
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.favourite-folder-chevron {
+    flex: none;
+    width: 0;
+    height: 0;
+    margin: 0 3px 0 4px;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 5px solid var(--muted);
+    transition: transform 0.15s;
+}
+
+.favourite-folder > details[open] > summary .favourite-folder-chevron {
+    transform: rotate(90deg);
+}
+
+.favourite-folder-title {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.favourite-folder-count {
+    padding: 0 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.6;
+}
+
+.favourite-folder-actions {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+.favourite-folder > details > summary:hover .favourite-folder-actions,
+.favourite-folder > details > summary:focus-within .favourite-folder-actions {
+    opacity: 1;
+}
+
+.favourite-action {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 22px;
+    cursor: pointer;
+}
+
+.favourite-action:hover {
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+    color: var(--text);
+}
+
+.favourite-action.danger:hover {
+    color: var(--danger, #e5484d);
+}
+
+.favourite-folder.drop-on > details > summary,
+.favourite-tree.drop-on {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    outline: 1px dashed var(--accent);
+}
+
+.favourite-folder-name {
+    width: 100%;
+    padding: 4px 8px;
+    font-size: 0.9rem;
+}
+
+/* the folder a favourite is in, as a quiet pill that is a choice */
+.favourite-move {
+    max-width: 10em;
+    padding: 1px 18px 1px 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.favourite-move:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.favourite-move option {
+    background: var(--panel);
+    color: var(--text);
+}
+
 .log-content {
     margin: 4px 0 0;
     font-size: 0.9em;
@@ -4590,6 +4767,60 @@ div.book-cover {
 /* the recaps of the chats, one point to a line */
 .memory.recap p {
     white-space: pre-line;
+}
+
+/* a note of the tutor, what it says folded under its title */
+.memory-note {
+    margin-bottom: 6px;
+}
+
+.memory-note summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+/* a table of the database of a note, its rows scrolled within it */
+.note-table {
+    margin-top: 6px;
+}
+
+.note-table summary {
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.note-table-rows {
+    max-height: 360px;
+    margin-top: 4px;
+    overflow: auto;
+}
+
+.note-table-rows table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85em;
+}
+
+.note-table-rows th,
+.note-table-rows td {
+    padding: 2px 6px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+
+.note-table-rows th {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+}
+
+.memory-note pre {
+    max-height: 320px;
+    margin: 6px 0 0;
+    overflow: auto;
+    font: inherit;
+    font-size: 0.9em;
+    white-space: pre-wrap;
 }
 
 /* The learner's texts: the list in the library, and one open to be

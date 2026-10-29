@@ -69,6 +69,8 @@ from live import LiveChecker
 from logs import LogError
 from lookups import asked_anything, translation_log, write_question_logs
 from models import Model, read_model
+from notes import run as run_note
+from notes import tables
 from pdfs import read_pdf
 from processing import Processor, words_in
 from profiling import (
@@ -127,6 +129,7 @@ from tutor import (
     practised,
     recap,
     wait_for,
+    with_notes,
     words_tool,
 )
 from tutor import read_messages as read_tutor_messages
@@ -390,6 +393,22 @@ def log(entry: str) -> None:
     different threads and their lines would otherwise run into each other."""
     with _log_lock:
         print(entry, flush=True)
+
+
+def favourites_of(store: UserStore) -> dict[str, Any]:
+    """The favourites with the folders they are kept in, as a reply gives
+    them."""
+    return {"favourites": store.favourites(), "folders": store.favourite_folders()}
+
+
+def _folder_id(value: object) -> int | None:
+    """The id of a folder of the favourites a request names, or None for
+    the top. Raises ValueError."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("a folder is named by its id, or null for the top")
+    return value
 
 
 @dataclass
@@ -1322,10 +1341,24 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                          same settings and what it does
                                          made anew; the reply is the session
             GET /favourites              the exercises of sessions kept as
-                                         favourites, the latest added first
+                                         favourites, the latest added first,
+                                         each with the `folder` it is in, and
+                                         the `folders`, each with its parent
             PUT /favourites/S/ID         keep the exercise ID of the session
                                          S among the favourites
+            PUT /favourites/S/ID/folder  put it in the folder `{"folder":
+                                         N}`, or at the top with null
             DELETE /favourites/S/ID      take it out of them
+            POST /favourite-folders      make a folder, `{"name": ...,
+                                         "parent": N}`, at the top without a
+                                         parent
+            PUT /favourite-folders/N     rename it with `"name"`, and move it
+                                         into `"parent"`, null for the top
+            DELETE /favourite-folders/N  delete it with the folders in it,
+                                         taking what is in them out of the
+                                         favourites
+
+        Each reply about the favourites is all of them as GET gives them.
 
         A POST that starts a session may bring `"guidance": {ID: ...}`, what
         each exercise is to aim at, such as the tutor steers it to, which it
@@ -1343,12 +1376,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
         end = re.fullmatch(r"/sessions/([^/]+)/end", url.path)
         step = re.fullmatch(r"/sessions/([^/]+)/exercises/([^/]+)/([a-z]+)", url.path)
         favourite = re.fullmatch(r"/favourites/([^/]+)/([^/]+)", url.path)
+        filed = re.fullmatch(r"/favourites/([^/]+)/([^/]+)/folder", url.path)
+        folder = re.fullmatch(r"/favourite-folders(?:/(\d+))?", url.path)
         listed = url.path in ("/lessons", "/exercises", "/sessions", "/favourites")
         store = self.account.store
         if (
             practice is None
             or store is None
-            or not (listed or one or end or step or favourite)
+            or not (listed or one or end or step or favourite or filed or folder)
         ):
             return False
         try:
@@ -1375,13 +1410,38 @@ class CheckerHandler(BaseHTTPRequestHandler):
             elif method == "POST" and url.path == "/sessions":
                 self._start_session(practice, api_key)
             elif method == "GET" and url.path == "/favourites":
-                self._reply(HTTPStatus.OK, {"favourites": store.favourites()})
+                self._reply(HTTPStatus.OK, favourites_of(store))
             elif method == "PUT" and favourite:
                 store.add_favourite(favourite.group(1), favourite.group(2))
-                self._reply(HTTPStatus.OK, {"favourites": store.favourites()})
+                self._reply(HTTPStatus.OK, favourites_of(store))
+            elif method == "PUT" and filed:
+                into = _folder_id(self._read_body().get("folder"))
+                store.move_favourite(filed.group(1), filed.group(2), into)
+                self._reply(HTTPStatus.OK, favourites_of(store))
             elif method == "DELETE" and favourite:
                 store.remove_favourite(favourite.group(1), favourite.group(2))
-                self._reply(HTTPStatus.OK, {"favourites": store.favourites()})
+                self._reply(HTTPStatus.OK, favourites_of(store))
+            elif folder and not folder.group(1) and method == "POST":
+                body = self._read_body()
+                name = body.get("name")
+                if not isinstance(name, str):
+                    raise ValueError("a folder has a name")
+                store.add_favourite_folder(name, _folder_id(body.get("parent")))
+                self._reply(HTTPStatus.OK, favourites_of(store))
+            elif folder and folder.group(1) and method == "PUT":
+                body = self._read_body()
+                folder_id = int(folder.group(1))
+                if "name" in body:
+                    if not isinstance(body["name"], str):
+                        raise ValueError("a folder has a name")
+                    store.rename_favourite_folder(folder_id, body["name"])
+                if "parent" in body:
+                    parent = _folder_id(body["parent"])
+                    store.move_favourite_folder(folder_id, parent)
+                self._reply(HTTPStatus.OK, favourites_of(store))
+            elif folder and folder.group(1) and method == "DELETE":
+                store.remove_favourite_folder(int(folder.group(1)))
+                self._reply(HTTPStatus.OK, favourites_of(store))
             elif method == "POST" and step and step.group(3) == "replay":
                 fresh = self._read_body().get("fresh") is True
                 self._reply(
@@ -1730,14 +1790,23 @@ class CheckerHandler(BaseHTTPRequestHandler):
         topics and the exercises, the POST says how the words are chosen:
         `{"mix_topics": ..., "vocabulary": "none" | "all" | "set", "words":
         [...], "topic_words": ...,
-        "embedding_model": ...}`, and how many `minutes` each exercise may
-        take, by exercise, none for no limit."""
+        "embedding_model": ...}`, how many `minutes` each exercise may
+        take, by exercise, none for no limit, and, for a session without a
+        lesson, the lessons it is `reviewing`: the latest practised if it
+        does not say, none if it says [], as the tutor's exercises made
+        from their brief alone do."""
         body = self._read_body()
         language, lesson = body.get("language"), body.get("lesson")
         topics, chosen = body.get("topics", []), body.get("exercises")
         options = body.get("options") or {}
         minutes = body.get("minutes") or {}
         steering = body.get("guidance") or {}
+        reviewing = body.get("reviewing")
+        if reviewing is not None and not (
+            isinstance(reviewing, list)
+            and all(isinstance(each, str) for each in reviewing)
+        ):
+            raise ValueError("reviewing is the list of the lessons a review goes over")
         if not (
             isinstance(language, str)
             and isinstance(lesson, str)
@@ -1759,6 +1828,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             read_choosing(body, api_key or ""),
             options,
             minutes,
+            reviewing=reviewing,
             steering=steering,
         )
         usage = [describe_usage(profile) for profile in used]
@@ -2294,6 +2364,15 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                       first, and those it `removed`
             DELETE /tutor/memories/N  have the tutor forget a memory, as the
                                       learner wants
+            GET /tutor/memories/N/tables
+                                      the tables of the database of the note
+                                      N, `{"tables": [{"name": ...,
+                                      "columns": [...], "rows": ...}]}`
+            GET /tutor/memories/N/tables?table=NAME&offset=K
+                                      the rows of a table of it, from the
+                                      K-th, as the tutor's sql tool gives a
+                                      query: `columns`, `rows`, `total`, and
+                                      `more` and `next_offset` if there are
         """
         store = self.account.store
         path = urlsplit(self.path).path
@@ -2302,12 +2381,14 @@ class CheckerHandler(BaseHTTPRequestHandler):
         offer = re.fullmatch(r"/tutor/chats/([^/]+)/offers", path)
         last = re.fullmatch(r"/tutor/chats/([^/]+)/request", path)
         memory = re.fullmatch(r"/tutor/memories/(\d+)", path)
+        note = re.fullmatch(r"/tutor/memories/(\d+)/tables", path)
         if store is None or not (
             one
             or close
             or offer
             or last
             or memory
+            or note
             or path in ("/tutor/chats", "/tutor/memories")
         ):
             return False
@@ -2337,6 +2418,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {"memories": store.memories(), "removed": store.memories(removed=True)},
             )
+        elif method == "GET" and note:
+            self._note_tables(store, int(note.group(1)))
         elif method == "DELETE" and memory:
             store.remove_memory(int(memory.group(1)), "", "learner")
             self._reply(HTTPStatus.OK, {})
@@ -2402,6 +2485,31 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return False
         return True
 
+    def _note_tables(self, store: UserStore, note_id: int) -> None:
+        """Reply with the tables of the database of a note of the tutor, or
+        with the rows of one of them, as the query asks."""
+        notes = store.memories(kind="note") + store.memories(True, kind="note")
+        if not any(each["id"] == note_id for each in notes):
+            self._reply(HTTPStatus.NOT_FOUND, {"error": "no such note"})
+            return
+        base = store.note_base(note_id)
+        query = parse_qs(urlsplit(self.path).query)
+        table = (query.get("table") or [""])[0]
+        offset = (query.get("offset") or ["0"])[0]
+        listed = tables(base)
+        if not table:
+            self._reply(HTTPStatus.OK, {"tables": listed})
+            return
+        if table not in [each["name"] for each in listed]:
+            self._reply(HTTPStatus.NOT_FOUND, {"error": "no such table"})
+            return
+        if not offset.isdigit():
+            raise ValueError("offset must be a whole number")
+        quoted = '"' + table.replace('"', '""') + '"'
+        self._reply(
+            HTTPStatus.OK, run_note(base, f"SELECT * FROM {quoted}", int(offset))
+        )
+
     def _close_tutor_chat(
         self, store: UserStore, chat_id: str, api_key: str | None
     ) -> None:
@@ -2418,6 +2526,9 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
             def recap_job(step: Callable[[], None]) -> tuple[list[Any], list[Any]]:
                 written, used = recap(chat["messages"], chat["language"], ask)
+                written = with_notes(
+                    written, store.memories(kind="note"), chat_id, chat["messages"]
+                )
                 store.add_memory(written, chat_id, kind="recap")
                 step()
                 return [written], [describe_usage(used)]
@@ -2496,7 +2607,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
         sets = [str(kept["name"]) for kept in vocabulary.sets()] if vocabulary else []
         tools = [
             *data_tools(store, lambda: lessons, language, evaluations),
-            *memory_tools(store),
+            *memory_tools(store, chat_id),
             words_tool(
                 partial(known_words, vocabulary, anki_words=anki_words),
                 sets,

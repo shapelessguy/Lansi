@@ -11,14 +11,15 @@ import pytest
 from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore
 
-# What came with versions 24 to 33, taken out of a store to make it as one
+# What came with versions 24 to 34, taken out of a store to make it as one
 # was before: the instances the exercises made, what each replays, whether
 # a session is hidden, the parts of a grade and what it is about, the size
 # of an evaluation, which was a length, when a message of the tutor was
 # processed, what a book lists of itself, the versions of books, the brief
-# the tutor gave an exercise, and the favourite exercises.
+# the tutor gave an exercise, the favourite exercises and their folders.
 BEFORE_INSTANCES = """
 DROP TABLE favourites;
+DROP TABLE favourite_folders;
 ALTER TABLE session_exercises DROP COLUMN brief;
 ALTER TABLE books DROP COLUMN version;
 ALTER TABLE books DROP COLUMN parent_id;
@@ -1539,3 +1540,58 @@ def test_an_exercise_kept_as_a_favourite_is_listed_until_it_is_taken_out(
         store.add_favourite("s1", "picture")
     store.remove_favourite("s1", "cloze")
     assert store.favourites() == []
+
+
+def test_favourites_are_kept_in_folders_one_in_another(store: UserStore) -> None:
+    store.start_session("s1", "German", "l", [], {"cloze": 1})
+    store.add_favourite("s1", "cloze")
+    anki = store.add_favourite_folder("  Anki   words ")
+    sets = store.add_favourite_folder("Sets", anki)
+
+    store.move_favourite("s1", "cloze", sets)
+    store.rename_favourite_folder(sets, "B1 sets")
+
+    assert store.favourite_folders() == [
+        {"id": anki, "name": "Anki words", "parent": None},
+        {"id": sets, "name": "B1 sets", "parent": anki},
+    ]
+    assert store.favourites()[0]["folder"] == sets
+    for wrong in (
+        lambda: store.add_favourite_folder(" "),
+        lambda: store.add_favourite_folder("x" * 101),
+        lambda: store.add_favourite_folder("Lost", 99),
+        lambda: store.move_favourite("s1", "cloze", 99),
+        lambda: store.move_favourite("s1", "picture", None),
+    ):
+        with pytest.raises(ValueError):
+            wrong()
+
+
+def test_a_folder_of_the_favourites_cannot_go_into_itself_or_one_in_it(
+    store: UserStore,
+) -> None:
+    top = store.add_favourite_folder("Top")
+    inner = store.add_favourite_folder("Inner", top)
+
+    for parent in (top, inner):
+        with pytest.raises(ValueError, match="itself"):
+            store.move_favourite_folder(top, parent)
+    store.move_favourite_folder(inner, None)
+
+    assert [each["parent"] for each in store.favourite_folders()] == [None, None]
+
+
+def test_a_folder_deleted_takes_its_folders_and_their_exercises_out_of_the_favourites(
+    store: UserStore,
+) -> None:
+    store.start_session("s1", "German", "l", [], {"cloze": 1, "translation": 1})
+    store.add_favourite("s1", "cloze")
+    store.add_favourite("s1", "translation")
+    top = store.add_favourite_folder("Top")
+    inner = store.add_favourite_folder("Inner", top)
+    store.move_favourite("s1", "cloze", inner)
+
+    store.remove_favourite_folder(top)
+
+    assert store.favourite_folders() == []
+    assert [each["exercise"] for each in store.favourites()] == ["translation"]

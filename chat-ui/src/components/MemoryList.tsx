@@ -5,7 +5,15 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ask } from "../lib/dialogs";
 import { locale, t } from "../lib/i18n";
-import { deleteMemory, fetchMemories, type Memory } from "../lib/tutor";
+import {
+    deleteMemory,
+    fetchMemories,
+    fetchNoteRows,
+    fetchNoteTables,
+    type Memory,
+    type NoteRows,
+    type NoteTable,
+} from "../lib/tutor";
 
 interface Props {
     /** Changes when memories may have been made or removed, so that they are listed again. */
@@ -25,7 +33,10 @@ type Loaded =
  * told them in every chat. The strategy, how the tutor and the learner
  * agreed to hold the lessons, and the calendar, what they planned to do on
  * a day, the tutor writes down as soon as they agree, and looks up, as it
- * does the recap of a few lines every chat leaves. The calendar goes by
+ * does the recap of a few lines every chat leaves and the notes it writes
+ * for itself, each by its title with what it says and the tables of its
+ * database folded, each table read whenever it is opened, and again while it
+ * is open whenever the memories may have changed. The calendar goes by
  * day, the days gone by greyed. What was removed is listed apart, with why
  * and by whom.
  */
@@ -63,6 +74,7 @@ export function MemoryList({ revision }: Props) {
         .sort((one, other) => (one.day ?? "").localeCompare(other.day ?? "") || one.id - other.id);
     const today = localDay(new Date());
     const recaps = loaded.memories.filter((memory) => memory.kind === "recap");
+    const notes = loaded.memories.filter((memory) => memory.kind === "note");
     const listed = (memories: Memory[]) => (
         <ul className="memory-list">
             {memories.map((memory) => (
@@ -72,9 +84,12 @@ export function MemoryList({ revision }: Props) {
                         .filter(Boolean)
                         .join(" ")}
                 >
-                    <p>{memory.content}</p>
+                    {memory.kind === "note"
+                        ? <Note id={memory.id} content={memory.content} revision={revision} />
+                        : <p>{memory.content}</p>}
                     <div className="memory-meta">
                         <span>
+                            {memory.kind === "note" && `#${memory.id} · `}
                             {memory.day
                                 ? memory.day === today ? t("Today") : dayOf(memory.day)
                                 : day(memory.createdAt)}
@@ -129,6 +144,18 @@ export function MemoryList({ revision }: Props) {
                     )
                     : listed(calendar)}
             </details>
+            <details className="memory-group" open>
+                <summary>{t("Notes")}</summary>
+                {notes.length === 0
+                    ? (
+                        <p className="sidebar-note">
+                            {t(
+                                "The tutor has no notes. What it works out and needs again, such as a table of the words your exercises used, it writes in a note here, to read again rather than make again.",
+                            )}
+                        </p>
+                    )
+                    : listed([...notes].reverse())}
+            </details>
             {recaps.length > 0 && (
                 <details className="memory-group">
                     <summary>{t("Recaps of the lessons")}</summary>
@@ -162,6 +189,110 @@ export function MemoryList({ revision }: Props) {
                 </details>
             )}
         </div>
+    );
+}
+
+/**
+ * A note of the tutor: its title, and what it says and its tables folded
+ * under it, the tables read whenever it is opened and again while it is open
+ * as `revision` changes, since the tutor may have changed them.
+ */
+function Note({ id, content, revision }: { id: number; content: string; revision: number }) {
+    const [title, ...lines] = content.split("\n");
+    const [open, setOpen] = useState(false);
+    const [tables, setTables] = useState<NoteTable[] | string | null>(null);
+    useEffect(() => {
+        let current = true;
+        if (open) {
+            fetchNoteTables(id).then(
+                (found) => current && setTables(found),
+                (failed: Error) => current && setTables(failed.message),
+            );
+        }
+        return () => {
+            current = false;
+        };
+    }, [id, open, revision]);
+    return (
+        <details className="memory-note" onToggle={(event) => setOpen(event.currentTarget.open)}>
+            <summary>{title}</summary>
+            <pre>{lines.join("\n")}</pre>
+            {open && typeof tables === "string" && <p className="sidebar-note error">{tables}</p>}
+            {open && Array.isArray(tables)
+                && tables.map((table) => <NoteTableView key={table.name} id={id} table={table} revision={revision} />)}
+        </details>
+    );
+}
+
+/**
+ * A table of a note, by its name and how many rows it has, its rows read a
+ * page at a time whenever it is opened, and from the first page again while
+ * it is open as `revision` changes.
+ */
+function NoteTableView({ id, table, revision }: { id: number; table: NoteTable; revision: number }) {
+    const [open, setOpen] = useState(false);
+    const [rows, setRows] = useState<NoteRows | null>(null);
+    const [failed, setFailed] = useState("");
+    useEffect(() => {
+        let current = true;
+        if (open) {
+            fetchNoteRows(id, table.name).then(
+                (page) => {
+                    if (current) {
+                        setRows(page);
+                        setFailed("");
+                    }
+                },
+                (error: Error) => current && setFailed(error.message),
+            );
+        }
+        return () => {
+            current = false;
+        };
+    }, [id, table.name, open, revision]);
+    function more(offset: number) {
+        fetchNoteRows(id, table.name, offset).then(
+            (page) => setRows((before) => before ? { ...page, rows: [...before.rows, ...page.rows] } : page),
+            (error: Error) => setFailed(error.message),
+        );
+    }
+    return (
+        <details className="note-table" onToggle={(event) => setOpen(event.currentTarget.open)}>
+            <summary>
+                {t("{name}, {count} rows", { name: table.name, count: table.rows.toLocaleString(locale()) })}
+            </summary>
+            {failed && <p className="sidebar-note error">{failed}</p>}
+            {open && rows && (
+                <div className="note-table-rows">
+                    <table>
+                        <thead>
+                            <tr>
+                                {rows.columns.map((column) => <th key={column}>{column}</th>)}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.rows.map((row, at) => (
+                                <tr key={at}>
+                                    {row.map((value, column) => (
+                                        <td key={column}>{value === null ? "" : String(value)}</td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {rows.next_offset !== undefined && (
+                        <button
+                            className="link"
+                            onClick={() => more(rows.next_offset ?? 0)}
+                        >
+                            {t("Show more ({count} left)", {
+                                count: (rows.total - rows.rows.length).toLocaleString(locale()),
+                            })}
+                        </button>
+                    )}
+                </div>
+            )}
+        </details>
     );
 }
 

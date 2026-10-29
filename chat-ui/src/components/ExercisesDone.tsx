@@ -1,18 +1,25 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { useEffect, useState } from "react";
+import { type DragEvent, type ReactNode, useEffect, useState } from "react";
 
+import { ask } from "../lib/dialogs";
 import { interfaceLanguage, locale, t } from "../lib/i18n";
 import {
+    addFavouriteFolder,
+    changeFavouriteFolder,
+    deleteFavouriteFolder,
     type ExerciseInfo,
     type ExerciseProgress,
     type Favourite,
+    type FavouriteFolder,
+    type Favourites,
     fetchExercises,
     fetchFavourites,
     fetchLessons,
     fetchSession,
     fetchSessions,
+    fileFavourite,
     type Grade,
     interfaceAddress,
     type Lesson,
@@ -36,8 +43,11 @@ interface Props {
      */
     onReplay: (session: PracticeSession, exercise: string, fresh?: boolean) => void;
     /**
-     * Whether only the favourites are listed, each of which can be taken out
-     * of them; otherwise every exercise done is, each with a star that adds it.
+     * Whether only the favourites are listed, in the folders the learner
+     * keeps them in, which they make, rename, move and delete, each
+     * favourite moved into one by dragging it there or choosing it, and
+     * taken out of the favourites with its star; otherwise every exercise
+     * done is, by day, each with a star that adds it.
      */
     favouritesOnly?: boolean;
 }
@@ -48,7 +58,14 @@ interface Listed {
     topics: Topic[];
     exercises: ExerciseInfo[];
     favourites: Favourite[];
+    folders: FavouriteFolder[];
 }
+
+/** What is being dragged among the favourites: a favourite, or a folder. */
+type Dragged = { session: string; exercise: string } | { folder: number };
+
+/** A folder whose name is being written: a new one in `parent`, or one being renamed. */
+type Naming = { parent: number | null } | { folder: number };
 
 /** An exercise done in a session, as it is listed. */
 interface Done {
@@ -122,7 +139,7 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
         Promise.all([fetchSessions(), fetchLessons(language), fetchTopics(), fetchExercises(), fetchFavourites()]).then(
             ([sessions, lessons, topics, exercises, favourites]) => {
                 if (current) {
-                    setListed({ sessions, lessons, topics, exercises, favourites });
+                    setListed({ sessions, lessons, topics, exercises, ...favourites });
                     // what was done is had again as it is opened
                     setOpened({});
                     setError(null);
@@ -147,11 +164,97 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
         );
     }
 
-    function favour(session: PracticeSession, exercise: string, kept: boolean) {
-        setFavourite(session.id, exercise, kept).then(
-            (favourites) => setListed((current) => current && { ...current, favourites }),
-            (failed: Error) => setError(failed.message),
+    // what went wrong with the last change of the favourites, said above them
+    const [changeError, setChangeError] = useState("");
+    const [naming, setNaming] = useState<Naming | null>(null);
+    const [dragged, setDragged] = useState<Dragged | null>(null);
+    const [dropOn, setDropOn] = useState<number | "top" | null>(null);
+    // the folders folded shut; the others are open
+    const [shut, setShut] = useState<Set<number>>(new Set());
+
+    function fold(folder: number, open: boolean) {
+        setShut((current) => {
+            if (current.has(folder) !== open) {
+                return current;
+            }
+            const next = new Set(current);
+            if (open) {
+                next.delete(folder);
+            } else {
+                next.add(folder);
+            }
+            return next;
+        });
+    }
+
+    function changed(change: Promise<Favourites>) {
+        change.then(
+            (favourites) => {
+                setListed((current) => current && { ...current, ...favourites });
+                setChangeError("");
+            },
+            (failed: Error) => setChangeError(failed.message),
         );
+    }
+
+    function favour(session: PracticeSession, exercise: string, kept: boolean) {
+        changed(setFavourite(session.id, exercise, kept));
+    }
+
+    /** Puts what is dragged, or `moved`, into `folder`, or at the top with null. */
+    function moveInto(folder: number | null, moved: Dragged | null = dragged) {
+        setDragged(null);
+        setDropOn(null);
+        if (!moved) {
+            return;
+        }
+        if ("folder" in moved) {
+            if (moved.folder !== folder) {
+                changed(changeFavouriteFolder(moved.folder, { parent: folder }));
+            }
+        } else {
+            changed(fileFavourite(moved.session, moved.exercise, folder));
+        }
+    }
+
+    function named(name: string | null) {
+        const was = naming;
+        setNaming(null);
+        if (!was || !name) {
+            return;
+        }
+        changed("folder" in was ? changeFavouriteFolder(was.folder, { name }) : addFavouriteFolder(name, was.parent));
+    }
+
+    function removeFolder(folder: FavouriteFolder, count: number) {
+        void ask(t("Delete the folder {name}?", { name: folder.name }), {
+            detail: count > 0
+                ? t("The folders in it are deleted too, and its {count} exercises are taken out of the favourites.", {
+                    count,
+                })
+                : t("The folders in it are deleted too."),
+            confirm: t("Delete"),
+        }).then((agreed) => agreed && changed(deleteFavouriteFolder(folder.id)));
+    }
+
+    /** What a place in the tree does as something is dragged over it and dropped on it. */
+    function dropTarget(folder: number | null) {
+        const key = folder ?? "top";
+        return {
+            onDragOver: (event: DragEvent) => {
+                if (dragged) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setDropOn(key);
+                }
+            },
+            onDragLeave: () => setDropOn((current) => current === key ? null : current),
+            onDrop: (event: DragEvent) => {
+                event.preventDefault();
+                event.stopPropagation();
+                moveInto(folder);
+            },
+        };
     }
 
     if (error) {
@@ -193,6 +296,265 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
             .toLowerCase();
         return words.every((word) => about.includes(word));
     });
+    // the folders of the favourites, and what is in each
+    const folderOf = (sessionId: string, exercise: string) =>
+        listed.favourites.find((each) => each.session_id === sessionId && each.exercise === exercise)?.folder ?? null;
+    const foldersIn = (parent: number | null) => listed.folders.filter((folder) => folder.parent === parent);
+    const itemsIn = (folder: number | null) =>
+        shown.filter(({ session, exercise }) => folderOf(session.id, exercise) === folder);
+    const countIn = (folder: number): number =>
+        itemsIn(folder).length + foldersIn(folder).reduce((sum, each) => sum + countIn(each.id), 0);
+    const pathOf = (folder: number): string => {
+        const names: string[] = [];
+        for (let at: number | null = folder; at !== null;) {
+            const found: FavouriteFolder | undefined = listed.folders.find((each) => each.id === at);
+            if (!found || names.length > listed.folders.length) {
+                break;
+            }
+            names.unshift(found.name);
+            at = found.parent;
+        }
+        return names.join(" / ");
+    };
+    // the folders something can be moved into, but for `except` and those in it
+    const folderChoices = (except?: number) => {
+        const inside = (folder: number | null): boolean =>
+            folder !== null
+            && (folder === except || inside(listed.folders.find((each) => each.id === folder)?.parent ?? null));
+        return listed.folders
+            .filter((folder) => except === undefined || !inside(folder.id))
+            .map((folder) => ({ id: folder.id, path: pathOf(folder.id) }))
+            .sort((one, other) => one.path.localeCompare(other.path, locale()));
+    };
+    // every folder is shown, however it is searched, so that one just made is in sight
+    const folderNode = (folder: FavouriteFolder): ReactNode => {
+        const count = countIn(folder.id);
+        const renaming = naming !== null && "folder" in naming && naming.folder === folder.id;
+        return (
+            <li
+                key={`folder:${folder.id}`}
+                className={`favourite-folder${dropOn === folder.id ? " drop-on" : ""}`}
+                draggable
+                onDragStart={(event) => {
+                    event.stopPropagation();
+                    event.dataTransfer.effectAllowed = "move";
+                    setDragged({ folder: folder.id });
+                }}
+                onDragEnd={() => {
+                    setDragged(null);
+                    setDropOn(null);
+                }}
+                {...dropTarget(folder.id)}
+            >
+                <details
+                    open={!shut.has(folder.id)}
+                    onToggle={(event) => fold(folder.id, event.currentTarget.open)}
+                >
+                    <summary>
+                        <span className="favourite-folder-chevron" aria-hidden />
+                        <FolderGlyph />
+                        <span className="favourite-folder-title">{folder.name}</span>
+                        <span className="favourite-folder-count">{count}</span>
+                        <span className="favourite-folder-actions">
+                            <button
+                                className="favourite-action"
+                                title={t("New folder in it")}
+                                aria-label={t("New folder in it")}
+                                onClick={(event) => {
+                                    event.preventDefault();
+                                    // what is made in it is written where it can be seen
+                                    fold(folder.id, true);
+                                    setNaming({ parent: folder.id });
+                                }}
+                            >
+                                +
+                            </button>
+                            <button
+                                className="favourite-action"
+                                title={t("Rename")}
+                                aria-label={t("Rename")}
+                                onClick={(event) => {
+                                    event.preventDefault();
+                                    fold(folder.id, true);
+                                    setNaming({ folder: folder.id });
+                                }}
+                            >
+                                ✎
+                            </button>
+                            <MoveTo
+                                folders={folderChoices(folder.id)}
+                                at={folder.parent}
+                                onMove={(parent) => moveInto(parent, { folder: folder.id })}
+                            />
+                            <button
+                                className="favourite-action danger"
+                                title={t("Delete the folder")}
+                                aria-label={t("Delete the folder")}
+                                onClick={(event) => {
+                                    event.preventDefault();
+                                    removeFolder(folder, countIn(folder.id));
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </span>
+                    </summary>
+                    <ul className="favourite-folder-items">
+                        {renaming && (
+                            <li>
+                                <NameField initial={folder.name} onDone={named} />
+                            </li>
+                        )}
+                        {naming && "parent" in naming && naming.parent === folder.id && (
+                            <li>
+                                <NameField initial="" onDone={named} />
+                            </li>
+                        )}
+                        {foldersIn(folder.id).map(folderNode)}
+                        {itemsIn(folder.id).map(entry)}
+                    </ul>
+                </details>
+            </li>
+        );
+    };
+    const entry = ({ session, exercise, progress }: Done) => {
+        const about = info(exercise);
+        const got = opened[session.id];
+        const grades = typeof got === "object"
+            ? got.grades.filter((grade) => grade.exercise === exercise)
+            : [];
+        const log = typeof got === "object" ? got.logs[exercise] : undefined;
+        const of = ofSession(session);
+        return (
+            <li
+                key={`${session.id}:${exercise}`}
+                className="log-entry done-exercise"
+                draggable={favouritesOnly}
+                onDragStart={(event) => {
+                    event.stopPropagation();
+                    event.dataTransfer.effectAllowed = "move";
+                    setDragged({ session: session.id, exercise });
+                }}
+                onDragEnd={() => {
+                    setDragged(null);
+                    setDropOn(null);
+                }}
+            >
+                <details onToggle={(event) => event.currentTarget.open && open(session.id)}>
+                    <summary>
+                        <span className="done-exercise-icon" aria-hidden>
+                            {about?.icon
+                                ? (
+                                    <span
+                                        className="practice-exercise-glyph"
+                                        style={{
+                                            maskImage: `url("${interfaceAddress(`${exercise}/ui/icon.svg`)}")`,
+                                        }}
+                                    />
+                                )
+                                : exerciseTitle(exercise).charAt(0)}
+                        </span>
+                        <span className="done-exercise-what">
+                            <span className="log-head">
+                                <span className="log-subject">{exerciseTitle(exercise)}</span>
+                                <span className="log-time">
+                                    {favouritesOnly
+                                        ? `${dayOf(progress.started_at ?? session.started_at)}, ${
+                                            timeOf(progress.started_at ?? session.started_at)
+                                        }`
+                                        : timeOf(progress.started_at ?? session.started_at)}
+                                </span>
+                                <FavouriteStar
+                                    favourite={isFavourite(session, exercise)}
+                                    removing={favouritesOnly}
+                                    onChange={(kept) => favour(session, exercise, kept)}
+                                />
+                            </span>
+                            <span className="log-where">
+                                {[
+                                    of,
+                                    ...session.topics.map(topicTitle),
+                                    progress.replays ? t("done again") : "",
+                                ].filter(Boolean).join(" · ")}
+                            </span>
+                            <span className="done-foot">
+                                <Results progress={progress} />
+                                {favouritesOnly && (
+                                    <MoveTo
+                                        folders={folderChoices()}
+                                        at={folderOf(session.id, exercise)}
+                                        onMove={(folder) => moveInto(folder, { session: session.id, exercise })}
+                                    />
+                                )}
+                                {
+                                    /* to do it again, always in sight; one that makes nothing, such
+                                as reviewing the Anki cards, goes one way only */
+                                }
+                                {session.status !== "running" && about?.instance && (
+                                    <span className="done-again">
+                                        {(progress.kept ?? 0) > 0 && (
+                                            <button
+                                                className="chip accent"
+                                                onClick={(event) => {
+                                                    // in the summary, it does not open the card
+                                                    event.preventDefault();
+                                                    onReplay(session, exercise);
+                                                }}
+                                                title={t(
+                                                    "Do it again exactly as it was, with nothing made anew",
+                                                )}
+                                            >
+                                                ↻ {t("Same")}
+                                            </button>
+                                        )}
+                                        <button
+                                            className="chip"
+                                            onClick={(event) => {
+                                                event.preventDefault();
+                                                onReplay(session, exercise, true);
+                                            }}
+                                            title={t(
+                                                "Do it again with the same lesson, topics and settings, made anew",
+                                            )}
+                                        >
+                                            ✦ {t("New")}
+                                        </button>
+                                    </span>
+                                )}
+                            </span>
+                        </span>
+                    </summary>
+                    {got === "loading" && <p className="sidebar-note">{t("Loading…")}</p>}
+                    {got === "failed" && (
+                        <p className="sidebar-note error">
+                            {t("What was done could not be had.")}
+                        </p>
+                    )}
+                    {typeof got === "object" && grades.length === 0 && (
+                        <p className="sidebar-note">{t("Nothing was answered.")}</p>
+                    )}
+                    {grades.length > 0 && (
+                        // each round of the exercise, as a card of its own
+                        <ol className="done-rounds">
+                            {grades.map((grade, number) => (
+                                <GradeRound
+                                    key={number}
+                                    grade={grade}
+                                    label={t("Round {number}", { number: number + 1 })}
+                                />
+                            ))}
+                        </ol>
+                    )}
+                    {log && (
+                        <details className="done-log">
+                            <summary>{t("Log")}</summary>
+                            <p>{log}</p>
+                        </details>
+                    )}
+                </details>
+            </li>
+        );
+    };
     const days: { day: string; items: Done[] }[] = [];
     for (const each of shown) {
         const day = dayOf(each.progress.started_at ?? each.session.started_at);
@@ -223,133 +585,113 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
                     ))}
                 </div>
             </div>
-            <div className="log-list exercises-done">
-                {shown.length === 0 && <p className="sidebar-note">{t("No exercise is like that.")}</p>}
-                {days.map(({ day, items }) => (
-                    <section key={day} className="log-day">
-                        <h3>{day}</h3>
-                        <ul>
-                            {items.map(({ session, exercise, progress }) => {
-                                const about = info(exercise);
-                                const got = opened[session.id];
-                                const grades = typeof got === "object"
-                                    ? got.grades.filter((grade) => grade.exercise === exercise)
-                                    : [];
-                                const log = typeof got === "object" ? got.logs[exercise] : undefined;
-                                const of = ofSession(session);
-                                return (
-                                    <li key={`${session.id}:${exercise}`} className="log-entry done-exercise">
-                                        <details onToggle={(event) => event.currentTarget.open && open(session.id)}>
-                                            <summary>
-                                                <span className="done-exercise-icon" aria-hidden>
-                                                    {about?.icon
-                                                        ? (
-                                                            <span
-                                                                className="practice-exercise-glyph"
-                                                                style={{
-                                                                    maskImage: `url("${
-                                                                        interfaceAddress(`${exercise}/ui/icon.svg`)
-                                                                    }")`,
-                                                                }}
-                                                            />
-                                                        )
-                                                        : exerciseTitle(exercise).charAt(0)}
-                                                </span>
-                                                <span className="done-exercise-what">
-                                                    <span className="log-head">
-                                                        <span className="log-subject">{exerciseTitle(exercise)}</span>
-                                                        <span className="log-time">
-                                                            {timeOf(progress.started_at ?? session.started_at)}
-                                                        </span>
-                                                        <FavouriteStar
-                                                            favourite={isFavourite(session, exercise)}
-                                                            removing={favouritesOnly}
-                                                            onChange={(kept) => favour(session, exercise, kept)}
-                                                        />
-                                                    </span>
-                                                    <span className="log-where">
-                                                        {[
-                                                            of,
-                                                            ...session.topics.map(topicTitle),
-                                                            progress.replays ? t("done again") : "",
-                                                        ].filter(Boolean).join(" · ")}
-                                                    </span>
-                                                    <span className="done-foot">
-                                                        <Results progress={progress} />
-                                                        {
-                                                            /* to do it again, always in sight; one that makes nothing, such
-                                                        as reviewing the Anki cards, goes one way only */
-                                                        }
-                                                        {session.status !== "running" && about?.instance && (
-                                                            <span className="done-again">
-                                                                {(progress.kept ?? 0) > 0 && (
-                                                                    <button
-                                                                        className="chip accent"
-                                                                        onClick={(event) => {
-                                                                            // in the summary, it does not open the card
-                                                                            event.preventDefault();
-                                                                            onReplay(session, exercise);
-                                                                        }}
-                                                                        title={t(
-                                                                            "Do it again exactly as it was, with nothing made anew",
-                                                                        )}
-                                                                    >
-                                                                        ↻ {t("Same")}
-                                                                    </button>
-                                                                )}
-                                                                <button
-                                                                    className="chip"
-                                                                    onClick={(event) => {
-                                                                        event.preventDefault();
-                                                                        onReplay(session, exercise, true);
-                                                                    }}
-                                                                    title={t(
-                                                                        "Do it again with the same lesson, topics and settings, made anew",
-                                                                    )}
-                                                                >
-                                                                    ✦ {t("New")}
-                                                                </button>
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                </span>
-                                            </summary>
-                                            {got === "loading" && <p className="sidebar-note">{t("Loading…")}</p>}
-                                            {got === "failed" && (
-                                                <p className="sidebar-note error">
-                                                    {t("What was done could not be had.")}
-                                                </p>
-                                            )}
-                                            {typeof got === "object" && grades.length === 0 && (
-                                                <p className="sidebar-note">{t("Nothing was answered.")}</p>
-                                            )}
-                                            {grades.length > 0 && (
-                                                // each round of the exercise, as a card of its own
-                                                <ol className="done-rounds">
-                                                    {grades.map((grade, number) => (
-                                                        <GradeRound
-                                                            key={number}
-                                                            grade={grade}
-                                                            label={t("Round {number}", { number: number + 1 })}
-                                                        />
-                                                    ))}
-                                                </ol>
-                                            )}
-                                            {log && (
-                                                <details className="done-log">
-                                                    <summary>{t("Log")}</summary>
-                                                    <p>{log}</p>
-                                                </details>
-                                            )}
-                                        </details>
-                                    </li>
-                                );
-                            })}
+            {favouritesOnly
+                ? (
+                    <div
+                        className={`log-list exercises-done favourite-tree${dropOn === "top" ? " drop-on" : ""}`}
+                        {...dropTarget(null)}
+                    >
+                        <div className="favourite-tree-bar">
+                            <button className="favourite-new" onClick={() => setNaming({ parent: null })}>
+                                <FolderGlyph /> {t("New folder")}
+                            </button>
+                        </div>
+                        {changeError && <p className="sidebar-note error">{changeError}</p>}
+                        {shown.length === 0 && <p className="sidebar-note">{t("No exercise is like that.")}</p>}
+                        <ul className="favourite-folder-items">
+                            {naming && "parent" in naming && naming.parent === null && (
+                                <li>
+                                    <NameField initial="" onDone={named} />
+                                </li>
+                            )}
+                            {foldersIn(null).map(folderNode)}
+                            {itemsIn(null).map(entry)}
                         </ul>
-                    </section>
-                ))}
-            </div>
+                    </div>
+                )
+                : (
+                    <div className="log-list exercises-done">
+                        {shown.length === 0 && <p className="sidebar-note">{t("No exercise is like that.")}</p>}
+                        {days.map(({ day, items }) => (
+                            <section key={day} className="log-day">
+                                <h3>{day}</h3>
+                                <ul>
+                                    {items.map(entry)}
+                                </ul>
+                            </section>
+                        ))}
+                    </div>
+                )}
         </>
+    );
+}
+
+/** A folder's name being written, kept on Enter or as the field is left, given up on Escape or when empty. */
+function NameField({ initial, onDone }: { initial: string; onDone: (name: string | null) => void }) {
+    const [name, setName] = useState(initial);
+    const [done, setDone] = useState(false);
+    function finish(kept: string | null) {
+        if (!done) {
+            setDone(true);
+            onDone(kept?.trim() || null);
+        }
+    }
+    return (
+        <input
+            className="favourite-folder-name"
+            autoFocus
+            value={name}
+            placeholder={t("Name of the folder")}
+            aria-label={t("Name of the folder")}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                    finish(name);
+                } else if (event.key === "Escape") {
+                    finish(null);
+                }
+            }}
+            onBlur={() => finish(name)}
+        />
+    );
+}
+
+/** A folder, drawn as an outline in the colour of the text around it. */
+function FolderGlyph() {
+    return (
+        <svg className="folder-glyph" viewBox="0 0 16 16" aria-hidden>
+            <path
+                d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.4 1.5h6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+}
+
+/** A choice of the folder to move something into, the top first, each folder by its path. */
+function MoveTo(
+    { folders, at, onMove }: {
+        folders: { id: number; path: string }[];
+        at: number | null;
+        onMove: (folder: number | null) => void;
+    },
+) {
+    return (
+        <select
+            className="favourite-move"
+            value={at ?? ""}
+            title={t("Move to a folder")}
+            aria-label={t("Move to a folder")}
+            // in a summary, it does not open the card
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => onMove(event.target.value === "" ? null : Number(event.target.value))}
+        >
+            <option value="">{t("Top")}</option>
+            {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.path}</option>)}
+        </select>
     );
 }
 
