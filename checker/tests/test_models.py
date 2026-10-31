@@ -30,10 +30,20 @@ def test_a_model_at_an_address_is_asked_under_it_with_its_own_key_or_none() -> N
 
     assert model == Model("jev", "http://127.0.0.1:10000/v1", "")
     assert model.endpoint("decisions") == "http://127.0.0.1:10000/v1/decisions"
+    assert model.endpoint("systemone") == "http://127.0.0.1:10000/v1/systemone"
     assert model.endpoint("audio/speech") == "http://127.0.0.1:10000/v1/audio/speech"
     assert model.headers() == {}
     assert model.problem() is None
     assert read_model({"model": "m", "url": "http://host/v1", "key": "k"}).key == "k"
+
+
+def test_a_model_at_an_address_signs_in_when_its_key_is_a_login() -> None:
+    at_home = Model("clef", "http://192.168.1.2:10000/clef/v1", "me:secret")
+    with_a_token = Model("clef", "http://192.168.1.2:10000/clef/v1", "token")
+
+    assert at_home.headers() == {"Authorization": "Basic bWU6c2VjcmV0"}
+    assert with_a_token.headers() == {"Authorization": "Bearer token"}
+    assert Model("some/model", "", "a:b").headers() == {"Authorization": "Bearer a:b"}
 
 
 def test_a_model_named_with_no_address_is_on_openrouter() -> None:

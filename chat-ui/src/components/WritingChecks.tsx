@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 
 import {
     applySuggestion,
+    isCorrected,
     type LiveCheck,
     type MarkedPart,
     type ProfileUsage,
@@ -184,7 +185,7 @@ function isFocused(element: HTMLTextAreaElement): boolean {
 }
 
 /** How a sentence is tinted by how far along it is, where its sentences are profiled. */
-function sentenceStyle(state: SentenceState, rateWords: boolean): CSSProperties {
+function sentenceStyle(state: SentenceState, rateWords: boolean, corrected: boolean): CSSProperties {
     // with the words rated, a sentence would be green first and only then get its red words
     const background = state === "typing"
         ? undefined
@@ -197,6 +198,15 @@ function sentenceStyle(state: SentenceState, rateWords: boolean): CSSProperties 
         boxDecorationBreak: "clone",
         WebkitBoxDecorationBreak: "clone",
         transition: "background-color 0.2s",
+        // one the correction changed a word of is off, though every word was rated right;
+        // drawn below where a misspelled word is underlined
+        ...(corrected && state !== "typing"
+            ? {
+                textDecoration: "underline solid 2px var(--corrected)",
+                textDecorationSkipInk: "none",
+                textUnderlineOffset: 5,
+            }
+            : {}),
     };
 }
 
@@ -237,7 +247,14 @@ function Mirror({ watch }: { watch: Watch }) {
             {sentenceParts(watch.text, watch.check, issues).map(({ sentence, parts }, index) =>
                 sentence && profiling
                     ? (
-                        <span key={index} style={sentenceStyle(sentenceState(sentence), profiling.rateWords)}>
+                        <span
+                            key={index}
+                            style={sentenceStyle(
+                                sentenceState(sentence),
+                                profiling.rateWords,
+                                isCorrected(sentence),
+                            )}
+                        >
                             {parts.map(markedPart)}
                         </span>
                     )

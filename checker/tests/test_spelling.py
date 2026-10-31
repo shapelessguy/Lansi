@@ -4,7 +4,8 @@
 from __future__ import annotations
 
 import pytest
-from spelling import Speller, SpellingIssue, StudySpeller
+from languages import language_of
+from spelling import Speller, SpellingIssue, StudySpeller, hunspell_of
 
 # "hund" is listed twice so that it counts as the more common word
 DICTIONARY = [
@@ -125,3 +126,70 @@ def test_a_language_without_a_dictionary_has_no_word_found_wrong_or_known() -> N
 
     assert speller.check("nuqneH qqqq") == []
     assert speller.knows("nuqneH") is False
+
+
+@pytest.fixture(scope="module")
+def hunspell_german() -> Speller:
+    """The speller of German with the system's Hunspell dictionary, if it
+    has one."""
+    hunspell = hunspell_of(language_of("German").hunspell)
+    if hunspell is None:
+        pytest.skip("the system has no Hunspell dictionary of German")
+    return Speller("de", hunspell=hunspell)
+
+
+def test_a_dictionary_the_system_has_not_is_none() -> None:
+    assert hunspell_of("xx_NOPE") is None
+    assert hunspell_of(None) is None
+
+
+def test_hunspell_tells_a_word_from_one_misspelled() -> None:
+    english = hunspell_of(language_of("English").hunspell)
+    if english is None:
+        pytest.skip("the system has no Hunspell dictionary of English")
+
+    assert english.lookup("dogs") and english.lookup("unbelievably")
+    assert not english.lookup("dgos")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Wir setzen uns für den Tierschutz ein.",
+        "Das Hundefutter liegt neben der Bahnhofsuhr.",
+        "Der Tierschutzverein hilft.",
+    ],
+)
+def test_hunspell_accepts_compounds_that_are_listed_nowhere(
+    hunspell_german: Speller, text: str
+) -> None:
+    assert hunspell_german.check(text) == []
+
+
+def test_hunspell_finds_a_compound_misspelled(hunspell_german: Speller) -> None:
+    assert [issue.word for issue in hunspell_german.check("Der Tierschuts")] == [
+        "Tierschuts"
+    ]
+
+
+def test_hunspell_knows_no_word_with_letters_its_dictionary_cannot_write(
+    hunspell_german: Speller,
+) -> None:
+    # the German dictionary is written in Latin-1, which has no "ő"
+    assert not hunspell_german.knows("Hőnd")
+
+
+def test_hunspell_suggests_a_noun_written_small_with_its_capital(
+    hunspell_german: Speller,
+) -> None:
+    [issue] = hunspell_german.check("Ich habe einen hund.")
+
+    assert issue.word == "hund"
+    assert issue.suggestions[0] == "Hund"
+
+
+def test_hunspell_suggests_only_words_it_has(hunspell_german: Speller) -> None:
+    [issue] = hunspell_german.check("Meine Grosmutter")
+
+    assert issue.suggestions[0] == "Großmutter"
+    assert all(hunspell_german.knows(word) for word in issue.suggestions)

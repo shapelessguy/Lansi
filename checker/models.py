@@ -7,17 +7,22 @@ Every model is asked the same way: on OpenRouter, with the learner's key,
 or at the address of a server of the learner's own that takes the requests
 OpenAI's API takes, such as one running on this machine. Each kind of
 request goes to a path of its own under the address: `chat/completions`,
-`embeddings`, `images`, `audio/speech`, and `decisions` for a decision model.
+`embeddings`, `images`, `audio/speech`, and `decisions` for a decision model,
+which a server of one's own may take on `systemone` instead, as llama.cpp
+does (`profiling.send_decisions`).
 
 A request names a model by its id on OpenRouter, or as `{"model": ...,
 "url": ..., "key": ...}` for one at an address of its own, whose key may
-be left out. A model of OpenRouter may come as `{"model": ..., "providers":
+be left out. A key of the form `user:password` signs in as that user,
+the way a server behind a login takes it (Basic); any other is sent as a
+Bearer token. A model of OpenRouter may come as `{"model": ..., "providers":
 [...]}`, the providers that alone are to serve it, which a chat request
 asks OpenRouter for as `provider.only` (`routed`); with none, any may.
 """
 
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -76,7 +81,13 @@ class Model:
         }
 
     def headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.key}"} if self.key else {}
+        if not self.key:
+            return {}
+        # a server of one's own may take a login rather than a token
+        if not self.on_openrouter and ":" in self.key:
+            login = base64.b64encode(self.key.encode()).decode()
+            return {"Authorization": f"Basic {login}"}
+        return {"Authorization": f"Bearer {self.key}"}
 
     def or_named(self, name: str) -> Model:
         """This, with `name` as its id if it has none."""

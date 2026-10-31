@@ -8,7 +8,13 @@ from pathlib import Path
 
 import pytest
 from exercising import EXERCISES_DIRECTORY, exercises
-from instances import instance_problem, schema_problem
+from instances import (
+    GAP,
+    instance_problem,
+    preview_of,
+    read_preview,
+    schema_problem,
+)
 
 SET = {
     "type": "object",
@@ -101,3 +107,50 @@ def test_an_exercise_whose_instance_is_unlike_any_shape_is_not_offered(
     )
 
     assert exercises(tmp_path) == []
+
+
+def test_the_preview_of_an_instance_is_what_it_asks_with_its_answers_blanked() -> None:
+    preview = read_preview(
+        ["title", {"path": "items.*.text", "blank": r"\[[^\]]*\]"}, "missing.*"]
+    )
+    instance = {
+        "title": "Morning",
+        "items": [{"text": "Ich [stehe] um sechs [auf]."}, {"text": " "}],
+    }
+
+    assert preview_of(instance, preview) == [
+        "Morning",
+        f"Ich {GAP} um sechs {GAP}.",
+    ]
+
+
+def test_a_preview_that_is_not_as_described_is_left_out() -> None:
+    assert read_preview(["", 3, {"path": "text", "blank": "["}, {"blank": "x"}]) == []
+    assert read_preview("text") == []
+
+
+def _paths(schema: dict[str, object], at: str = "") -> set[str]:
+    """The paths of the texts an instance of `schema` may have."""
+    if schema["type"] == "string":
+        return {at}
+    if schema["type"] == "array":
+        items = schema["items"]
+        assert isinstance(items, dict)
+        return _paths(items, f"{at}.*" if at else "*")
+    if schema["type"] == "object":
+        properties = schema["properties"]
+        assert isinstance(properties, dict)
+        return {
+            path
+            for name, each in properties.items()
+            for path in _paths(each, f"{at}.{name}" if at else name)
+        }
+    return set()
+
+
+def test_every_exercise_previews_only_texts_its_instances_have() -> None:
+    for manifest in exercises():
+        if manifest.preview:
+            assert manifest.instance is not None
+            paths = _paths(manifest.instance)
+            assert {path for path, _ in manifest.preview} <= paths, manifest.id

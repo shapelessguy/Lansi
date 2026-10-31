@@ -31,7 +31,7 @@ from typing import Any
 from books import PICTURE_ID
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 34
+SCHEMA_VERSION = 35
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -571,7 +571,13 @@ CREATE TABLE favourite_folders (
 ALTER TABLE favourites ADD COLUMN folder_id INTEGER
     REFERENCES favourite_folders (id) ON DELETE CASCADE;
 """
-# the longest the name of a folder of the favourites may be, in characters
+# What came with version 35: the name the learner gave a favourite, NULL for
+# none, which is then called by the title of its exercise.
+_FAVOURITE_NAMES = """
+ALTER TABLE favourites ADD COLUMN name TEXT;
+"""
+# the longest the name of a folder of the favourites, or of a favourite,
+# may be, in characters
 MAX_FOLDER_NAME = 100
 # how far an exercise the tutor offered got
 OFFER_STATUSES = ("running", "done", "abandoned")
@@ -917,6 +923,8 @@ class UserStore:
                 self._db.executescript(_FAVOURITES)
             if version < 34:
                 self._db.executescript(_FAVOURITE_FOLDERS)
+            if version < 35:
+                self._db.executescript(_FAVOURITE_NAMES)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -2462,12 +2470,13 @@ class UserStore:
     def favourites(self) -> list[dict[str, Any]]:
         """The exercises of sessions kept among the favourites, the latest
         added first, each as `{"session_id": ..., "exercise": ...,
-        "added_at": ..., "folder": ...}`, the folder it is in None at the
-        top."""
+        "added_at": ..., "folder": ..., "name": ...}`, the folder it is in
+        None at the top, and the name the learner gave it None if they gave
+        none."""
         with self._lock:
             rows = self._db.execute(
-                "SELECT session_id, exercise, added_at, folder_id FROM favourites"
-                " ORDER BY added_at DESC"
+                "SELECT session_id, exercise, added_at, folder_id, name"
+                " FROM favourites ORDER BY added_at DESC"
             ).fetchall()
         return [
             {
@@ -2475,8 +2484,9 @@ class UserStore:
                 "exercise": exercise,
                 "added_at": added_at,
                 "folder": folder,
+                "name": name,
             }
-            for session_id, exercise, added_at, folder in rows
+            for session_id, exercise, added_at, folder, name in rows
         ]
 
     def favourite_folders(self) -> list[dict[str, Any]]:
@@ -2555,6 +2565,23 @@ class UserStore:
                 (folder, session_id, exercise),
             )
             if moved.rowcount == 0:
+                raise ValueError("there is no such favourite")
+
+    def rename_favourite(self, session_id: str, exercise: str, name: str) -> None:
+        """Give a favourite a name of the learner's, its spaces evened out,
+        or, with an empty one, call it by its exercise again. Raises
+        ValueError for a name too long or a favourite there is not."""
+        name = " ".join(name.split())
+        if len(name) > MAX_FOLDER_NAME:
+            raise ValueError(
+                f"the name of a favourite is at most {MAX_FOLDER_NAME} characters"
+            )
+        with self._lock, self._db:
+            renamed = self._db.execute(
+                "UPDATE favourites SET name = ? WHERE session_id = ? AND exercise = ?",
+                (name or None, session_id, exercise),
+            )
+            if renamed.rowcount == 0:
                 raise ValueError("there is no such favourite")
 
     def _held_folder(self, folder: int | None, required: bool = False) -> None:

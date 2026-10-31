@@ -6,6 +6,7 @@ import { expect, test } from "vitest";
 import {
     applySuggestion,
     inUtf16,
+    isCorrected,
     type LiveCheck,
     markedParts,
     type Sentence,
@@ -185,8 +186,21 @@ test("a rated word that is misspelled as well is one stretch with both", () => {
     ]);
 });
 
-test("a word is good from 0.9, unsure from 0.5 and wrong below", () => {
-    expect([1, 0.9, 0.89, 0.5, 0.49, 0].map(wordShade)).toEqual([
+test.each(
+    [
+        [true, "Er hat gefragt, obwohl niemand ihn gefragt hat."],
+        [true, "Er hat gefragt, obwohl niemand nach ihm gefragt."],
+        [false, "Er hat gefragt obwohl niemand nach ihm gefragt hat"],
+        [false, null],
+    ] as const,
+)("a sentence is corrected %s when its correction is %j", (corrected, correction) => {
+    const written = sentence("Er hat gefragt, obwohl niemand nach ihm gefragt hat.", 0, []);
+
+    expect(isCorrected({ ...written, correction })).toBe(corrected);
+});
+
+test("a word is good from 0.8, unsure from 0.5 and wrong below", () => {
+    expect([1, 0.8, 0.79, 0.5, 0.49, 0].map(wordShade)).toEqual([
         "good",
         "good",
         "unsure",

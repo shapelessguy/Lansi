@@ -68,6 +68,12 @@
             "kind"
         ]
     },
+    "preview": [
+        "situation",
+        "points.*",
+        "text",
+        "fields.*.label"
+    ],
     "messages": {
         "German": {
             "Write": "Schreiben",

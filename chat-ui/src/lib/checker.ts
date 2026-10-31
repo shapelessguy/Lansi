@@ -307,12 +307,12 @@ export function sentenceState(sentence: Sentence): SentenceState {
     return sentence.profile_error ? "failed" : "done";
 }
 
-/** How right a word that was rated is: "good" from 0.9, "unsure" from 0.5, and "wrong" below. */
+/** How right a word that was rated is: "good" from 0.8, "unsure" from 0.5, and "wrong" below. */
 export type WordShade = "good" | "unsure" | "wrong";
 
 /** How right a word rated `value`, from 0 to 1, is taken to be, as it is coloured. */
 export function wordShade(value: number): WordShade {
-    return value >= 0.9 ? "good" : value >= 0.5 ? "unsure" : "wrong";
+    return value >= 0.8 ? "good" : value >= 0.5 ? "unsure" : "wrong";
 }
 
 /**
@@ -322,6 +322,25 @@ export function wordShade(value: number): WordShade {
  */
 export function wordTint(value: number): string {
     return `var(--word-${wordShade(value)})`;
+}
+
+/** The words of a text, each its letters and digits, with an apostrophe or a hyphen inside it. */
+function wordsOf(text: string): string[] {
+    return text.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) ?? [];
+}
+
+/**
+ * Whether the correction of a sentence changed a word of it, which says
+ * that something in it is off, however its words were rated, such as a
+ * phrase that is right in its grammar but says something else; one that
+ * changed only its punctuation, or the spaces in it, did not.
+ */
+export function isCorrected(sentence: Sentence): boolean {
+    if (!sentence.correction) {
+        return false;
+    }
+    const [written, corrected] = [wordsOf(sentence.text), wordsOf(sentence.correction)];
+    return written.length !== corrected.length || written.some((word, index) => word !== corrected[index]);
 }
 
 /** A stretch of the text that is one sentence, or the space between two. */

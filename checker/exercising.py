@@ -48,7 +48,7 @@ from typing import Any
 
 from anki_import import AnkiLink, AnkiUnavailable
 from grammar import Grammar
-from instances import instance_problem, schema_problem
+from instances import instance_problem, preview_of, read_preview, schema_problem
 from intake import read_usage
 from languages import language_of
 from logs import LogError, Task, has_anything, write_again, write_log
@@ -224,6 +224,10 @@ class Manifest:
     # "optional", as the learner chooses with a checkbox in the bar of the
     # session, off at first.
     sentence_checks: str = "never"
+    # What an instance asks, without what answers it, as instances.py
+    # describes, such as a favourite shows: each path with what is blanked
+    # in it; empty for one that shows nothing of it.
+    preview: list[tuple[str, str]] = field(default_factory=list)
 
 
 # Whether the sentences written in an exercise may be checked.
@@ -271,6 +275,7 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
                     data["sentence_checks"]
                     if data.get("sentence_checks") in SENTENCE_CHECKS
                     else "never",
+                    read_preview(data.get("preview")),
                 )
             )
     return sorted(
@@ -1210,6 +1215,28 @@ class Practice:
                 self._store.extend_replay(session["id"], exercise, ids)
         except ValueError as error:
             raise ExerciseError(str(error)) from None
+
+    def preview(self, session_id: str, exercise: str) -> list[list[str]]:
+        """What each instance of an exercise of a session asks, without what
+        answers it, as its manifest's `preview` says, in order: the instances
+        it replays, or else those it made; none for one that declares no
+        preview, or whose instances are gone. Raises ValueError for an
+        exercise the session has not."""
+        session = self._store.session(session_id)
+        if session is None or exercise not in session["exercises"]:
+            raise ValueError("there is no such exercise in the session")
+        manifest = next(
+            (each for each in exercises(self._directory) if each.id == exercise), None
+        )
+        if manifest is None or not manifest.preview:
+            return []
+        try:
+            made = self._store.instances(
+                exercise, self._store.instance_ids(session_id, exercise)
+            )
+        except ValueError:
+            return []
+        return [preview_of(instance, manifest.preview) for instance in made]
 
     def replay(
         self, session_id: str, exercise: str, fresh: bool = False

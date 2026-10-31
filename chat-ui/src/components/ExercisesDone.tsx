@@ -17,6 +17,7 @@ import {
     fetchExercises,
     fetchFavourites,
     fetchLessons,
+    fetchPreview,
     fetchSession,
     fetchSessions,
     fileFavourite,
@@ -24,11 +25,12 @@ import {
     interfaceAddress,
     type Lesson,
     type PracticeSession,
+    renameFavourite,
     sessionTitleOf,
     setFavourite,
 } from "../lib/practice";
 import { fetchTopics, type Topic } from "../lib/topics";
-import { GradeRound } from "./GradeRound";
+import { AskedRound, GradeRound } from "./GradeRound";
 
 interface Props {
     /** Whether the tab is shown, which is when the exercises are listed. */
@@ -64,8 +66,11 @@ interface Listed {
 /** What is being dragged among the favourites: a favourite, or a folder. */
 type Dragged = { session: string; exercise: string } | { folder: number };
 
-/** A folder whose name is being written: a new one in `parent`, or one being renamed. */
-type Naming = { parent: number | null } | { folder: number };
+/**
+ * A name being written: of a new folder in `parent`, of a folder being
+ * renamed, or of a favourite.
+ */
+type Naming = { parent: number | null } | { folder: number } | { session: string; exercise: string };
 
 /** An exercise done in a session, as it is listed. */
 interface Done {
@@ -73,6 +78,9 @@ interface Done {
     exercise: string;
     progress: ExerciseProgress;
 }
+
+/** What a favourite that was opened asks, each instance as its texts. */
+type Previewed = string[][] | "loading" | "failed";
 
 /** What was done in a session that was opened: the grades of its exercises and their logs. */
 type Opened = { grades: Grade[]; logs: Record<string, string> } | "loading" | "failed";
@@ -108,7 +116,9 @@ function timeOf(seconds: number): string {
  * Every exercise done, the latest first and by day, in the panel of the
  * logs: what it was of and how it went, and, once opened, each round of it
  * as a card of its own, what it gave and what was answered, with its log.
- * One whose instances were kept can be done again as it was.
+ * One whose instances were kept can be done again as it was. A favourite
+ * is a placeholder of the exercise rather than a record of the time it was
+ * done: it shows what it is of and, once opened, only what it asks.
  */
 export function ExercisesDone({ active, language, revision, onReplay, favouritesOnly = false }: Props) {
     const [listed, setListed] = useState<Listed | null>(null);
@@ -142,6 +152,7 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
                     setListed({ sessions, lessons, topics, exercises, ...favourites });
                     // what was done is had again as it is opened
                     setOpened({});
+                    setPreviews({});
                     setError(null);
                 }
             },
@@ -151,6 +162,21 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
             current = false;
         };
     }, [active, language, revision, shownIn]);
+
+    // what each favourite opened asks, by its session's id and its own
+    const [previews, setPreviews] = useState<Record<string, Previewed>>({});
+
+    function preview(sessionId: string, exercise: string) {
+        const key = `${sessionId}:${exercise}`;
+        if (previews[key] && previews[key] !== "failed") {
+            return;
+        }
+        setPreviews((current) => ({ ...current, [key]: "loading" }));
+        fetchPreview(sessionId, exercise).then(
+            (found) => setPreviews((current) => ({ ...current, [key]: found })),
+            () => setPreviews((current) => ({ ...current, [key]: "failed" })),
+        );
+    }
 
     function open(sessionId: string) {
         if (opened[sessionId] && opened[sessionId] !== "failed") {
@@ -220,10 +246,17 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
     function named(name: string | null) {
         const was = naming;
         setNaming(null);
-        if (!was || !name) {
+        if (!was || name === null) {
             return;
         }
-        changed("folder" in was ? changeFavouriteFolder(was.folder, { name }) : addFavouriteFolder(name, was.parent));
+        if ("session" in was) {
+            // an empty name calls it by its exercise again
+            changed(renameFavourite(was.session, was.exercise, name));
+        } else if (name) {
+            changed(
+                "folder" in was ? changeFavouriteFolder(was.folder, { name }) : addFavouriteFolder(name, was.parent),
+            );
+        }
     }
 
     function removeFolder(folder: FavouriteFolder, count: number) {
@@ -263,8 +296,12 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
     if (!listed) {
         return <p className="sidebar-note">{t("Loading…")}</p>;
     }
-    const isFavourite = (session: PracticeSession, exercise: string) =>
-        listed.favourites.some((each) => each.session_id === session.id && each.exercise === exercise);
+    const favouriteOf = (session: PracticeSession, exercise: string) =>
+        listed.favourites.find((each) => each.session_id === session.id && each.exercise === exercise);
+    const isFavourite = (session: PracticeSession, exercise: string) => favouriteOf(session, exercise) !== undefined;
+    // what it is called: among the favourites, the name the learner gave it, if any
+    const nameOf = (session: PracticeSession, exercise: string) =>
+        (favouritesOnly && favouriteOf(session, exercise)?.name) || "";
     const done = doneOf(listed.sessions).filter(({ session, exercise }) =>
         !favouritesOnly || isFavourite(session, exercise)
     );
@@ -291,7 +328,12 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
         if (chosen.size > 0 && !chosen.has(exercise)) {
             return false;
         }
-        const about = [exerciseTitle(exercise), ofSession(session), ...session.topics.map(topicTitle)]
+        const about = [
+            nameOf(session, exercise),
+            exerciseTitle(exercise),
+            ofSession(session),
+            ...session.topics.map(topicTitle),
+        ]
             .join(" ")
             .toLowerCase();
         return words.every((word) => about.includes(word));
@@ -425,11 +467,15 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
             : [];
         const log = typeof got === "object" ? got.logs[exercise] : undefined;
         const of = ofSession(session);
+        const name = nameOf(session, exercise);
+        const renaming = naming !== null && "session" in naming && naming.session === session.id
+            && naming.exercise === exercise;
         return (
             <li
                 key={`${session.id}:${exercise}`}
                 className="log-entry done-exercise"
-                draggable={favouritesOnly}
+                // not while its name is written, so that its text can be selected
+                draggable={favouritesOnly && !renaming}
                 onDragStart={(event) => {
                     event.stopPropagation();
                     event.dataTransfer.effectAllowed = "move";
@@ -440,7 +486,16 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
                     setDropOn(null);
                 }}
             >
-                <details onToggle={(event) => event.currentTarget.open && open(session.id)}>
+                <details
+                    onToggle={(event) => {
+                        if (event.currentTarget.open) {
+                            open(session.id);
+                            if (favouritesOnly) {
+                                preview(session.id, exercise);
+                            }
+                        }
+                    }}
+                >
                     <summary>
                         <span className="done-exercise-icon" aria-hidden>
                             {about?.icon
@@ -456,29 +511,57 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
                         </span>
                         <span className="done-exercise-what">
                             <span className="log-head">
-                                <span className="log-subject">{exerciseTitle(exercise)}</span>
-                                <span className="log-time">
-                                    {favouritesOnly
-                                        ? `${dayOf(progress.started_at ?? session.started_at)}, ${
-                                            timeOf(progress.started_at ?? session.started_at)
-                                        }`
-                                        : timeOf(progress.started_at ?? session.started_at)}
-                                </span>
+                                {renaming
+                                    ? (
+                                        // written where the title is, in the way it is
+                                        <NameField
+                                            className="favourite-rename"
+                                            initial={name}
+                                            placeholder={exerciseTitle(exercise)}
+                                            label={t("Name of the exercise")}
+                                            onDone={named}
+                                        />
+                                    )
+                                    : <span className="log-subject">{name || exerciseTitle(exercise)}</span>}
+                                {favouritesOnly && !renaming && (
+                                    <button
+                                        className="favourite-action"
+                                        title={t("Rename: empty for its own title")}
+                                        aria-label={t("Rename: empty for its own title")}
+                                        onClick={(event) => {
+                                            event.preventDefault();
+                                            setNaming({ session: session.id, exercise });
+                                        }}
+                                    >
+                                        ✎
+                                    </button>
+                                )}
+                                {!favouritesOnly && (
+                                    <span className="log-time">
+                                        {timeOf(progress.started_at ?? session.started_at)}
+                                    </span>
+                                )}
                                 <FavouriteStar
                                     favourite={isFavourite(session, exercise)}
                                     removing={favouritesOnly}
                                     onChange={(kept) => favour(session, exercise, kept)}
                                 />
                             </span>
-                            <span className="log-where">
-                                {[
-                                    of,
-                                    ...session.topics.map(topicTitle),
-                                    progress.replays ? t("done again") : "",
-                                ].filter(Boolean).join(" · ")}
-                            </span>
+                            {favouritesOnly
+                                // a favourite is told by its name alone; one renamed still tells what exercise it is
+                                ? name && <span className="log-where">{exerciseTitle(exercise)}</span>
+                                : (
+                                    <span className="log-where">
+                                        {[
+                                            of,
+                                            ...session.topics.map(topicTitle),
+                                            progress.replays ? t("done again") : "",
+                                        ]
+                                            .filter(Boolean).join(" · ")}
+                                    </span>
+                                )}
                             <span className="done-foot">
-                                <Results progress={progress} />
+                                {!favouritesOnly && <Results progress={progress} />}
                                 {favouritesOnly && (
                                     <MoveTo
                                         folders={folderChoices()}
@@ -524,16 +607,22 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
                             </span>
                         </span>
                     </summary>
-                    {got === "loading" && <p className="sidebar-note">{t("Loading…")}</p>}
-                    {got === "failed" && (
-                        <p className="sidebar-note error">
-                            {t("What was done could not be had.")}
-                        </p>
-                    )}
-                    {typeof got === "object" && grades.length === 0 && (
-                        <p className="sidebar-note">{t("Nothing was answered.")}</p>
-                    )}
-                    {grades.length > 0 && (
+                    {favouritesOnly
+                        ? asked(previews[`${session.id}:${exercise}`], got, grades)
+                        : (
+                            <>
+                                {got === "loading" && <p className="sidebar-note">{t("Loading…")}</p>}
+                                {got === "failed" && (
+                                    <p className="sidebar-note error">
+                                        {t("What was done could not be had.")}
+                                    </p>
+                                )}
+                                {typeof got === "object" && grades.length === 0 && (
+                                    <p className="sidebar-note">{t("Nothing was answered.")}</p>
+                                )}
+                            </>
+                        )}
+                    {!favouritesOnly && grades.length > 0 && (
                         // each round of the exercise, as a card of its own
                         <ol className="done-rounds">
                             {grades.map((grade, number) => (
@@ -545,7 +634,7 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
                             ))}
                         </ol>
                     )}
-                    {log && (
+                    {log && !favouritesOnly && (
                         <details className="done-log">
                             <summary>{t("Log")}</summary>
                             <p>{log}</p>
@@ -554,6 +643,45 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
                 </details>
             </li>
         );
+    };
+    /**
+     * What a favourite asks, each round as a card: what it made, as its
+     * preview shows it, or, for one that shows nothing of it, what was
+     * asked in what was answered.
+     */
+    const asked = (previewed: Previewed | undefined, got: Opened | undefined, grades: Grade[]) => {
+        const rounds = Array.isArray(previewed) ? previewed.filter((texts) => texts.length > 0) : [];
+        if (rounds.length > 0) {
+            return (
+                <ol className="done-rounds">
+                    {rounds.map((texts, number) => (
+                        <AskedRound
+                            key={number}
+                            texts={texts}
+                            label={t("Round {number}", { number: number + 1 })}
+                        />
+                    ))}
+                </ol>
+            );
+        }
+        if (previewed === "loading" || previewed === undefined || got === "loading" || got === undefined) {
+            return <p className="sidebar-note">{t("Loading…")}</p>;
+        }
+        if (grades.length > 0) {
+            return (
+                <ol className="done-rounds">
+                    {grades.map((grade, number) => (
+                        <GradeRound
+                            key={number}
+                            grade={grade}
+                            label={t("Round {number}", { number: number + 1 })}
+                            asked
+                        />
+                    ))}
+                </ol>
+            );
+        }
+        return <p className="sidebar-note">{t("Nothing of what it asks was kept.")}</p>;
     };
     const days: { day: string; items: Done[] }[] = [];
     for (const each of shown) {
@@ -626,26 +754,48 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
     );
 }
 
-/** A folder's name being written, kept on Enter or as the field is left, given up on Escape or when empty. */
-function NameField({ initial, onDone }: { initial: string; onDone: (name: string | null) => void }) {
+/**
+ * A name being written, of a folder unless told otherwise, kept on Enter
+ * or as the field is left, given up on Escape, with null.
+ */
+function NameField(
+    {
+        initial,
+        onDone,
+        placeholder = t("Name of the folder"),
+        label = placeholder,
+        className = "favourite-folder-name",
+    }: {
+        initial: string;
+        className?: string;
+        onDone: (name: string | null) => void;
+        placeholder?: string;
+        label?: string;
+    },
+) {
     const [name, setName] = useState(initial);
     const [done, setDone] = useState(false);
     function finish(kept: string | null) {
         if (!done) {
             setDone(true);
-            onDone(kept?.trim() || null);
+            onDone(kept === null ? null : kept.trim());
         }
     }
     return (
         <input
-            className="favourite-folder-name"
+            className={className}
             autoFocus
             value={name}
-            placeholder={t("Name of the folder")}
-            aria-label={t("Name of the folder")}
+            onFocus={(event) => event.currentTarget.select()}
+            // in a summary, neither a click nor a space opens the card
+            onClick={(event) => event.preventDefault()}
+            onKeyUp={(event) => event.key === " " && event.preventDefault()}
+            placeholder={placeholder}
+            aria-label={label}
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {
                 if (event.key === "Enter") {
+                    event.preventDefault();
                     finish(name);
                 } else if (event.key === "Escape") {
                     finish(null);

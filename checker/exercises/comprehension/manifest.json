@@ -97,6 +97,12 @@
             "questions"
         ]
     },
+    "preview": [
+        "title",
+        "shown",
+        "text",
+        "questions.*.prompt"
+    ],
     "messages": {
         "German": {
             "Understand a text": "Einen Text verstehen",

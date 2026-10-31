@@ -68,7 +68,10 @@ new ones, reporting none as made. There may be fewer than there are
 instances to do, as when the learner left it before it made them all: it
 makes those after them as it would have, reporting them as made, and they
 are kept to be done again in their turn. `replay` is None otherwise. One that makes nothing, such as reviewing the
-learner's Anki cards or reading theory, declares no instance.
+learner's Anki cards or reading theory, declares no instance. One that
+declares an instance may also declare its `preview`, the texts of an
+instance that tell what it asks without what answers it, as
+checker/instances.py describes, which a favourite shows of what it is.
 
 An exercise whose manifest has `"topics": false` is not about the topics
 of the session; one that is about neither them nor a lesson, such as

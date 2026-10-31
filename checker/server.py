@@ -1332,6 +1332,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                          `show`, and the `tasks` it started,
                                          such as writing the log of an
                                          exercise that is over
+            GET /sessions/S/exercises/ID/preview
+                                         what each instance of it asks,
+                                         without what answers it, as
+                                         `{"preview": [[TEXT, ...], ...]}`,
+                                         empty for one that shows nothing
             POST /sessions/S/exercises/ID/replay
                                          start a session that does that
                                          exercise again exactly as it was,
@@ -1348,6 +1353,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                          S among the favourites
             PUT /favourites/S/ID/folder  put it in the folder `{"folder":
                                          N}`, or at the top with null
+            PUT /favourites/S/ID/name    call it `{"name": ...}`, or by its
+                                         exercise again with ""
             DELETE /favourites/S/ID      take it out of them
             POST /favourite-folders      make a folder, `{"name": ...,
                                          "parent": N}`, at the top without a
@@ -1377,13 +1384,16 @@ class CheckerHandler(BaseHTTPRequestHandler):
         step = re.fullmatch(r"/sessions/([^/]+)/exercises/([^/]+)/([a-z]+)", url.path)
         favourite = re.fullmatch(r"/favourites/([^/]+)/([^/]+)", url.path)
         filed = re.fullmatch(r"/favourites/([^/]+)/([^/]+)/folder", url.path)
+        renamed = re.fullmatch(r"/favourites/([^/]+)/([^/]+)/name", url.path)
         folder = re.fullmatch(r"/favourite-folders(?:/(\d+))?", url.path)
         listed = url.path in ("/lessons", "/exercises", "/sessions", "/favourites")
         store = self.account.store
         if (
             practice is None
             or store is None
-            or not (listed or one or end or step or favourite or filed or folder)
+            or not (
+                listed or one or end or step or favourite or filed or renamed or folder
+            )
         ):
             return False
         try:
@@ -1418,6 +1428,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 into = _folder_id(self._read_body().get("folder"))
                 store.move_favourite(filed.group(1), filed.group(2), into)
                 self._reply(HTTPStatus.OK, favourites_of(store))
+            elif method == "PUT" and renamed:
+                name = self._read_body().get("name")
+                if not isinstance(name, str):
+                    raise ValueError("a favourite is named with a string")
+                store.rename_favourite(renamed.group(1), renamed.group(2), name)
+                self._reply(HTTPStatus.OK, favourites_of(store))
             elif method == "DELETE" and favourite:
                 store.remove_favourite(favourite.group(1), favourite.group(2))
                 self._reply(HTTPStatus.OK, favourites_of(store))
@@ -1442,6 +1458,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
             elif folder and folder.group(1) and method == "DELETE":
                 store.remove_favourite_folder(int(folder.group(1)))
                 self._reply(HTTPStatus.OK, favourites_of(store))
+            elif method == "GET" and step and step.group(3) == "preview":
+                self._reply(
+                    HTTPStatus.OK,
+                    {"preview": practice.preview(step.group(1), step.group(2))},
+                )
             elif method == "POST" and step and step.group(3) == "replay":
                 fresh = self._read_body().get("fresh") is True
                 self._reply(

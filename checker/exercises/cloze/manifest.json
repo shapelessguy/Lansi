@@ -46,6 +46,12 @@
             "items"
         ]
     },
+    "preview": [
+        {
+            "path": "items.*.text",
+            "blank": "\\[[^\\[\\]]+\\]"
+        }
+    ],
     "messages": {
         "German": {
             "Fill the gaps": "Lücken füllen",

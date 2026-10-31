@@ -40,6 +40,9 @@
             "items"
         ]
     },
+    "preview": [
+        "items.*.source"
+    ],
     "messages": {
         "German": {
             "Translate": "Übersetzen",

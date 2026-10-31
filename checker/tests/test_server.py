@@ -2722,7 +2722,7 @@ def test_the_tables_of_a_note_of_the_tutor_and_their_rows_are_read_a_page_at_a_t
     assert (missing, not_a_note) == (404, 404)
 
 
-def test_the_favourites_are_put_in_folders_that_are_made_renamed_moved_and_deleted(
+def test_the_favourites_are_named_and_put_in_folders_that_are_made_renamed_moved_and_deleted(
     with_users: str, tmp_path: Path
 ) -> None:
     ada = log_in(with_users, "ada", "a password")
@@ -2745,6 +2745,7 @@ def test_the_favourites_are_put_in_folders_that_are_made_renamed_moved_and_delet
     made = asked("/favourite-folders", "POST", {"name": "Sets", "parent": anki["id"]})
     [inner] = [each for each in made["folders"] if each["name"] == "Sets"]
     filed = asked("/favourites/s1/cloze/folder", "PUT", {"folder": inner["id"]})
+    named = asked("/favourites/s1/cloze/name", "PUT", {"name": "Letters"})
     asked(f"/favourite-folders/{inner['id']}", "PUT", {"name": "B1", "parent": None})
     into_itself, _, _ = send(
         f"{with_users}/favourite-folders/{anki['id']}",
@@ -2756,6 +2757,7 @@ def test_the_favourites_are_put_in_folders_that_are_made_renamed_moved_and_delet
     deleted = asked(f"/favourite-folders/{inner['id']}", "DELETE")
 
     assert filed["favourites"][0]["folder"] == inner["id"]
+    assert named["favourites"][0]["name"] == "Letters"
     assert into_itself == 400
     assert {(each["name"], each["parent"]) for each in after["folders"]} == {
         ("Anki", None),

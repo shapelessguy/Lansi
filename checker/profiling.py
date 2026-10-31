@@ -21,6 +21,7 @@ import urllib.request
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 from models import Model
@@ -135,7 +136,12 @@ class WordRating:
 
 
 class ProfileError(Exception):
-    """A profile could not be made. The message says why."""
+    """A profile could not be made. The message says why, and `status` is
+    the HTTP status the request was refused with, if it was."""
+
+    def __init__(self, message: str = "", status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 def describe_usage(profile: Profile) -> dict[str, object]:
@@ -198,7 +204,7 @@ def post(
             decoded: dict[str, Any] = json.loads(_read(response, within, where))
             return decoded
     except urllib.error.HTTPError as error:
-        raise ProfileError(error_message(error, where)) from None
+        raise ProfileError(error_message(error, where), error.code) from None
     except (OSError, ValueError) as error:
         raise ProfileError(f"could not reach {where}: {error}") from None
 
@@ -217,8 +223,34 @@ def _read(response: Any, within: float | None, where: str) -> bytes:
     return b"".join(pieces)
 
 
+# The paths a server of one's own may take decisions on: llama.cpp's, then
+# the one OpenRouter's are named for.
+DECISION_PATHS = ("systemone", "decisions")
+# the path each address was found to take decisions on
+_decision_paths: dict[str, str] = {}
+
+
 def send_decisions(body: dict[str, Any], model: Model) -> dict[str, Any]:
-    return post(model.endpoint("decisions"), body, model.headers(), model.where)
+    """Ask a decision model. One at an address of its own is asked on each
+    of DECISION_PATHS in turn, beginning with the one it was found to answer
+    on, until one is there, which is remembered."""
+    if model.on_openrouter:
+        return post(model.endpoint("decisions"), body, model.headers(), model.where)
+    found = _decision_paths.get(model.url)
+    *before, last = sorted(DECISION_PATHS, key=lambda path: path != found)
+    for path in before:
+        try:
+            decoded = post(model.endpoint(path), body, model.headers(), model.where)
+        except ProfileError as error:
+            # a path the server has not is not there; anything else is the answer
+            if error.status != HTTPStatus.NOT_FOUND:
+                raise
+            continue
+        _decision_paths[model.url] = path
+        return decoded
+    decoded = post(model.endpoint(last), body, model.headers(), model.where)
+    _decision_paths[model.url] = last
+    return decoded
 
 
 def error_message(error: urllib.error.HTTPError, where: str) -> str:

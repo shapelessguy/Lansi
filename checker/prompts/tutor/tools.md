@@ -28,7 +28,7 @@ The learner's latest sessions of practice, the latest first: each with its id, w
 
 ## Prompt: favourites
 
-The exercises the learner keeps among their favourites, the latest added first: each with the id of its session and its own, the folder the learner keeps it in, as a path such as "Anki / B1 sets", empty at the top, when it was added and done, its lesson, how many answers were right, partial and wrong, and the scores it came to. They are the ones the learner liked, to do again.
+The exercises the learner keeps among their favourites, the latest added first: each with the id of its session and its own, the name the learner gave it, empty if they gave none, the folder the learner keeps it in, as a path such as "Anki / B1 sets", empty at the top, when it was added and done, its lesson, how many answers were right, partial and wrong, and the scores it came to. They are the ones the learner liked, to do again.
 
 ## Prompt: exercise_done
 

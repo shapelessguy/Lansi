@@ -96,6 +96,9 @@ class Language:
     # Words that are written with a full stop but do not end a sentence,
     # without the final full stop, in small letters.
     abbreviations: frozenset[str] = frozenset()
+    # The name of the Hunspell dictionary its spelling is checked with, such
+    # as "de_DE", where the system has it, as spelling.py finds it.
+    hunspell: str | None = None
 
     def __init__(self, name: str) -> None:
         self.name = name

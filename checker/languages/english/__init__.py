@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 class English(Language):
     answer_words = {"truefalse": ("True", "False"), "yesno": ("Yes", "No")}
+    hunspell = "en_US"
     # "the dog", "a cat", "to go"
     note_prefixes = frozenset({"the", "a", "an", "to"})
     abbreviations = frozenset(

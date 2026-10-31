@@ -40,6 +40,10 @@
             "prompts"
         ]
     },
+    "preview": [
+        "card",
+        "prompts.*"
+    ],
     "messages": {
         "German": {
             "Speak": "Sprechen",

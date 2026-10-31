@@ -707,6 +707,33 @@ def test_what_an_exercise_makes_is_kept_and_done_again_exactly(
     assert once_more["exercises"] == {"echo": 3}
 
 
+def test_the_preview_of_an_exercise_is_what_each_instance_it_made_asks(
+    practice: Practice, directory: Path
+) -> None:
+    session, _ = practice.start_session("German", LESSON, [], {"echo": 3})
+    making(directory)
+    practice.step(session["id"], "echo", "start", None, LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "make", LEARNER, answering())
+    practice.step(session["id"], "echo", "act", "make", LEARNER, answering())
+    # echo declares no preview yet
+    unseen = practice.preview(session["id"], "echo")
+    (directory / "echo" / "manifest.json").write_text(
+        json.dumps(
+            {
+                "title": "Echo",
+                "instance": ECHO_INSTANCE,
+                "preview": [{"path": "text", "blank": "stehe"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert unseen == []
+    assert practice.preview(session["id"], "echo") == [["Ich ___ auf."]] * 2
+    with pytest.raises(ValueError):
+        practice.preview(session["id"], "picture")
+
+
 def test_an_instance_unlike_the_shape_of_its_exercise_is_refused(
     practice: Practice, directory: Path
 ) -> None:

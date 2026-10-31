@@ -30,6 +30,8 @@
     --word-good: rgb(46 160 67 / 30%);
     --word-unsure: rgb(212 167 44 / 38%);
     --word-wrong: rgb(215 58 73 / 40%);
+    /* the underline of a sentence the correction changed a word of */
+    --corrected: rgb(214 110 24);
     --icon-bg: #f4f3ef;
     /* a colour for each level, from green at the start to pink at the top */
     --level-a1: #1f8a4c;
@@ -70,6 +72,7 @@
         --word-good: rgb(63 185 80 / 30%);
         --word-unsure: rgb(227 179 65 / 34%);
         --word-wrong: rgb(248 81 73 / 40%);
+        --corrected: rgb(240 150 70);
         --icon-bg: #e4e3dd;
         --level-a1: #5fd18a;
         --level-a2: #4fcfcf;
@@ -106,6 +109,7 @@
     --word-good: rgb(63 185 80 / 30%);
     --word-unsure: rgb(227 179 65 / 34%);
     --word-wrong: rgb(248 81 73 / 40%);
+    --corrected: rgb(240 150 70);
     --icon-bg: #e4e3dd;
     --level-a1: #5fd18a;
     --level-a2: #4fcfcf;
@@ -4003,6 +4007,26 @@ div.book-cover {
     font-size: 0.9rem;
 }
 
+/* the name of a favourite being written, in the place and the type of its title */
+.favourite-rename {
+    flex: 1;
+    min-width: 0;
+    margin: -2px 0;
+    padding: 1px 6px;
+    border-color: var(--accent);
+    border-radius: 4px;
+    background: var(--panel);
+    font-weight: 600;
+}
+
+.favourite-rename:focus-visible {
+    outline: none;
+}
+
+.favourite-rename::placeholder {
+    font-weight: 400;
+}
+
 /* the folder a favourite is in, as a quiet pill that is a choice */
 .favourite-move {
     max-width: 10em;
@@ -5237,6 +5261,11 @@ div.book-cover {
 
 .done-round .round-task {
     color: var(--muted);
+}
+
+/* a favourite shows only what was asked, which is then all there is to read */
+.done-round.asked .round-task {
+    color: var(--text);
 }
 
 .done-round .round-answer {

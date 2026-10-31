@@ -11,12 +11,13 @@ import pytest
 from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore
 
-# What came with versions 24 to 34, taken out of a store to make it as one
+# What came with versions 24 to 35, taken out of a store to make it as one
 # was before: the instances the exercises made, what each replays, whether
 # a session is hidden, the parts of a grade and what it is about, the size
 # of an evaluation, which was a length, when a message of the tutor was
 # processed, what a book lists of itself, the versions of books, the brief
-# the tutor gave an exercise, the favourite exercises and their folders.
+# the tutor gave an exercise, the favourite exercises, their folders and
+# their names.
 BEFORE_INSTANCES = """
 DROP TABLE favourites;
 DROP TABLE favourite_folders;
@@ -1565,6 +1566,23 @@ def test_favourites_are_kept_in_folders_one_in_another(store: UserStore) -> None
     ):
         with pytest.raises(ValueError):
             wrong()
+
+
+def test_a_favourite_is_given_a_name_and_called_by_its_exercise_again_when_it_is_emptied(
+    store: UserStore,
+) -> None:
+    store.start_session("s1", "German", "l", [], {"cloze": 1})
+    store.add_favourite("s1", "cloze")
+
+    store.rename_favourite("s1", "cloze", "  Office   letters ")
+    named = store.favourites()[0]["name"]
+    store.rename_favourite("s1", "cloze", " ")
+
+    assert named == "Office letters"
+    assert store.favourites()[0]["name"] is None
+    for exercise, name in (("cloze", "x" * 101), ("picture", "Lost")):
+        with pytest.raises(ValueError):
+            store.rename_favourite("s1", exercise, name)
 
 
 def test_a_folder_of_the_favourites_cannot_go_into_itself_or_one_in_it(

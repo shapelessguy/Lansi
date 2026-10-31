@@ -940,6 +940,7 @@ def data_tools(
                 {
                     "session": session["id"],
                     "exercise": exercise,
+                    "name": favourite.get("name") or "",
                     "folder": path(favourite.get("folder")),
                     "added": _date(favourite["added_at"]),
                     "started": _date(session["started_at"]),

@@ -22,6 +22,7 @@ from profiling import (
     post,
     read_profile,
     read_questions,
+    send_decisions,
     spent,
     spent_by,
     weigh_ratings,
@@ -489,3 +490,74 @@ def test_a_word_is_rated_without_the_punctuation_beside_it() -> None:
 
     assert '"weil" (word 3 of the sentence)' in instructions
     assert "Leave punctuation out" in instructions
+
+
+# the path a server of one's own takes decisions on
+
+
+def serving_decisions_on(path: str) -> tuple[HTTPServer, list[str]]:
+    """A server that answers decisions on `path` alone, and the paths it
+    was asked on."""
+    asked: list[str] = []
+
+    class Deciding(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            asked.append(self.path)
+            self.rfile.read(int(self.headers["Content-Length"]))
+            found = self.path == path
+            self.send_response(200 if found else 404)
+            self.end_headers()
+            self.wfile.write(b'{"answers": {}}' if found else b"File Not Found")
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Deciding)
+    threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+    ).start()
+    return server, asked
+
+
+@pytest.mark.parametrize(
+    "path, tried",
+    [
+        ("/v1/systemone", ["/v1/systemone"]),
+        ("/v1/decisions", ["/v1/systemone", "/v1/decisions"]),
+    ],
+)
+def test_a_server_of_ones_own_is_asked_on_the_path_it_takes_decisions_on(
+    path: str, tried: list[str]
+) -> None:
+    server, asked = serving_decisions_on(path)
+    model = Model("local/clef", f"http://127.0.0.1:{server.server_port}/v1")
+    try:
+        assert send_decisions({"state": "Er ist gut."}, model) == {"answers": {}}
+        assert asked == tried
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_path_a_server_takes_decisions_on_is_remembered_once_found() -> None:
+    server, asked = serving_decisions_on("/v1/decisions")
+    model = Model("local/clef", f"http://127.0.0.1:{server.server_port}/v1")
+    try:
+        send_decisions({}, model)
+        send_decisions({}, model)
+        assert asked == ["/v1/systemone", "/v1/decisions", "/v1/decisions"]
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_server_that_takes_decisions_on_no_path_says_it_refused() -> None:
+    server, asked = serving_decisions_on("/elsewhere")
+    model = Model("local/clef", f"http://127.0.0.1:{server.server_port}/v1")
+    try:
+        with pytest.raises(ProfileError, match=r"refused the request \(404\)"):
+            send_decisions({}, model)
+        assert asked == ["/v1/systemone", "/v1/decisions"]
+    finally:
+        server.shutdown()
+        server.server_close()

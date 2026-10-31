@@ -21,6 +21,7 @@ class German(Language):
     nouns_have_capitals = True
     equivalents = {"ß": "ss", "ä": "ae", "ö": "oe", "ü": "ue"}
     marks = "umlauts"
+    hunspell = "de_DE"
     # as the Goethe-Institut asks them
     answer_words = {"truefalse": ("Richtig", "Falsch"), "yesno": ("Ja", "Nein")}
     # "der Hund", "sich freuen"

@@ -897,6 +897,14 @@ export const MESSAGES = {
         German: "Neuer Ordner",
         Italian: "Nuova cartella",
     },
+    "Name of the exercise": {
+        German: "Name der Übung",
+        Italian: "Nome dell'esercizio",
+    },
+    "Rename: empty for its own title": {
+        German: "Umbenennen: leer für den eigenen Titel",
+        Italian: "Rinomina: vuoto per il titolo originale",
+    },
     "Name of the folder": {
         German: "Name des Ordners",
         Italian: "Nome della cartella",
@@ -956,6 +964,10 @@ export const MESSAGES = {
     "The answers could not be had.": {
         German: "Die Antworten konnten nicht geladen werden.",
         Italian: "Non è stato possibile caricare le risposte.",
+    },
+    "Nothing of what it asks was kept.": {
+        German: "Von dem, was sie fragt, wurde nichts aufbewahrt.",
+        Italian: "Non è stato conservato nulla di ciò che chiede.",
     },
     "Nothing was answered.": {
         German: "Es wurde nichts beantwortet.",

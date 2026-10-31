@@ -18,10 +18,20 @@ exercise that made it:
     {"type": "boolean"}             each may have an "enum" of what it may be
 
 A property that is not required may be left out, but is never null.
+
+What an instance asks, without what answers it, is its preview, as the
+`preview` of the manifest declares it: a list of the paths of the texts it
+shows, in order, each its names joined by dots, with `*` for each item of a
+list, and, where a text holds its answers, the pattern of each with
+`blank`, which is shown as a gap:
+
+    "preview": ["title", "questions.*.question",
+                {"path": "items.*.text", "blank": "\\[[^\\]]*\\]"}]
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 Schema = dict[str, Any]
@@ -112,6 +122,56 @@ def instance_problem(
         )
         return next((problem for problem in problems if problem), None)
     return None
+
+
+# what a text's answers are shown as in its preview
+GAP = "___"
+
+
+def read_preview(value: object) -> list[tuple[str, str]]:
+    """The preview a manifest declares, as each path with the pattern of
+    what is blanked in it, empty for none; what is not as described above,
+    such as a pattern that is not one, left out."""
+    read = []
+    for entry in value if isinstance(value, list) else []:
+        path, blank = (
+            (entry.get("path"), entry.get("blank", ""))
+            if isinstance(entry, dict)
+            else (entry, "")
+        )
+        if not (isinstance(path, str) and path and isinstance(blank, str)):
+            continue
+        try:
+            re.compile(blank)
+        except re.error:
+            continue
+        read.append((path, blank))
+    return read
+
+
+def preview_of(instance: object, preview: list[tuple[str, str]]) -> list[str]:
+    """What an instance asks, as `preview` (as `read_preview` gives it)
+    says: each text it names that is not empty, in order, its answers
+    blanked."""
+
+    def at(value: object, names: list[str]) -> list[str]:
+        if not names:
+            return [value] if isinstance(value, str) else []
+        first, rest = names[0], names[1:]
+        if first == "*":
+            items = value if isinstance(value, list) else []
+            return [text for each in items for text in at(each, rest)]
+        if isinstance(value, dict) and first in value:
+            return at(value[first], rest)
+        return []
+
+    shown = []
+    for path, blank in preview:
+        for text in at(instance, path.split(".")):
+            shown_text = re.sub(blank, GAP, text) if blank else text
+            if shown_text.strip():
+                shown.append(shown_text)
+    return shown
 
 
 def _is(value: object, kind: str) -> bool:

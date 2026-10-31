@@ -473,6 +473,18 @@ export function fetchSession(
 }
 
 /**
+ * What each instance an exercise of a session made asks, without what
+ * answers it, as its manifest's preview says: the texts of each, in order;
+ * none for one that shows nothing of what it made.
+ */
+export async function fetchPreview(sessionId: string, exercise: string): Promise<string[][]> {
+    const { preview } = await call<{ preview?: string[][] }>(
+        `/sessions/${encodeURIComponent(sessionId)}/exercises/${encodeURIComponent(exercise)}/preview`,
+    );
+    return preview ?? [];
+}
+
+/**
  * Where to take up a session again: the first of its exercises that is not
  * finished, or the last if all are.
  */
@@ -593,6 +605,8 @@ export interface Favourite {
     added_at: number;
     /** The folder it is kept in; null, or missing from a server before folders, at the top. */
     folder?: number | null;
+    /** The name the learner gave it; null, or missing from a server before names, for the title of its exercise. */
+    name?: string | null;
 }
 
 /** A folder the learner keeps favourites in, in the folder `parent`, null at the top. */
@@ -640,6 +654,16 @@ export async function fileFavourite(sessionId: string, exercise: string, folder:
         await call<Partial<Favourites>>(
             `/favourites/${encodeURIComponent(sessionId)}/${encodeURIComponent(exercise)}/folder`,
             putting({ folder }),
+        ),
+    );
+}
+
+/** Calls a favourite `name`, or by the title of its exercise again with an empty one. */
+export async function renameFavourite(sessionId: string, exercise: string, name: string): Promise<Favourites> {
+    return favouritesOf(
+        await call<Partial<Favourites>>(
+            `/favourites/${encodeURIComponent(sessionId)}/${encodeURIComponent(exercise)}/name`,
+            putting({ name }),
         ),
     );
 }
