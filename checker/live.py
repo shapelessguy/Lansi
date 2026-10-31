@@ -9,10 +9,11 @@ import json
 import threading
 from collections import OrderedDict
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import partial
 from typing import Any, Literal
 
+from checks import REST, CheckCache
 from models import Model
 from profiling import (
     QUESTIONS,
@@ -81,6 +82,8 @@ class _Asked:
     dropped: bool = False
     # The text box whose sentence it was asked about, which alone gives it up.
     box: str = ""
+    # Where the sentence was written, which it is kept under once answered.
+    source: str = REST
 
 
 # A question that is to be asked, where its answer is kept, and the answer.
@@ -128,6 +131,11 @@ class LiveChecker:
     An answer belongs to the question as it was asked and to the model that
     was asked. Other questions and another model are asked afresh, and going
     back to earlier ones brings back the answers they gave.
+
+    With `kept`, what was answered is kept between runs as well: a sentence
+    that is not remembered is looked for there before anything is asked,
+    and every answer that comes back, and is not dropped, is kept there
+    under the `source` the sentence was written in.
     """
 
     def __init__(
@@ -140,6 +148,7 @@ class LiveChecker:
         max_remembered: int = 10000,
         corrector: Corrector | None = None,
         on_corrected: OnCorrected | None = None,
+        kept: CheckCache | None = None,
     ) -> None:
         self._speller = speller
         self._profiler = profiler
@@ -149,6 +158,7 @@ class LiveChecker:
         self._on_corrected = on_corrected
         self._background = background
         self._max_remembered = max_remembered
+        self._kept = kept
         self._asked: OrderedDict[_Key, _Asked] = OrderedDict()
         # the questions that are out at the moment
         self._asking: dict[_Key, _Asked] = {}
@@ -169,6 +179,7 @@ class LiveChecker:
         correct_with: Model | None = None,
         into: str = "English",
         box: str = "",
+        source: str = REST,
     ) -> list[Sentence]:
         """Split `text` into sentences and fill in what is known about each.
 
@@ -184,7 +195,8 @@ class LiveChecker:
         `into` the language the learner reads, and the words are rated with
         what it wrote. `box` names the text box the text is of: what is out
         about the sentences of another box is left to it, as the boxes of a
-        page are checked in turn."""
+        page are checked in turn. `source` is where the text was written,
+        which what is answered about it is kept under."""
         sentences = split_sentences(text, caret)
         if questions is None:
             questions = QUESTIONS
@@ -220,7 +232,7 @@ class LiveChecker:
             for sentence in sentences:
                 sentence.spelling = self._speller.check(sentence.text)
                 correction_key = (sentence.text, correcting_model, _CORRECTION, "")
-                corrected = self._asked.get(correction_key) if correct_with else None
+                corrected = self._recalled(correction_key) if correct_with else None
                 keys = {
                     name: (
                         sentence.text,
@@ -250,7 +262,9 @@ class LiveChecker:
                     if corrected:
                         self._asked.move_to_end(correction_key)
                     elif can_correct and has_words(sentence.text):
-                        corrected = self._asked[correction_key] = _Asked(box=box)
+                        corrected = self._asked[correction_key] = _Asked(
+                            box=box, source=source
+                        )
                         self._asking[correction_key] = corrected
                         to_correct.append((sentence.text, correction_key, corrected))
                     if corrected:
@@ -264,10 +278,12 @@ class LiveChecker:
                 new: dict[str, _Question] = {}
                 for name, key in keys.items():
                     wanted.add(key)
-                    if key in self._asked:
+                    if self._recalled(key):
                         self._asked.move_to_end(key)
                     elif can_ask:
-                        asked = self._asked[key] = self._asking[key] = _Asked(box=box)
+                        asked = self._asked[key] = self._asking[key] = _Asked(
+                            box=box, source=source
+                        )
                         new[name] = (questions[name], key, asked)
                 if together and new:
                     to_ask.append((sentence.text, new))
@@ -279,7 +295,7 @@ class LiveChecker:
                 if not rate_words:
                     continue
                 wanted.add(words_key)
-                rated = self._asked.get(words_key)
+                rated = self._recalled(words_key)
                 if rated:
                     self._asked.move_to_end(words_key)
                 elif (
@@ -289,7 +305,7 @@ class LiveChecker:
                     and has_words(sentence.text)
                 ):
                     rated = self._asked[words_key] = self._asking[words_key] = _Asked(
-                        box=box
+                        box=box, source=source
                     )
                     answers = sentence.profile.answers
                     to_rate.append(
@@ -372,14 +388,14 @@ class LiveChecker:
     def _being_written(
         self, sentence: Sentence, keys: dict[str, _Key], words_key: _Key
     ) -> None:
-        rated = self._asked.get(words_key)
+        rated = self._recalled(words_key)
         if rated and rated.state == "failed":
             del self._asked[words_key]
         elif rated and rated.words:
             sentence.words = rated.words
         answers = {}
         for name, key in keys.items():
-            asked = self._asked.get(key)
+            asked = self._recalled(key)
             if asked is None:
                 continue
             if asked.state == "failed":
@@ -394,13 +410,28 @@ class LiveChecker:
             sentence.profile = Profile(answers)
 
     def _correction_being_written(self, sentence: Sentence, key: _Key) -> None:
-        corrected = self._asked.get(key)
+        corrected = self._recalled(key)
         if corrected and corrected.state == "failed":
             # leaving the sentence again is a fresh chance to ask
             del self._asked[key]
         elif corrected and corrected.correction:
             sentence.correction = corrected.correction
             sentence.correction_translation = corrected.translation
+
+    def _recalled(self, key: _Key) -> _Asked | None:
+        """What is remembered under `key`, brought back from what is kept
+        if it is not remembered."""
+        asked = self._asked.get(key)
+        if asked is None and self._kept:
+            value = self._kept.get(key)
+            if value is not None:
+                asked = self._asked[key] = _restored(key, value)
+        return asked
+
+    def _keep(self, key: _Key, asked: _Asked) -> None:
+        """Keep what was answered under `key` between runs."""
+        if self._kept and asked.state == "answered":
+            self._kept.put(key, asked.source, _stored(key, asked))
 
     def _fill_in(self, sentence: Sentence, keys: dict[str, _Key]) -> None:
         """Say where the profile of a finished sentence stands."""
@@ -470,6 +501,9 @@ class LiveChecker:
                         asked.answer = profile.answers.get(name) if profile else None
                         asked.error = error
                 dropped = all(asked.dropped for _, _, asked in new.values())
+        for _, key, asked in new.values():
+            if not asked.dropped:
+                self._keep(key, asked)
         if self._on_profiled:
             self._on_profiled(sentence_text, profile, error, dropped)
 
@@ -506,6 +540,8 @@ class LiveChecker:
                     rated.state = "answered" if ratings else "failed"
                     rated.words = ratings
                     rated.error = error
+        if not rated.dropped:
+            self._keep(key, rated)
         if self._on_rated:
             self._on_rated(sentence_text, ratings, error, rated.dropped)
 
@@ -541,5 +577,29 @@ class LiveChecker:
                     corrected.correction = correction
                     corrected.translation = translation
                     corrected.error = error
+        if not corrected.dropped:
+            self._keep(key, corrected)
         if self._on_corrected:
             self._on_corrected(sentence_text, correction, error, corrected.dropped)
+
+
+def _stored(key: _Key, asked: _Asked) -> Any:
+    """What is kept of an answer, as JSON can hold it."""
+    if key[2] == _WORDS:
+        return [asdict(rating) for rating in asked.words or []]
+    if key[2] == _CORRECTION:
+        return {"correction": asked.correction, "translation": asked.translation}
+    return asdict(asked.answer) if asked.answer else None
+
+
+def _restored(key: _Key, value: Any) -> _Asked:
+    """An answer brought back from what `_stored` kept of it."""
+    asked = _Asked(state="answered")
+    if key[2] == _WORDS:
+        asked.words = [WordRating(**rating) for rating in value]
+    elif key[2] == _CORRECTION:
+        asked.correction = value["correction"]
+        asked.translation = value["translation"]
+    else:
+        asked.answer = Answer(**value)
+    return asked

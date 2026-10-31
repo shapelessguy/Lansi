@@ -18,6 +18,7 @@ from unittest.mock import ANY
 import pytest
 from anki_import import AnkiImporter, AnkiLink, AnkiRefused, AnkiUnavailable
 from books import read_epub
+from checks import EXERCISES, REST, CheckCache
 from evaluating import Evaluations
 from exercising import Practice, Runner
 from intake import Intake
@@ -2767,3 +2768,25 @@ def test_the_favourites_are_named_and_put_in_folders_that_are_made_renamed_moved
         "favourites": [],
         "folders": [{"id": anki["id"], "name": "Anki", "parent": None}],
     }
+
+
+def test_the_sentences_of_an_exercise_are_kept_apart_from_the_rest(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.start_session("s1", "German", "l", [], {"cloze": 1})
+    kept = CheckCache(tmp_path / "checks.db")
+    checker = LiveChecker(
+        Speller(language=None, words=["hund"]),
+        KeyEchoingProfiler(),
+        background=lambda job: job(),
+        kept=kept,
+    )
+
+    with server_of(Account(checker, store=store)) as url:
+        for text, usage in [("Der Hund.", "s1"), ("Ein Hund.", "c1")]:
+            body = json.dumps({"text": text, "usage": usage}).encode()
+            post(f"{url}/sentences", body, key="a-key")
+
+    assert kept.count(EXERCISES) == 1
+    assert kept.count(REST) == 1

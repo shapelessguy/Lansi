@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
+from checks import EXERCISES, REST, CheckCache
 from live import LiveChecker
 from models import Model
 from profiling import (
@@ -1250,3 +1253,108 @@ def test_a_box_gives_up_what_is_out_about_its_own_sentence_once_it_changed() -> 
 
     assert ("Er ist gut.", True) in announced
     assert ("Sie ist klug.", False) in announced
+
+
+def keeping(
+    kept: CheckCache,
+    profiler: FakeProfiler | None = None,
+    corrector: FakeCorrector | None = None,
+    background: Callable[[Callable[[], None]], None] = lambda job: job(),
+) -> LiveChecker:
+    """A checker that keeps what was answered in `kept`, as after a restart
+    when made again with the same."""
+    profiler = profiler or FakeProfiler()
+    profiler.language = "German"
+    return LiveChecker(
+        Speller(language=None, words=WORDS),
+        profiler,
+        background=background,
+        corrector=corrector or FakeCorrector(),
+        kept=kept,
+    )
+
+
+def test_a_sentence_kept_in_an_earlier_run_is_not_asked_about_again(
+    tmp_path: Path,
+) -> None:
+    keep = CheckCache(tmp_path / "checks.db")
+    first = keeping(keep)
+    # the words are rated once the correction is in, the next time
+    correct(first, "Er ist gut.", rate_words=True)
+    correct(first, "Er ist gut.", rate_words=True)
+    profiler, corrector = FakeProfiler(), FakeCorrector()
+
+    (sentence,) = correct(
+        keeping(CheckCache(tmp_path / "checks.db"), profiler, corrector),
+        "Er ist gut.",
+        rate_words=True,
+    )
+
+    assert profiler.asked == []
+    assert profiler.rated == []
+    assert corrector.asked == []
+    assert sentence.processed
+    assert sentence.profile == Profile({"polite": YES})
+    assert sentence.words == ratings_of("Er ist gut.")
+    assert sentence.correction == "Correct: Er ist gut."
+    assert sentence.correction_translation == "In English: Er ist gut."
+
+
+def test_a_kept_sentence_is_shown_while_the_caret_is_on_it(tmp_path: Path) -> None:
+    keep = CheckCache(tmp_path / "checks.db")
+    correct(keeping(keep), "Er ist gut.")
+
+    (sentence,) = correct(
+        keeping(CheckCache(tmp_path / "checks.db")), "Er ist gut.", caret=5
+    )
+
+    assert sentence.profile == Profile({"polite": YES})
+    assert sentence.correction == "Correct: Er ist gut."
+
+
+def test_a_sentence_is_kept_under_the_source_it_was_written_in(
+    tmp_path: Path,
+) -> None:
+    keep = CheckCache(tmp_path / "checks.db")
+    checker = keeping(keep)
+
+    checker.check("Er ist gut.", None, KEYED, POLITE, source=EXERCISES)
+    checker.check("Sie ist klug.", None, KEYED, POLITE)
+
+    assert keep.count(EXERCISES) == 1
+    assert keep.count(REST) == 1
+
+
+def test_a_dropped_answer_is_not_kept(tmp_path: Path) -> None:
+    keep = CheckCache(tmp_path / "checks.db")
+    waiting: list[Callable[[], None]] = []
+    checker = keeping(keep, background=waiting.append)
+
+    ask(checker, "Er ist gut.")
+    ask(checker, "Er ist sehr gut.")
+    for job in waiting:
+        job()
+
+    assert keep.count(REST) == 1
+    assert keep.get(checker_key("Er ist gut.")) is None
+
+
+def test_a_failed_question_is_not_kept(tmp_path: Path) -> None:
+    keep = CheckCache(tmp_path / "checks.db")
+    profiler = FakeProfiler()
+    profiler.failing = True
+
+    ask(keeping(keep, profiler), "Er ist gut.")
+
+    assert keep.count(REST) == 0
+
+
+def checker_key(sentence: str) -> tuple[str, str, str, str]:
+    """The key the polite question about a sentence is kept under."""
+    model = FakeProfiler().named(KEYED)
+    return (
+        sentence,
+        f"{model.url} {model.name} German",
+        "polite",
+        json.dumps(POLITE["polite"], sort_keys=True),
+    )

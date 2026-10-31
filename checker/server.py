@@ -42,6 +42,7 @@ from anki_import import (
 )
 from books import PICTURE_ENDS, Book, BookError, read_epub
 from categories import CATEGORIES, practised_categories
+from checks import EXERCISES, REST, CheckCache
 from evaluating import EvaluationError, Evaluations
 from exercising import (
     Asker,
@@ -2916,8 +2917,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+        # the text of an exercise is counted under the session it is done in
+        store = self.account.store
+        source = (
+            EXERCISES if store and is_id(usage_id) and store.session(usage_id) else REST
+        )
         sentences = self.account.checker.check(
-            text, caret, model, questions, rate_words, correct_with, into, box
+            text, caret, model, questions, rate_words, correct_with, into, box, source
         )
         log(f"{datetime.now():%H:%M:%S}\n{describe(sentences)}")
         used, pending = self.account.checker.billing()
@@ -3160,6 +3166,7 @@ if __name__ == "__main__":
                 on_rated=print_ratings,
                 corrector=translator.correct,
                 on_corrected=print_correction,
+                kept=CheckCache(user_directory(data_directory, user) / "checks.db"),
             ),
             intake,
             importer,
