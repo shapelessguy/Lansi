@@ -4,13 +4,22 @@
         {
             "name": "linux-checker",
             "runtimeExecutable": "/home/claudio/.local/bin/just",
-            "runtimeArgs": ["--justfile", "/home/claudio/Documents/Lansi/justfile", "checker"],
+            "runtimeArgs": [
+                "--justfile",
+                "/home/claudio/Documents/Lansi/justfile",
+                "checker"
+            ],
             "port": 8092
         },
         {
             "name": "linux-ui",
             "runtimeExecutable": "npm",
-            "runtimeArgs": ["--prefix", "/home/claudio/Documents/Lansi/chat-ui", "run", "dev"],
+            "runtimeArgs": [
+                "--prefix",
+                "/home/claudio/Documents/Lansi/chat-ui",
+                "run",
+                "dev"
+            ],
             "port": 5173,
             "url": "http://127.0.0.1:5173"
         },
@@ -100,6 +109,25 @@
                 "$env:CHECKER_URL='http://127.0.0.1:8195'; Set-Location 'C:\\Users\\shape\\Documents\\codebase\\Lansi\\chat-ui'; npx vite --port 5187 --strictPort"
             ],
             "port": 5187
+        },
+        {
+            "name": "layout-checker",
+            "runtimeExecutable": "bash",
+            "runtimeArgs": [
+                "-c",
+                "CHECKER_PORT=8196 CHECKER_DATA=/tmp/claude-1000/-home-claudio-Documents-Lansi/23889814-5f3b-417a-a510-aed67d6faddc/scratchpad/data CHECKER_USERS=/tmp/claude-1000/-home-claudio-Documents-Lansi/23889814-5f3b-417a-a510-aed67d6faddc/scratchpad/users.json exec checker/.venv/bin/python checker/server.py"
+            ],
+            "port": 8196
+        },
+        {
+            "name": "layout-ui",
+            "runtimeExecutable": "bash",
+            "runtimeArgs": [
+                "-c",
+                "cd chat-ui && CHECKER_URL=http://127.0.0.1:8196 exec npx vite --port 5188 --strictPort"
+            ],
+            "port": 5188,
+            "url": "http://127.0.0.1:5188"
         }
     ]
 }
