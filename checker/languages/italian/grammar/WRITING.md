@@ -130,7 +130,7 @@ of every language; Italian uses them so:
 ### Boxes
 
 A quote whose first line is `[!kind]` is a coloured box. The kinds are
-fixed keywords, and the renderer's default titles are German, so **every
+fixed keywords, and the renderer's default titles are English, so **every
 box is given its Italian title**, always the same for a kind:
 
 | Box | Colour | Title | For |
@@ -163,9 +163,10 @@ already, and give it the role `review` instead.
 
 ## Checking
 
-- `just check`. The test
-  `test_the_lessons_of_italian_have_theory_to_show` in
-  `checker/languages/italian/test_language.py` reads every lesson.
+- `just check`. `test_the_lessons_that_are_kept_have_theory_to_show` in
+  `checker/exercises/theory/test_backend.py` shows every lesson as Theory,
+  and `test_the_lessons_of_italian_are_whole_and_each_kept_in_the_order` in
+  `checker/languages/italian/test_language.py` reads every lesson and point.
 - Open the lesson as Theory in the app, in light and dark, and turn every
   page: the buttons must not move much, no page may be much taller than the
   rest, and no table may need to scroll.

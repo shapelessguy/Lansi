@@ -2,8 +2,10 @@
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 """What Italian does its own way, as languages/ describes: its categories,
-in categories.py, with what the models are told of them in prompts/; and
-how the forms of its words are laid out, in tables.json."""
+in categories.py, with what the models are told of them in prompts/; how
+the forms of its words are laid out, in tables.json; its lessons, in
+grammar/; and its mock exams, those of the CELI of the Università per
+Stranieri di Perugia, in evaluations/."""
 
 from __future__ import annotations
 

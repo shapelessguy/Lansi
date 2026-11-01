@@ -3,7 +3,12 @@
 
 from __future__ import annotations
 
+import json
+
 from anki_import import vocabulary_words
+from evaluating import EVALUATIONS_DIRECTORY, SIZES, exams
+from exercising import exercises
+from grammar import Grammar
 
 from languages import language_of
 from languages.italian import LANGUAGE as ITALIAN
@@ -13,6 +18,17 @@ def test_italian_is_the_language_of_its_directory() -> None:
     assert language_of("Italian") is ITALIAN
     assert ITALIAN.directory is not None
     assert (ITALIAN.directory / "tables.json").is_file()
+    assert (ITALIAN.directory / "grammar" / "points.json").is_file()
+    assert sorted(
+        path.name for path in (ITALIAN.directory / "evaluations").iterdir()
+    ) == [
+        "A1.json",
+        "A2.json",
+        "B1.json",
+        "B2.json",
+        "C1.json",
+        "C2.json",
+    ]
 
 
 def test_italian_writes_its_nouns_small_and_its_accents_otherwise() -> None:
@@ -45,3 +61,41 @@ def test_the_forms_of_italian_are_laid_out_in_tables_of_their_tags() -> None:
     ]
     assert tables["noun"][0]["tags"] == "{row} {column}"
     assert tables["adjective"][1]["tags"] == "superlativo {row} {column}"
+
+
+def test_the_exams_of_italian_have_every_module_and_exercises_there_are() -> None:
+    found = exams("Italian", EVALUATIONS_DIRECTORY)
+
+    assert sorted(found) == ["A1", "A2", "B1", "B2", "C1", "C2"]
+    known = {manifest.id for manifest in exercises()}
+    for exam in found.values():
+        assert {part.module for part in exam.parts} == {
+            "listening",
+            "reading",
+            "writing",
+            "speaking",
+        }
+        assert {part.exercise for part in exam.parts} <= known
+
+
+def test_the_exams_of_italian_take_longer_at_each_size_up_to_the_exam_in_full() -> None:
+    for exam in exams("Italian", EVALUATIONS_DIRECTORY).values():
+        minutes = [exam.minutes_at(size) for size in SIZES]
+        assert minutes == sorted(set(minutes))
+        assert minutes[-1] == exam.minutes
+
+
+def test_the_lessons_of_italian_are_whole_and_each_kept_in_the_order() -> None:
+    grammar = Grammar()
+    lessons = grammar.lessons("Italian")
+    assert ITALIAN.directory is not None
+    order = json.loads(
+        (ITALIAN.directory / "grammar" / "order.json").read_text(encoding="utf-8")
+    )
+
+    assert sorted(lesson.id for lesson in lessons) == sorted(order)
+    assert {lesson.level for lesson in lessons} == {"A1", "A2", "B1", "B2"}
+    for each in lessons:
+        assert each.id in order
+        described = grammar.lesson("Italian", each.id)
+        assert described and all(point["statement"] for point in described["points"])
