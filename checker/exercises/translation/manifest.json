@@ -1,8 +1,16 @@
 {
     "title": "Translate",
-    "description": "Translate sentences that need the lesson into the language you learn, or whole texts, such as short stories, where a brief gives them. Each instance is a set of them, checked together.",
+    "description": "Translate sentences that need the lesson into the language you learn, or from it, or whole texts, such as short stories, where a brief gives them. Each instance is a set of them, checked together.",
     "sentence_checks": "optional",
     "options": {
+        "direction": {
+            "label": "Direction",
+            "about": "which way the learner translates at first, which they may turn while they do it: into the language learned, practising its grammar, or from it, practising reading it",
+            "choices": {
+                "into": "Into the language you learn",
+                "from": "From the language you learn"
+            }
+        },
         "sentences": {
             "label": "Sentences in a set",
             "about": "how many items a set has: sentences, or whole texts, such as short stories, where the brief gives texts; three stories in one set are 3, and ten sentences 10",
@@ -46,7 +54,6 @@
     "messages": {
         "German": {
             "Translate": "Übersetzen",
-            "Translate sentences that need the lesson into the language you learn, or whole texts, such as short stories, where a brief gives them. Each instance is a set of them, checked together.": "Übersetze Sätze, die die Lektion brauchen, in die Sprache, die du lernst, oder ganze Texte, etwa kurze Geschichten, wo eine Vorgabe sie gibt. Jede Runde ist eine Gruppe davon, die zusammen geprüft wird.",
             "Sentences in a set": "Sätze pro Gruppe",
             "Right": "Richtig",
             "Almost": "Fast",
@@ -61,11 +68,17 @@
             "Enter goes to the next sentence": "Enter geht zum nächsten Satz",
             "Done": "Fertig",
             "Next": "Weiter",
-            "Making the next sentences…": "Nächste Sätze werden erstellt…"
+            "Making the next sentences…": "Nächste Sätze werden erstellt…",
+            "Translate sentences that need the lesson into the language you learn, or from it, or whole texts, such as short stories, where a brief gives them. Each instance is a set of them, checked together.": "Übersetze Sätze, die die Lektion brauchen, in die Sprache, die du lernst, oder aus ihr, oder ganze Texte, etwa kurze Geschichten, wo eine Vorgabe sie gibt. Jede Runde ist eine Gruppe davon, die zusammen geprüft wird.",
+            "Direction": "Richtung",
+            "Into the language you learn": "In die Sprache, die du lernst",
+            "From the language you learn": "Aus der Sprache, die du lernst",
+            "Swap": "Umdrehen",
+            "Show translation": "Übersetzung zeigen",
+            "Hide translation": "Übersetzung verbergen"
         },
         "Italian": {
             "Translate": "Tradurre",
-            "Translate sentences that need the lesson into the language you learn, or whole texts, such as short stories, where a brief gives them. Each instance is a set of them, checked together.": "Traduci nella lingua che impari frasi che richiedono la lezione, o testi interi, come brevi storie, dove delle istruzioni li danno. Ogni turno è un gruppo di questi, corretti insieme.",
             "Sentences in a set": "Frasi per gruppo",
             "Right": "Giusto",
             "Almost": "Quasi",
@@ -80,7 +93,14 @@
             "Enter goes to the next sentence": "Invio passa alla frase successiva",
             "Done": "Fatto",
             "Next": "Avanti",
-            "Making the next sentences…": "Creazione delle frasi successive…"
+            "Making the next sentences…": "Creazione delle frasi successive…",
+            "Translate sentences that need the lesson into the language you learn, or from it, or whole texts, such as short stories, where a brief gives them. Each instance is a set of them, checked together.": "Traduci nella lingua che impari, o da essa, frasi che richiedono la lezione, o testi interi, come brevi storie, dove delle istruzioni li danno. Ogni turno è un gruppo di questi, corretti insieme.",
+            "Direction": "Direzione",
+            "Into the language you learn": "Nella lingua che impari",
+            "From the language you learn": "Dalla lingua che impari",
+            "Swap": "Inverti",
+            "Show translation": "Mostra traduzione",
+            "Hide translation": "Nascondi traduzione"
         }
     }
 }

@@ -9,7 +9,8 @@ $lesson
 $topics
 $words$guidance$made
 
-Give each item with a good translation into $language.
+Give each item with a good translation into $language. Write both as a \
+native speaker would, as either may be the one the learner translates.
 
 Reply with JSON alone: {"items": [{"source": "...", "reference": "..."}]}"""
 
@@ -42,5 +43,39 @@ Reply with JSON alone, with a verdict for each sentence or text in turn: \
 
 sentence = """
 $number. In $into: $source
+   Good: $reference
+   The learner's: $given"""
+
+judging_back = """
+You check translations into $into by someone learning $language at level \
+$level, who translates from $language to show they understand it. The \
+lesson they practise:
+
+$lesson
+
+The sentences or texts, each in $language, with a good translation and the learner's:
+
+$sentences
+
+Judge whether each translation of the learner shows they understood the \
+$language, not how close it is to the good one, nor how well they write \
+$into: another wording that means the same is right. "right" if it means \
+what the sentence means, with what the rules of the lesson give it, such \
+as a tense, a case or who does what. "partial" if it means the sentence \
+but misses a detail of it, such as a word left out or one taken for a \
+near one. "wrong" if it means something else, or misreads what the rules \
+of the lesson give it. Where the sentence can be read in more than one \
+way, a translation of any of those readings means it. A slip in the \
+$into, such as a misspelling, is no mistake: leave the result as it is. \
+The correction is the learner's translation with as few changes as make \
+it mean the sentence, or "" if it does. The note says in a sentence of \
+$into what was misread, and how the $language says it, or "" if there is \
+nothing to say.
+
+Reply with JSON alone, with a verdict for each sentence or text in turn: \
+{"verdicts": [{"result": "...", "correction": "...", "note": "..."}]}"""
+
+sentence_back = """
+$number. In $language: $source
    Good: $reference
    The learner's: $given"""

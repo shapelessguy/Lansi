@@ -2907,7 +2907,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             # the spelling of a text box whose sentences are not profiled;
             # the requests to the model are left to be reported to the one
             # that is
-            sentences = self.account.checker.spell(text, caret)
+            sentences = self.account.checker.spell(text, caret, into)
             self._reply(
                 HTTPStatus.OK,
                 {

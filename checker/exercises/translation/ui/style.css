@@ -11,3 +11,28 @@ textarea {
     margin: 8px 0 0;
     resize: vertical;
 }
+
+.direction {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 4px 0 12px;
+}
+
+.hint {
+    margin: 4px 0 0;
+}
+
+.hint .link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.reference {
+    margin: 4px 0 0;
+    font-style: italic;
+}

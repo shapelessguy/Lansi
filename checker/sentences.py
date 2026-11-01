@@ -41,6 +41,11 @@ class Sentence:
     complete: bool
     # What the spell checker found in it.
     spelling: list[SpellingIssue] = field(default_factory=list)
+    # The language it is written in, by its English name, as the spell
+    # checker found it: of the one learned and the one the learner reads,
+    # that whose dictionary finds the fewest words wrong in it. Empty where
+    # it was not looked for.
+    language: str = ""
     # Whether the sentence, as it is now, has been profiled.
     processed: bool = False
     # The answers to the questions asked about it, once it has been profiled.

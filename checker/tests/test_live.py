@@ -302,18 +302,16 @@ def test_a_sentence_is_profiled_again_when_the_model_changes(
     assert profiler.models == ["one/model", "other/model"]
 
 
-def test_a_sentence_is_profiled_again_when_the_language_studied_changes(
+def test_a_sentence_is_not_profiled_again_when_the_language_studied_changes(
     checker: LiveChecker, profiler: FakeProfiler
 ) -> None:
     checker.study("German")
     ask(checker, "Er ist gut.")
     checker.study("English")
     ask(checker, "Er ist gut.")
-    checker.study("German")
-    ask(checker, "Er ist gut.")
 
-    # what was answered in German before is still known
-    assert profiler.asked.count("Er ist gut.") == 2
+    # it is judged by the language it is written in, whichever is studied
+    assert profiler.asked.count("Er ist gut.") == 1
 
 
 # the questions

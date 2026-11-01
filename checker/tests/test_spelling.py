@@ -121,6 +121,23 @@ def test_the_speller_of_the_language_being_studied_goes_by_that_language() -> No
     assert speller.knows("dog") and not speller.knows("Hund")
 
 
+def test_a_sentence_is_spelled_by_the_language_most_of_it_is_written_in() -> None:
+    speller = StudySpeller("German")
+
+    german, in_german = speller.check_written("Ich habe einen dog.", ["English"])
+    english, in_english = speller.check_written("I have a big Hund.", ["English"])
+
+    assert (german, [issue.word for issue in in_german]) == ("German", ["dog"])
+    assert (english, [issue.word for issue in in_english]) == ("English", ["Hund"])
+
+
+def test_a_sentence_both_dictionaries_know_is_of_the_language_studied() -> None:
+    speller = StudySpeller("German")
+
+    assert speller.check_written("Hand", ["English"]) == ("German", [])
+    assert speller.check_written("Hand", ["Klingon"]) == ("German", [])
+
+
 def test_a_language_without_a_dictionary_has_no_word_found_wrong_or_known() -> None:
     speller = StudySpeller("Klingon")
 

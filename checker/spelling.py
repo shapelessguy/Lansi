@@ -220,7 +220,8 @@ DICTIONARIES = {
 
 class StudySpeller(Speller):
     """Checks words against the dictionary of the language being studied,
-    which may be changed at any time. A language there is no dictionary for
+    which may be changed at any time, or of the language a text is written
+    in, among others it is told of. A language there is no dictionary for
     has no word found wrong, and none known."""
 
     def __init__(self, language: str) -> None:
@@ -229,8 +230,8 @@ class StudySpeller(Speller):
         self._spellers: dict[str, Speller | None] = {}
         self._lock = threading.Lock()
 
-    def _speller(self) -> Speller | None:
-        name = self.language.strip().lower()
+    def _speller(self, language: str = "") -> Speller | None:
+        name = (language or self.language).strip().lower()
         with self._lock:
             if name not in self._spellers:
                 code = DICTIONARIES.get(name)
@@ -243,6 +244,24 @@ class StudySpeller(Speller):
     def check(self, text: str) -> list[SpellingIssue]:
         speller = self._speller()
         return speller.check(text) if speller else []
+
+    def check_written(
+        self, text: str, among: Iterable[str] = ()
+    ) -> tuple[str, list[SpellingIssue]]:
+        """The language `text` is written in, of the one studied and those
+        `among`, with the words its dictionary finds wrong in it: the one
+        whose dictionary finds the fewest wrong, the one studied where
+        several find as few. A language there is no dictionary for is not
+        one a text is found to be written in, unless none has one."""
+        found: tuple[str, list[SpellingIssue]] | None = None
+        for language in dict.fromkeys([self.language, *among]):
+            speller = self._speller(language) if language.strip() else None
+            if speller is None:
+                continue
+            issues = speller.check(text)
+            if found is None or len(issues) < len(found[1]):
+                found = (language, issues)
+        return found or (self.language, [])
 
     def knows(self, word: str) -> bool:
         speller = self._speller()

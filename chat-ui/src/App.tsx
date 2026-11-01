@@ -147,10 +147,10 @@ export function App({ user, initialSettings, initialChats }: Props) {
         window.addEventListener(LOGGED_EVENT, listAgain);
         return () => window.removeEventListener(LOGGED_EVENT, listAgain);
     }, []);
-    // the panels on the right share one place, so one is shown at a time
-    const [openPanel, setOpenPanel] = useState<Panel | "subchat" | null>(() => loadLayout().panel);
-    // The panels are found as they were left the next time the page is
-    // opened, but for the chat about a selection, which is gone by then.
+    // The panels on the right share one place, so one is shown at a time,
+    // and are found as they were left the next time the page is opened.
+    // The chat about a selection floats over them, and leaves them as they are.
+    const [panel, setOpenPanel] = useState<Panel | null>(() => loadLayout().panel);
     // the tab shown last is shown again when the page is opened, and the text open last
     const [activity, setActivity] = useState<Activity>(() => loadLayout().activity);
     const [textId, setTextId] = useState<string | null>(() => loadLayout().text);
@@ -162,13 +162,14 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 logsOpen,
                 libraryTab: sidebarTab,
                 logsTab,
-                panel: openPanel === "subchat" ? null : openPanel,
+                panel,
                 activity,
                 text: textId,
             }),
-        [libraryOpen, logsOpen, sidebarTab, logsTab, openPanel, activity, textId],
+        [libraryOpen, logsOpen, sidebarTab, logsTab, panel, activity, textId],
     );
-    // the selection the floating chat is about, with a number that tells it from the one before
+    // the selection the floating chat is about, with a number that tells it from the one
+    // before, or null while it is closed
     const [asked, setAsked] = useState<{ translated: Translated; nonce: number } | null>(null);
     const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
     // where the chat puts the sentence checks, which are made of what it knows
@@ -642,10 +643,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
     // it, as in a book, in the chat.
     const chatShown = libraryOpen && !logsOpen && sidebarTab === "chat";
     const chatChecked = chatShown && !CHECKED_ACTIVITIES.includes(activity);
-    // the floating chat belongs to a selection
-    const panel = openPanel === "subchat" && !asked
-        ? null
-        : openPanel;
     // who answers what is asked about a selection, and who translates it, which may be a quicker model
     const asking = useMemo<Asking>(
         () => ({
@@ -1309,7 +1306,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                 </main>
                 <aside
                     className="side-panel"
-                    hidden={panel === null || panel === "subchat"}
+                    hidden={panel === null}
                     ref={setPanelSlot}
                 >
                     {panel === "checks" && !CHECKED_ACTIVITIES.includes(activity) && !chatChecked && (
@@ -1358,15 +1355,18 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     )}
                 </aside>
                 {/* floats over the page, which keeps its width */}
-                {panel === "subchat" && asked && (
-                    <section className="floating-window" aria-label={t("Ask about it")}>
+                {asked && (
+                    <section
+                        className={panel === null ? "floating-window" : "floating-window beside-panel"}
+                        aria-label={t("Ask about it")}
+                    >
                         <SubChat
                             key={asked.nonce}
                             translated={asked.translated}
                             asking={asking}
                             onUsage={addUsageEntry}
                             onTask={addTask}
-                            onClose={() => setOpenPanel(null)}
+                            onClose={() => setAsked(null)}
                         />
                     </section>
                 )}
@@ -1381,7 +1381,6 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         bookId && setListening({ source: bookSource(bookId, selection), nonce: Date.now() })}
                     onChat={(translated) => {
                         setAsked({ translated, nonce: Date.now() });
-                        setOpenPanel("subchat");
                     }}
                 />
                 {listening && (

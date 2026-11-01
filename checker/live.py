@@ -202,10 +202,11 @@ class LiveChecker:
             questions = QUESTIONS
         if self._profiler and model:
             model = self._profiler.named(model)
-        # A sentence is judged by the rules of the language studied, so what
-        # was answered in one language is not taken to hold in another.
+        # A sentence is judged by the language most of it is written in,
+        # whichever it is, and corrected so as well; what it is translated
+        # into is the other of the language studied and the one read.
         language = (self._profiler.language if self._profiler else None) or ""
-        asked_model = f"{model.url} {model.name} {language}" if model else ""
+        asked_model = f"{model.url} {model.name}" if model else ""
         can_ask = bool(self._profiler and model and model.problem() is None)
         # a model that names none is the corrector's usual one
         can_correct = bool(self._corrector and correct_with and correct_with.has_key)
@@ -230,7 +231,7 @@ class LiveChecker:
             # the questions the text, as it is now, wants answered
             wanted: set[_Key] = set()
             for sentence in sentences:
-                sentence.spelling = self._speller.check(sentence.text)
+                self._spell(sentence, into)
                 correction_key = (sentence.text, correcting_model, _CORRECTION, "")
                 corrected = self._recalled(correction_key) if correct_with else None
                 keys = {
@@ -357,7 +358,9 @@ class LiveChecker:
             )
         return sentences
 
-    def spell(self, text: str, caret: int | None = None) -> list[Sentence]:
+    def spell(
+        self, text: str, caret: int | None = None, into: str = "English"
+    ) -> list[Sentence]:
         """Split `text` into sentences and check their spelling alone. Nothing
         is profiled, and what is out or known about the text that `check` is
         given is left as it is, so that other text boxes can be checked
@@ -365,13 +368,25 @@ class LiveChecker:
         sentences = split_sentences(text, caret)
         with self._lock:
             for sentence in sentences:
-                sentence.spelling = self._speller.check(sentence.text)
+                self._spell(sentence, into)
         return sentences
+
+    def _spell(self, sentence: Sentence, into: str) -> None:
+        """Check the spelling of `sentence` by the dictionary of the language
+        it is written in, the one studied or `into`, the one the learner
+        reads, where the speller can tell them apart."""
+        if isinstance(self._speller, StudySpeller):
+            sentence.language, sentence.spelling = self._speller.check_written(
+                sentence.text, [into]
+            )
+        else:
+            sentence.spelling = self._speller.check(sentence.text)
 
     def study(self, language: str) -> None:
         """Go by `language`, given by its English name, from now on: it is
-        the one whose spelling is checked, where the speller can be told,
-        and the one sentences are judged by."""
+        the one whose spelling is checked first, where the speller can be
+        told, beside the one the learner reads, and the one a sentence in
+        the language read is translated into."""
         if isinstance(self._speller, StudySpeller):
             self._speller.language = language
         if self._profiler:

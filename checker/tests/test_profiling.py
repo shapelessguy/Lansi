@@ -449,7 +449,7 @@ def test_a_response_that_comes_in_pieces_within_its_time_is_read_whole(
     assert post(trickling, {}, {}, "the model", timeout=5, within=5) == {"done": True}
 
 
-def test_the_model_is_told_the_language_being_studied_once_it_is_known() -> None:
+def test_a_sentence_is_judged_by_its_own_language_and_not_the_one_studied() -> None:
     sent: list[dict[str, Any]] = []
 
     def send(body: dict[str, Any], model: Model) -> dict[str, Any]:
@@ -471,8 +471,11 @@ def test_the_model_is_told_the_language_being_studied_once_it_is_known() -> None
 
     assert [body["state"] for body in sent] == [
         {"sentence": "Wie geht es?"},
-        {"sentence": "Wie geht es?", "language": "German"},
+        {"sentence": "Wie geht es?"},
     ]
+    # what is asked about something of the language studied is told it
+    profiler.ask({"word": "Hund"}, questions, KEYED)
+    assert sent[-1]["state"] == {"word": "Hund", "language": "German"}
 
 
 def test_an_error_carries_what_was_used_before_it_once_each() -> None:

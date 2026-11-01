@@ -87,12 +87,23 @@ def test_a_set_of_five_sentences_is_made_for_the_points_taught_and_the_topics() 
     assert step.show == {
         "at": 0,
         "total": 3,
+        "reversed": False,
+        "from": "English",
+        "to": "German",
         "sources": [
             "I get up at six.",
             "She calls me.",
             "He shops today.",
             "We come along.",
             "You close the door.",
+        ],
+        # shown only once the learner asks for them
+        "references": [
+            "Ich stehe um sechs auf.",
+            "Sie ruft mich an.",
+            "Er kauft heute ein.",
+            "Wir kommen mit.",
+            "Du machst die Tür zu.",
         ],
     }
     prompt = model.asked[0]
@@ -256,3 +267,75 @@ def test_the_sets_not_made_before_are_made_once_those_done_again_run_out() -> No
     assert started.made == []
     assert len(prepared.made) == 1
     assert len(model.asked) == 2
+
+
+def test_a_translation_looked_at_first_is_told_in_the_task_of_its_grade() -> None:
+    model = FakeModel(ITEMS, {"verdicts": [RIGHT] * 4})
+    state = start(CONTEXT, model).state
+
+    step = act(CONTEXT, state, {"answers": ANSWERS, "looked": [False, True]}, model)
+
+    [first, second, *_] = step.graded[0]["parts"]
+    assert first["task"] == "Translate from English: I get up at six."
+    assert second["task"] == (
+        "Translate from English: She calls me. (looked at a good translation first)"
+    )
+
+
+def test_a_set_is_translated_from_the_language_learned_when_the_learner_swaps() -> None:
+    model = FakeModel(ITEMS)
+    state = start(CONTEXT, model).state
+
+    step = act(CONTEXT, state, {"reverse": True}, model)
+
+    assert (step.show["from"], step.show["to"]) == ("German", "English")
+    assert step.show["sources"][0] == "Ich stehe um sechs auf."
+    assert step.show["references"][0] == "I get up at six."
+    # turning it asks no model
+    assert len(model.asked) == 1
+
+
+def test_a_translation_from_the_language_learned_is_judged_for_understanding() -> None:
+    wrong = {"result": "wrong", "correction": "I got up at six.", "note": "Present."}
+    model = FakeModel(ITEMS, {"verdicts": [wrong, RIGHT]})
+    context = {**CONTEXT, "options": {"direction": "from"}}
+    state = start(context, model).state
+
+    step = act(
+        context, state, {"answers": ["I got up at six.", "She calls me."]}, model
+    )
+
+    assert "translates from German to show they understand it" in model.asked[1]
+    assert "In German: Ich stehe um sechs auf." in model.asked[1]
+    assert step.graded[0]["parts"][0]["task"] == (
+        "Translate from German: Ich stehe um sechs auf."
+    )
+    assert step.show["feedback"][2]["reference"] == "He shops today."
+    # what the learner wrote is in the language they read, and is not learned
+    assert step.written["user"] == []
+    assert step.written["assistant"][0] == "Ich stehe um sechs auf."
+    assert "I got up at six." not in step.written["assistant"]
+
+
+def test_a_set_cannot_be_swapped_once_it_is_checked() -> None:
+    model = FakeModel(ITEMS, {"verdicts": [RIGHT] * 4})
+    state = start(CONTEXT, model).state
+    state = act(CONTEXT, state, {"answers": ANSWERS}, model).state
+
+    step = act(CONTEXT, state, {"reverse": True}, model)
+
+    assert step.show["reversed"] is False
+
+
+def test_sets_translated_each_way_score_grammar_and_reading_apart() -> None:
+    model = FakeModel(ITEMS, {"verdicts": [RIGHT] * 4}, ITEMS, {"verdicts": [RIGHT]})
+    state = start(CONTEXT, model).state
+    state = act(CONTEXT, state, {"answers": ANSWERS}, model).state
+    state = act(CONTEXT, state, {"next": True}, model).state
+    state = act(CONTEXT, state, {"reverse": True}, model).state
+    state = act(CONTEXT, state, {"answers": ["I get up at six."]}, model).state
+
+    scores = finish(CONTEXT, state, model).scores
+
+    # four of five right one way, and one of five the other
+    assert scores == {"structures": 80.0, "reading": 20.0}

@@ -4,6 +4,7 @@
 import { type DragEvent, type ReactNode, useEffect, useState } from "react";
 
 import { ask } from "../lib/dialogs";
+import { loadOpenFolders, saveOpenFolders } from "../lib/folders";
 import { interfaceLanguage, locale, t } from "../lib/i18n";
 import {
     addFavouriteFolder,
@@ -195,20 +196,21 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
     const [naming, setNaming] = useState<Naming | null>(null);
     const [dragged, setDragged] = useState<Dragged | null>(null);
     const [dropOn, setDropOn] = useState<number | "top" | null>(null);
-    // the folders folded shut; the others are open
-    const [shut, setShut] = useState<Set<number>>(new Set());
+    // the folders open, as they were left the time before; the others are shut
+    const [unfolded, setUnfolded] = useState<Set<number>>(loadOpenFolders);
 
     function fold(folder: number, open: boolean) {
-        setShut((current) => {
-            if (current.has(folder) !== open) {
+        setUnfolded((current) => {
+            if (current.has(folder) === open) {
                 return current;
             }
             const next = new Set(current);
             if (open) {
-                next.delete(folder);
-            } else {
                 next.add(folder);
+            } else {
+                next.delete(folder);
             }
+            saveOpenFolders(next);
             return next;
         });
     }
@@ -389,7 +391,7 @@ export function ExercisesDone({ active, language, revision, onReplay, favourites
                 {...dropTarget(folder.id)}
             >
                 <details
-                    open={!shut.has(folder.id)}
+                    open={unfolded.has(folder.id)}
                     onToggle={(event) => fold(folder.id, event.currentTarget.open)}
                 >
                     <summary>

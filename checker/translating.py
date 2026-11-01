@@ -196,9 +196,11 @@ class Translator:
     def correct(
         self, sentence: str, language: str, model: Model, into: str = "English"
     ) -> tuple[Corrected, Profile]:
-        """`sentence`, written by someone learning `language`, as it should
-        be, or as it is if nothing in it is wrong, translated into `into`,
-        with what asking for it used. Raises TranslationError."""
+        """`sentence`, written by someone learning `language` who reads
+        `into`, as it should be in the language most of it is written in,
+        which may be either or another, or as it is if nothing in it is
+        wrong, translated into `into`, or into `language` if it is written
+        in `into`, with what asking for it used. Raises TranslationError."""
         said, used = self._ask(
             PROMPTS("correcting", language=language, into=into),
             [{"role": "user", "content": sentence}],

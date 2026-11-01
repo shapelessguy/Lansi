@@ -1798,6 +1798,18 @@ div.book-cover {
     box-shadow: 0 6px 24px rgb(0 0 0 / 25%);
 }
 
+/* left of the side panel, which stays open beside it */
+.floating-window.beside-panel {
+    right: calc(460px + 16px);
+}
+
+/* where there is no room beside it, over the panel as before */
+@media (max-width: 920px) {
+    .floating-window.beside-panel {
+        right: 16px;
+    }
+}
+
 /* usage */
 
 /* The panels at the sides: the library on the left, and sentence checks,

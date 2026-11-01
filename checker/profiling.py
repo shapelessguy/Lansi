@@ -48,7 +48,10 @@ QUESTIONS: Questions = {
         "instructions": (
             "How many grammar errors does the sentence have? Judge it by the"
             " rules of the `language`, if one is given, and else of the"
-            " language it is written in. For each noun phrase, find its role"
+            " language most of it is written in. A word of another language"
+            " in it is one the writer did not know the word for: it is no"
+            " grammar error, if the right word would stand where it does."
+            " For each noun phrase, find its role"
             " in the sentence (subject, direct object, indirect object, object"
             " of a preposition) and check that its articles, adjectives and"
             " pronouns have the case, gender and number that the role and the"
@@ -270,8 +273,10 @@ class Profiler:
         self._model = model
         self._send = send
         # The language being studied, by its English name, if it is known.
-        # The model is told, so that it does not judge a sentence by the
-        # rules of whatever other language it may be written in.
+        # The model is told when it is asked about something of that
+        # language, such as a word of the vocabulary, though not about a
+        # sentence the learner wrote, which may be in any language and is
+        # judged by the one most of it is written in.
         self.language: str | None = None
         # A server of the learner's own may answer one request at a time,
         # and keep some of those that come in together waiting until all
@@ -292,7 +297,7 @@ class Profiler:
         given. Raises ProfileError."""
         if questions is None:
             questions = QUESTIONS
-        return self._ask({"sentence": sentence}, questions, model)
+        return self._ask({"sentence": sentence}, questions, model, studied=False)
 
     def rate_words(
         self,
@@ -317,7 +322,7 @@ class Profiler:
         state: dict[str, Any] = {"sentence": sentence, "assessment": assessment}
         if correction is not None:
             state["correction"] = correction
-        profile = self._ask(state, questions, model)
+        profile = self._ask(state, questions, model, studied=False)
         ratings = [
             WordRating(
                 word.group(),
@@ -335,13 +340,19 @@ class Profiler:
         return self._ask(state, questions, model)
 
     def _ask(
-        self, state: dict[str, Any], questions: Questions, model: Model
+        self,
+        state: dict[str, Any],
+        questions: Questions,
+        model: Model,
+        studied: bool = True,
     ) -> Profile:
+        """Ask `questions` about `state`, telling the model of the language
+        studied if `studied`."""
         model = self.named(model)
         problem = model.problem()
         if problem:
             raise ProfileError(problem)
-        if self.language and "language" not in state:
+        if studied and self.language and "language" not in state:
             state = {**state, "language": self.language}
         body: dict[str, Any] = {
             "model": model.name,
@@ -377,6 +388,8 @@ def word_question(number: int, word: str) -> dict[str, Any]:
             " out: a comma, a full stop or any other mark that is missing,"
             " extra or wrong is no error of the word beside it, and a"
             " correction that differs only in punctuation changed no word."
+            " A word of another language than the one most of the sentence"
+            " is written in is not right where it stands: answer no."
         ),
     }
 

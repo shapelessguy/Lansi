@@ -55,6 +55,29 @@ export function mount(root, exercise) {
         });
     }
 
+    /** Which way the sentences are translated, with a button that turns it while `swap` is given. */
+    function direction(show, swap = null) {
+        const bar = element("div", { className: "direction" }, element("strong", { textContent: `${show.from} → ${show.to}` }));
+        if (swap) {
+            const button = element("button", { textContent: `⇄ ${t("Swap")}` });
+            button.onclick = () => swap(button);
+            bar.append(button);
+        }
+        return bar;
+    }
+
+    /** A button that shows and hides `reference`, a good translation, remembering in `looked` that it was shown. */
+    function hint(reference, looked, number) {
+        const shown = element("div", { className: "reference muted", textContent: reference, hidden: true });
+        const button = element("button", { className: "link", textContent: t("Show translation") });
+        button.onclick = () => {
+            shown.hidden = !shown.hidden;
+            looked[number] = true;
+            button.textContent = shown.hidden ? t("Show translation") : t("Hide translation");
+        };
+        return element("div", { className: "hint" }, button, shown);
+    }
+
     function answering(show) {
         // as tall as the translation of its source may be, a sentence or a whole text
         const answers = show.sources.map((source) =>
@@ -64,12 +87,14 @@ export function mount(root, exercise) {
                 rows: Math.min(12, Math.max(2, Math.ceil(String(source).length / 60))),
             })
         );
+        const looked = show.sources.map(() => false);
         const check = element("button", { className: "primary", textContent: t("Check") });
         const submit = () => {
             if (answers.some((answer) => answer.value.trim())) {
-                send({ answers: answers.map((answer) => answer.value) }, check, t("Checking…"), answers);
+                send({ answers: answers.map((answer) => answer.value), looked }, check, t("Checking…"), answers);
             }
         };
+        const swap = (button) => send({ reverse: !show.reversed }, button, button.textContent, [check, ...answers]);
         check.onclick = submit;
         answers.forEach((answer, number) =>
             answer.addEventListener("keydown", (event) => {
@@ -88,11 +113,18 @@ export function mount(root, exercise) {
             "ol",
             { className: "sentences" },
             ...show.sources.map((source, number) =>
-                element("li", { className: "card" }, element("div", { className: "source", textContent: source }), answers[number])
+                element(
+                    "li",
+                    { className: "card" },
+                    element("div", { className: "source", textContent: source }),
+                    show.references?.[number] ? hint(show.references[number], looked, number) : null,
+                    answers[number],
+                )
             ),
         );
         root.replaceChildren(
             progress(show.at, show.total),
+            direction(show, swap),
             sentences,
             element("div", { className: "actions" }, check, element("span", { className: "muted", textContent: t("Enter goes to the next sentence") })),
             error,
@@ -116,6 +148,7 @@ export function mount(root, exercise) {
         }
         root.replaceChildren(
             progress(show.at - 1, show.total),
+            direction(show),
             summary,
             element("ol", { className: "sentences" }, ...show.feedback.map((each) => feedbackOf(each, t))),
             element("div", { className: "actions" }, go),

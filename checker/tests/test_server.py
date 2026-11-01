@@ -220,6 +220,7 @@ def test_sentences_request_returns_and_prints_the_checked_sentences(
             "end": 6,
             "complete": True,
             "spelling": [],
+            "language": "",
             "processed": False,
             "profile": None,
             "profiling": False,
@@ -239,6 +240,7 @@ def test_sentences_request_returns_and_prints_the_checked_sentences(
             "spelling": [
                 {"word": "Hundd", "start": 9, "end": 14, "suggestions": ["Hund"]}
             ],
+            "language": "",
             "processed": False,
             "profile": None,
             "profiling": False,
