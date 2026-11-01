@@ -66,6 +66,25 @@ def test_a_task_talked_through_at_once_has_one_turn() -> None:
     assert step.show["task"]["prompts"] == ["Erzählen Sie."]
 
 
+def test_a_talk_is_followed_by_the_questions_on_it_as_turns() -> None:
+    talk = {**CONTEXT, "options": {"kind": "present", "prompts": 3}}
+    model = FakeModel(
+        {
+            "card": "Homeoffice · eigene Erfahrung · Vorteile · Nachteile",
+            "prompts": ["Halten Sie Ihren Vortrag.", "Frage 1?", "Frage 2?", "more"],
+        }
+    )
+
+    step = start(talk, model)
+
+    assert "gives a talk" in model.asked[0]
+    assert step.show["task"]["prompts"] == [
+        "Halten Sie Ihren Vortrag.",
+        "Frage 1?",
+        "Frage 2?",
+    ]
+
+
 def test_what_was_said_is_rated_as_a_whole_with_a_correction_of_each_turn() -> None:
     model = FakeModel(TASK, RATED)
     state = start(CONTEXT, model).state

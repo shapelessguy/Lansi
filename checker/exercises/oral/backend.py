@@ -8,6 +8,8 @@
     requests    ask a partner for things, and react to what they ask
     talk        talk about your own life, to the points of a card
     plan        plan something with a partner, turn by turn
+    present     give a talk on a theme, then answer questions on it
+    discuss     discuss a question with a partner, weighing what they say
 
 Until speech is taken in, what the learner says is typed, as they would
 say it. A task is a card, or the turns of a partner, with as many turns to
@@ -55,7 +57,7 @@ from kit import (
     written,
 )
 
-KINDS = ("introduce", "cards", "requests", "talk", "plan")
+KINDS = ("introduce", "cards", "requests", "talk", "plan", "present", "discuss")
 # how many turns a task has, unless it is talked through at once
 TURNS = 4
 # those talked through at once, to a card, which have one turn
@@ -67,6 +69,8 @@ RATED = {
     "requests": ["task", "vocabulary", "structures"],
     "talk": ["task", "coherence", "vocabulary", "structures"],
     "plan": ["task", "coherence", "vocabulary", "structures"],
+    "present": ["task", "coherence", "vocabulary", "structures"],
+    "discuss": ["task", "coherence", "vocabulary", "structures"],
 }
 MAX_ANSWER_LENGTH = 2000
 

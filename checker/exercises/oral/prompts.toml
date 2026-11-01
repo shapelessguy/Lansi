@@ -71,3 +71,18 @@ present. The "card" says what, and gives the learner's own diary of \
 the day, hour by hour, with two or three hours free. Each turn is what \
 the partner says, in order, for the learner to answer: proposing a \
 time, turning one down with a reason, agreeing on what to do."""
+present = """
+The learner gives a talk on a theme. The "card" gives the theme, \
+or two to choose from, and the parts the talk is to have, separated by ·, \
+such as their own experience, the situation in their country, what speaks \
+for and against, and their opinion. The first turn asks them to give the \
+talk; each turn after it is a question of the examiner or the partner on \
+what the talk is about, for the learner to answer and give reasons."""
+discuss = """
+The learner discusses a question with a partner, such as whether \
+something should be allowed or which of two ways is better. The "card" \
+states the question, with a few points to argue with, separated by ·. Each \
+turn is what the partner says, in order, for the learner to answer: an \
+opinion with a reason, an objection, a question back, a proposal to agree \
+on. The partner's turns take up what was said before, and disagree with \
+the learner at least once."""
