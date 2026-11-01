@@ -1,6 +1,8 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
+import { useEffect, useState } from "react";
+
 /** The panels that share the right-hand side, one at a time. */
 export type Panel = "checks" | "usage" | "settings";
 
@@ -28,6 +30,26 @@ export interface Layout {
     activity: Activity;
     /** The text open last, by its id, if any. */
     text: string | null;
+}
+
+/**
+ * A window with room for a panel on each side and the page between them.
+ * Where there is less, only the side opened last is shown, as the styles
+ * also say at this width.
+ */
+export const SIDES_FIT = "(min-width: 1301px)";
+
+/** Whether the window matches a media query, again whenever that changes. */
+export function useMediaQuery(query: string): boolean {
+    const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+    useEffect(() => {
+        const list = window.matchMedia(query);
+        const update = () => setMatches(list.matches);
+        update();
+        list.addEventListener("change", update);
+        return () => list.removeEventListener("change", update);
+    }, [query]);
+    return matches;
 }
 
 const STORAGE_KEY = "chat-ui.layout";

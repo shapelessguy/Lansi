@@ -6,9 +6,15 @@ package com.lansi
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.content.Context
+import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.ActionMode
+import android.view.Menu
+import android.view.MenuItem
+import android.view.View
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -28,7 +34,8 @@ import androidx.core.view.WindowInsetsCompat
  * of the server of CyanHouse, which has its own login and phone layout.
  * What the app adds is the choice of address (Route), keeping the login
  * from one address to the other (Storage), the picker of files for the
- * books, and links out of Lansi opened in the browser.
+ * books, links out of Lansi opened in the browser, and text selected
+ * without the phone's own menu over it, since Lansi has its own (Page).
  */
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -45,7 +52,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
-        webView = WebView(this).apply {
+        webView = Page(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             webViewClient = Client()
@@ -144,6 +151,48 @@ class MainActivity : ComponentActivity() {
                 picking = null
                 false
             }
+        }
+    }
+}
+
+/**
+ * The WebView of the page, which selects text as any does, with its
+ * handles, but without the phone's menu of copying and sharing over the
+ * selection: the page brings up its own buttons there, which the menu
+ * would cover.
+ */
+private class Page(context: Context) : WebView(context) {
+    override fun startActionMode(callback: ActionMode.Callback, type: Int): ActionMode? =
+        super.startActionMode(WithoutItems(callback), type)
+}
+
+/**
+ * The menu of a selection with nothing in it, which the phone then does
+ * not show. The selection stays as it is, since the menu is still made.
+ */
+private class WithoutItems(private val wrapped: ActionMode.Callback) : ActionMode.Callback2() {
+    override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+        wrapped.onCreateActionMode(mode, menu)
+        menu.clear()
+        return true
+    }
+
+    override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
+        wrapped.onPrepareActionMode(mode, menu)
+        menu.clear()
+        return true
+    }
+
+    override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean =
+        wrapped.onActionItemClicked(mode, item)
+
+    override fun onDestroyActionMode(mode: ActionMode) = wrapped.onDestroyActionMode(mode)
+
+    override fun onGetContentRect(mode: ActionMode, view: View, outRect: Rect) {
+        if (wrapped is ActionMode.Callback2) {
+            wrapped.onGetContentRect(mode, view, outRect)
+        } else {
+            super.onGetContentRect(mode, view, outRect)
         }
     }
 }

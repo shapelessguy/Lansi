@@ -226,6 +226,9 @@ a {
 
 .main {
     flex: 1;
+    min-width: 0;
+    /* what is in it is laid out by its own width, which the panels beside it take from */
+    container-type: inline-size;
 }
 
 /* word list */
@@ -1006,13 +1009,58 @@ a {
     box-shadow: 0 0 0 1px var(--border);
 }
 
-/* On a phone the activities have a row of their own, under the buttons of
-   the panels, and scroll sideways if their names do not fit. */
-@media (max-width: 720px) {
+/* The activities show their names where there is room, and only their
+   icons, which their titles name, where there is not: room in the page,
+   whatever the panels beside it leave of the window. */
+.topbar .activities button {
+    display: flex;
+    align-items: center;
+}
+
+.topbar .activities .icon {
+    display: none;
+}
+
+@container (max-width: 840px) {
+    .topbar .activities .icon {
+        display: block;
+    }
+
+    .topbar .activities .label {
+        display: none;
+    }
+
+    .topbar .activities button {
+        padding-inline: 8px;
+    }
+
+    /* the icons go wherever there is room between the buttons of the panels,
+       which no longer keep a side as wide as the other */
+    .topbar {
+        grid-template-columns: auto 1fr auto;
+    }
+
+    .topbar .activities {
+        justify-self: center;
+    }
+}
+
+@container (max-width: 580px) {
+    .topbar {
+        padding: 8px 10px;
+    }
+}
+
+/* On a phone even the icons do not fit in one row with the buttons of the
+   panels, and the activities have a row of their own under them. */
+@container (max-width: 460px) {
     .topbar {
         grid-template-columns: 1fr auto;
         row-gap: 8px;
-        padding: 8px 10px;
+    }
+
+    .topbar .activities {
+        justify-self: stretch;
     }
 
     .topbar .activities {
@@ -1024,7 +1072,7 @@ a {
 
     .topbar .activities button {
         flex: 1;
-        padding-inline: 8px;
+        justify-content: center;
     }
 }
 
@@ -2773,8 +2821,9 @@ div.book-cover {
     flex: 0 0 30%;
 }
 
-@media (max-width: 1300px) {
-    /* a panel covers the right edge rather than squeezing the chat */
+/* Below 1300px only one side is shown at a time (App.tsx, SIDES_FIT), beside
+   the page while the page keeps a width of its own, and over it below that. */
+@media (max-width: 920px) {
     .side-panel {
         position: fixed;
         inset: 0 0 0 auto;
@@ -2784,17 +2833,14 @@ div.book-cover {
     }
 
     .side-panel.left {
-        position: static;
-        box-shadow: none;
+        inset: 0 auto 0 0;
     }
 }
 
 @media (max-width: 720px) {
-    /* and so does the one on the left */
-    .side-panel.left {
-        position: fixed;
-        inset: 0 auto 0 0;
-        box-shadow: 0 0 24px rgb(0 0 0 / 25%);
+    /* on a phone a panel takes the whole window, rather than leaving a strip of the page */
+    .side-panel {
+        width: 100%;
     }
 
     .chat-header {

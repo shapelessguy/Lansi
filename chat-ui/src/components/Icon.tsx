@@ -22,6 +22,33 @@ const ICONS = {
         </>
     ),
     checks: <path d="M20 6 9 17l-5-5" />,
+    // the activities
+    tutor: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" />,
+    books: (
+        <>
+            <path d="M2 5h6a4 4 0 0 1 4 4v11a3 3 0 0 0-3-3H2Z" />
+            <path d="M22 5h-6a4 4 0 0 0-4 4v11a3 3 0 0 1 3-3h7Z" />
+        </>
+    ),
+    texts: (
+        <>
+            <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" />
+            <path d="M14 3v6h6M8 13h8M8 17h5" />
+        </>
+    ),
+    practice: (
+        <>
+            <circle cx="12" cy="12" r="9" />
+            <circle cx="12" cy="12" r="5" />
+            <circle cx="12" cy="12" r="1" />
+        </>
+    ),
+    evaluations: (
+        <>
+            <path d="m2 9 10-5 10 5-10 5Z" />
+            <path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5M22 9v6" />
+        </>
+    ),
     chevron: <path d="m6 9 6 6 6-6" />,
     edit: (
         <>

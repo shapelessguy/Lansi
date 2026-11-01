@@ -468,11 +468,9 @@ export function Tutor(
                     >
                         {!chats.some((chat) => chat.id === chatId) && <option value="">{t("This chat")}</option>}
                         {chats.map((chat) => (
-                            <option key={chat.id} value={chat.id}>
-                                {new Date(chat.updatedAt * 1000).toLocaleString(locale(), {
-                                    dateStyle: "short",
-                                    timeStyle: "short",
-                                })} · {chat.first.slice(0, 40) || "…"}
+                            // the date alone keeps the list short; how the chat began shows on hover
+                            <option key={chat.id} value={chat.id} title={chat.first.slice(0, 80)}>
+                                {new Date(chat.updatedAt * 1000).toLocaleDateString(locale(), { dateStyle: "short" })}
                             </option>
                         ))}
                     </select>
