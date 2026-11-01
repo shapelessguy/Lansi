@@ -28,6 +28,7 @@ import { EvaluationReview, passedOf } from "./EvaluationsDone";
 import { ExerciseView } from "./ExerciseView";
 import { LevelBadge } from "./Level";
 import { SentenceChecks } from "./SentenceChecks";
+import type { SettingsTab } from "./SettingsPanel";
 import { TimeLeft } from "./TimeLeft";
 
 interface Props {
@@ -43,7 +44,8 @@ interface Props {
     onTask: (task: BackgroundTask) => void;
     /** Keeps the settings changed, such as how long an evaluation takes. */
     onChangeSettings: (next: Settings) => void;
-    onOpenSettings: () => void;
+    /** Opens the settings on `tab`, where what is missing is set. */
+    onOpenSettings: (tab: SettingsTab) => void;
     /** Has a text of an exercise of a part read aloud, which the exercise numbers `number`. */
     onReadAloud: (sessionId: string, exercise: string, number: number, text: string) => void;
     /** An evaluation ended, and its log is being written. */
@@ -370,7 +372,7 @@ export function Evaluations(
                 {!canAsk(learner.model, learner.apiKey) && (
                     <p className="practice-note">
                         {t("The parts are made by a model.")}{" "}
-                        <button onClick={onOpenSettings}>{t("Add your OpenRouter key")}</button>
+                        <button onClick={() => onOpenSettings("models")}>{t("Add your OpenRouter key")}</button>
                     </p>
                 )}
                 <section className="evaluation-start">
@@ -390,7 +392,7 @@ export function Evaluations(
                                 : t("There is no exam of {language} at {level} yet.", {
                                     language: languageName(language),
                                     level,
-                                })} <button onClick={onOpenSettings}>{t("Change your level")}</button>
+                                })} <button onClick={() => onOpenSettings("general")}>{t("Change your level")}</button>
                         </p>
                     )}
                     {exam && (

@@ -1033,7 +1033,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 words={words}
                                 loadWords={freshWordLists}
                                 picked={picked}
-                                onOpenSettings={() => openSettings("general")}
+                                onOpenSettings={() => openSettings("models")}
                                 onUsage={addUsageEntry}
                                 onReplied={() => setUsageRevision((revision) => revision + 1)}
                                 onSpeak={speakMessage}
@@ -1172,7 +1172,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     source: exerciseSource(sessionId, exercise, number, text),
                                     nonce: Date.now(),
                                 })}
-                            onOpenSettings={() => openSettings("general")}
+                            onOpenSettings={() => openSettings("models")}
                             onStartEvaluation={startOfferedEvaluation}
                             speakReplies={settings.speakReplies}
                             onSpeakReplies={(speakReplies) => updateSettings({ ...settings, speakReplies })}
@@ -1274,7 +1274,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             onUsage={addPracticeUsage}
                             onTask={addTask}
                             onChangeSettings={updateSettings}
-                            onOpenSettings={() => openSettings("general")}
+                            onOpenSettings={() => openSettings("models")}
                             onReadAloud={(sessionId, exercise, number, text) =>
                                 setListening({
                                     source: exerciseSource(sessionId, exercise, number, text),
@@ -1294,7 +1294,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             onUsage={addEvaluationUsage}
                             onTask={addTask}
                             onChangeSettings={updateSettings}
-                            onOpenSettings={() => openSettings("general")}
+                            onOpenSettings={openSettings}
                             onReadAloud={(sessionId, exercise, number, text) =>
                                 setListening({
                                     source: exerciseSource(sessionId, exercise, number, text, "evaluation"),
