@@ -1,0 +1,750 @@
+{
+    "level": "B1",
+    "exam": "CELI 2 (B1)",
+    "pass": {
+        "total": 59
+    },
+    "themes": [
+        "Lavoro e colleghi",
+        "Scuola, università e corsi",
+        "Salute e benessere",
+        "Ambiente e natura",
+        "Città e campagna",
+        "Mezzi di comunicazione e internet",
+        "Consumi e pubblicità",
+        "Viaggi e turismo",
+        "Feste, tradizioni e cucina italiana",
+        "Amicizia e vita in famiglia",
+        "Sport e tempo libero",
+        "Volontariato e vita di quartiere"
+    ],
+    "modules": [
+        {
+            "id": "reading",
+            "title": "Comprensione della lettura",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova A.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "any",
+                        "answers": "choice",
+                        "questions": 1
+                    },
+                    "instances": 7,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "instances": 3,
+                            "minutes": 8
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 11
+                        },
+                        {
+                            "instances": 5,
+                            "minutes": 14
+                        },
+                        {
+                            "instances": 6,
+                            "minutes": 17
+                        }
+                    ],
+                    "points": 14,
+                    "instructions": "Legga i testi e risponda alle domande. Scelga la risposta giusta: a, b o c.",
+                    "task": "A short text of 60 to 100 words, such as an email, an advert, a notice, the page of a website or a short news item, with one question on its purpose or a key fact. The three options are all close to the text; the wrong ones take up its words with a different meaning.",
+                    "example": {
+                        "title": "Biblioteca comunale",
+                        "shown": "",
+                        "text": "Da lunedì 3 ottobre la biblioteca cambia orario: sarà aperta dal lunedì al venerdì dalle 9 alle 19 e il sabato solo la mattina. Il prestito dei libri è gratuito per tutti i residenti; chi non abita in città deve pagare una quota di 10 euro all'anno. Per i bambini sotto i 12 anni ci sono letture ad alta voce ogni mercoledì pomeriggio.",
+                        "questions": [
+                            {
+                                "prompt": "Che cosa devono fare le persone che non abitano in città?",
+                                "options": [
+                                    "Venire solo il sabato mattina.",
+                                    "Pagare per prendere in prestito i libri.",
+                                    "Portare i bambini il mercoledì."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "yesno",
+                        "questions": 10
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Legga il testo. Poi legga le affermazioni. Le informazioni sono presenti nel testo? Scelga: Sì o No.",
+                    "task": "A text of 250 to 300 words, such as an article of a magazine or a story of someone's experience, on a theme of everyday life. Ten statements; each is or is not said in the text, in other words than the text's, and those that are not said are likely ones that the text leaves out or says otherwise.",
+                    "example": {
+                        "title": "Un anno in Sicilia",
+                        "shown": "",
+                        "text": "Quando Katrin è arrivata a Palermo da Monaco, non parlava una parola di italiano. Lavorava come ingegnere e la sua azienda l'aveva mandata a seguire un progetto per un anno. «All'inizio era difficile: al mercato tutti parlavano velocemente e io capivo solo i numeri», racconta. Dopo tre mesi ha cominciato un corso serale e ha trovato una coinquilina siciliana che le ha insegnato a cucinare la caponata. Oggi Katrin vive ancora a Palermo: il progetto è finito, ma lei ha deciso di restare e lavora per una ditta locale.",
+                        "questions": [
+                            {
+                                "prompt": "Katrin è andata a Palermo per lavoro.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Katrin aveva già studiato italiano in Germania.",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Katrin ha frequentato un corso di sera.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Katrin è tornata a Monaco dopo un anno.",
+                                "options": [],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 5
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 5,
+                    "instructions": "Completi le frasi. Scelga la parola o l'espressione giusta: a, b, c o d.",
+                    "task": "Five separate sentences of everyday life, each with a gap, ___, as the prompts; the text only says to complete them. The four options of each are words of the same kind, such as prepositions, pronouns, verb forms or connectors, and only one fits by grammar and meaning.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Completi ogni frase con la parola giusta.",
+                        "questions": [
+                            {
+                                "prompt": "Se domani piove, ___ a casa e guardiamo un film.",
+                                "options": [
+                                    "restiamo",
+                                    "restavamo",
+                                    "restassimo",
+                                    "restati"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Ho incontrato Paola e ___ ho dato il tuo numero.",
+                                "options": [
+                                    "la",
+                                    "le",
+                                    "gli",
+                                    "lo"
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "message",
+                        "answers": "choice",
+                        "questions": 10
+                    },
+                    "instances": 1,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 10
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Legga il testo e lo completi. Per ogni spazio scelga la parola giusta: a, b o c.",
+                    "task": "A text of 150 to 200 words, such as an email to a friend or a short article, with ten numbered gaps, (1) to (10), in the text. Each question is the number of a gap; its three options are words of the same kind, of which one fits by grammar and meaning: articles, prepositions, pronouns, verb forms, connectors.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Cara Silvia,\nscusa (1) ___ non ti ho scritto prima, ma questo mese sono stata molto impegnata. (2) ___ settimana scorsa ho cominciato il nuovo lavoro in banca. I colleghi sono gentili e (3) ___ ufficio è vicino a casa mia.",
+                        "questions": [
+                            {
+                                "prompt": "(1)",
+                                "options": [
+                                    "perché",
+                                    "se",
+                                    "quando"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "(2)",
+                                "options": [
+                                    "Il",
+                                    "La",
+                                    "Lo"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "(3)",
+                                "options": [
+                                    "l'",
+                                    "il",
+                                    "lo"
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.5",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 5
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 5,
+                    "instructions": "Completi le frasi con le informazioni del testo. Scelga la risposta giusta: a, b o c.",
+                    "task": "A short text of 100 to 150 words, such as a notice or a short article, and five sentences about it, each ending in a gap, as the prompts. The three options are short endings, all words of the text; one completes the sentence as the text says. In the real exam the gaps are open; here they are chosen.",
+                    "example": {
+                        "title": "Corso di fotografia",
+                        "shown": "",
+                        "text": "L'associazione Obiettivo organizza un corso di fotografia per principianti. Le lezioni si tengono ogni giovedì dalle 20 alle 22, da ottobre a dicembre, nella sala del centro civico. È necessario avere una macchina fotografica, anche semplice; non serve il computer. Il corso costa 80 euro e alla fine ci sarà una mostra con le foto dei partecipanti.",
+                        "questions": [
+                            {
+                                "prompt": "Le lezioni sono il ___",
+                                "options": [
+                                    "martedì.",
+                                    "giovedì.",
+                                    "sabato."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Alla fine del corso c'è ___",
+                                "options": [
+                                    "un esame.",
+                                    "una festa.",
+                                    "una mostra."
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "writing",
+            "title": "Produzione di testi scritti",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova B.1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "form"
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "minutes": 6
+                        },
+                        {
+                            "minutes": 8
+                        },
+                        {
+                            "minutes": 10
+                        },
+                        {
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 5,
+                    "instructions": "Legga il testo. Risponda alle domande del questionario con le informazioni del testo.",
+                    "task": "A text of five to eight sentences in which a person tells about their habits on a theme of general interest, such as reading, sport, travel or the use of the internet, and a questionnaire of up to nine questions on it. Each answer is a short phrase the text gives. In the real exam the learner answers about themselves; here the answers come from the text.",
+                    "example": {
+                        "text": "Mi chiamo Davide e ho 34 anni. Leggo molto, soprattutto gialli, e compro i libri in libreria perché non mi piace leggere sullo schermo. Leggo di solito la sera prima di dormire, circa un'ora. Il mio scrittore preferito è Andrea Camilleri. Una volta al mese vado a un gruppo di lettura in biblioteca.",
+                        "fields": [
+                            {
+                                "label": "Che genere di libri legge?",
+                                "answer": "gialli"
+                            },
+                            {
+                                "label": "Dove compra i libri?",
+                                "answer": "in libreria"
+                            },
+                            {
+                                "label": "Quando legge?",
+                                "answer": "la sera, prima di dormire"
+                            },
+                            {
+                                "label": "Per quanto tempo?",
+                                "answer": "circa un'ora"
+                            },
+                            {
+                                "label": "Scrittore preferito:",
+                                "answer": "Andrea Camilleri"
+                            },
+                            {
+                                "label": "Quante volte va al gruppo di lettura?",
+                                "answer": "una volta al mese"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova B.2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "message",
+                        "words": 50
+                    },
+                    "instances": 1,
+                    "minutes": 25,
+                    "sizes": [
+                        {
+                            "words": 20,
+                            "minutes": 10
+                        },
+                        {
+                            "words": 30,
+                            "minutes": 14
+                        },
+                        {
+                            "words": 35,
+                            "minutes": 18
+                        },
+                        {
+                            "words": 40,
+                            "minutes": 21
+                        }
+                    ],
+                    "points": 15,
+                    "instructions": "Scriva un breve annuncio (circa 50 parole), oppure risponda all'annuncio. Scriva a tutti i punti.",
+                    "task": "A short advert or notice on a matter of everyday life, given in the situation, such as someone selling a bike, looking for a flatmate or offering lessons, to write or to answer; three points to write about.",
+                    "example": {
+                        "situation": "Sul sito del Suo quartiere ha letto questo annuncio: «Studente cerca persona per scambio di conversazione italiano-inglese, due ore alla settimana». Risponda all'annuncio.",
+                        "points": [
+                            "Si presenti brevemente.",
+                            "Dica perché l'annuncio La interessa.",
+                            "Proponga un giorno e un luogo per incontrarvi."
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova B.3",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "email",
+                        "words": 100
+                    },
+                    "instances": 1,
+                    "minutes": 40,
+                    "sizes": [
+                        {
+                            "words": 40,
+                            "minutes": 16
+                        },
+                        {
+                            "words": 55,
+                            "minutes": 22
+                        },
+                        {
+                            "words": 70,
+                            "minutes": 28
+                        },
+                        {
+                            "words": 85,
+                            "minutes": 34
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Scriva una lettera o un'email (90-100 parole) seguendo la traccia. Scriva a tutti i punti.",
+                    "task": "A situation in which the learner writes a formal letter or email, to an office, a school, a company or a landlord, to ask, complain or explain, with three or four points to write about.",
+                    "example": {
+                        "situation": "Ha comprato online una lampada, ma è arrivata rotta. Scriva un'email al servizio clienti del negozio.",
+                        "points": [
+                            "Dica che cosa ha comprato e quando.",
+                            "Descriva il problema.",
+                            "Chieda di cambiare la lampada o di avere i soldi indietro.",
+                            "Chieda quando avrà una risposta."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "listening",
+            "title": "Comprensione dell'ascolto",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova C.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "phone",
+                        "answers": "choice",
+                        "questions": 1,
+                        "plays": "2"
+                    },
+                    "instances": 4,
+                    "minutes": 5,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 4
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Ascolti i messaggi. Ascolta ogni messaggio due volte. Scelga la risposta giusta: a, b o c.",
+                    "task": "Short messages left on the phone, of four to six sentences: who calls, what they want and when or where. The question asks for its purpose or a key fact; all options are said or likely.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Buongiorno, signora Rossi, sono Marina dello studio dentistico Bianchi. Purtroppo il dottore domani mattina non c'è, quindi dobbiamo spostare il suo appuntamento. Le va bene venerdì alle 15? Mi richiami, per favore, allo 06 4458921. Grazie.",
+                        "questions": [
+                            {
+                                "prompt": "Perché telefona Marina?",
+                                "options": [
+                                    "Per cambiare un appuntamento.",
+                                    "Per chiedere un pagamento.",
+                                    "Per confermare la visita di domani."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "announcement",
+                        "answers": "choice",
+                        "questions": 1,
+                        "plays": "2"
+                    },
+                    "instances": 4,
+                    "minutes": 5,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 4
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Ascolti le notizie. Ascolta ogni notizia due volte. Scelga la risposta giusta: a, b o c.",
+                    "task": "Short news items or announcements of the radio, of four to six sentences: the weather, the traffic, an event in town, a change of a service. The question asks what is said; the options are close to each other.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Notizie dalla città. Questa domenica il centro storico sarà chiuso alle auto dalle 10 alle 18 per la festa dei fiori. Gli autobus delle linee 3 e 7 non passeranno per piazza Duomo, ma per viale Roma. Il parcheggio della stazione sarà gratuito tutto il giorno.",
+                        "questions": [
+                            {
+                                "prompt": "Che cosa succede domenica?",
+                                "options": [
+                                    "Gli autobus sono gratis.",
+                                    "Le auto non possono entrare in centro.",
+                                    "Piazza Duomo è chiusa per lavori."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "interview",
+                        "answers": "yesno",
+                        "questions": 10,
+                        "plays": "2"
+                    },
+                    "instances": 2,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "instances": 1,
+                            "minutes": 4
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 6
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 7
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 25,
+                    "instructions": "Ascolti i testi. Ascolta ogni testo due volte. Le informazioni sono presenti nel testo? Scelga: Sì o No.",
+                    "task": "An interview or a talk of the radio of 250 to 300 words, on a person's work, studies or a place, with ten statements; each is or is not said. The real exam has two texts with 25 statements in all.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Intervistatore: Signor Galli, Lei fa la guida in montagna da vent'anni. Come ha cominciato?\nGalli: Da ragazzo andavo in montagna con mio padre ogni estate. Poi ho studiato scienze naturali a Torino e, dopo la laurea, ho fatto il corso per diventare guida.\nIntervistatore: Che cosa le piace del suo lavoro?\nGalli: Conoscere persone diverse. D'inverno accompagno soprattutto stranieri a fare sci di fondo.",
+                        "questions": [
+                            {
+                                "prompt": "Galli andava in montagna con il padre.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Galli ha studiato medicina.",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "D'inverno Galli lavora soprattutto con stranieri.",
+                                "options": [],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "speaking",
+            "title": "Produzione orale",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "talk",
+                        "prompts": 4
+                    },
+                    "instances": 1,
+                    "minutes": 4,
+                    "sizes": [
+                        {
+                            "prompts": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 3
+                        }
+                    ],
+                    "points": 13,
+                    "instructions": "Conversazione con l'esaminatore. Si presenti e risponda alle domande. Scriva come parlerebbe.",
+                    "task": "An interview in which the learner introduces themselves and speaks of matters of their own life, such as their work, studies, home town, habits or plans. The first prompt asks them to introduce themselves; the others are questions of the examiner that ask for reasons and experiences.",
+                    "example": {
+                        "card": "Conversazione: Lei, la Sua città, il lavoro o lo studio, i Suoi progetti",
+                        "prompts": [
+                            "Si presenti, per favore.",
+                            "Che cosa le piace della città dove abita?",
+                            "Perché studia l'italiano?",
+                            "Che progetti ha per l'estate?"
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova 2",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "present",
+                        "prompts": 2
+                    },
+                    "instances": 1,
+                    "minutes": 4,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 1,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 1,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        }
+                    ],
+                    "points": 13,
+                    "instructions": "Descriva la foto e risponda alle domande dell'esaminatore. Scriva come parlerebbe.",
+                    "task": "A photo of a scene of everyday life, described in words on the card in place of the picture, such as people at a market, a family moving house or students in a library. The first prompt asks the learner to describe it and say what happens; the second is a question of the examiner on the theme.",
+                    "example": {
+                        "card": "Foto: in un parco, alcune persone di età diverse puliscono il prato e raccolgono la plastica in grandi sacchi. Un bambino aiuta la nonna.",
+                        "prompts": [
+                            "Descriva la foto: chi sono queste persone e che cosa fanno?",
+                            "Nella Sua città ci sono iniziative di questo tipo?"
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova 3",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "requests",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 4,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 3
+                        }
+                    ],
+                    "points": 14,
+                    "instructions": "Role play. Legga la situazione e parli con l'esaminatore. Scriva come parlerebbe.",
+                    "task": "A role play in a situation of everyday life, set by a picture that is not to be described: a complaint in a shop, a booking, asking for information at an office, settling something with a neighbour. The card says who the learner is and what they want; the prompts are the turns of the examiner.",
+                    "example": {
+                        "card": "Lei è in un albergo. La camera è rumorosa e il riscaldamento non funziona. Parli con il receptionist e chieda una soluzione.",
+                        "prompts": [
+                            "Buonasera, posso aiutarLa?",
+                            "Mi dispiace. Purtroppo stasera l'albergo è pieno. Che cosa possiamo fare?",
+                            "Domani possiamo darLe un'altra camera. Le va bene?"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

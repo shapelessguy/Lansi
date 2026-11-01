@@ -1,0 +1,792 @@
+{
+    "level": "A2",
+    "exam": "CELI 1 (A2)",
+    "pass": {
+        "total": 61
+    },
+    "themes": [
+        "Famiglia e rapporti",
+        "Abitare e cercare casa",
+        "Cibo e ristoranti",
+        "Negozi e acquisti",
+        "Lavoro e studio",
+        "Tempo libero e sport",
+        "Feste e tradizioni",
+        "Vacanze e viaggi",
+        "Trasporti in città",
+        "Salute e medico",
+        "Servizi: banca, posta, uffici",
+        "Ricordi e esperienze"
+    ],
+    "modules": [
+        {
+            "id": "reading",
+            "title": "Comprensione della lettura",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova A.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 1
+                    },
+                    "instances": 4,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 6
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 4,
+                    "instructions": "Legga i testi. Per ogni testo scelga l'immagine giusta: a o b.",
+                    "task": "A short text of two or three lines, such as a notice, a short message or an advert, and two pictures, a and b, described in a few words each in place of the picture. Both show the same kind of thing; only one fits the text. The prompt is the text; the two options are the pictures.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "",
+                        "questions": [
+                            {
+                                "prompt": "Cerco una bicicletta da bambino, usata ma in buono stato, per mio figlio di sei anni. Telefonare a Marta, 333 4512789.",
+                                "options": [
+                                    "a) Una piccola bicicletta rossa con le rotelle.",
+                                    "b) Una bicicletta da corsa grande e nuova."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "match",
+                        "questions": 5
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 5,
+                    "instructions": "Legga i testi. Abbini ogni testo all'immagine giusta. Ci sono più immagini del necessario.",
+                    "task": "Five short texts of two to four lines, numbered, such as adverts or descriptions of places, things or people, and a list of seven pictures, described in a few words each, shown as the list to match. Each question is one of the texts; its options are the seven pictures, the same for every question.",
+                    "example": {
+                        "title": "",
+                        "shown": "A. un palazzo con balconi davanti a un parco · B. un divano marrone · C. una trattoria sul mare · D. una camera d'albergo · E. un letto matrimoniale",
+                        "text": "1. Appartamento al terzo piano, con balcone e vista sul parco.\n2. Si vende divano in pelle, tre posti, colore marrone.\n3. Ristorante di pesce sul porto, aperto anche a pranzo.",
+                        "questions": [
+                            {
+                                "prompt": "Testo 1",
+                                "options": [
+                                    "A. un palazzo con balconi davanti a un parco",
+                                    "B. un divano marrone",
+                                    "C. una trattoria sul mare",
+                                    "D. una camera d'albergo",
+                                    "E. un letto matrimoniale"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Testo 2",
+                                "options": [
+                                    "A. un palazzo con balconi davanti a un parco",
+                                    "B. un divano marrone",
+                                    "C. una trattoria sul mare",
+                                    "D. una camera d'albergo",
+                                    "E. un letto matrimoniale"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Testo 3",
+                                "options": [
+                                    "A. un palazzo con balconi davanti a un parco",
+                                    "B. un divano marrone",
+                                    "C. una trattoria sul mare",
+                                    "D. una camera d'albergo",
+                                    "E. un letto matrimoniale"
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "match",
+                        "questions": 7
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Unisca le due parti delle frasi. Abbini ogni inizio alla fine giusta.",
+                    "task": "Seven beginnings of everyday sentences, the questions, and a list of their ends, shown, with one more than needed. Each end fits one beginning only, by its meaning and its grammar, such as a preposition, an agreement or a tense. The options of each question are the ends, the same for every question.",
+                    "example": {
+                        "title": "",
+                        "shown": "a. alle sette e faccio colazione. · b. perché ho perso il treno. · c. con i miei amici al mare.",
+                        "text": "Unisca l'inizio di ogni frase con la sua fine.",
+                        "questions": [
+                            {
+                                "prompt": "Ogni mattina mi alzo",
+                                "options": [
+                                    "a. alle sette e faccio colazione.",
+                                    "b. perché ho perso il treno.",
+                                    "c. con i miei amici al mare."
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Ieri sono arrivato tardi",
+                                "options": [
+                                    "a. alle sette e faccio colazione.",
+                                    "b. perché ho perso il treno.",
+                                    "c. con i miei amici al mare."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "D'estate vado in vacanza",
+                                "options": [
+                                    "a. alle sette e faccio colazione.",
+                                    "b. perché ho perso il treno.",
+                                    "c. con i miei amici al mare."
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "match",
+                        "questions": 7
+                    },
+                    "instances": 1,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 10
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Legga le domande e le risposte. Abbini ogni domanda alla risposta giusta.",
+                    "task": "A short interview or conversation, such as with a shop assistant, a new neighbour or a hotel receptionist, cut into seven questions and their answers. The questions are the prompts; the answers are the list shown, mixed, with one more than needed, and are the options of every question.",
+                    "example": {
+                        "title": "Al telefono con l'albergo",
+                        "shown": "a. Sì, è compresa nel prezzo. · b. Sì, ce n'è ancora una libera. · c. Novanta euro a notte.",
+                        "text": "Un cliente telefona a un albergo per prenotare una camera.",
+                        "questions": [
+                            {
+                                "prompt": "Avete una camera doppia per il fine settimana?",
+                                "options": [
+                                    "a. Sì, è compresa nel prezzo.",
+                                    "b. Sì, ce n'è ancora una libera.",
+                                    "c. Novanta euro a notte."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Quanto costa?",
+                                "options": [
+                                    "a. Sì, è compresa nel prezzo.",
+                                    "b. Sì, ce n'è ancora una libera.",
+                                    "c. Novanta euro a notte."
+                                ],
+                                "answer": 2
+                            },
+                            {
+                                "prompt": "E la colazione?",
+                                "options": [
+                                    "a. Sì, è compresa nel prezzo.",
+                                    "b. Sì, ce n'è ancora una libera.",
+                                    "c. Novanta euro a notte."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.5",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 1
+                    },
+                    "instances": 5,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 6
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 8
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 10
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Legga i testi e risponda alle domande. Scelga la risposta giusta: a, b o c.",
+                    "task": "A short text of 40 to 70 words, such as an email, a notice, a short article or a page of a website, with one question on its main fact or purpose. The three options are all close to the text, and only one is what it says.",
+                    "example": {
+                        "title": "Avviso nel condominio",
+                        "shown": "",
+                        "text": "Gentili condomini, giovedì 12 marzo, dalle 8 alle 13, manca l'acqua in tutto il palazzo per lavori. Vi consigliamo di prendere l'acqua la sera prima. L'ascensore funziona normalmente. Grazie per la comprensione. L'amministratore",
+                        "questions": [
+                            {
+                                "prompt": "Che cosa succede giovedì mattina?",
+                                "options": [
+                                    "L'ascensore non funziona.",
+                                    "Nel palazzo non c'è acqua.",
+                                    "L'amministratore fa una riunione."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "writing",
+            "title": "Produzione di testi scritti",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova B.1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "form"
+                    },
+                    "instances": 1,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "minutes": 8
+                        },
+                        {
+                            "minutes": 11
+                        },
+                        {
+                            "minutes": 14
+                        },
+                        {
+                            "minutes": 17
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Legga il testo. Completi il modulo con le informazioni del testo.",
+                    "task": "A short text of five to seven sentences about a person who signs up for something, such as a gym, a course, a library or a trip, and a form of up to ten fields for the facts the text gives: names, a date, an address, a number of people, a way to pay, a choice between two. Each answer is a word or a short group of words.",
+                    "example": {
+                        "text": "Mi chiamo Ahmed Benali, sono nato il 3 maggio 1995 e abito a Torino, in via Garibaldi 18. Vorrei iscrivermi al corso di nuoto del martedì e del giovedì sera. Lavoro tutto il giorno, quindi preferisco le 19. Pago con la carta di credito.",
+                        "fields": [
+                            {
+                                "label": "Cognome:",
+                                "answer": "Benali"
+                            },
+                            {
+                                "label": "Data di nascita:",
+                                "answer": "3 maggio 1995"
+                            },
+                            {
+                                "label": "Indirizzo:",
+                                "answer": "via Garibaldi 18, Torino"
+                            },
+                            {
+                                "label": "Corso:",
+                                "answer": "nuoto"
+                            },
+                            {
+                                "label": "Giorni:",
+                                "answer": "martedì e giovedì"
+                            },
+                            {
+                                "label": "Orario (mattina / sera):",
+                                "answer": "sera"
+                            },
+                            {
+                                "label": "Pagamento (contanti / carta):",
+                                "answer": "carta"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova B.2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "message",
+                        "words": 80
+                    },
+                    "instances": 1,
+                    "minutes": 45,
+                    "sizes": [
+                        {
+                            "words": 30,
+                            "minutes": 18
+                        },
+                        {
+                            "words": 45,
+                            "minutes": 25
+                        },
+                        {
+                            "words": 55,
+                            "minutes": 31
+                        },
+                        {
+                            "words": 70,
+                            "minutes": 38
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Scriva un breve testo (circa 80 parole) seguendo la traccia. Scriva a tutti i punti.",
+                    "task": "A situation of one or two sentences in which the learner writes to a friend about something they did or will do, such as a weekend, a party, a new home or a holiday, with four points to write about, as the outline to expand: what, where, with whom, and an impression or a plan. The past tense is often needed.",
+                    "example": {
+                        "situation": "Lo scorso fine settimana è stato in una città che non conosceva. Scriva un'email a un'amica, Chiara.",
+                        "points": [
+                            "Dove è andato e con chi?",
+                            "Che cosa ha visto?",
+                            "Che cosa le è piaciuto di più?",
+                            "Inviti Chiara a venire con Lei la prossima volta."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "listening",
+            "title": "Comprensione dell'ascolto",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova C.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "dialogue",
+                        "answers": "choice",
+                        "questions": 1,
+                        "plays": "2"
+                    },
+                    "instances": 5,
+                    "minutes": 6,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 4
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 5
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Ascolti i dialoghi. Ascolta ogni dialogo due volte. Scelga la risposta giusta: a o b.",
+                    "task": "Short everyday dialogues of four to six turns, with the speakers named, such as Donna, Uomo, Commesso. The question asks for one fact the dialogue gives, a time, a price, a place or a thing; both options are said in it, and only one is what the speakers agree on.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Donna: Scusi, quanto costano queste scarpe?\nCommesso: Sessanta euro, ma oggi c'è lo sconto del venti per cento.\nDonna: Allora quarantotto euro?\nCommesso: Esatto, quarantotto.",
+                        "questions": [
+                            {
+                                "prompt": "Quanto paga la donna?",
+                                "options": [
+                                    "48 euro.",
+                                    "60 euro."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "match",
+                        "questions": 6,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 4,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 2
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 3
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Ascolti i testi. Ascolta ogni testo due volte. Abbini ogni testo all'immagine giusta.",
+                    "task": "Six short monologues of two or three sentences, numbered in one text, each of a person saying what they do, buy, want or where they are, and a list of seven pictures, described in a few words each, shown. Each question is one of the monologues; its options are the pictures.",
+                    "example": {
+                        "title": "",
+                        "shown": "A. un autobus in città · B. un banco del mercato · C. un campo da tennis · D. una piscina",
+                        "text": "1. Prendo sempre l'autobus numero 5 per andare in ufficio.\n2. Oggi compro un chilo di mele e del formaggio.\n3. La domenica gioco a tennis con mio fratello.",
+                        "questions": [
+                            {
+                                "prompt": "Testo 1",
+                                "options": [
+                                    "A. un autobus in città",
+                                    "B. un banco del mercato",
+                                    "C. un campo da tennis",
+                                    "D. una piscina"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Testo 2",
+                                "options": [
+                                    "A. un autobus in città",
+                                    "B. un banco del mercato",
+                                    "C. un campo da tennis",
+                                    "D. una piscina"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Testo 3",
+                                "options": [
+                                    "A. un autobus in città",
+                                    "B. un banco del mercato",
+                                    "C. un campo da tennis",
+                                    "D. una piscina"
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "yesno",
+                        "questions": 10,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 6,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 2
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 5
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Ascolti cinque brevi testi. Ascolta i testi due volte. Le informazioni della lista sono nei testi? Scelga: Sì o No.",
+                    "task": "Five short monologues, one after another in the text, each of a person speaking of their day, home, work or holidays, of three or four sentences, with the name of who speaks. The statements are a list of facts; each is or is not said by one of them.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Laura: Lavoro in una farmacia vicino alla stazione. Comincio alle otto e finisco alle quattro.\nGiorgio: Abito in campagna con mia moglie e due cani. Vado in città solo il sabato.",
+                        "questions": [
+                            {
+                                "prompt": "Laura lavora vicino alla stazione.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Laura finisce di lavorare alle sei.",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Giorgio ha due cani.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Giorgio va in città ogni giorno.",
+                                "options": [],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "choice",
+                        "questions": 1,
+                        "plays": "2"
+                    },
+                    "instances": 5,
+                    "minutes": 4,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 2
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 3
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 3
+                        }
+                    ],
+                    "points": 5,
+                    "instructions": "Ascolti i testi. Ascolta ogni testo due volte. Scelga la risposta giusta: a o b.",
+                    "task": "Short monologues of two to four sentences, such as a message on the phone, an announcement or a person telling a plan. The question asks for one fact; the two options are both likely.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Ciao Elena, sono Matteo. Stasera non posso venire al cinema, devo lavorare fino a tardi. Possiamo andare domani alle nove?",
+                        "questions": [
+                            {
+                                "prompt": "Quando vuole andare al cinema Matteo?",
+                                "options": [
+                                    "Stasera.",
+                                    "Domani sera."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "speaking",
+            "title": "Produzione orale",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "introduce",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 3,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 1
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 3
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Si presenti e risponda alle domande dell'esaminatore. Scriva come parlerebbe.",
+                    "task": "A short conversation in which the learner introduces themselves and gives simple facts about their life: family, home, work or study, free time. The card lists the points; the first prompt asks for the introduction, the others are questions of the examiner on it.",
+                    "example": {
+                        "card": "Nome · Paese e città · Famiglia · Lavoro o studio · Tempo libero",
+                        "prompts": [
+                            "Si presenti, per favore.",
+                            "Con chi abita?",
+                            "Che cosa fa nel fine settimana?"
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova 2",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "talk",
+                        "prompts": 2
+                    },
+                    "instances": 1,
+                    "minutes": 3,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 1
+                        },
+                        {
+                            "prompts": 1,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 1,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        }
+                    ],
+                    "points": 15,
+                    "instructions": "Guardi le vignette e racconti che cosa succede. Scriva come parlerebbe.",
+                    "task": "A sequence of four pictures that tell a short everyday story, described in words on the card in place of the pictures: getting up late, missing the bus, running, arriving in time. The first prompt asks the learner to tell the story, the second a question about it or about their own life.",
+                    "example": {
+                        "card": "Vignetta 1: Anna dorme, la sveglia segna le 8. · Vignetta 2: Anna corre alla fermata, l'autobus parte. · Vignetta 3: Anna prende un taxi. · Vignetta 4: Anna arriva in ufficio, i colleghi sorridono.",
+                        "prompts": [
+                            "Racconti la storia di Anna.",
+                            "E a Lei è mai successo di arrivare in ritardo?"
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova 3",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "requests",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 3,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 1
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 3
+                        }
+                    ],
+                    "points": 15,
+                    "instructions": "Role play. Legga la situazione e parli con l'esaminatore. Scriva come parlerebbe.",
+                    "task": "A role play in an everyday situation, set by a picture that is not to be described: at a ticket office, in a shop, at the doctor's, at a hotel. The card says who the learner is and what they want; the prompts are the turns of the examiner, who plays the other person.",
+                    "example": {
+                        "card": "Lei è alla stazione e vuole comprare un biglietto per Napoli per domani mattina. Chieda l'orario, il prezzo e il binario.",
+                        "prompts": [
+                            "Buongiorno, mi dica.",
+                            "C'è un treno alle 7 e uno alle 9. Quale preferisce?",
+                            "Sono 45 euro. Paga in contanti o con la carta?"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,974 @@
+[
+    {
+        "id": "pronomi-soggetto",
+        "level": "A1",
+        "title": "Subject pronouns and leaving them out",
+        "statement": "The subject pronouns are io, tu, lui, lei, Lei, noi, voi, loro. As the ending of the verb already shows the person, the pronoun is usually left out; it is said only for contrast or emphasis (Io lavoro, tu no).",
+        "when": "any sentence with a conjugated verb",
+        "confused_with": ["lei-formale"],
+        "requires": []
+    },
+    {
+        "id": "lei-formale",
+        "level": "A1",
+        "title": "Formal Lei",
+        "statement": "To address a stranger or someone formally, use Lei (often with a capital) with the verb in the third person singular: Lei è italiano? Come si chiama? The plural formal address is voi.",
+        "when": "speaking to a stranger, a customer, an older person or in writing formally",
+        "confused_with": ["pronomi-soggetto"],
+        "requires": ["pronomi-soggetto"]
+    },
+    {
+        "id": "essere-presente",
+        "level": "A1",
+        "title": "Present tense of essere",
+        "statement": "essere is irregular: sono, sei, è, siamo, siete, sono. It is used for identity, origin (sono di Roma), nationality, job, description and where something is.",
+        "when": "saying who or what someone is, where they are from, what they are like, where they are",
+        "confused_with": ["avere-presente"],
+        "requires": ["pronomi-soggetto"]
+    },
+    {
+        "id": "avere-presente",
+        "level": "A1",
+        "title": "Present tense of avere",
+        "statement": "avere is irregular: ho, hai, ha, abbiamo, avete, hanno; the h is not pronounced. It is used for possession, family and age.",
+        "when": "saying what someone has, their family, their age",
+        "confused_with": ["essere-presente"],
+        "requires": ["pronomi-soggetto"]
+    },
+    {
+        "id": "avere-espressioni",
+        "level": "A1",
+        "title": "Expressions with avere",
+        "statement": "Italian says avere where English uses to be: avere ... anni (age), avere fame, sete, sonno, freddo, caldo, fretta, paura, ragione, torto, bisogno di.",
+        "when": "age, hunger, thirst, cold, heat, sleepiness, hurry, fear, being right, needing",
+        "confused_with": ["essere-presente"],
+        "requires": ["avere-presente"]
+    },
+    {
+        "id": "c-e-ci-sono",
+        "level": "A1",
+        "title": "c'è and ci sono",
+        "statement": "There is is c'è with a singular noun and there are is ci sono with a plural one. They say that something exists or is present, usually with an indefinite article or none; to say where a known, definite thing is, use è or sono (Il bagno è a destra).",
+        "when": "saying that something exists or is somewhere",
+        "confused_with": ["essere-presente"],
+        "requires": ["essere-presente"]
+    },
+    {
+        "id": "nomi-genere",
+        "level": "A1",
+        "title": "Gender of nouns",
+        "statement": "Every noun is masculine or feminine. Most nouns in -o are masculine and most in -a feminine; nouns in -e can be either and are learned with their article. Nouns in -zione, -sione, -tà, -tù are feminine; nouns in -ma from Greek (problema, tema, sistema) are masculine.",
+        "when": "any noun",
+        "confused_with": ["nomi-plurale"],
+        "requires": []
+    },
+    {
+        "id": "nomi-plurale",
+        "level": "A1",
+        "title": "Plural of nouns",
+        "statement": "-o becomes -i, -a becomes -e, -e becomes -i: libro → libri, casa → case, chiave → chiavi. Masculine nouns in -a take -i (problemi). -ca/-ga become -che/-ghe; -co/-go usually -chi/-ghi but -ci/-gi after a stressed vowel two syllables back (amici, medici).",
+        "when": "a noun in the plural",
+        "confused_with": ["nomi-invariabili"],
+        "requires": ["nomi-genere"]
+    },
+    {
+        "id": "nomi-invariabili",
+        "level": "A1",
+        "title": "Nouns that do not change in the plural",
+        "statement": "Nouns ending in a stressed vowel (città, caffè, università), in a consonant (bar, film, sport), shortened nouns (foto, moto, cinema, auto) and nouns in -i (crisi, analisi) stay the same in the plural; only the article shows the number.",
+        "when": "the plural of such a noun",
+        "confused_with": ["nomi-plurale"],
+        "requires": ["nomi-plurale"]
+    },
+    {
+        "id": "articolo-determinativo-forme",
+        "level": "A1",
+        "title": "Forms of the definite article",
+        "statement": "Masculine: il before a consonant, lo before s + consonant, z, gn, ps, y, x, and l' before a vowel; plural i (for il) and gli (for lo and l'). Feminine: la, l' before a vowel; plural le.",
+        "when": "a noun with the definite article",
+        "confused_with": ["articolo-indeterminativo"],
+        "requires": ["nomi-genere", "nomi-plurale"]
+    },
+    {
+        "id": "articolo-determinativo-uso",
+        "level": "A1",
+        "title": "When Italian uses the definite article",
+        "statement": "Italian uses the definite article more than English: with general and abstract nouns (Il caffè fa bene), languages after verbs other than parlare/studiare (L'italiano è bello), titles when speaking about someone (il signor Rossi, but Buongiorno, signor Rossi), dates and times (alle tre), and possessives (la mia casa).",
+        "when": "a noun used generally, a title, a time or a possessive",
+        "confused_with": [],
+        "requires": ["articolo-determinativo-forme"]
+    },
+    {
+        "id": "articolo-indeterminativo",
+        "level": "A1",
+        "title": "Forms of the indefinite article",
+        "statement": "Masculine: un before a consonant or a vowel, uno before s + consonant, z, gn, ps, y. Feminine: una before a consonant, un' before a vowel. un never takes an apostrophe; un' is only feminine (un amico, un'amica).",
+        "when": "a noun with a or an",
+        "confused_with": ["articolo-determinativo-forme"],
+        "requires": ["nomi-genere"]
+    },
+    {
+        "id": "aggettivo-accordo",
+        "level": "A1",
+        "title": "Agreement of adjectives",
+        "statement": "An adjective agrees with its noun in gender and number. Adjectives in -o have four forms (rosso, rossa, rossi, rosse); adjectives in -e have two (verde, verdi). With nouns of both genders, the adjective is masculine plural.",
+        "when": "an adjective with a noun, or after essere",
+        "confused_with": [],
+        "requires": ["nomi-genere", "nomi-plurale"]
+    },
+    {
+        "id": "aggettivo-posizione",
+        "level": "A1",
+        "title": "Position of adjectives",
+        "statement": "Most adjectives come after the noun (una macchina rossa, un ragazzo simpatico), always those of colour, nationality and shape. Some common ones (bello, brutto, buono, grande, piccolo, nuovo, vecchio) often come before; molto, poco, tanto and numbers come before.",
+        "when": "an adjective with a noun",
+        "confused_with": [],
+        "requires": ["aggettivo-accordo"]
+    },
+    {
+        "id": "bello-buono",
+        "level": "A2",
+        "title": "The forms of bello and buono before a noun",
+        "statement": "Before a noun, bello takes the forms of the definite article (bel, bello, bell', bei, begli; bella, bell', belle) and buono those of the indefinite article (buon, buono, buona, buon'). After the noun or after essere they are regular.",
+        "when": "bello or buono before a noun",
+        "confused_with": ["quello-forme"],
+        "requires": ["aggettivo-posizione", "articolo-determinativo-forme"]
+    },
+    {
+        "id": "presente-are",
+        "level": "A1",
+        "title": "Present tense of verbs in -are",
+        "statement": "Verbs in -are drop -are and add -o, -i, -a, -iamo, -ate, -ano: parlo, parli, parla, parliamo, parlate, parlano. The stress of the loro form stays on the stem: PARlano.",
+        "when": "present tense of a verb in -are",
+        "confused_with": ["presente-ere-ire"],
+        "requires": ["pronomi-soggetto"]
+    },
+    {
+        "id": "presente-ere-ire",
+        "level": "A1",
+        "title": "Present tense of verbs in -ere and -ire",
+        "statement": "Verbs in -ere add -o, -i, -e, -iamo, -ete, -ono (scrivo, scrivi, scrive, scriviamo, scrivete, scrivono). Verbs in -ire add -o, -i, -e, -iamo, -ite, -ono (dormo, dormi, dorme, dormiamo, dormite, dormono).",
+        "when": "present tense of a verb in -ere or -ire",
+        "confused_with": ["presente-are", "presente-isc"],
+        "requires": ["pronomi-soggetto"]
+    },
+    {
+        "id": "presente-isc",
+        "level": "A1",
+        "title": "Verbs in -ire with -isc-",
+        "statement": "Many verbs in -ire (capire, finire, preferire, pulire, spedire) put -isc- between the stem and the ending in all forms but noi and voi: capisco, capisci, capisce, capiamo, capite, capiscono.",
+        "when": "present tense of capire, finire, preferire, pulire, spedire, costruire, restituire ...",
+        "confused_with": ["presente-ere-ire"],
+        "requires": ["presente-ere-ire"]
+    },
+    {
+        "id": "presente-ortografia",
+        "level": "A1",
+        "title": "Spelling of verbs in -care, -gare, -ciare, -giare",
+        "statement": "Verbs in -care and -gare add an h before i to keep the hard sound: cerchi, cerchiamo, paghi, paghiamo. Verbs in -ciare, -giare and -iare do not double the i: cominci, mangi, studi.",
+        "when": "present tense, tu and noi, of cercare, pagare, giocare, mangiare, cominciare, studiare ...",
+        "confused_with": [],
+        "requires": ["presente-are"]
+    },
+    {
+        "id": "presente-irregolare",
+        "level": "A1",
+        "title": "Irregular verbs in the present",
+        "statement": "Common verbs are irregular in the present and are learned whole: andare (vado, vai, va, andiamo, andate, vanno), fare (faccio, fai, fa, facciamo, fate, fanno), stare (sto, stai, sta, stiamo, state, stanno), dare (do, dai, dà, diamo, date, danno), dire (dico, dici, dice, diciamo, dite, dicono), venire (vengo, vieni, viene, veniamo, venite, vengono), uscire (esco, esci, esce, usciamo, uscite, escono), bere (bevo, bevi, ...), rimanere (rimango), tenere (tengo).",
+        "when": "present tense of andare, fare, stare, dare, dire, venire, uscire, bere, rimanere, tenere, salire, scegliere",
+        "confused_with": [],
+        "requires": ["presente-are", "presente-ere-ire"]
+    },
+    {
+        "id": "modali-forme",
+        "level": "A1",
+        "title": "Present tense of the modal verbs",
+        "statement": "potere (posso, puoi, può, possiamo, potete, possono), volere (voglio, vuoi, vuole, vogliamo, volete, vogliono) and dovere (devo, devi, deve, dobbiamo, dovete, devono) are irregular.",
+        "when": "present tense of potere, volere, dovere",
+        "confused_with": [],
+        "requires": ["presente-ere-ire"]
+    },
+    {
+        "id": "modali-infinito",
+        "level": "A1",
+        "title": "Modal verb and infinitive",
+        "statement": "A modal verb is followed directly by an infinitive, without a preposition: Posso entrare? Voglio mangiare. Devo lavorare. Unstressed pronouns go before the modal or are attached to the infinitive (Lo devo fare / Devo farlo).",
+        "when": "a modal verb with another verb",
+        "confused_with": ["sapere-potere"],
+        "requires": ["modali-forme"]
+    },
+    {
+        "id": "sapere-potere",
+        "level": "A1",
+        "title": "sapere or potere",
+        "statement": "sapere + infinitive means knowing how to, an ability that was learned (So nuotare); potere means being able or allowed in a situation (Oggi non posso nuotare, ho il raffreddore). sapere is irregular: so, sai, sa, sappiamo, sapete, sanno.",
+        "when": "saying that someone can do something",
+        "confused_with": ["modali-infinito"],
+        "requires": ["modali-forme"]
+    },
+    {
+        "id": "negazione-non",
+        "level": "A1",
+        "title": "Negation with non",
+        "statement": "non goes directly before the conjugated verb, and before any unstressed pronoun in front of it: Non parlo tedesco. Non lo so.",
+        "when": "a negative sentence",
+        "confused_with": ["doppia-negazione"],
+        "requires": ["presente-are"]
+    },
+    {
+        "id": "doppia-negazione",
+        "level": "A1",
+        "title": "Double negation",
+        "statement": "With niente, nulla, nessuno, mai, più, neanche placed after the verb, non stays before the verb: Non vedo niente. Non viene nessuno. Non bevo mai caffè. When such a word comes before the verb, non is left out: Nessuno viene.",
+        "when": "a sentence with niente, nessuno, mai, più, neanche, né ... né",
+        "confused_with": ["negazione-non"],
+        "requires": ["negazione-non"]
+    },
+    {
+        "id": "parole-interrogative",
+        "level": "A1",
+        "title": "Question words",
+        "statement": "Questions start with the question word and the verb comes before an expressed subject: Dove abita Marco? The words are che cosa (or cosa, che), chi, dove, quando, come, perché, quanto (agreeing: quanti anni, quante persone), quale (qual è, without apostrophe). A yes/no question has the order of a statement and a rising tone.",
+        "when": "a question",
+        "confused_with": [],
+        "requires": ["presente-are"]
+    },
+    {
+        "id": "preposizioni-luogo",
+        "level": "A1",
+        "title": "Prepositions of place: a, in, da",
+        "statement": "Use a with cities and small islands (a Roma, a Capri) and with casa, scuola, letto, teatro; in with countries, regions, large islands and many places (in Italia, in Toscana, in Sicilia, in banca, in ufficio, in piazza, in montagna); da with a person (vado dal medico, da Marco).",
+        "when": "going to or being in a place",
+        "confused_with": ["preposizioni-di-da"],
+        "requires": []
+    },
+    {
+        "id": "preposizioni-di-da",
+        "level": "A1",
+        "title": "di and da for origin, possession and time",
+        "statement": "Origin from a city with essere uses di (Sono di Napoli); coming from uses da (Vengo da Napoli). di also shows possession and material (la macchina di Luca, una camicia di cotone). da + time says since or for, with the present tense (Studio italiano da due anni).",
+        "when": "where someone is from, whose something is, since when",
+        "confused_with": ["preposizioni-luogo"],
+        "requires": []
+    },
+    {
+        "id": "preposizioni-tempo",
+        "level": "A1",
+        "title": "Prepositions of time",
+        "statement": "a for the hour and some months (alle otto, a maggio), in for months, seasons and years (in estate, nel 2020), da ... a for spans (dalle nove alle cinque), per for planned durations (per due settimane), fra/tra for the time from now (fra un'ora). Days and dates take the article or nothing (il lunedì = every Monday; lunedì = this Monday).",
+        "when": "saying when or for how long",
+        "confused_with": ["preposizioni-di-da"],
+        "requires": []
+    },
+    {
+        "id": "preposizioni-articolate",
+        "level": "A1",
+        "title": "Prepositions joined with the article",
+        "statement": "a, da, di, in and su join the definite article that follows them: a + il = al, di + il = del, da + il = dal, in + il = nel, su + il = sul, and in the same way with lo, l', la, i, gli, le (allo, alla, ai, agli, alle; nello, nella, nei, negli, nelle). con and per usually stay apart (con il), tra and fra always do.",
+        "when": "a, da, di, in, su before a definite article",
+        "confused_with": ["preposizioni-luogo"],
+        "requires": ["articolo-determinativo-forme"]
+    },
+    {
+        "id": "preposizioni-articolo-o-no",
+        "level": "A2",
+        "title": "A preposition with or without the article",
+        "statement": "A place word on its own takes a simple preposition (in Italia, in banca, a casa, in cucina); once it is specified or has an adjective, it takes the article (nell'Italia del Nord, nella banca di mio padre, alla casa di Luca). The same goes for months and years: a maggio, but nel maggio del 1990.",
+        "when": "a place or a time with in or a, specified or not",
+        "confused_with": [],
+        "requires": ["preposizioni-articolate", "preposizioni-luogo"]
+    },
+    {
+        "id": "questo-quello",
+        "level": "A1",
+        "title": "questo and quello",
+        "statement": "questo (this) shows what is near the speaker, quello (that) what is far. questo has four forms like an adjective in -o (questo, questa, questi, queste), and before a vowel quest' in the singular.",
+        "when": "pointing at something near or far",
+        "confused_with": [],
+        "requires": ["aggettivo-accordo"]
+    },
+    {
+        "id": "quello-forme",
+        "level": "A1",
+        "title": "The forms of quello before a noun",
+        "statement": "Before a noun quello takes the forms of the definite article: quel, quello, quell', quei, quegli; quella, quell', quelle (quel ragazzo, quello studente, quegli amici). Alone, without a noun, it is quello, quella, quelli, quelle.",
+        "when": "quello before a noun or alone",
+        "confused_with": ["bello-buono"],
+        "requires": ["questo-quello", "articolo-determinativo-forme"]
+    },
+    {
+        "id": "possessivi-articolo",
+        "level": "A1",
+        "title": "Possessives with the article",
+        "statement": "Possessives agree with the thing possessed, not with the owner, and usually take the article: il mio libro, la sua casa (his or her house), i nostri amici, le vostre chiavi. loro does not change: il loro cane, la loro casa.",
+        "when": "saying whose something is",
+        "confused_with": ["possessivi-famiglia"],
+        "requires": ["articolo-determinativo-forme", "aggettivo-accordo"]
+    },
+    {
+        "id": "possessivi-famiglia",
+        "level": "A1",
+        "title": "Possessives with nouns of the family",
+        "statement": "With a singular noun of the family, unchanged, the article is left out: mia madre, tuo fratello, suo marito. It is kept with loro, in the plural, with a diminutive or an adjective (la loro madre, i miei fratelli, la mia sorellina, il mio caro padre), and with mamma and papà.",
+        "when": "a possessive with madre, padre, fratello, sorella, marito, moglie, figlio, zio, nonno ...",
+        "confused_with": ["possessivi-articolo"],
+        "requires": ["possessivi-articolo"]
+    },
+    {
+        "id": "riflessivi-presente",
+        "level": "A1",
+        "title": "Reflexive verbs in the present",
+        "statement": "A reflexive verb (alzarsi, lavarsi, chiamarsi, divertirsi) takes the pronoun mi, ti, si, ci, vi, si before the conjugated verb: mi alzo, ti alzi, si alza, ci alziamo, vi alzate, si alzano. With a modal verb the pronoun goes before the modal or is attached to the infinitive: mi devo alzare / devo alzarmi.",
+        "when": "a reflexive verb",
+        "confused_with": [],
+        "requires": ["presente-are"]
+    },
+    {
+        "id": "piacere",
+        "level": "A1",
+        "title": "piacere",
+        "statement": "piacere is said of the thing liked, which is the subject: mi piace il caffè (singular or an infinitive), mi piacciono i dolci (plural). The person who likes is an indirect object: mi, ti, gli, le, ci, vi, gli, or a + name (A Marco piace il calcio).",
+        "when": "saying that someone likes something",
+        "confused_with": ["pronomi-indiretti"],
+        "requires": ["presente-are"]
+    },
+    {
+        "id": "passato-prossimo-avere",
+        "level": "A2",
+        "title": "Passato prossimo with avere",
+        "statement": "The passato prossimo is the present of avere or essere and the past participle. Most verbs, all those with a direct object, take avere: ho mangiato, hai visto, abbiamo dormito. With avere the participle does not change for the subject.",
+        "when": "a finished action in the past",
+        "confused_with": ["passato-prossimo-essere"],
+        "requires": ["avere-presente"]
+    },
+    {
+        "id": "participio-regolare",
+        "level": "A2",
+        "title": "Regular past participles",
+        "statement": "Verbs in -are form the participle in -ato (parlato), verbs in -ere in -uto (venduto, avuto), verbs in -ire in -ito (dormito, finito).",
+        "when": "forming the past participle",
+        "confused_with": ["participio-irregolare"],
+        "requires": []
+    },
+    {
+        "id": "participio-irregolare",
+        "level": "A2",
+        "title": "Irregular past participles",
+        "statement": "Many verbs in -ere, and some others, have irregular participles: fare fatto, dire detto, scrivere scritto, leggere letto, vedere visto, prendere preso, mettere messo, chiudere chiuso, aprire aperto, offrire offerto, rispondere risposto, chiedere chiesto, decidere deciso, perdere perso, scegliere scelto, rimanere rimasto, venire venuto, essere stato, nascere nato, morire morto, bere bevuto, vivere vissuto.",
+        "when": "the participle of fare, dire, scrivere, leggere, vedere, prendere, mettere, aprire, chiudere, venire, essere, nascere ...",
+        "confused_with": ["participio-regolare"],
+        "requires": ["participio-regolare"]
+    },
+    {
+        "id": "passato-prossimo-essere",
+        "level": "A2",
+        "title": "Passato prossimo with essere",
+        "statement": "Verbs of movement from one place to another (andare, venire, arrivare, partire, tornare, entrare, uscire), of change of state (nascere, morire, diventare), of staying (stare, restare, rimanere), essere itself and piacere take essere: sono andato, è nata.",
+        "when": "the passato prossimo of a verb without a direct object of movement, change or staying",
+        "confused_with": ["passato-prossimo-avere"],
+        "requires": ["passato-prossimo-avere", "essere-presente"]
+    },
+    {
+        "id": "accordo-participio-essere",
+        "level": "A2",
+        "title": "Agreement of the participle with essere",
+        "statement": "With essere the participle agrees with the subject like an adjective: Marco è andato, Giulia è andata, i ragazzi sono andati, le ragazze sono andate.",
+        "when": "the passato prossimo or another compound tense with essere",
+        "confused_with": [],
+        "requires": ["passato-prossimo-essere", "aggettivo-accordo"]
+    },
+    {
+        "id": "passato-prossimo-riflessivi",
+        "level": "A2",
+        "title": "Passato prossimo of reflexive verbs",
+        "statement": "Reflexive verbs always take essere, and the participle agrees with the subject: mi sono alzato/alzata, ci siamo divertiti.",
+        "when": "the passato prossimo of a reflexive verb",
+        "confused_with": ["passato-prossimo-avere"],
+        "requires": ["riflessivi-presente", "accordo-participio-essere"]
+    },
+    {
+        "id": "ausiliare-doppio",
+        "level": "A2",
+        "title": "Verbs with both auxiliaries",
+        "statement": "Some verbs take avere with a direct object and essere without one: Ho cominciato il lavoro / Il film è cominciato; also finire, passare, salire, scendere, cambiare, aumentare. Verbs of weather may take either (è piovuto / ha piovuto). correre and saltare take avere for the activity and essere with a goal (Ho corso molto / Sono corso a casa).",
+        "when": "the passato prossimo of cominciare, finire, passare, salire, scendere, cambiare, correre ...",
+        "confused_with": ["passato-prossimo-essere"],
+        "requires": ["passato-prossimo-essere"]
+    },
+    {
+        "id": "passato-prossimo-modali",
+        "level": "A2",
+        "title": "Passato prossimo of modal verbs",
+        "statement": "In the passato prossimo a modal verb usually takes the auxiliary of the infinitive that follows it: Ho dovuto lavorare (lavorare takes avere), Sono dovuto partire (partire takes essere). With essere the participle agrees.",
+        "when": "dovere, potere, volere in the passato prossimo with an infinitive",
+        "confused_with": ["passato-prossimo-essere"],
+        "requires": ["passato-prossimo-essere", "modali-infinito"]
+    },
+    {
+        "id": "imperfetto-forme",
+        "level": "A2",
+        "title": "Forms of the imperfetto",
+        "statement": "The imperfetto adds -vo, -vi, -va, -vamo, -vate, -vano to the stem with its vowel: parlavo, leggevi, dormiva, parlavamo. essere is irregular (ero, eri, era, eravamo, eravate, erano); fare, dire, bere take the old stem (facevo, dicevo, bevevo).",
+        "when": "forming the imperfetto",
+        "confused_with": [],
+        "requires": ["presente-are"]
+    },
+    {
+        "id": "imperfetto-uso",
+        "level": "A2",
+        "title": "Uses of the imperfetto",
+        "statement": "The imperfetto describes the past: habits (Da bambino andavo al mare), the background and the setting of a story, people, places, weather, time, age, feelings (Era tardi, pioveva, avevo fame), and an action in progress (Mentre cucinavo, ...).",
+        "when": "describing the past, past habits, an action in progress",
+        "confused_with": ["passato-prossimo-imperfetto"],
+        "requires": ["imperfetto-forme"]
+    },
+    {
+        "id": "passato-prossimo-imperfetto",
+        "level": "A2",
+        "title": "Passato prossimo or imperfetto",
+        "statement": "The passato prossimo tells finished events, one after another or with a set duration (Ieri ho lavorato otto ore); the imperfetto tells the background and what was going on (Mentre leggevo, è suonato il telefono). The time words help: ieri, una volta, all'improvviso take the passato prossimo; sempre, di solito, mentre the imperfetto. sapere and conoscere change meaning: ho saputo (found out), sapevo (knew); ho conosciuto (met for the first time), conoscevo (knew).",
+        "when": "a story or account of the past",
+        "confused_with": ["imperfetto-uso"],
+        "requires": ["passato-prossimo-avere", "imperfetto-uso"]
+    },
+    {
+        "id": "trapassato-prossimo",
+        "level": "B1",
+        "title": "Trapassato prossimo",
+        "statement": "The trapassato prossimo is the imperfetto of avere or essere and the participle (avevo mangiato, ero partito). It says what had happened before another past event: Quando sono arrivato, il treno era già partito.",
+        "when": "an action before another action in the past",
+        "confused_with": ["passato-prossimo-imperfetto"],
+        "requires": ["passato-prossimo-imperfetto"]
+    },
+    {
+        "id": "passato-remoto",
+        "level": "B2",
+        "title": "Passato remoto",
+        "statement": "The passato remoto tells events of a past closed off from the present, mainly in writing, in stories, history and biographies: parlò, credette, partì. Regular endings are -ai, -asti, -ò, -ammo, -aste, -arono (parlare), -ei/-etti, -esti, -é/-ette, -emmo, -este, -erono/-ettero (credere), -ii, -isti, -ì, -immo, -iste, -irono (partire). Many verbs in -ere are irregular in io, lui/lei and loro (ebbi, ebbe, ebbero; fui, fu, furono; feci, fece, fecero; venni, venne, vennero).",
+        "when": "a past event in a written narrative, a biography or history",
+        "confused_with": ["passato-prossimo-imperfetto"],
+        "requires": ["passato-prossimo-imperfetto"]
+    },
+    {
+        "id": "pronomi-diretti",
+        "level": "A2",
+        "title": "Direct object pronouns",
+        "statement": "The unstressed direct object pronouns are mi, ti, lo, la, ci, vi, li, le (and La for formal you). They go before the conjugated verb: Lo vedo. Non la conosco. With an infinitive they are attached to it (Voglio vederlo). lo also stands for a whole clause (Lo so).",
+        "when": "replacing a direct object",
+        "confused_with": ["pronomi-indiretti"],
+        "requires": ["negazione-non"]
+    },
+    {
+        "id": "pronomi-diretti-participio",
+        "level": "A2",
+        "title": "Agreement of the participle with lo, la, li, le",
+        "statement": "With avere, the participle agrees with a direct object pronoun of the third person before it: L'ho vista (Giulia), Li ho comprati, Le ho prese. lo and la take an apostrophe before ho, hai, ha, hanno; li and le never do.",
+        "when": "the passato prossimo with lo, la, li, le before it",
+        "confused_with": [],
+        "requires": ["pronomi-diretti", "passato-prossimo-avere"]
+    },
+    {
+        "id": "pronomi-indiretti",
+        "level": "A2",
+        "title": "Indirect object pronouns",
+        "statement": "The unstressed indirect object pronouns are mi, ti, gli (to him, and in speech also to them), le (to her), Le (to you, formal), ci, vi, gli (to them; also loro after the verb). They replace a + person and go before the conjugated verb: Gli telefono stasera. Le ho scritto. With avere the participle never agrees with them.",
+        "when": "replacing a + person, with verbs like dare, dire, telefonare, scrivere, regalare, chiedere, rispondere",
+        "confused_with": ["pronomi-diretti"],
+        "requires": ["pronomi-diretti"]
+    },
+    {
+        "id": "pronomi-tonici",
+        "level": "A2",
+        "title": "Stressed pronouns",
+        "statement": "The stressed pronouns me, te, lui, lei, Lei, noi, voi, loro go after a preposition (con me, per te, a lei) and after a verb for emphasis or contrast (Vuole te, non me). a me piace stresses the person of mi piace.",
+        "when": "a pronoun after a preposition, or stressed",
+        "confused_with": ["pronomi-indiretti"],
+        "requires": ["pronomi-indiretti"]
+    },
+    {
+        "id": "pronomi-combinati",
+        "level": "B1",
+        "title": "Combined pronouns",
+        "statement": "When an indirect and a direct pronoun go together, the indirect comes first and mi, ti, ci, vi become me, te, ce, ve: me lo, te la, ce li, ve le. gli and le both become glie- and join the direct pronoun: glielo, gliela, glieli, gliele, gliene. With si the same: se lo, se ne.",
+        "when": "two unstressed pronouns together",
+        "confused_with": ["pronomi-indiretti"],
+        "requires": ["pronomi-diretti", "pronomi-indiretti"]
+    },
+    {
+        "id": "ci-luogo",
+        "level": "A2",
+        "title": "ci for a place",
+        "statement": "ci replaces a place already named, after a, in, da or su: Vai a Roma? Sì, ci vado domani. It goes before the conjugated verb like the other pronouns. ci also forms fixed verbs: volerci (Ci vuole un'ora), metterci (Ci metto dieci minuti), esserci, entrarci.",
+        "when": "a place already named, and volerci, metterci, entrarci",
+        "confused_with": ["ne-partitivo"],
+        "requires": ["preposizioni-luogo"]
+    },
+    {
+        "id": "ne-partitivo",
+        "level": "A2",
+        "title": "ne for a quantity",
+        "statement": "ne replaces di + noun, above all a part of something named, with a quantity or a number after the verb: Quanti caffè bevi? Ne bevo tre. Hai del pane? Sì, ne ho un po'. With a number or a quantity, ne must be said and the noun not repeated. ne also replaces di + a thing with verbs like parlare di, pensare di (Che ne pensi?).",
+        "when": "a quantity or number of something named; parlare di, pensare di",
+        "confused_with": ["ci-luogo", "pronomi-diretti"],
+        "requires": ["pronomi-diretti"]
+    },
+    {
+        "id": "ne-participio",
+        "level": "B1",
+        "title": "Agreement of the participle with ne",
+        "statement": "With ne and avere, the participle agrees with the quantity replaced: Quante pizze hai mangiato? Ne ho mangiate due.",
+        "when": "the passato prossimo with ne for a quantity",
+        "confused_with": [],
+        "requires": ["ne-partitivo", "pronomi-diretti-participio"]
+    },
+    {
+        "id": "partitivo",
+        "level": "A2",
+        "title": "The partitive article",
+        "statement": "di with the definite article (del, dello, della, dell', dei, degli, delle) means some: Compro del pane e delle mele. In the plural it can be replaced by alcuni/alcune; in a negative sentence it is usually left out (Non ho comprato pane).",
+        "when": "an uncounted quantity, some",
+        "confused_with": ["qualche-alcuni"],
+        "requires": ["preposizioni-articolate"]
+    },
+    {
+        "id": "qualche-alcuni",
+        "level": "A2",
+        "title": "qualche, alcuni, un po' di",
+        "statement": "qualche means some but takes a singular noun and verb (qualche amico, qualche volta); alcuni/alcune takes a plural noun (alcuni amici); un po' di goes with what is not counted (un po' di zucchero).",
+        "when": "saying some or a few",
+        "confused_with": ["partitivo"],
+        "requires": ["nomi-plurale"]
+    },
+    {
+        "id": "molto-avverbio-aggettivo",
+        "level": "A2",
+        "title": "molto, poco, tanto, troppo as adjective or adverb",
+        "statement": "With a noun molto, poco, tanto, troppo are adjectives and agree (molti libri, poca acqua); with an adjective, a verb or an adverb they are adverbs and do not change (molto belle, lavora poco).",
+        "when": "molto, poco, tanto, troppo",
+        "confused_with": [],
+        "requires": ["aggettivo-accordo"]
+    },
+    {
+        "id": "futuro-forme",
+        "level": "A2",
+        "title": "Forms of the future",
+        "statement": "The future drops the final -e of the infinitive and adds -ò, -ai, -à, -emo, -ete, -anno; verbs in -are change a to e: parlerò, leggerai, dormirà. -care/-gare add h (cercherò, pagherò), -ciare/-giare drop i (comincerò, mangerò). Many verbs lose a vowel or double the r: avrò, sarò, andrò, potrò, dovrò, saprò, vedrò, vivrò, farò, darò, starò, verrò, vorrò, berrò, rimarrò.",
+        "when": "forming the future",
+        "confused_with": [],
+        "requires": ["presente-are"]
+    },
+    {
+        "id": "futuro-uso",
+        "level": "A2",
+        "title": "Uses of the future",
+        "statement": "The future speaks of what will happen, above all with plans less certain or further away (L'anno prossimo andrò in Italia); for near, set plans the present is enough (Domani parto). It also says a guess about the present: Dov'è Marco? Sarà a casa (He's probably at home). After quando and se about the future, Italian uses the future in both parts: Quando arriverò, ti chiamerò.",
+        "when": "talking about the future, guessing",
+        "confused_with": [],
+        "requires": ["futuro-forme"]
+    },
+    {
+        "id": "futuro-anteriore",
+        "level": "B1",
+        "title": "Futuro anteriore",
+        "statement": "The futuro anteriore is the future of avere or essere and the participle (avrò finito, sarò arrivato). It says what will have happened before another future event, often after quando, dopo che, appena (Appena avrò finito, uscirò), and a guess about the past (Avrà perso il treno).",
+        "when": "an action finished before another in the future, or a guess about the past",
+        "confused_with": [],
+        "requires": ["futuro-uso", "passato-prossimo-essere"]
+    },
+    {
+        "id": "comparativo-di-che",
+        "level": "A2",
+        "title": "Comparisons with più/meno ... di or che",
+        "statement": "più or meno goes before the adjective; than is di before a noun or a pronoun (Marco è più alto di Luca, di me) and che before an adjective, a verb, an adverb or a noun with a preposition, when two of the same kind are compared (È più bello che utile. Mi piace più leggere che guardare la tv. Fa più caldo a Roma che a Milano).",
+        "when": "comparing two things",
+        "confused_with": ["comparativo-uguaglianza"],
+        "requires": ["aggettivo-accordo"]
+    },
+    {
+        "id": "comparativo-uguaglianza",
+        "level": "A2",
+        "title": "Comparisons of equality",
+        "statement": "As ... as is (così) ... come or (tanto) ... quanto: Luca è alto come suo padre. With nouns, tanto agrees: Ho tanti libri quanto te.",
+        "when": "saying that two things are the same in some way",
+        "confused_with": ["comparativo-di-che"],
+        "requires": ["comparativo-di-che"]
+    },
+    {
+        "id": "superlativo-relativo",
+        "level": "A2",
+        "title": "The relative superlative",
+        "statement": "The most is the article + (noun) + più + adjective, and of or in is di: È la città più bella d'Italia. È il più giovane della classe.",
+        "when": "the most or the least of a group",
+        "confused_with": ["superlativo-assoluto"],
+        "requires": ["comparativo-di-che"]
+    },
+    {
+        "id": "superlativo-assoluto",
+        "level": "A2",
+        "title": "The absolute superlative",
+        "statement": "-issimo, -issima, -issimi, -issime added to the adjective without its last vowel means very: bellissimo, buonissima, simpaticissimi. molto + adjective says the same.",
+        "when": "saying very",
+        "confused_with": ["superlativo-relativo"],
+        "requires": ["aggettivo-accordo"]
+    },
+    {
+        "id": "comparativi-irregolari",
+        "level": "B1",
+        "title": "migliore, peggiore and meglio, peggio",
+        "statement": "buono and cattivo have the comparatives migliore and peggiore (adjectives, agreeing: le migliori pizze) and the superlatives ottimo and pessimo; bene and male have meglio and peggio (adverbs, unchanging: Sto meglio). più buono and più cattivo are also used, above all of food and character. Never più migliore.",
+        "when": "comparing what is good or bad",
+        "confused_with": ["comparativo-di-che"],
+        "requires": ["comparativo-di-che", "superlativo-assoluto"]
+    },
+    {
+        "id": "imperativo-tu-noi-voi",
+        "level": "A2",
+        "title": "The imperative of tu, noi and voi",
+        "statement": "The tu form of verbs in -are ends in -a (parla!), that of verbs in -ere and -ire in -i (prendi! senti! finisci!). noi and voi are as in the present (andiamo! guardate!). Some verbs have short tu forms: va'/vai, fa'/fai, sta'/stai, da'/dai, di'; essere sii, avere abbi.",
+        "when": "an instruction, an advice or an invitation to tu, noi, voi",
+        "confused_with": ["imperativo-negativo"],
+        "requires": ["presente-are", "presente-ere-ire"]
+    },
+    {
+        "id": "imperativo-negativo",
+        "level": "A2",
+        "title": "The negative imperative",
+        "statement": "The negative imperative of tu is non + infinitive: Non parlare! Non preoccuparti! noi and voi only add non: Non andate!",
+        "when": "telling tu, noi, voi not to do something",
+        "confused_with": ["imperativo-tu-noi-voi"],
+        "requires": ["imperativo-tu-noi-voi"]
+    },
+    {
+        "id": "imperativo-lei",
+        "level": "A2",
+        "title": "The imperative of Lei",
+        "statement": "The formal imperative is the third person of the present subjunctive: verbs in -are end in -i (Scusi! Guardi!), those in -ere and -ire in -a (Prenda! Senta! Finisca!). Irregular: vada, faccia, venga, dica, stia, sia, abbia. Pronouns go before it: Si accomodi! Mi dica.",
+        "when": "an instruction or request to someone addressed as Lei",
+        "confused_with": ["imperativo-tu-noi-voi"],
+        "requires": ["imperativo-tu-noi-voi", "lei-formale"]
+    },
+    {
+        "id": "imperativo-pronomi",
+        "level": "A2",
+        "title": "The imperative with pronouns",
+        "statement": "With tu, noi and voi the unstressed pronouns are attached to the imperative: Dimmi! Prendilo! Alziamoci! After the short forms va', fa', da', di', sta' the consonant doubles (dammi, fallo, dimmi, stammi), except with gli (dagli). In the negative of tu they go before or after the infinitive (Non lo fare / Non farlo). With Lei they go before (Lo prenda).",
+        "when": "an imperative with mi, ti, lo, la, gli, ci, ne ...",
+        "confused_with": [],
+        "requires": ["imperativo-tu-noi-voi", "pronomi-diretti"]
+    },
+    {
+        "id": "stare-gerundio",
+        "level": "A2",
+        "title": "stare + gerund",
+        "statement": "stare + gerund says that an action is going on right now: Sto mangiando. Stavo uscendo quando hai chiamato. The gerund is -ando for -are and -endo for -ere and -ire (parlando, leggendo, dormendo); fare facendo, dire dicendo, bere bevendo.",
+        "when": "an action in progress at the moment",
+        "confused_with": ["stare-per"],
+        "requires": ["presente-irregolare"]
+    },
+    {
+        "id": "stare-per",
+        "level": "A2",
+        "title": "stare per + infinitive",
+        "statement": "stare per + infinitive says that something is about to happen: Sta per piovere. Stavo per uscire.",
+        "when": "something that is about to happen",
+        "confused_with": ["stare-gerundio"],
+        "requires": ["stare-gerundio"]
+    },
+    {
+        "id": "condizionale-forme",
+        "level": "A2",
+        "title": "Forms of the present conditional",
+        "statement": "The conditional has the stem of the future and the endings -ei, -esti, -ebbe, -emmo, -este, -ebbero: parlerei, vorresti, sarebbe, potremmo, andrebbero. Irregular stems are those of the future (avrei, sarei, andrei, farei, verrei, vorrei, berrei).",
+        "when": "forming the conditional",
+        "confused_with": ["futuro-forme"],
+        "requires": ["futuro-forme"]
+    },
+    {
+        "id": "condizionale-uso",
+        "level": "A2",
+        "title": "Uses of the present conditional",
+        "statement": "The conditional makes a request polite (Vorrei un caffè. Potrebbe aiutarmi?), expresses a wish (Mi piacerebbe vivere al mare), gives advice (Dovresti dormire di più) and reports news not confirmed (Il ministro sarebbe malato).",
+        "when": "a polite request, a wish, an advice, an unconfirmed report",
+        "confused_with": [],
+        "requires": ["condizionale-forme"]
+    },
+    {
+        "id": "condizionale-passato",
+        "level": "B1",
+        "title": "The past conditional",
+        "statement": "The past conditional is the conditional of avere or essere and the participle (avrei voluto, sarei venuto). It says a wish or an action that did not happen in the past (Sarei venuto, ma ero malato).",
+        "when": "a wish or a possibility in the past that did not come true",
+        "confused_with": ["condizionale-uso"],
+        "requires": ["condizionale-uso", "passato-prossimo-essere"]
+    },
+    {
+        "id": "futuro-nel-passato",
+        "level": "B1",
+        "title": "The future in the past",
+        "statement": "After a verb of saying, thinking or knowing in a past tense, what was then still to come is said with the past conditional, not the present one: Ha detto che sarebbe venuto. Pensavo che avrebbe piovuto.",
+        "when": "a future seen from the past, after disse, ha detto, pensavo, sapevo ...",
+        "confused_with": ["condizionale-passato"],
+        "requires": ["condizionale-passato"]
+    },
+    {
+        "id": "relativo-che",
+        "level": "B1",
+        "title": "The relative pronoun che",
+        "statement": "che is the relative pronoun of subject and direct object, for people and things, and never changes: Il ragazzo che parla è mio fratello. Il libro che leggo è giallo. It is never used after a preposition.",
+        "when": "a relative clause whose pronoun is the subject or the direct object",
+        "confused_with": ["relativo-cui"],
+        "requires": []
+    },
+    {
+        "id": "relativo-cui",
+        "level": "B1",
+        "title": "The relative pronoun cui",
+        "statement": "After a preposition the relative pronoun is cui, which never changes: la città in cui abito, l'amico con cui esco, il motivo per cui. a cui may be just cui (la persona (a) cui ho scritto). il cui, la cui ... between article and noun means whose, the article agreeing with the thing possessed (l'autore il cui libro ...).",
+        "when": "a relative clause with a preposition, or whose",
+        "confused_with": ["relativo-che"],
+        "requires": ["relativo-che", "preposizioni-articolate"]
+    },
+    {
+        "id": "relativo-il-quale",
+        "level": "B2",
+        "title": "il quale",
+        "statement": "il quale, la quale, i quali, le quali can replace che, above all in writing, to make clear which noun is meant, and cui after a preposition, joined with it (del quale, alla quale, nei quali).",
+        "when": "a relative clause in formal writing, or one that would be ambiguous",
+        "confused_with": ["relativo-cui"],
+        "requires": ["relativo-cui"]
+    },
+    {
+        "id": "relativo-chi",
+        "level": "B1",
+        "title": "chi, ciò che, quello che",
+        "statement": "chi means the person who and takes a singular verb (Chi studia, impara). ciò che and quello che mean what, the thing that (Fai quello che vuoi). tutto quello che / tutto ciò che means everything that.",
+        "when": "a relative clause without a noun before it",
+        "confused_with": ["relativo-che"],
+        "requires": ["relativo-che"]
+    },
+    {
+        "id": "congiuntivo-presente-forme",
+        "level": "B1",
+        "title": "Forms of the present subjunctive",
+        "statement": "The present subjunctive of verbs in -are ends in -i, -i, -i, -iamo, -iate, -ino (parli); of verbs in -ere and -ire in -a, -a, -a, -iamo, -iate, -ano (prenda, dorma, finisca). Many irregular forms come from the io form of the present: vado vada, faccio faccia, vengo venga, dico dica, esco esca; essere sia, avere abbia, sapere sappia, stare stia, dare dia. The three singular persons are the same, so io, tu, lui/lei are often said.",
+        "when": "forming the present subjunctive",
+        "confused_with": [],
+        "requires": ["presente-irregolare"]
+    },
+    {
+        "id": "congiuntivo-opinione",
+        "level": "B1",
+        "title": "The subjunctive after verbs of opinion, wish and feeling",
+        "statement": "After verbs that express opinion, doubt, wish, fear, hope or feeling, followed by che and a different subject, the verb of the clause is in the subjunctive: Penso che sia vero. Voglio che tu venga. Spero che vada bene. Mi dispiace che tu parta. After sapere, dire, vedere, essere sicuro, which state facts, it is the indicative.",
+        "when": "a clause with che after pensare, credere, volere, sperare, temere, dubitare, avere paura, essere contento ...",
+        "confused_with": ["congiuntivo-infinito", "congiuntivo-impersonali"],
+        "requires": ["congiuntivo-presente-forme"]
+    },
+    {
+        "id": "congiuntivo-impersonali",
+        "level": "B1",
+        "title": "The subjunctive after impersonal expressions",
+        "statement": "After impersonal expressions of opinion, need or possibility with che, the verb is in the subjunctive: È importante che tu studi. Bisogna che partiamo. È possibile che piova. Without a subject, they take the infinitive: È importante studiare. After è vero, è chiaro, è certo che it is the indicative.",
+        "when": "è importante, è necessario, bisogna, è possibile, è meglio, è strano, sembra che ...",
+        "confused_with": ["congiuntivo-opinione"],
+        "requires": ["congiuntivo-presente-forme"]
+    },
+    {
+        "id": "congiuntivo-congiunzioni",
+        "level": "B1",
+        "title": "The subjunctive after some conjunctions",
+        "statement": "benché, sebbene, nonostante (although), perché and affinché (so that), prima che (before), a patto che, purché (provided that), senza che (without), a meno che (unless) take the subjunctive: Esco benché piova. Te lo dico perché tu lo sappia. perché meaning because takes the indicative.",
+        "when": "a clause after benché, sebbene, affinché, perché (so that), prima che, purché, senza che ...",
+        "confused_with": [],
+        "requires": ["congiuntivo-presente-forme"]
+    },
+    {
+        "id": "congiuntivo-infinito",
+        "level": "B1",
+        "title": "Subjunctive or infinitive",
+        "statement": "When the subject of the clause is the same as that of the main verb, Italian uses di + infinitive instead of che + subjunctive: Penso di partire (not penso che io parta). Spero di vederti. With volere and verbs of liking, the infinitive has no di: Voglio partire. prima che becomes prima di, senza che senza.",
+        "when": "a clause after a verb of opinion or wish, with the same subject or not",
+        "confused_with": ["congiuntivo-opinione"],
+        "requires": ["congiuntivo-opinione"]
+    },
+    {
+        "id": "congiuntivo-passato",
+        "level": "B1",
+        "title": "The past subjunctive",
+        "statement": "The past subjunctive is the present subjunctive of avere or essere and the participle (abbia mangiato, sia partito). It is used where the subjunctive is needed for something that happened before the present main verb: Penso che sia già partito. Mi dispiace che tu non abbia potuto venire.",
+        "when": "a subjunctive clause about the past, with the main verb in the present",
+        "confused_with": [],
+        "requires": ["congiuntivo-opinione", "passato-prossimo-essere"]
+    },
+    {
+        "id": "congiuntivo-imperfetto",
+        "level": "B1",
+        "title": "The imperfect subjunctive",
+        "statement": "The imperfect subjunctive adds -ssi, -ssi, -sse, -ssimo, -ste, -ssero to the stem with its vowel: parlassi, prendessi, dormissi. essere fossi, dare dessi, stare stessi; fare facessi, dire dicessi, bere bevessi. It follows a main verb in a past tense or in the conditional for something at the same time: Pensavo che fosse vero. Vorrei che tu venissi.",
+        "when": "a subjunctive clause after a main verb in a past tense or the conditional",
+        "confused_with": ["congiuntivo-passato"],
+        "requires": ["congiuntivo-opinione", "imperfetto-forme"]
+    },
+    {
+        "id": "congiuntivo-trapassato",
+        "level": "B2",
+        "title": "The pluperfect subjunctive",
+        "statement": "The pluperfect subjunctive is the imperfect subjunctive of avere or essere and the participle (avessi saputo, fossi venuto). It follows a main verb in a past tense or the conditional for something before it: Pensavo che fosse già partito. It also forms the third periodo ipotetico.",
+        "when": "a subjunctive clause about what happened before a past main verb",
+        "confused_with": ["congiuntivo-imperfetto"],
+        "requires": ["congiuntivo-imperfetto", "trapassato-prossimo"]
+    },
+    {
+        "id": "concordanza-tempi",
+        "level": "B2",
+        "title": "Sequence of tenses with the subjunctive",
+        "statement": "The tense of the subjunctive depends on the main verb and on time. Main verb in the present or future: congiuntivo presente (same time or after) or passato (before). Main verb in a past tense or the conditional: congiuntivo imperfetto (same time) or trapassato (before), and the past conditional for after (Pensavo che sarebbe venuto).",
+        "when": "a subjunctive clause, with the main verb in any tense",
+        "confused_with": [],
+        "requires": ["congiuntivo-passato", "congiuntivo-trapassato"]
+    },
+    {
+        "id": "congiuntivo-desiderio",
+        "level": "B2",
+        "title": "Wishes with magari and se",
+        "statement": "magari or se + imperfect subjunctive expresses a wish for the present or the future (Magari fosse vero!), + pluperfect subjunctive a regret about the past (Se l'avessi saputo!). Also the subjunctive alone in main clauses of wish: Che sia l'ultima volta!",
+        "when": "a wish or regret said on its own",
+        "confused_with": [],
+        "requires": ["congiuntivo-imperfetto"]
+    },
+    {
+        "id": "ipotetico-reale",
+        "level": "B1",
+        "title": "The real conditional sentence",
+        "statement": "For a condition that is real or likely, se is followed by the indicative and the main clause is in the indicative or the imperative: Se piove, resto a casa. Se avrai tempo, chiamami. The future in the se clause goes with a future in the main one.",
+        "when": "a condition that is likely, with se",
+        "confused_with": ["ipotetico-possibile"],
+        "requires": ["futuro-uso"]
+    },
+    {
+        "id": "ipotetico-possibile",
+        "level": "B1",
+        "title": "The possible conditional sentence",
+        "statement": "For a condition that is possible but unlikely, or unreal in the present, se is followed by the imperfect subjunctive and the main clause by the present conditional: Se avessi tempo, verrei. Se fossi in te, non lo farei. Never the conditional after se.",
+        "when": "an unlikely or imaginary condition in the present or future",
+        "confused_with": ["ipotetico-reale", "ipotetico-irreale"],
+        "requires": ["congiuntivo-imperfetto", "condizionale-forme"]
+    },
+    {
+        "id": "ipotetico-irreale",
+        "level": "B2",
+        "title": "The unreal conditional sentence of the past",
+        "statement": "For a condition that was not met in the past, se is followed by the pluperfect subjunctive and the main clause by the past conditional: Se fossi partito prima, sarei arrivato in tempo. When the result is in the present, the main clause takes the present conditional (Se avessi studiato, ora saprei la risposta). In speech the imperfetto may stand in both parts (Se lo sapevo, venivo).",
+        "when": "a condition that was not met in the past",
+        "confused_with": ["ipotetico-possibile"],
+        "requires": ["congiuntivo-trapassato", "condizionale-passato"]
+    },
+    {
+        "id": "verbi-di-infinito",
+        "level": "B1",
+        "title": "Verbs with di + infinitive",
+        "statement": "Many verbs take di before an infinitive: decidere, finire, smettere, cercare, sperare, credere, pensare, ricordarsi, dimenticare, provare, accettare, chiedere, dire: Ho deciso di partire. Smetti di fumare!",
+        "when": "a verb with an infinitive after it",
+        "confused_with": ["verbi-a-infinito"],
+        "requires": ["modali-infinito"]
+    },
+    {
+        "id": "verbi-a-infinito",
+        "level": "B1",
+        "title": "Verbs with a + infinitive",
+        "statement": "Verbs of beginning, continuing, getting used and succeeding, and of movement take a before an infinitive: cominciare, continuare, imparare, abituarsi, riuscire, aiutare, andare, venire, stare: Ho imparato a nuotare. Vado a dormire. Non riesco a capire.",
+        "when": "a verb with an infinitive after it",
+        "confused_with": ["verbi-di-infinito"],
+        "requires": ["modali-infinito"]
+    },
+    {
+        "id": "discorso-indiretto-presente",
+        "level": "B1",
+        "title": "Indirect speech with the main verb in the present",
+        "statement": "With dice, chiede, pensa in the present, the tenses stay the same; only the persons, the pronouns and the possessives change: «Sono stanco» → Dice che è stanco. A command becomes di + infinitive: «Vieni!» → Mi dice di venire.",
+        "when": "reporting what someone says now",
+        "confused_with": ["discorso-indiretto-passato"],
+        "requires": ["pronomi-diretti"]
+    },
+    {
+        "id": "discorso-indiretto-passato",
+        "level": "B1",
+        "title": "Indirect speech with the main verb in the past",
+        "statement": "With ha detto, disse, diceva, the tenses shift back: present → imperfetto, passato prossimo → trapassato prossimo, future → past conditional; the imperfetto stays. Time and place words change: oggi → quel giorno, domani → il giorno dopo, ieri → il giorno prima, qui → lì, questo → quello. «Domani parto» → Ha detto che il giorno dopo sarebbe partito.",
+        "when": "reporting what someone said in the past",
+        "confused_with": ["discorso-indiretto-presente"],
+        "requires": ["discorso-indiretto-presente", "futuro-nel-passato", "trapassato-prossimo"]
+    },
+    {
+        "id": "domande-indirette",
+        "level": "B1",
+        "title": "Indirect questions",
+        "statement": "An indirect question begins with the question word, or with se for a yes/no question, and keeps the order of a statement: Mi chiede dove abito. Non so se viene. In careful speech and writing it may take the subjunctive (Mi chiedo se sia vero).",
+        "when": "a question inside a sentence, after chiedere, sapere, domandarsi ...",
+        "confused_with": [],
+        "requires": ["parole-interrogative"]
+    },
+    {
+        "id": "passivo-essere",
+        "level": "B2",
+        "title": "The passive with essere",
+        "statement": "The passive is essere in the tense of the active verb and the participle, which agrees with the subject; the doer is introduced by da: La casa è stata costruita nel 1900. Il libro è letto da molti. Only verbs with a direct object have a passive.",
+        "when": "a sentence in which the subject undergoes the action",
+        "confused_with": ["passivo-venire", "si-passivante"],
+        "requires": ["accordo-participio-essere", "preposizioni-articolate"]
+    },
+    {
+        "id": "passivo-venire",
+        "level": "B2",
+        "title": "The passive with venire and andare",
+        "statement": "venire can replace essere in the simple tenses, stressing the action: La porta viene chiusa alle otto. andare + participle means must be done: Il modulo va compilato in stampatello. Neither is used in the compound tenses.",
+        "when": "a passive in a simple tense, or a rule of what must be done",
+        "confused_with": ["passivo-essere"],
+        "requires": ["passivo-essere"]
+    },
+    {
+        "id": "si-impersonale",
+        "level": "B2",
+        "title": "The impersonal si",
+        "statement": "si + verb in the third person singular says what people in general do: In Italia si mangia bene. Si dice che ... With a reflexive verb it becomes ci si (Ci si alza presto). With essere and an adjective, the adjective is plural (Si è felici).",
+        "when": "saying what people in general do",
+        "confused_with": ["si-passivante"],
+        "requires": ["riflessivi-presente"]
+    },
+    {
+        "id": "si-passivante",
+        "level": "B2",
+        "title": "The passive si",
+        "statement": "si + verb with a direct object makes the verb agree with that object: Si vende la casa, si vendono case. In compound tenses it takes essere and the participle agrees: Si sono venduti molti biglietti.",
+        "when": "si with a noun that is the object of the action",
+        "confused_with": ["si-impersonale", "passivo-essere"],
+        "requires": ["si-impersonale"]
+    },
+    {
+        "id": "gerundio-uso",
+        "level": "B2",
+        "title": "Uses of the gerund",
+        "statement": "The gerund on its own says how, why, when or on what condition something happens, and has the subject of the main clause: Ho imparato l'italiano leggendo. Essendo stanco, sono andato a letto. Pronouns are attached to it (Vedendola, ...). The past gerund avendo / essendo + participle says what happened before (Avendo finito, è uscito).",
+        "when": "a clause of manner, cause, time or condition without a conjunction",
+        "confused_with": ["stare-gerundio"],
+        "requires": ["stare-gerundio"]
+    },
+    {
+        "id": "infinito-passato",
+        "level": "B2",
+        "title": "The past infinitive",
+        "statement": "The past infinitive is avere or essere + participle (aver mangiato, essere partito) and says what happened before the main action, above all after dopo and with verbs that take di: Dopo aver mangiato, è uscito. Penso di aver capito.",
+        "when": "an infinitive about an earlier action, after dopo, or after a verb with di",
+        "confused_with": [],
+        "requires": ["verbi-di-infinito", "passato-prossimo-essere"]
+    },
+    {
+        "id": "connettivi",
+        "level": "B2",
+        "title": "Connectors of cause, consequence and concession",
+        "statement": "Cause: perché, poiché, siccome (at the start), dato che, dal momento che + indicative. Consequence: quindi, perciò, così ... che, tanto che + indicative. Concession: anche se + indicative; benché, sebbene, nonostante + subjunctive. Contrast: invece, mentre, però, tuttavia.",
+        "when": "joining two clauses by cause, consequence, concession or contrast",
+        "confused_with": [],
+        "requires": ["congiuntivo-congiunzioni"]
+    }
+]

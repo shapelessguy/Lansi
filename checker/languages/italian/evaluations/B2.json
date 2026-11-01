@@ -1,0 +1,762 @@
+{
+    "level": "B2",
+    "exam": "CELI 3 (B2)",
+    "pass": {
+        "total": 59
+    },
+    "themes": [
+        "Il mondo del lavoro",
+        "Istruzione e formazione",
+        "Salute e stili di vita",
+        "Ambiente e sostenibilità",
+        "Vivere in città o in provincia",
+        "Media, social network e informazione",
+        "Consumi e pubblicità",
+        "Turismo e patrimonio culturale",
+        "Società e convivenza",
+        "Scienza e tecnologia",
+        "Arte, cinema e musica",
+        "Generazioni e famiglia"
+    ],
+    "modules": [
+        {
+            "id": "reading",
+            "title": "Comprensione della lettura e competenza linguistica",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova A.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 5
+                    },
+                    "instances": 2,
+                    "minutes": 30,
+                    "sizes": [
+                        {
+                            "instances": 1,
+                            "minutes": 12
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 16
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 21
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 26
+                        }
+                    ],
+                    "points": 22,
+                    "instructions": "Legga i testi e risponda alle domande. Scelga la risposta giusta: a, b, c o d.",
+                    "task": "An article of 300 to 400 words from a newspaper or a magazine, on a matter of society, work or culture, with five questions in the order of the text, on its main idea, the view of the writer or of the people quoted, and details. The four options are all close to the text; the wrong ones are half true or say what the text does not. The real exam has two texts with five and four questions.",
+                    "example": {
+                        "title": "Il ritorno dei negozi di quartiere",
+                        "shown": "",
+                        "text": "Per anni si è detto che i piccoli negozi sarebbero scomparsi, schiacciati dai centri commerciali e dagli acquisti online. Eppure, in molte città italiane, la tendenza sembra cambiare. A Bologna, nel quartiere Bolognina, negli ultimi due anni hanno aperto una libreria, una bottega di prodotti sfusi e un laboratorio di riparazione di biciclette. «La gente ha voglia di relazioni, non solo di prezzi bassi», spiega Elisa Monti, che gestisce la libreria. Secondo un'indagine della Camera di commercio, però, il fenomeno resta limitato: i nuovi negozi sono spesso aperti da giovani con poca esperienza e uno su tre chiude entro tre anni.",
+                        "questions": [
+                            {
+                                "prompt": "Che cosa sostiene l'articolo all'inizio?",
+                                "options": [
+                                    "I piccoli negozi sono già scomparsi.",
+                                    "Si pensava che i piccoli negozi non avessero futuro.",
+                                    "I centri commerciali stanno chiudendo.",
+                                    "Gli acquisti online sono diminuiti."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Secondo Elisa Monti, i clienti cercano soprattutto…",
+                                "options": [
+                                    "prezzi più bassi.",
+                                    "prodotti sfusi.",
+                                    "contatti umani.",
+                                    "negozi grandi."
+                                ],
+                                "answer": 2
+                            },
+                            {
+                                "prompt": "Che cosa dice l'indagine della Camera di commercio?",
+                                "options": [
+                                    "Che i nuovi negozi hanno molto successo.",
+                                    "Che molti nuovi negozi non durano a lungo.",
+                                    "Che i giovani non vogliono aprire negozi.",
+                                    "Che il fenomeno riguarda solo Bologna."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "match",
+                        "questions": 10
+                    },
+                    "instances": 1,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 11
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 14
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 17
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Legga i due testi. Poi legga le affermazioni e indichi a quale testo si riferiscono: Testo A o Testo B.",
+                    "task": "Two texts of 150 to 200 words each, A and B, on the same theme from two points of view, such as two people telling how they work from home, or two reviews of the same place, given in the text with their letters. Ten statements, each true of one text only; the options of each are Testo A and Testo B.",
+                    "example": {
+                        "title": "Lavorare da casa",
+                        "shown": "",
+                        "text": "Testo A – Marco, programmatore: Da quando lavoro da casa risparmio due ore al giorno di viaggio. Ho più tempo per i miei figli e sono più concentrato, perché in ufficio c'era sempre rumore. L'unico problema è che a volte non riesco a smettere di lavorare la sera.\nTesto B – Federica, grafica: Ho provato a lavorare da casa per sei mesi, ma mi mancavano i colleghi. Le idee migliori nascono parlando davanti alla macchinetta del caffè. Adesso vado in ufficio tre giorni a settimana e sono molto più contenta.",
+                        "questions": [
+                            {
+                                "prompt": "Questa persona ha bisogno del contatto con i colleghi.",
+                                "options": [
+                                    "Testo A",
+                                    "Testo B"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Questa persona fa fatica a separare lavoro e vita privata.",
+                                "options": [
+                                    "Testo A",
+                                    "Testo B"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Questa persona ha cambiato organizzazione dopo un periodo di prova.",
+                                "options": [
+                                    "Testo A",
+                                    "Testo B"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Questa persona lavora meglio nel silenzio.",
+                                "options": [
+                                    "Testo A",
+                                    "Testo B"
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 4
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 2,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Legga il testo e risponda alle domande. Scelga la risposta giusta: a, b, c o d.",
+                    "task": "A text of 250 to 300 words, such as an article or a page of a guide, with four questions that ask why, how or what follows from it, as open questions would; the options are four answers in other words than the text's, of which one says what it means. In the real exam the answers are open.",
+                    "example": {
+                        "title": "Lo spreco alimentare",
+                        "shown": "",
+                        "text": "In Italia ogni famiglia butta via in media circa 30 chili di cibo all'anno. Il motivo più frequente non è la cattiva qualità dei prodotti, ma la cattiva organizzazione: si compra troppo, senza una lista, e si dimenticano gli alimenti in fondo al frigorifero. Alcuni comuni hanno avviato corsi gratuiti per insegnare a conservare e riutilizzare gli avanzi.",
+                        "questions": [
+                            {
+                                "prompt": "Perché, secondo il testo, si spreca tanto cibo?",
+                                "options": [
+                                    "Perché i prodotti sono di bassa qualità.",
+                                    "Perché la spesa è fatta senza programmare.",
+                                    "Perché i frigoriferi sono troppo piccoli.",
+                                    "Perché il cibo costa poco."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 10
+                    },
+                    "instances": 2,
+                    "minutes": 25,
+                    "sizes": [
+                        {
+                            "instances": 1,
+                            "minutes": 10
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 14
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 18
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 21
+                        }
+                    ],
+                    "points": 12,
+                    "instructions": "Legga il testo e lo completi. Per ogni spazio numerato scelga la parola giusta: a, b, c o d.",
+                    "task": "A text of 200 to 250 words with ten numbered gaps, (1) to (10), in the text; the gaps take articles, prepositions, pronouns, connectors and verb forms in the tense and mood the sentence asks for, such as a subjunctive after a verb of opinion. Each question is the number of a gap with four options of the same kind. The real exam has two texts with 23 gaps, to fill in without options.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Molti pensano che la bicicletta (1) ___ un mezzo adatto solo all'estate. In realtà, (2) ___ si veste in modo adeguato, si può pedalare tutto l'anno. A Ferrara, per esempio, quasi un abitante su tre va al lavoro in bici, (3) ___ quando piove.",
+                        "questions": [
+                            {
+                                "prompt": "(1)",
+                                "options": [
+                                    "è",
+                                    "sia",
+                                    "sarà",
+                                    "fosse"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "(2)",
+                                "options": [
+                                    "benché",
+                                    "se",
+                                    "affinché",
+                                    "quindi"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "(3)",
+                                "options": [
+                                    "anche",
+                                    "invece",
+                                    "perciò",
+                                    "magari"
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "match",
+                        "questions": 7
+                    },
+                    "instances": 1,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 10
+                        }
+                    ],
+                    "points": 5,
+                    "instructions": "Ricostruisca le frasi. Abbini ogni prima parte alla seconda parte giusta.",
+                    "task": "Seven beginnings of sentences, the prompts, and their ends, the list shown, each end starting with a connector, such as sebbene, purché, dal momento che, tanto che, nel caso in cui; one end only fits each beginning by its meaning and by the mood of its verb. The options of every question are the ends. In the real exam the learner joins two sentences into one.",
+                    "example": {
+                        "title": "",
+                        "shown": "a. sebbene non avesse studiato molto. · b. purché tu me la riporti stasera. · c. tanto che ha dovuto chiamare un tecnico.",
+                        "text": "Unisca le due parti di ogni frase.",
+                        "questions": [
+                            {
+                                "prompt": "Ti presto la macchina",
+                                "options": [
+                                    "a. sebbene non avesse studiato molto.",
+                                    "b. purché tu me la riporti stasera.",
+                                    "c. tanto che ha dovuto chiamare un tecnico."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Ha superato l'esame",
+                                "options": [
+                                    "a. sebbene non avesse studiato molto.",
+                                    "b. purché tu me la riporti stasera.",
+                                    "c. tanto che ha dovuto chiamare un tecnico."
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Il computer era così lento",
+                                "options": [
+                                    "a. sebbene non avesse studiato molto.",
+                                    "b. purché tu me la riporti stasera.",
+                                    "c. tanto che ha dovuto chiamare un tecnico."
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 5
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 3,
+                    "instructions": "Completi le frasi con la parola giusta, formata dalla parola tra parentesi. Scelga: a, b, c o d.",
+                    "task": "Five separate sentences, each with a gap and a word in brackets, as the prompts; the gap takes a word made from it, such as a noun from a verb, an adjective from a noun or an adverb from an adjective. The four options are words of the same family, of which one fits. In the real exam the learner writes the word.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Completi ogni frase con la forma giusta della parola tra parentesi.",
+                        "questions": [
+                            {
+                                "prompt": "La ___ del nuovo ponte è durata tre anni. (costruire)",
+                                "options": [
+                                    "costruttore",
+                                    "costruzione",
+                                    "costruttivo",
+                                    "costruito"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Ha risposto ___ a tutte le domande. (tranquillo)",
+                                "options": [
+                                    "tranquillità",
+                                    "tranquillizzare",
+                                    "tranquillamente",
+                                    "tranquillo"
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "writing",
+            "title": "Produzione di testi scritti",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova B.1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "opinion",
+                        "words": 150
+                    },
+                    "instances": 1,
+                    "minutes": 45,
+                    "sizes": [
+                        {
+                            "words": 60,
+                            "minutes": 18
+                        },
+                        {
+                            "words": 80,
+                            "minutes": 25
+                        },
+                        {
+                            "words": 105,
+                            "minutes": 31
+                        },
+                        {
+                            "words": 130,
+                            "minutes": 38
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Scriva una breve composizione (120-180 parole) su uno dei due argomenti proposti.",
+                    "task": "Two themes to choose from, given in the situation: personal experiences, situations, or matters of general interest, such as a trip that changed one's ideas, the use of the smartphone among young people, or living abroad. The points are what to tell or argue, with an example and the learner's own view.",
+                    "example": {
+                        "situation": "Scelga uno dei due argomenti. A) Racconti un'esperienza che L'ha fatta cambiare idea su qualcosa. B) Secondo Lei, è meglio vivere in una grande città o in un piccolo paese?",
+                        "points": [
+                            "Presenti l'argomento scelto.",
+                            "Racconti un'esperienza o porti degli esempi.",
+                            "Esprima e motivi la Sua opinione."
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova B.2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "email",
+                        "words": 90
+                    },
+                    "instances": 1,
+                    "minutes": 30,
+                    "sizes": [
+                        {
+                            "words": 35,
+                            "minutes": 12
+                        },
+                        {
+                            "words": 50,
+                            "minutes": 16
+                        },
+                        {
+                            "words": 65,
+                            "minutes": 21
+                        },
+                        {
+                            "words": 75,
+                            "minutes": 26
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Scriva una lettera o un'email (80-100 parole) su una delle situazioni proposte.",
+                    "task": "A situation with a clear aim and addressee, to ask for or give information or advice, to complain or to give an opinion, such as writing to a newspaper, a school, a company or an acquaintance; three points to write about. The real exam lets the learner choose among three.",
+                    "example": {
+                        "situation": "Ha letto sul giornale locale che il Comune vuole chiudere la piscina pubblica del Suo quartiere. Scriva una lettera al direttore del giornale.",
+                        "points": [
+                            "Spieghi perché la piscina è importante per il quartiere.",
+                            "Esprima la Sua opinione sulla decisione del Comune.",
+                            "Proponga un'alternativa."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "listening",
+            "title": "Comprensione dell'ascolto",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova D.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "interview",
+                        "answers": "choice",
+                        "questions": 5,
+                        "plays": "2"
+                    },
+                    "instances": 2,
+                    "minutes": 14,
+                    "sizes": [
+                        {
+                            "instances": 1,
+                            "minutes": 6
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 8
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 10
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 12
+                        }
+                    ],
+                    "points": 30,
+                    "instructions": "Ascolti i testi. Ascolta ogni testo due volte. Risponda alle domande scegliendo la risposta giusta: a, b, c o d.",
+                    "task": "An interview or a programme of the radio of 300 to 400 words, on a matter of society, work, culture or science, with five questions in the order of what is said. The four options are close to each other and use words of the text.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Conduttrice: Oggi parliamo di orti urbani con Paolo Neri, agronomo. Paolo, perché a Milano ce ne sono sempre di più?\nNeri: Prima di tutto per ragioni sociali. Chi coltiva un orto in città lo fa raramente per risparmiare: lo fa per stare all'aria aperta e conoscere i vicini. Poi c'è il tema ambientale: un orto è uno spazio verde in più.\nConduttrice: E chi può averne uno?\nNeri: Il Comune assegna i terreni con un bando ogni due anni. Hanno la precedenza i pensionati e le scuole.",
+                        "questions": [
+                            {
+                                "prompt": "Secondo Neri, perché le persone coltivano un orto in città?",
+                                "options": [
+                                    "Soprattutto per risparmiare sulla spesa.",
+                                    "Per passare tempo fuori e fare conoscenze.",
+                                    "Perché il Comune lo chiede.",
+                                    "Per vendere i prodotti."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Chi ha la precedenza nell'assegnazione dei terreni?",
+                                "options": [
+                                    "Le famiglie con bambini.",
+                                    "Gli agronomi.",
+                                    "I pensionati e le scuole.",
+                                    "Chi abita vicino all'orto."
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova D.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "announcement",
+                        "answers": "choice",
+                        "questions": 10,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 11,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 9
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Ascolti il testo. Lo ascolta due volte. Completi le frasi scegliendo l'informazione giusta: a, b o c.",
+                    "task": "A report, a guided tour or an announcement of 250 to 300 words with many facts, such as times, places, numbers and names. Ten sentences in the order of the text, each ending with a gap, as the prompts; the three options are what the text says and two near it. In the real exam the learner writes the words heard.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Benvenuti al Museo del Novecento. La visita guidata dura circa un'ora e mezza e comincia al secondo piano, dove si trovano le opere del Futurismo. Vi ricordiamo che è vietato fotografare con il flash. Alla fine della visita potete salire sulla terrazza, da cui si vede tutta piazza del Duomo. Il bar del museo chiude alle 18.",
+                        "questions": [
+                            {
+                                "prompt": "La visita dura circa ___",
+                                "options": [
+                                    "un'ora.",
+                                    "un'ora e mezza.",
+                                    "due ore."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Le opere del Futurismo sono ___",
+                                "options": [
+                                    "al primo piano.",
+                                    "al secondo piano.",
+                                    "sulla terrazza."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Il bar chiude ___",
+                                "options": [
+                                    "alle 17.",
+                                    "alle 18.",
+                                    "alle 19."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "speaking",
+            "title": "Produzione orale",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "present",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 5,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 4
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Descriva la foto e ne parli con l'esaminatore. Scriva come parlerebbe.",
+                    "task": "A photo, described in words on the card in place of the picture, of a scene that opens a theme of society, such as commuters on a crowded train, a farmers' market or a classroom with tablets. The first prompt asks the learner to describe it; the others are questions of the examiner that take the theme further.",
+                    "example": {
+                        "card": "Foto: un gruppo di anziani in una sala di un centro civico segue un corso di computer; una ragazza giovane li aiuta.",
+                        "prompts": [
+                            "Descriva la foto.",
+                            "Secondo Lei, perché molti anziani vogliono imparare a usare il computer?",
+                            "Nel Suo Paese ci sono iniziative simili?"
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova 2",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "discuss",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 5,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 4
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Riassuma il testo e ne discuta con l'esaminatore. Scriva come parlerebbe.",
+                    "task": "A short text of 120 to 150 words on a matter of society, on the card, such as a news item on the four-day week or on cities without cars. The first prompt asks the learner to sum it up; the others are questions of the examiner that ask for their view and reasons.",
+                    "example": {
+                        "card": "Testo: In alcune aziende italiane si sperimenta la settimana corta: si lavora quattro giorni invece di cinque, con lo stesso stipendio. I primi risultati mostrano che i dipendenti sono meno stressati e che la produttività non è diminuita. Alcuni economisti, però, temono che il modello non sia applicabile a tutti i settori, per esempio alla sanità o ai negozi.",
+                        "prompts": [
+                            "Riassuma il testo con parole Sue.",
+                            "Che cosa pensa della settimana corta?",
+                            "In quali lavori sarebbe difficile applicarla?"
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova 3",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "requests",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 5,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 4
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Role play. Legga la situazione e parli con l'esaminatore. Scriva come parlerebbe.",
+                    "task": "A role play in a clearly set situation in which the learner must reach an aim, such as complaining about a service, asking for a change at work or persuading someone. The card says who the learner and the examiner are and what the learner wants; the prompts are the examiner's turns, who resists at first.",
+                    "example": {
+                        "card": "Lei ha prenotato un viaggio organizzato, ma l'agenzia ha cambiato l'albergo con uno più lontano dal centro. Parli con l'impiegato dell'agenzia e chieda un rimborso o un'altra soluzione.",
+                        "prompts": [
+                            "Buongiorno, in che cosa posso esserLe utile?",
+                            "Capisco, ma l'albergo è della stessa categoria. Non possiamo rimborsarLa.",
+                            "Potrei offrirLe un'escursione gratuita. Che ne dice?"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

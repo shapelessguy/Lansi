@@ -1960,14 +1960,14 @@ def test_an_evaluation_is_started_and_its_first_part_in_a_session_of_its_own(
 
 def test_an_evaluation_of_a_level_with_no_exam_is_refused(with_users: str) -> None:
     ada = log_in(with_users, "ada", "a password")
-    body = {"language": "German", "level": "C2", "size": 5, "timed": True}
+    body = {"language": "English", "level": "C2", "size": 5, "timed": True}
 
     status, said, _ = send(
         f"{with_users}/evaluations", "POST", ada, json.dumps(body).encode()
     )
 
     assert status == 400
-    assert "no exam of German at C2" in json.loads(said)["error"]
+    assert "no exam of English at C2" in json.loads(said)["error"]
 
 
 # a server of the learner's own, which the chat passes requests on to

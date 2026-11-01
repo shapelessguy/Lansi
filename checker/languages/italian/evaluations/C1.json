@@ -1,0 +1,878 @@
+{
+    "level": "C1",
+    "exam": "CELI 4 (C1)",
+    "pass": {
+        "total": 59
+    },
+    "themes": [
+        "Lavoro, precarietà e nuove professioni",
+        "Scuola, università e merito",
+        "Salute pubblica e medicina",
+        "Clima, energia e territorio",
+        "Migrazioni e identità",
+        "Informazione, fake news e libertà di stampa",
+        "Economia, consumi e disuguaglianze",
+        "Patrimonio artistico e turismo di massa",
+        "Diritti, istituzioni e partecipazione",
+        "Innovazione, ricerca e intelligenza artificiale",
+        "Letteratura, cinema e lingua italiana",
+        "Invecchiamento e rapporti tra generazioni"
+    ],
+    "modules": [
+        {
+            "id": "reading",
+            "title": "Comprensione della lettura e competenza linguistica",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova A.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 5
+                    },
+                    "instances": 2,
+                    "minutes": 30,
+                    "sizes": [
+                        {
+                            "instances": 1,
+                            "minutes": 12
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 16
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 21
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 26
+                        }
+                    ],
+                    "points": 15,
+                    "instructions": "Legga i testi e risponda alle domande. Scelga la risposta giusta: a, b, c o d.",
+                    "task": "An article of 450 to 550 words from a newspaper, a magazine or an essay, on a matter of society, science or culture, written in a high register, with five questions on its argument, the stance of the writer, what a phrase means in context and what is implied. The four options are near each other; the wrong ones are half true, too strong or the view of someone quoted.",
+                    "example": {
+                        "title": "Il paradosso della lentezza",
+                        "shown": "",
+                        "text": "Viviamo in un'epoca che celebra la velocità: consegne in giornata, risposte immediate, aggiornamenti continui. Eppure, da qualche anno, cresce il numero di chi rivendica il diritto alla lentezza. Non si tratta, come vorrebbero alcuni critici, di una moda per pochi privilegiati che possono permettersi di rallentare. Il movimento nato a Bra con lo Slow Food ha mostrato, anzi, che la lentezza può diventare un modello economico: piccoli produttori che rinunciano alla quantità per puntare sulla qualità, e che proprio per questo riescono a sopravvivere alla concorrenza globale.",
+                        "questions": [
+                            {
+                                "prompt": "Qual è la tesi principale dell'autore?",
+                                "options": [
+                                    "La lentezza è un lusso per pochi.",
+                                    "La velocità è necessaria all'economia moderna.",
+                                    "Rallentare può essere anche una scelta economicamente valida.",
+                                    "Lo Slow Food è una moda passeggera."
+                                ],
+                                "answer": 2
+                            },
+                            {
+                                "prompt": "Che cosa pensa l'autore dei critici citati?",
+                                "options": [
+                                    "Che hanno ragione.",
+                                    "Che la loro obiezione non regge.",
+                                    "Che sono piccoli produttori.",
+                                    "Che parlano solo di cibo."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 4
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 2,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Legga il testo e risponda alle domande. Scelga la risposta giusta: a, b, c o d.",
+                    "task": "An article or an essay of 400 to 500 words, with four questions that ask why, what the writer means or what follows, as open questions would. The four options say it in other words than the text's, and only one renders its meaning fully. In the real exam the answers are open.",
+                    "example": {
+                        "title": "Dialetti e scuola",
+                        "shown": "",
+                        "text": "Per decenni la scuola italiana ha considerato il dialetto un ostacolo da eliminare: parlare italiano significava appartenere alla nazione. Oggi molti linguisti invitano a ripensare questa impostazione. Il bambino che parla dialetto in famiglia, sostengono, non ha una lingua di meno, ma una in più, e la riflessione sulle differenze tra i due codici può rafforzare la sua competenza in italiano.",
+                        "questions": [
+                            {
+                                "prompt": "Perché, secondo i linguisti citati, il dialetto può aiutare a scuola?",
+                                "options": [
+                                    "Perché è più facile dell'italiano.",
+                                    "Perché confrontarlo con l'italiano sviluppa la consapevolezza linguistica.",
+                                    "Perché la famiglia lo preferisce.",
+                                    "Perché è la lingua della nazione."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova A.3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "match",
+                        "questions": 10
+                    },
+                    "instances": 1,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 11
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 14
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 17
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Legga i due testi. Poi legga le affermazioni e indichi a quale testo si riferiscono: Testo A o Testo B.",
+                    "task": "Two texts of 250 to 300 words each, A and B, on the same matter from opposed or different points of view, such as two editorials on tourism in historic cities, given in the text with their letters. Ten statements, each true of one text only, often of its reasoning rather than its facts; the options are Testo A and Testo B.",
+                    "example": {
+                        "title": "Il turismo nelle città d'arte",
+                        "shown": "",
+                        "text": "Testo A: Il ticket d'ingresso a Venezia è una misura necessaria. Una città che conta meno di cinquantamila residenti non può accogliere ogni giorno decine di migliaia di visitatori senza perdere la propria identità. Il contributo serve a finanziare i servizi e a scoraggiare il turismo mordi e fuggi.\nTesto B: Far pagare l'ingresso a una città significa trasformarla definitivamente in un museo. Il problema non sono i turisti, ma la mancanza di politiche per la casa: i residenti se ne vanno perché gli affitti brevi rendono più delle locazioni tradizionali.",
+                        "questions": [
+                            {
+                                "prompt": "L'autore individua la causa del problema nel mercato degli affitti.",
+                                "options": [
+                                    "Testo A",
+                                    "Testo B"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "L'autore ritiene che una tassa possa ridurre le visite brevi.",
+                                "options": [
+                                    "Testo A",
+                                    "Testo B"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "L'autore teme che la città perda la sua vita normale a causa della misura.",
+                                "options": [
+                                    "Testo A",
+                                    "Testo B"
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 10
+                    },
+                    "instances": 1,
+                    "minutes": 18,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 13
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 15
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Legga il testo e lo completi. Per ogni spazio numerato scelga la parola giusta: a, b, c o d.",
+                    "task": "A text of 250 to 300 words in a formal register with ten numbered gaps, (1) to (10), in the text; the gaps take connectors, relative pronouns, prepositions and verbs in the mood and tense the sentence asks for, including the subjunctive, the conditional and the passive. Each question is the number of a gap with four options of the same kind. The real exam has fourteen gaps, open.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Il progetto, (1) ___ obiettivo è ridurre il traffico in centro, è stato approvato ieri dal consiglio comunale. (2) ___ le proteste dei commercianti, la giunta ha deciso di procedere, a condizione che i lavori (3) ___ entro la fine dell'anno.",
+                        "questions": [
+                            {
+                                "prompt": "(1)",
+                                "options": [
+                                    "il cui",
+                                    "che",
+                                    "del quale il",
+                                    "cui il"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "(2)",
+                                "options": [
+                                    "Nonostante",
+                                    "Sebbene",
+                                    "Benché",
+                                    "Malgrado che"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "(3)",
+                                "options": [
+                                    "finiscono",
+                                    "finiscano",
+                                    "finirebbero",
+                                    "finiranno"
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "match",
+                        "questions": 10
+                    },
+                    "instances": 1,
+                    "minutes": 17,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 12
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 14
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Legga il testo e lo completi. Per ogni spazio scelga dalla lista la parte mancante.",
+                    "task": "A text of 250 to 300 words with ten numbered gaps, (1) to (10), each for a missing phrase or clause, and the list of the phrases shown, lettered, with two more than needed. Each question is the number of a gap; its options are the letters of the list.",
+                    "example": {
+                        "title": "",
+                        "shown": "a. i bambini sono tra i più sovrappeso d'Europa · b. come patrimonio immateriale dell'umanità · c. a causa dei prezzi troppo alti · d. ma di un insieme di pratiche sociali e culturali",
+                        "text": "La dieta mediterranea è stata riconosciuta dall'UNESCO (1) ___. Non si tratta soltanto di un modo di mangiare, (2) ___. Eppure, paradossalmente, proprio in Italia (3) ___.",
+                        "questions": [
+                            {
+                                "prompt": "(1)",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "(2)",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d"
+                                ],
+                                "answer": 3
+                            },
+                            {
+                                "prompt": "(3)",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d"
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "message",
+                        "answers": "choice",
+                        "questions": 10
+                    },
+                    "instances": 1,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 11
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 14
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 17
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Nel testo ci sono degli errori. Per ogni parte numerata scelga la forma corretta: a, b, c o d.",
+                    "task": "A text of 200 to 250 words, such as a formal letter or a report, in which ten numbered words or phrases, marked (1) to (10) in the text, are written wrongly: an agreement, a preposition, a pronoun, a mood or a tense, a connector. Each question is the number with the wrong form; the four options are corrections, of which one is right, and none is the wrong form again. In the real exam the learner finds and corrects fourteen errors.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Gentile direttore,\nLe scrivo (1) a segnalarLe un problema che ho avuto la settimana scorsa. Benché (2) ho prenotato con largo anticipo, all'arrivo mi è stato detto che la camera non era disponibile. Ho chiesto spiegazioni all'impiegata, ma (3) lui non mi ha risposto.",
+                        "questions": [
+                            {
+                                "prompt": "(1) a → ?",
+                                "options": [
+                                    "per",
+                                    "di",
+                                    "da",
+                                    "con"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "(2) ho prenotato → ?",
+                                "options": [
+                                    "avevo prenotato",
+                                    "abbia prenotato",
+                                    "prenotavo",
+                                    "avrei prenotato"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "(3) lui → ?",
+                                "options": [
+                                    "lei",
+                                    "la",
+                                    "le",
+                                    "lo"
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova C.4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "answers": "choice",
+                        "questions": 10
+                    },
+                    "instances": 1,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 11
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 14
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 17
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Legga gli appunti. Per ogni appunto scelga la frase che lo sviluppa meglio nel testo: a, b, c o d.",
+                    "task": "Ten notes of a few words each, in order, the outline of a short report or article, as the prompts; the text gives its theme. The four options of each are full sentences that expand the note, and only one is correct and joined coherently to what comes before, with the right connector, pronouns and mood. In the real exam the learner writes the text.",
+                    "example": {
+                        "title": "Relazione: il volontariato giovanile",
+                        "shown": "",
+                        "text": "Appunti per una breve relazione sul volontariato tra i giovani.",
+                        "questions": [
+                            {
+                                "prompt": "giovani volontari – aumento – ultimi 5 anni",
+                                "options": [
+                                    "Negli ultimi cinque anni il numero dei giovani volontari è aumentato.",
+                                    "Negli ultimi cinque anni i giovani volontari ha aumentato.",
+                                    "I giovani volontari sono aumentati da ultimi cinque anni.",
+                                    "Negli ultimi cinque anni si aumentano i giovani volontari."
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "motivi – desiderio di sentirsi utili",
+                                "options": [
+                                    "Perciò il desiderio di sentirsi utili.",
+                                    "Tra i motivi, il più citato è il desiderio di sentirsi utili.",
+                                    "I motivi, che sono il desiderio di sentirsi utili.",
+                                    "Il motivo è che sentirsi utili desiderano."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "writing",
+            "title": "Produzione di testi scritti",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova B.1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "essay",
+                        "words": 180
+                    },
+                    "instances": 1,
+                    "minutes": 45,
+                    "sizes": [
+                        {
+                            "words": 70,
+                            "minutes": 18
+                        },
+                        {
+                            "words": 100,
+                            "minutes": 25
+                        },
+                        {
+                            "words": 125,
+                            "minutes": 31
+                        },
+                        {
+                            "words": 155,
+                            "minutes": 38
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Legga il testo e ne scriva un riassunto (150-200 parole), seguendo la traccia.",
+                    "task": "A text of 400 to 500 words on a matter of society or culture, given in full in the situation, to be summed up; the points are the outline the summary must follow: the main thesis, the arguments, the examples, the conclusion. The summary is in the learner's own words, formal, without their own opinion.",
+                    "example": {
+                        "situation": "Riassuma il seguente articolo. «Negli ultimi vent'anni i piccoli borghi dell'Appennino hanno perso quasi un terzo degli abitanti. I giovani partono per studiare e non tornano, le scuole chiudono, i servizi si spostano a valle. Alcuni comuni, però, stanno tentando una strada diversa: offrono case a un euro, incentivi a chi apre un'attività, connessioni internet veloci per attirare chi lavora a distanza. I risultati sono ancora incerti: in certi paesi la popolazione è tornata a crescere, in altri le case vendute restano vuote per gran parte dell'anno, abitate solo in estate. Gli esperti concordano su un punto: senza scuole, trasporti e servizi sanitari, nessun incentivo basterà a far rinascere le aree interne.»",
+                        "points": [
+                            "Il problema dello spopolamento e le sue cause.",
+                            "Le iniziative di alcuni comuni.",
+                            "I risultati finora.",
+                            "La conclusione degli esperti."
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova B.2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "essay",
+                        "words": 240
+                    },
+                    "instances": 1,
+                    "minutes": 55,
+                    "sizes": [
+                        {
+                            "words": 95,
+                            "minutes": 22
+                        },
+                        {
+                            "words": 130,
+                            "minutes": 30
+                        },
+                        {
+                            "words": 170,
+                            "minutes": 38
+                        },
+                        {
+                            "words": 205,
+                            "minutes": 47
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Scriva una composizione (220-250 parole) su uno dei due argomenti proposti.",
+                    "task": "Two themes to choose from, given in the situation: a report on a problem or a phenomenon of today's society, a story of events and personal experiences, or a formal letter. The points are what the text must do: present the matter, develop it with reasons and examples, weigh other views and conclude.",
+                    "example": {
+                        "situation": "Scelga uno dei due argomenti. A) «Il lavoro a distanza sta cambiando il rapporto tra le persone e le città.» Scriva una relazione sul fenomeno. B) Racconti un'esperienza in cui ha dovuto adattarsi a una cultura diversa dalla Sua.",
+                        "points": [
+                            "Introduca l'argomento.",
+                            "Lo sviluppi con argomenti ed esempi.",
+                            "Consideri anche punti di vista diversi dal Suo.",
+                            "Concluda in modo coerente."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "listening",
+            "title": "Comprensione dell'ascolto",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova D.1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "interview",
+                        "answers": "choice",
+                        "questions": 8,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Ascolti il testo. Lo ascolta due volte. Completi le frasi scegliendo l'informazione giusta: a, b, c o d.",
+                    "task": "An interview or a talk of the radio of 400 to 500 words on a matter of culture, science or work, with eight sentences in the order of what is said, each ending in a gap, as the prompts. The four options are close in meaning; one is what is said. In the real exam the learner writes the words.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Conduttore: Professoressa Ricci, Lei studia da anni il sonno degli adolescenti. Che cosa ha scoperto?\nRicci: Che i ragazzi non sono pigri, come spesso si pensa. Durante l'adolescenza l'orologio biologico si sposta in avanti di circa due ore: un quindicenne ha sonno naturalmente verso mezzanotte. Se la scuola comincia alle otto, dorme in media sei ore e mezza, mentre ne avrebbe bisogno di almeno otto.",
+                        "questions": [
+                            {
+                                "prompt": "Secondo la professoressa, gli adolescenti ___",
+                                "options": [
+                                    "sono pigri.",
+                                    "hanno un ritmo biologico diverso.",
+                                    "dormono troppo.",
+                                    "si svegliano presto naturalmente."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Un quindicenne avrebbe bisogno di dormire ___",
+                                "options": [
+                                    "sei ore e mezza.",
+                                    "sette ore.",
+                                    "almeno otto ore.",
+                                    "dieci ore."
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova D.2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "interview",
+                        "answers": "yesno",
+                        "questions": 10,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 3
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 11,
+                    "instructions": "Ascolti il testo. Lo ascolta due volte. Le affermazioni sono presenti nel testo? Scelga: Sì o No.",
+                    "task": "A discussion or a report of the radio of 400 to 500 words, with ten statements; each is or is not said, the absent ones likely and close to what is said. The real exam has eleven.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Giornalista: In Italia si legge poco? I dati dell'ISTAT dicono che solo quattro italiani su dieci leggono almeno un libro all'anno. Ma l'editore Lorenzo Fabbri non è pessimista: «Le librerie indipendenti stanno crescendo, soprattutto al Sud, e i gruppi di lettura si moltiplicano. Il problema sono gli adulti tra i trenta e i cinquant'anni, che dicono di non avere tempo».",
+                        "questions": [
+                            {
+                                "prompt": "Meno della metà degli italiani legge un libro all'anno.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Le librerie indipendenti stanno chiudendo.",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Gli adulti di mezza età giustificano la scarsa lettura con la mancanza di tempo.",
+                                "options": [],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova D.3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "announcement",
+                        "answers": "choice",
+                        "questions": 10,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 9,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 12,
+                    "instructions": "Ascolti il testo. Lo ascolta due volte. Completi la scheda scegliendo l'informazione giusta: a, b, c o d.",
+                    "task": "A presentation of 350 to 450 words full of facts, such as the programme of a festival, the rules of a competition or a report with figures. A form of ten fields, each a prompt ending in a colon; the four options are what is said and three facts near it, such as other dates, numbers or names heard. The real exam has twelve fields, open.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Il Festival della Scienza di Genova si terrà dal 23 ottobre al 3 novembre. Quest'anno il tema è «Equilibri». Sono previsti oltre trecento eventi, tra conferenze, laboratori e mostre, distribuiti in quaranta sedi della città. Il biglietto giornaliero costa 12 euro; per gli studenti è ridotto a 8. Le scuole possono prenotare i laboratori sul sito entro il 30 settembre.",
+                        "questions": [
+                            {
+                                "prompt": "Durata del festival:",
+                                "options": [
+                                    "dal 23 settembre al 3 ottobre",
+                                    "dal 23 ottobre al 3 novembre",
+                                    "dal 3 al 23 ottobre",
+                                    "dal 30 settembre al 3 novembre"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Biglietto ridotto per studenti:",
+                                "options": [
+                                    "6 euro",
+                                    "8 euro",
+                                    "10 euro",
+                                    "12 euro"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Scadenza prenotazioni per le scuole:",
+                                "options": [
+                                    "23 ottobre",
+                                    "3 novembre",
+                                    "30 settembre",
+                                    "1 ottobre"
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "speaking",
+            "title": "Produzione orale",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Prova 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "present",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 7,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 6
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Confronti le due foto e ne parli con l'esaminatore. Scriva come parlerebbe.",
+                    "task": "Two photos to compare, described in words on the card in place of the pictures, that open a theme of society, such as an office full of people and a person working alone at home. The first prompt asks the learner to describe and compare them; the others are questions of the examiner that widen the theme.",
+                    "example": {
+                        "card": "Foto 1: una grande aula universitaria piena di studenti che ascoltano un professore. · Foto 2: una ragazza segue una lezione online dalla sua camera, con le cuffie, davanti al computer.",
+                        "prompts": [
+                            "Descriva e confronti le due foto.",
+                            "Quali vantaggi e svantaggi vede nelle due situazioni?",
+                            "Come pensa che cambierà l'università nei prossimi anni?"
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova 2",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "discuss",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 7,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 6
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Riassuma il testo e ne discuta con l'esaminatore. Scriva come parlerebbe.",
+                    "task": "A text of 200 to 250 words on a matter of society, on the card. The first prompt asks the learner to sum it up; the others are questions of the examiner that challenge their view.",
+                    "example": {
+                        "card": "Testo: Sempre più comuni italiani vietano l'uso dello smartphone nelle scuole, anche durante l'intervallo. I sostenitori del divieto parlano di maggiore concentrazione e di più dialogo tra i ragazzi. I critici ricordano che il telefono è anche uno strumento di studio e che la scuola dovrebbe insegnare a usarlo con responsabilità, non vietarlo.",
+                        "prompts": [
+                            "Riassuma il testo.",
+                            "Lei è favorevole o contrario al divieto? Perché?",
+                            "Non crede che vietare sia più semplice che educare?"
+                        ]
+                    }
+                },
+                {
+                    "title": "Prova 3",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "present",
+                        "prompts": 2
+                    },
+                    "instances": 1,
+                    "minutes": 6,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 2
+                        },
+                        {
+                            "prompts": 1,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 1,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 5
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Illustri il grafico e ne parli con l'esaminatore. Scriva come parlerebbe.",
+                    "task": "A chart or a table of figures, given in words on the card, such as how people go to work in five cities, or what share of the young live with their parents in several countries. The first prompt asks the learner to present the figures and what they show; the second asks them to explain or comment on them.",
+                    "example": {
+                        "card": "Grafico: giovani tra 18 e 34 anni che vivono con i genitori (percentuale). Italia 68% · Spagna 64% · Francia 42% · Germania 38% · Svezia 15%.",
+                        "prompts": [
+                            "Illustri i dati del grafico.",
+                            "Come spiega le differenze tra i Paesi?"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
