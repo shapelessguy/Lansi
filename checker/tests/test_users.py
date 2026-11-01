@@ -11,8 +11,17 @@ from users import TOKEN_SECS, Users, take_vocabulary, user_directory
 from vocabulary import Vocabularies
 
 
-def write(file: Path, users: object) -> None:
-    file.write_text(json.dumps(users), encoding="utf-8")
+def write(file: Path, users: dict[str, object]) -> None:
+    """Writes each user, by its password, as one allowed into the app."""
+    file.write_text(
+        json.dumps(
+            {
+                name: {"token": password, "permissions": {"Lansi": True}}
+                for name, password in users.items()
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 @pytest.fixture
@@ -53,6 +62,26 @@ def test_a_name_that_could_not_be_a_directory_of_its_own_is_passed_over(
 
     assert users.names() == ["ada"]
     assert not users.check(name, "a password")
+
+
+@pytest.mark.parametrize(
+    "permissions", [{"Lansi": False}, {"Lansi": "yes"}, {"media": ["*"]}, None]
+)
+def test_a_user_without_the_permission_of_the_app_cannot_log_in(
+    users: Users, file: Path, permissions: object
+) -> None:
+    file.write_text(
+        json.dumps(
+            {
+                "ada": {"token": "a password", "permissions": {"Lansi": True}},
+                "ben": {"token": "another one", "permissions": permissions},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert users.names() == ["ada"]
+    assert not users.check("ben", "another one")
 
 
 def test_a_user_without_a_password_cannot_log_in(users: Users, file: Path) -> None:

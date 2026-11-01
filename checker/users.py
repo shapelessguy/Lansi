@@ -3,10 +3,15 @@
 
 """The people who use the app, and who each have data of their own.
 
-Who may log in is written in a file that is edited by hand: an object with a
-password for each name, such as `{"ada": "her password"}`. The file is read
-every time someone logs in, so a change to it needs no restart. It holds the
-passwords as they are, and so is not to be shared.
+Who may log in is written in a file that is edited by hand, the one the
+other services of CyanHouse share: an object with each name, its password as
+`token` and what it may do as `permissions`, such as
+
+    {"ada": {"token": "her password", "permissions": {"Lansi": true}}}
+
+Only a user whose permission `Lansi` is true may log in to this app. The
+file is read every time someone logs in, so a change to it needs no restart.
+It holds the passwords as they are, and so is not to be shared.
 
 A user who logs in is given a token, which comes back with every request and
 says who is asking. A token is the name and the time it runs out, signed
@@ -26,6 +31,8 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+# the permission a user needs to log in to this app
+PERMISSION = "Lansi"
 # how long a token is good for
 TOKEN_SECS = 30 * 24 * 60 * 60
 # A name is also the name of the directory the user's data is kept in.
@@ -106,8 +113,9 @@ class Users:
             return self._secret_file.read_bytes()
 
     def _read(self) -> dict[str, str]:
-        """The password of each user. A name that could not be a directory,
-        or a password that is empty or not text, is passed over."""
+        """The password of each user who may log in to this app. A name that
+        could not be a directory, a password that is empty or not text, or a
+        user without the permission, is passed over."""
         try:
             users = json.loads(self.file.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -115,7 +123,12 @@ class Users:
         if not isinstance(users, dict):
             return {}
         return {
-            name: password
-            for name, password in users.items()
-            if is_name(name) and isinstance(password, str) and password
+            name: user["token"]
+            for name, user in users.items()
+            if is_name(name)
+            and isinstance(user, dict)
+            and isinstance(user.get("token"), str)
+            and user["token"]
+            and isinstance(user.get("permissions"), dict)
+            and user["permissions"].get(PERMISSION) is True
         }

@@ -44,11 +44,13 @@ The GUI is then opened through the nginx of CyanHouse, at `/lansi/`.
 
 ## Users
 
-The app is logged in to. Who may log in is written in `users.json`, at the
-top of the repository, as a password for each name:
+The app is logged in to. Who may log in is written in the `users.json` the
+services of CyanHouse share, `~/Documents/users.json` unless the variable
+`USERS_FILE` names another, as a password for each name, its `token`, with
+what it may do. Only a user whose permission `Lansi` is true may log in:
 
 ```
-{ "ada": "her password" }
+{ "ada": { "token": "her password", "permissions": { "Lansi": true } } }
 ```
 
 The file is read every time someone logs in, so a change needs no restart.

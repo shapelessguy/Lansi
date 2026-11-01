@@ -59,8 +59,9 @@ A language-learning chat built on an Anki collection. Three parts:
   categories of words and their prompts, its lessons, its exams and
   whatever else it does its own way.
   Who may log in is in
-  `users.json` at the top of the repository, which holds passwords: do not
-  read it.
+  the `users.json` CyanHouse shares, `~/Documents/users.json` unless
+  `USERS_FILE` names another, open to those whose permission `Lansi` is
+  true (`users.py`). It holds passwords: do not read it.
 
 `rslib/`, `proto/` and `ftl/` are Anki's Rust core, kept only because
 `deck-status` is built on it. Avoid changing them.

@@ -864,7 +864,13 @@ def with_users(tmp_path: Path) -> Iterator[str]:
     """A server that two users can log in to, each with a vocabulary of
     their own, stopped after the test."""
     (tmp_path / "users.json").write_text(
-        json.dumps({"ada": "a password", "ben": "another one"}), encoding="utf-8"
+        json.dumps(
+            {
+                name: {"token": password, "permissions": {"Lansi": True}}
+                for name, password in (("ada", "a password"), ("ben", "another one"))
+            }
+        ),
+        encoding="utf-8",
     )
     users = Users(tmp_path / "users.json", tmp_path)
     # what is asked of the language model, by every user
