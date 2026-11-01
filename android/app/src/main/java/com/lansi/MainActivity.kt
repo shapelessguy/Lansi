@@ -6,6 +6,7 @@ package com.lansi
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.content.Context
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
@@ -38,12 +39,11 @@ import androidx.core.view.WindowInsetsControllerCompat
  * from one address to the other (Storage), the picker of files for the
  * books, links out of Lansi opened in the browser, the full screen a book
  * is read on without the bars of the system (Chrome), and text selected
- * without the phone's own menu over it, since Lansi has its own
- * (onWindowStartingActionMode).
+ * without the phone's own menu over it, since Lansi has its own (Frame).
  */
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
-    private lateinit var frame: FrameLayout
+    private lateinit var frame: Frame
     private val chrome = Chrome()
     private val handler = Handler(Looper.getMainLooper())
     // the page could not be loaded, and is tried again while the app is in sight
@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
             webChromeClient = chrome
         }
         // the page is kept clear of the bars of the system and of the keyboard
-        frame = FrameLayout(this).apply { addView(webView) }
+        frame = Frame(this).apply { addView(webView) }
         ViewCompat.setOnApplyWindowInsetsListener(frame) { view, insets ->
             val bars = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
@@ -101,16 +101,6 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         handler.removeCallbacksAndMessages(null)
     }
-
-    /**
-     * Text is selected as anywhere, with its handles, but without the
-     * phone's menu of copying and sharing over the selection: the page
-     * brings up its own buttons there, which the menu would cover. It is
-     * left out here, for the whole window, as the page is shown by a view
-     * of its own while it is on the full screen (Chrome).
-     */
-    override fun onWindowStartingActionMode(callback: ActionMode.Callback, type: Int): ActionMode? =
-        super.onWindowStartingActionMode(WithoutItems(callback), type)
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
@@ -207,6 +197,19 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+/**
+ * What the page is shown in: the WebView, and the view of its own the page
+ * is shown by while it is on the full screen (Chrome). Text is selected in
+ * either as anywhere, with its handles, but without the phone's menu of
+ * copying and sharing over the selection: the page brings up its own
+ * buttons there, which the menu would cover. The menu of either comes up
+ * through here, which leaves out what is in it.
+ */
+private class Frame(context: Context) : FrameLayout(context) {
+    override fun startActionModeForChild(originalView: View, callback: ActionMode.Callback, type: Int): ActionMode? =
+        super.startActionModeForChild(originalView, WithoutItems(callback), type)
 }
 
 /**
