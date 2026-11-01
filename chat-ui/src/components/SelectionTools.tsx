@@ -14,11 +14,13 @@ import {
     anchorFor,
     type Asking,
     type Picked,
+    type Rect,
     takeWords,
     textAround,
     translate,
     type Translated,
     usageEntry,
+    visiblePart,
 } from "../lib/translate";
 import type { UsageEntry } from "../lib/usage";
 
@@ -50,7 +52,10 @@ type Task = keyof typeof TASKS;
 /** What was selected, and where on the window. */
 interface Found {
     picked: Picked;
-    rect: DOMRect;
+    /** What can be seen of it, which the buttons are put by. */
+    rect: Rect;
+    /** The part of the window it is shown in, which the buttons are kept within. */
+    area: Rect;
     /** What it is of the book in the reader, if it was selected there. */
     book: BookSelection | null;
     /** Where it was selected, as what is done with it is logged. */
@@ -88,13 +93,52 @@ function findSelection(): Found | null {
     const { region, root, book } = found;
     // the selection of the document has only the host of a shadow root
     const text = root === region ? selection.toString() : range.toString();
+    const area = clipOf(range.commonAncestorContainer);
     return {
         picked: textAround(range, root, text),
-        rect: range.getBoundingClientRect(),
+        rect: seenOf(range, area),
+        area,
         book: book && region instanceof Element ? bookSelection(range, region) : null,
         where: readWhere(markedAncestor(range.commonAncestorContainer, WHERE_ATTRIBUTE)?.value),
         bounds: [range.startContainer, range.startOffset, range.endContainer, range.endOffset],
     };
+}
+
+/**
+ * The part of the window that what is in `node` can be seen in: the window,
+ * cut down by every box around it that hides what goes over its edges, such
+ * as the view of the pages of a book.
+ */
+function clipOf(node: Node): Rect {
+    let clip: Rect = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    for (let at: Node | null = node; at; at = at instanceof ShadowRoot ? at.host : at.parentNode) {
+        if (!(at instanceof Element)) {
+            continue;
+        }
+        const style = getComputedStyle(at);
+        if (style.overflowX !== "visible" || style.overflowY !== "visible") {
+            const box = at.getBoundingClientRect();
+            clip = {
+                left: Math.max(clip.left, box.left),
+                right: Math.min(clip.right, box.right),
+                top: Math.max(clip.top, box.top),
+                bottom: Math.min(clip.bottom, box.bottom),
+            };
+        }
+    }
+    return clip;
+}
+
+/**
+ * What can be seen of a selection in `area`, the part of the window it is
+ * shown in, or, where none of it can, such as when it goes on over pages of
+ * a book other than the one shown, the foot of the area, which the buttons
+ * then come up over.
+ */
+function seenOf(range: Range, area: Rect): Rect {
+    const middle = (area.left + area.right) / 2;
+    return visiblePart([...range.getClientRects()], area)
+        ?? { left: middle, right: middle, top: area.bottom, bottom: area.bottom };
 }
 
 function placed(anchor: Anchor) {
@@ -120,9 +164,20 @@ export function SelectionTools(
     const [box, setBox] = useState<Box | null>(null);
     const tools = useRef<HTMLDivElement>(null);
     const request = useRef<AbortController | null>(null);
-    // where the selection the buttons were last brought up for is, which a
-    // click elsewhere, such as on a button that opens a panel, leaves as it was
-    const lastBounds = useRef<Bounds | null>(null);
+    // the selection the buttons were put away for with Escape, which they
+    // come up for again only once it is another
+    const dismissed = useRef<Bounds | null>(null);
+
+    /** Brings the buttons up for what is selected, wherever it is now, or puts them away if nothing is. */
+    function show() {
+        const next = findSelection();
+        if (next && dismissed.current && sameBounds(next.bounds, dismissed.current)) {
+            setFound(null);
+            return;
+        }
+        dismissed.current = null;
+        setFound(next);
+    }
 
     useEffect(() => {
         // The selection is as it will be only after the click that made or
@@ -137,14 +192,10 @@ export function SelectionTools(
                 return;
             }
             clearTimeout(timer);
-            timer = window.setTimeout(() => {
-                const next = findSelection();
-                const known = next !== null && lastBounds.current !== null
-                    && sameBounds(next.bounds, lastBounds.current);
-                lastBounds.current = next?.bounds ?? null;
-                // the buttons come up only for a selection that was just made
-                setFound(known ? null : next);
-            });
+            // The buttons come up whenever something is selected, again
+            // after one of them was used and the selection was left as it
+            // was, as by a tap on it.
+            timer = window.setTimeout(show);
         }
         function onMouseDown(event: MouseEvent) {
             if (!(event.target instanceof Node && tools.current?.contains(event.target))) {
@@ -155,6 +206,7 @@ export function SelectionTools(
             if (event.key === "Escape") {
                 close();
                 setFound(null);
+                dismissed.current = findSelection()?.bounds ?? null;
             }
         }
         // On a touch screen a selection is made by holding a word and moving
@@ -165,33 +217,55 @@ export function SelectionTools(
         function onPointerDown(event: PointerEvent) {
             touching = event.pointerType === "touch";
         }
+        // a tap that leaves the selection as it was, such as one on it, changes nothing to be told of
+        function onPointerUp(event: PointerEvent) {
+            if (event.pointerType === "touch") {
+                look(event);
+            }
+        }
         function onSelectionChange() {
             if (touching) {
                 clearTimeout(settling);
                 settling = window.setTimeout(() => look(new Event("selectionchange")), 500);
             }
         }
-        // the buttons would be left behind by text that moves from under them
-        const drop = () => setFound(null);
+        // The buttons would be left behind by text that moves from under
+        // them, as when a page of a book is turned: they are put away, and
+        // brought up again by the selection once it is still.
+        let moving: number | undefined;
+        const drop = () => {
+            setFound(null);
+            clearTimeout(moving);
+            moving = window.setTimeout(show, 300);
+        };
         document.addEventListener("mouseup", look);
+        // and once what a click does is done, such as turning a page of a book under the selection
+        document.addEventListener("click", look);
         document.addEventListener("keyup", look);
         document.addEventListener("pointerdown", onPointerDown, true);
+        document.addEventListener("pointerup", onPointerUp, true);
         document.addEventListener("selectionchange", onSelectionChange);
         document.addEventListener("mousedown", onMouseDown);
         document.addEventListener("keydown", onKeyDown);
         document.addEventListener("scroll", drop, true);
+        // a page of a book that slides to the next is still once its transition ends
+        document.addEventListener("transitionend", look, true);
         document.addEventListener("wheel", drop, true);
         window.addEventListener("resize", drop);
         return () => {
             clearTimeout(timer);
             clearTimeout(settling);
+            clearTimeout(moving);
             document.removeEventListener("mouseup", look);
+            document.removeEventListener("click", look);
             document.removeEventListener("keyup", look);
             document.removeEventListener("pointerdown", onPointerDown, true);
+            document.removeEventListener("pointerup", onPointerUp, true);
             document.removeEventListener("selectionchange", onSelectionChange);
             document.removeEventListener("mousedown", onMouseDown);
             document.removeEventListener("keydown", onKeyDown);
             document.removeEventListener("scroll", drop, true);
+            document.removeEventListener("transitionend", look, true);
             document.removeEventListener("wheel", drop, true);
             window.removeEventListener("resize", drop);
         };
@@ -203,6 +277,12 @@ export function SelectionTools(
         request.current?.abort();
         request.current = null;
         setBox(null);
+    }
+
+    /** Closes the box, and brings the buttons up again for what is still selected. */
+    function closeBox() {
+        close();
+        show();
     }
 
     function start(task: Task, of: Found) {
@@ -244,7 +324,9 @@ export function SelectionTools(
                     className="selection-bar"
                     role="toolbar"
                     aria-label={t("Selected text")}
-                    style={placed(anchorFor(found.rect, window.innerWidth, BAR.width, BAR.room))}
+                    style={placed(
+                        anchorFor(found.rect, found.area, BAR.width, BAR.room),
+                    )}
                     // a click on a button must not drop the selection the button is for
                     onMouseDown={(event) => event.preventDefault()}
                 >
@@ -269,7 +351,9 @@ export function SelectionTools(
                     className="selection-box"
                     role="dialog"
                     aria-label={t(TASKS[box.task])}
-                    style={placed(anchorFor(box.found.rect, window.innerWidth, BOX.width, BOX.room))}
+                    style={placed(
+                        anchorFor(box.found.rect, box.found.area, BOX.width, BOX.room),
+                    )}
                 >
                     <p className="selection-source">{box.found.picked.selection.trim()}</p>
                     {box.status === "loading" && <p className="typing">{t("Translating…")}</p>}
@@ -278,7 +362,7 @@ export function SelectionTools(
                             <p className="selection-error" role="alert">{box.message}</p>
                             <div className="selection-actions">
                                 <button onClick={() => start(box.task, box.found)}>{t("Try again")}</button>
-                                <button onClick={close}>{t("Close")}</button>
+                                <button onClick={closeBox}>{t("Close")}</button>
                             </div>
                         </>
                     )}
@@ -290,13 +374,13 @@ export function SelectionTools(
                                     className="primary"
                                     onClick={() => {
                                         onChat(box.translated);
-                                        close();
+                                        closeBox();
                                     }}
                                     title={t("Ask about this in a chat at the side")}
                                 >
                                     {t("Chat")}
                                 </button>
-                                <button onClick={close}>{t("Close")}</button>
+                                <button onClick={closeBox}>{t("Close")}</button>
                             </div>
                         </>
                     )}

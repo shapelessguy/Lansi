@@ -151,6 +151,10 @@ export const MESSAGES = {
         German: "Schließen",
         Italian: "Chiudi",
     },
+    "Full screen": {
+        German: "Vollbild",
+        Italian: "Schermo intero",
+    },
     "Close {name}": {
         German: "{name} schließen",
         Italian: "Chiudi {name}",

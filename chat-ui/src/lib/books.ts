@@ -479,6 +479,26 @@ export function pageCount(laidWidth: number, width: number, gap: number): number
     return Math.max(1, Math.round((laidWidth + gap) / (width + gap)));
 }
 
+/** How far, in pixels, and how quickly, in milliseconds, a finger is to move to turn a page. */
+const SWIPE = { distance: 50, time: 600 };
+
+/**
+ * The page a swipe of a finger on a book `width` wide turns to, from the
+ * one shown: the next for a swipe to the left, the one before for one to
+ * the right, or none, 0, for a move more up and down than across, which is
+ * something else, such as scrolling, or one that is short and slow, which
+ * lets the page go back. A slow one turns it once it has drawn the page a
+ * third of the way, as a quick one does once it is long enough to be meant.
+ */
+export function swipeTurn(across: number, down: number, time: number, width: number): -1 | 0 | 1 {
+    const far = Math.abs(across);
+    const meant = far >= width / 3 || (far >= SWIPE.distance && time <= SWIPE.time);
+    if (!meant || far < 2 * Math.abs(down)) {
+        return 0;
+    }
+    return across < 0 ? 1 : -1;
+}
+
 /** The page, from 0, of what is `left` from the start of such columns. */
 export function pageOf(left: number, width: number, gap: number): number {
     // a pixel is allowed for, as places are not always whole numbers

@@ -20,6 +20,7 @@ import {
     storyParts,
     stretchTokens,
     suggestedStories,
+    swipeTurn,
 } from "./books";
 
 test("the text of a block is cut where its links start and end", () => {
@@ -208,4 +209,19 @@ test("the stories suggested are the sections at the top with a title and section
     ];
 
     expect(suggestedStories(sections)).toEqual(new Set(["4-9"]));
+});
+
+test("a quick swipe across a book turns to the next page leftwards and to the one before rightwards", () => {
+    expect(swipeTurn(-120, 10, 200, 400)).toBe(1);
+    expect(swipeTurn(120, -10, 200, 400)).toBe(-1);
+});
+
+test("a slow swipe turns the page once it has drawn it a third of the way", () => {
+    expect(swipeTurn(-150, 0, 1500, 400)).toBe(1);
+    expect(swipeTurn(-120, 0, 1500, 400)).toBe(0);
+});
+
+test("a move of a finger that is short or up and down turns no page", () => {
+    expect(swipeTurn(-30, 0, 200, 400)).toBe(0);
+    expect(swipeTurn(-120, 90, 200, 400)).toBe(0);
 });

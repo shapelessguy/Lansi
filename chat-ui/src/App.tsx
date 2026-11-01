@@ -1102,82 +1102,84 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         /* Buttons that take each other's place are kept together: the panels on the left,
                         the activities, and the panels on the right. */
                     }
-                    <header className="topbar">
-                        <div className="topbar-side">
-                            <div className="switch" role="group" aria-label={t("Panel on the left")}>
+                    <header className="topbar-frame">
+                        <div className="topbar">
+                            <div className="topbar-side">
+                                <div className="switch" role="group" aria-label={t("Panel on the left")}>
+                                    <button
+                                        className="icon-only"
+                                        aria-pressed={libraryOpen && !logsOpen && behind !== "left"}
+                                        onClick={() => toggleLeft(false)}
+                                        title={t("Library")}
+                                        aria-label={t("Library")}
+                                    >
+                                        <Icon name="library" />
+                                    </button>
+                                    <button
+                                        className="icon-only"
+                                        aria-pressed={logsOpen && behind !== "left"}
+                                        onClick={() => toggleLeft(true)}
+                                        title={t("Logs")}
+                                        aria-label={t("Logs")}
+                                    >
+                                        <Icon name="logs" />
+                                    </button>
+                                </div>
+                                <TaskSign tasks={tasks} />
+                            </div>
+                            <div className="switch activities" role="tablist" aria-label={t("Activity")}>
+                                {ACTIVITY_TABS.map(([name, label]) => (
+                                    <button
+                                        key={name}
+                                        role="tab"
+                                        aria-selected={activity === name}
+                                        onClick={() => setActivity(name)}
+                                        title={t(label)}
+                                    >
+                                        <Icon name={name} />
+                                        <span className="label">{t(label)}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="topbar-side end">
+                                <div className="switch" role="group" aria-label={t("Panel on the right")}>
+                                    <button
+                                        className="icon-only"
+                                        aria-pressed={panel === "checks" && behind !== "right"}
+                                        onClick={() => togglePanel("checks")}
+                                        title={t("Checks")}
+                                        aria-label={t("Checks")}
+                                    >
+                                        <Icon name="checks" />
+                                    </button>
+                                    <button
+                                        className="icon-only"
+                                        aria-pressed={panel === "usage" && behind !== "right"}
+                                        onClick={() => togglePanel("usage")}
+                                        title={t("Usage")}
+                                        aria-label={t("Usage")}
+                                    >
+                                        <Icon name="usage" />
+                                    </button>
+                                    <button
+                                        className="icon-only"
+                                        aria-pressed={panel === "settings" && behind !== "right"}
+                                        onClick={() => togglePanel("settings")}
+                                        title={t("Settings")}
+                                        aria-label={t("Settings")}
+                                    >
+                                        <Icon name="settings" />
+                                    </button>
+                                </div>
                                 <button
-                                    className="icon-only"
-                                    aria-pressed={libraryOpen && !logsOpen && behind !== "left"}
-                                    onClick={() => toggleLeft(false)}
-                                    title={t("Library")}
-                                    aria-label={t("Library")}
+                                    className="log-out icon-only"
+                                    onClick={logOut}
+                                    title={t("Log out (logged in as {user})", { user })}
+                                    aria-label={t("Log out")}
                                 >
-                                    <Icon name="library" />
-                                </button>
-                                <button
-                                    className="icon-only"
-                                    aria-pressed={logsOpen && behind !== "left"}
-                                    onClick={() => toggleLeft(true)}
-                                    title={t("Logs")}
-                                    aria-label={t("Logs")}
-                                >
-                                    <Icon name="logs" />
+                                    <Icon name="log-out" />
                                 </button>
                             </div>
-                            <TaskSign tasks={tasks} />
-                        </div>
-                        <div className="switch activities" role="tablist" aria-label={t("Activity")}>
-                            {ACTIVITY_TABS.map(([name, label]) => (
-                                <button
-                                    key={name}
-                                    role="tab"
-                                    aria-selected={activity === name}
-                                    onClick={() => setActivity(name)}
-                                    title={t(label)}
-                                >
-                                    <Icon name={name} />
-                                    <span className="label">{t(label)}</span>
-                                </button>
-                            ))}
-                        </div>
-                        <div className="topbar-side end">
-                            <div className="switch" role="group" aria-label={t("Panel on the right")}>
-                                <button
-                                    className="icon-only"
-                                    aria-pressed={panel === "checks" && behind !== "right"}
-                                    onClick={() => togglePanel("checks")}
-                                    title={t("Checks")}
-                                    aria-label={t("Checks")}
-                                >
-                                    <Icon name="checks" />
-                                </button>
-                                <button
-                                    className="icon-only"
-                                    aria-pressed={panel === "usage" && behind !== "right"}
-                                    onClick={() => togglePanel("usage")}
-                                    title={t("Usage")}
-                                    aria-label={t("Usage")}
-                                >
-                                    <Icon name="usage" />
-                                </button>
-                                <button
-                                    className="icon-only"
-                                    aria-pressed={panel === "settings" && behind !== "right"}
-                                    onClick={() => togglePanel("settings")}
-                                    title={t("Settings")}
-                                    aria-label={t("Settings")}
-                                >
-                                    <Icon name="settings" />
-                                </button>
-                            </div>
-                            <button
-                                className="log-out icon-only"
-                                onClick={logOut}
-                                title={t("Log out (logged in as {user})", { user })}
-                                aria-label={t("Log out")}
-                            >
-                                <Icon name="log-out" />
-                            </button>
                         </div>
                     </header>
                     {/* each stays in place while hidden, so a reply still arriving is not cut off */}
@@ -1216,7 +1218,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         />
                     </div>
                     <div className="pane texts-pane" hidden={activity !== "texts"}>
-                        <SideList label={t("Texts")}>
+                        <SideList label={t("Texts")} nothingOpen={textId === null}>
                             <TextList
                                 texts={texts}
                                 selectedId={textId}
@@ -1276,6 +1278,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                         <BookReader
                             bookId={bookId}
                             active={activity === "books"}
+                            besides={`${libraryOpen || logsOpen}:${panel}:${behind}:${sidesFit}`}
                             names={readNames}
                             onPlay={(selection) =>
                                 bookId && setListening({ source: bookSource(bookId, selection), nonce: Date.now() })}

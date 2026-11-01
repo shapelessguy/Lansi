@@ -21,11 +21,13 @@ import {
     segments,
     shownSize,
     SPACINGS,
+    swipeTurn,
 } from "../lib/books";
 import { t } from "../lib/i18n";
 import type { Where } from "../lib/logs";
 import type { BookSelection } from "../lib/speaking";
 import { BookContents } from "./BookContents";
+import { Icon } from "./Icon";
 import { SPOKEN_EVENT } from "./SpeechPlayer";
 
 interface Props {
@@ -37,6 +39,12 @@ interface Props {
     names?: { title: string; version?: string };
     /** Told what of the book to read aloud, such as a section chosen in the contents. */
     onPlay: (selection: BookSelection) => void;
+    /**
+     * Which panels are shown beside the reader, told apart by anything that
+     * changes with them: the reader may be moved by them without changing
+     * its width, as when one on the left gives way to one on the right.
+     */
+    besides?: string;
 }
 
 type BookState =
@@ -60,12 +68,34 @@ const KEYS: Record<string, number> = {
 };
 
 /** Shows a book a page at a time: its text, each part in its size, and nothing else. */
-export function BookReader({ bookId, active, names, onPlay }: Props) {
+export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
     const [state, setState] = useState<BookState>({ status: "loading" });
     const [attempt, setAttempt] = useState(0);
     // how the text looks: its size, its font, its colours and how far apart its lines are
     const [look, setLook] = useState<Reading>(loadReading);
     const [optionsOpen, setOptionsOpen] = useState(false);
+    // The text of the book alone on the whole screen, as the browser puts
+    // the page there: the reader follows the browser's full screen, which
+    // the browser's own way out, such as Escape or the Back of a phone, leaves.
+    const [full, setFull] = useState(false);
+    useEffect(() => {
+        const follow = () => setFull(document.fullscreenElement !== null);
+        document.addEventListener("fullscreenchange", follow);
+        return () => document.removeEventListener("fullscreenchange", follow);
+    }, []);
+    function toggleFull() {
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        } else {
+            document.documentElement.requestFullscreen().catch(() => {});
+        }
+    }
+    // nothing else of the app can be reached while it is on the screen, so it is left with the reader
+    useEffect(() => {
+        if (!active && document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+        }
+    }, [active]);
     const [contentsOpen, setContentsOpen] = useState(false);
     // the paragraph at the top of the page of each book, and the character
     // of it the page starts at, by the id of the book
@@ -76,6 +106,12 @@ export function BookReader({ bookId, active, names, onPlay }: Props) {
     // what the pages are seen through, and the text, which is laid out in
     // columns as wide as that, one beside the other: each column is a page
     const view = useRef<HTMLDivElement>(null);
+    // The pages are as wide as the window lets them be with no panel open
+    // beside the reader (styles.css), so that a panel opened covers their
+    // edge rather than having them counted again. They are kept where they
+    // would be by how far the reader is from the left of the window.
+    const area = useRef<HTMLDivElement>(null);
+    const [fromLeft, setFromLeft] = useState(0);
     const columns = useRef<HTMLDivElement>(null);
     // the page that is shown, from 0, and how many there are
     const [page, setPage] = useState(0);
@@ -106,10 +142,31 @@ export function BookReader({ bookId, active, names, onPlay }: Props) {
         if (!shown) {
             return;
         }
-        const observer = new ResizeObserver(() => setViewSize(`${shown.clientWidth}x${shown.clientHeight}`));
+        const observer = new ResizeObserver(() =>
+            setViewSize((before) => {
+                // The keyboard of a phone takes the foot of the window while
+                // something is typed, such as the number of a page: the pages
+                // keep their height under it rather than being counted again.
+                const sameWidth = Number(before.split("x")[0]) === shown.clientWidth;
+                return sameWidth && typing() ? before : `${shown.clientWidth}x${shown.clientHeight}`;
+            })
+        );
         observer.observe(shown);
         return () => observer.disconnect();
     }, [book]);
+
+    // measured before the pages are shown where they were, so that they are never seen moved
+    useLayoutEffect(() => {
+        const shown = area.current;
+        if (!shown) {
+            return;
+        }
+        const measure = () => setFromLeft(shown.getBoundingClientRect().left);
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(shown);
+        return () => observer.disconnect();
+    }, [book, besides, active]);
 
     /** The page, from 0, that a paragraph starts on, by its place among the paragraphs. */
     const pageWith = useCallback((place: number): number => {
@@ -262,6 +319,60 @@ export function BookReader({ bookId, active, names, onPlay }: Props) {
         }
     }
 
+    // A swipe of a finger across the page turns it, as in a book: the page
+    // follows the finger, and once it is let go slides on to the next or
+    // back to where it was. A mouse turns none, as it selects by dragging,
+    // and a finger held to select is taken by the browser, which cancels
+    // the swipe.
+    const swipe = useRef<{ x: number; y: number; at: number } | null>(null);
+    // how far, in pixels, the page is drawn by the finger, while it is
+    const [drawn, setDrawn] = useState(0);
+    function onPointerDown(event: React.PointerEvent) {
+        swipe.current = event.pointerType === "touch"
+            ? { x: event.clientX, y: event.clientY, at: event.timeStamp }
+            : null;
+    }
+    function onPointerMove(event: React.PointerEvent) {
+        const from = swipe.current;
+        if (!from || !(window.getSelection()?.isCollapsed ?? true)) {
+            return;
+        }
+        const across = event.clientX - from.x;
+        if (Math.abs(across) < 2 * Math.abs(event.clientY - from.y)) {
+            return;
+        }
+        // past the first page or the last the page gives only a little
+        const end = (page === 0 && across > 0) || (page === pages - 1 && across < 0);
+        setDrawn(end ? across / 4 : across);
+    }
+    function letGo() {
+        swipe.current = null;
+        setDrawn(0);
+    }
+    function onPointerUp(event: React.PointerEvent) {
+        const from = swipe.current;
+        letGo();
+        if (!from || event.pointerType !== "touch" || !(window.getSelection()?.isCollapsed ?? true)) {
+            return;
+        }
+        const turned = swipeTurn(
+            event.clientX - from.x,
+            event.clientY - from.y,
+            event.timeStamp - from.at,
+            view.current?.clientWidth ?? window.innerWidth,
+        );
+        if (turned !== 0) {
+            turnTo(page + turned);
+        }
+    }
+    // A page turned to the next or the one before slides there, as one let go
+    // by the finger does; one further off is shown at once.
+    const shownPage = useRef(page);
+    const slides = drawn === 0 && Math.abs(page - shownPage.current) <= 1;
+    useEffect(() => {
+        shownPage.current = page;
+    }, [page]);
+
     function changeLook(change: Partial<Reading>) {
         setLook(changeReading((kept) => ({ ...kept, ...change })));
     }
@@ -278,7 +389,7 @@ export function BookReader({ bookId, active, names, onPlay }: Props) {
 
     const paper = PAPERS[look.paper];
     return (
-        <section className="reader">
+        <section className={full ? "reader full" : "reader"}>
             {/* how the book looks opens over the page, under the bar */}
             <div className="reader-top">
                 <header className="reader-bar">
@@ -325,6 +436,16 @@ export function BookReader({ bookId, active, names, onPlay }: Props) {
                     >
                         ›
                     </button>
+                    {document.fullscreenEnabled && (
+                        <button
+                            className="icon-button"
+                            onClick={toggleFull}
+                            title={t("Full screen")}
+                            aria-label={t("Full screen")}
+                        >
+                            <Icon name="full-screen" />
+                        </button>
+                    )}
                     <button
                         className="icon-button"
                         aria-pressed={optionsOpen}
@@ -436,6 +557,7 @@ export function BookReader({ bookId, active, names, onPlay }: Props) {
             {book && (
                 <div
                     className="reader-page"
+                    ref={area}
                     style={{
                         fontSize: `${look.fontSize}px`,
                         fontFamily: FONTS[look.font].family,
@@ -444,8 +566,12 @@ export function BookReader({ bookId, active, names, onPlay }: Props) {
                         color: paper.color || undefined,
                     }}
                     onWheel={onWheel}
+                    onPointerDown={onPointerDown}
+                    onPointerUp={onPointerUp}
+                    onPointerMove={onPointerMove}
+                    onPointerCancel={letGo}
                 >
-                    <div className="reader-view" ref={view}>
+                    <div className="reader-view" ref={view} style={{ marginLeft: -fromLeft }}>
                         <div
                             className="reader-columns"
                             data-selectable="book"
@@ -456,9 +582,14 @@ export function BookReader({ bookId, active, names, onPlay }: Props) {
                             style={{
                                 // a picture is no higher than a page
                                 ["--page-height" as string]: `${Number(viewSize.split("x")[1]) || 0}px`,
+                                // the pages as high as they were counted, which the keyboard of a phone leaves as
+                                // they are, rather than as high as the view
+                                height: Number(viewSize.split("x")[1]) || undefined,
                                 columnGap: `${PAGE_GAP}px`,
                                 // a page further on is its own width and the gap to the left
-                                transform: `translateX(calc(${-page} * (100% + ${PAGE_GAP}px)))`,
+                                // and one drawn by a finger is moved with it
+                                transform: `translateX(calc(${-page} * (100% + ${PAGE_GAP}px) + ${drawn}px))`,
+                                transition: slides ? "transform 0.25s ease-out" : "none",
                             }}
                         >
                             <Blocks bookId={book.id} blocks={book.blocks} onFollow={follow} />
@@ -682,4 +813,12 @@ function BookPicture({ bookId, block }: { bookId: string; block: BookBlock }) {
             draggable={false}
         />
     );
+}
+
+/** Whether what has the focus is typed in, which brings up the keyboard on a phone. */
+function typing(): boolean {
+    const focused = document.activeElement;
+    return focused instanceof HTMLElement
+        && (focused.matches("input:not([type=checkbox], [type=radio], [type=range], [type=button]), textarea")
+            || focused.isContentEditable);
 }

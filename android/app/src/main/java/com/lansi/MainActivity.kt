@@ -15,6 +15,7 @@ import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -27,18 +28,23 @@ import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 /**
  * Lansi as the web shows it, in a WebView: the app is the page at /lansi/
  * of the server of CyanHouse, which has its own login and phone layout.
  * What the app adds is the choice of address (Route), keeping the login
  * from one address to the other (Storage), the picker of files for the
- * books, links out of Lansi opened in the browser, and text selected
+ * books, links out of Lansi opened in the browser, the full screen a book
+ * is read on without the bars of the system (Chrome), and text selected
  * without the phone's own menu over it, since Lansi has its own (Page).
  */
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
+    private lateinit var frame: FrameLayout
+    private val chrome = Chrome()
     private val handler = Handler(Looper.getMainLooper())
     // the page could not be loaded, and is tried again while the app is in sight
     private var failed = false
@@ -56,10 +62,10 @@ class MainActivity : ComponentActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             webViewClient = Client()
-            webChromeClient = Chrome()
+            webChromeClient = chrome
         }
         // the page is kept clear of the bars of the system and of the keyboard
-        val frame = FrameLayout(this).apply { addView(webView) }
+        frame = FrameLayout(this).apply { addView(webView) }
         ViewCompat.setOnApplyWindowInsetsListener(frame) { view, insets ->
             val bars = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
@@ -71,7 +77,9 @@ class MainActivity : ComponentActivity() {
         setContentView(frame)
         Storage(this).attach(webView)
         onBackPressedDispatcher.addCallback(this) {
-            if (webView.canGoBack()) {
+            if (chrome.fullScreen) {
+                chrome.leaveFullScreen()
+            } else if (webView.canGoBack()) {
                 webView.goBack()
             } else {
                 isEnabled = false
@@ -137,6 +145,42 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class Chrome : WebChromeClient() {
+        // what the page put on the whole screen, as the WebView shows it, while it is there
+        private var shown: View? = null
+        private var whenHidden: CustomViewCallback? = null
+        val fullScreen: Boolean get() = shown != null
+
+        private val bars: WindowInsetsControllerCompat
+            get() = WindowCompat.getInsetsController(window, window.decorView)
+
+        // The page on the whole screen, as a book is read: over the WebView,
+        // with the bars of the system hidden until a swipe from the edge of
+        // the screen brings them back for a moment.
+        override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+            if (shown != null) {
+                callback.onCustomViewHidden()
+                return
+            }
+            shown = view
+            whenHidden = callback
+            val whole = ViewGroup.LayoutParams.MATCH_PARENT
+            frame.addView(view, ViewGroup.LayoutParams(whole, whole))
+            bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars.hide(WindowInsetsCompat.Type.systemBars())
+        }
+
+        override fun onHideCustomView() {
+            val view = shown ?: return
+            shown = null
+            frame.removeView(view)
+            bars.show(WindowInsetsCompat.Type.systemBars())
+            whenHidden?.onCustomViewHidden()
+            whenHidden = null
+        }
+
+        /** Leaves the full screen, as Back does. */
+        fun leaveFullScreen() = onHideCustomView()
+
         override fun onShowFileChooser(
             view: WebView,
             callback: ValueCallback<Array<Uri>>,

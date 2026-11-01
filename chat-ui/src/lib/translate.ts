@@ -118,23 +118,59 @@ export interface Anchor {
 /** The space left between a box and the selection, and the edge of the window, in pixels. */
 const GAP = 8;
 
+/** A rectangle of the window, in pixels from its top left corner. */
+export interface Rect {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+}
+
+/**
+ * What can be seen of a selection made of `rects`, the lines it takes up,
+ * through `clip`, the part of the window it is shown in: the lines that can
+ * be seen, put together, or null if none can, as when the selection goes on
+ * over pages of a book other than the one shown.
+ */
+export function visiblePart(rects: readonly Rect[], clip: Rect): Rect | null {
+    let seen: Rect | null = null;
+    for (const line of rects) {
+        const part = {
+            left: Math.max(line.left, clip.left),
+            right: Math.min(line.right, clip.right),
+            top: Math.max(line.top, clip.top),
+            bottom: Math.min(line.bottom, clip.bottom),
+        };
+        if (part.left >= part.right || part.top >= part.bottom) {
+            continue;
+        }
+        seen = seen === null ? part : {
+            left: Math.min(seen.left, part.left),
+            right: Math.max(seen.right, part.right),
+            top: Math.min(seen.top, part.top),
+            bottom: Math.max(seen.bottom, part.bottom),
+        };
+    }
+    return seen;
+}
+
 /**
  * Where to put a box at most `width` wide for a selection that takes up
- * `rect` of a window `viewport` wide: above the selection and centred on it,
- * but not over the edge of the window, and below it where there is not
- * `room` above.
+ * `rect` of `area`, the part of the window it is shown in, such as the
+ * pages of a book beside the panels: above the selection and centred on it,
+ * and below it where there is not `room` above, but within the area, over
+ * the selection if need be, so that it covers nothing beside it and can
+ * always be seen.
  */
-export function anchorFor(
-    rect: { left: number; right: number; top: number; bottom: number },
-    viewport: number,
-    width: number,
-    room: number,
-): Anchor {
-    const half = Math.min(width, viewport - 2 * GAP) / 2;
+export function anchorFor(rect: Rect, area: Rect, width: number, room: number): Anchor {
+    const half = Math.min(width, area.right - area.left - 2 * GAP) / 2;
     const middle = (rect.left + rect.right) / 2;
-    const left = Math.max(GAP + half, Math.min(viewport - GAP - half, middle));
-    const above = rect.top - GAP >= room;
-    return { left, top: above ? rect.top - GAP : rect.bottom + GAP, above };
+    const left = Math.max(area.left + GAP + half, Math.min(area.right - GAP - half, middle));
+    const above = rect.top - GAP - area.top >= room;
+    if (above) {
+        return { left, top: rect.top - GAP, above };
+    }
+    return { left, top: Math.max(area.top + GAP, Math.min(rect.bottom + GAP, area.bottom - GAP - room)), above };
 }
 
 /** What a request to the model used, as the usage is counted. */

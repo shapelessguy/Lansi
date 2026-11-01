@@ -227,8 +227,6 @@ a {
 .main {
     flex: 1;
     min-width: 0;
-    /* what is in it is laid out by its own width, which the panels beside it take from */
-    container-type: inline-size;
 }
 
 /* word list */
@@ -914,10 +912,26 @@ a {
     display: none;
 }
 
+/* The bar is laid out by its own width, which the panels beside it take
+   from, as the frame around it tells (@container below). The frame alone is
+   the container, as a container is what anything fixed in it is placed by,
+   rather than the window. Over what floats in the page (up to 5), as what
+   drops from the bar does, and under the panels (10). */
+.topbar-frame {
+    container-type: inline-size;
+    position: relative;
+    z-index: 6;
+}
+
 /* the panels on the left, the activities in the middle and the rest on the right */
 .topbar {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
+    /* As high as the activities with their names, whether they show their
+       names or their icons, so that the page under the bar keeps its height
+       when the bar is narrowed, as by a panel opened beside it, and the pages
+       of a book are not counted again. */
+    grid-auto-rows: 37px;
     align-items: center;
     gap: 10px;
     padding: 10px 16px;
@@ -1047,7 +1061,7 @@ a {
 
 @container (max-width: 580px) {
     .topbar {
-        padding: 8px 10px;
+        padding-inline: 10px;
     }
 }
 
@@ -1084,6 +1098,20 @@ a {
     min-height: 0;
     display: flex;
     flex-direction: column;
+}
+
+/* A book on the whole screen: its text alone, over the bar of the app and
+   the panels (10), and under what floats over everything, such as the
+   buttons of a selection and the player of what is read aloud (15 and up). */
+.reader.full {
+    position: fixed;
+    inset: 0;
+    z-index: 12;
+    background: var(--bg);
+}
+
+.reader.full .reader-bar {
+    display: none;
 }
 
 .reader-bar {
@@ -1262,16 +1290,27 @@ a {
 }
 
 .reader-page {
+    --reader-margin: clamp(16px, 4vw, 56px);
     flex: 1;
+    /* The pages that go on beside it, under a panel (.reader-view), are cut
+       at its edge, which the panel covers anyway: what is cut off cannot be
+       selected into, nor show the handles of a selection over the panel. It
+       is not a box that scrolls, which a selection would scroll. */
+    overflow: clip;
     min-height: 0;
     display: flex;
-    padding: 20px clamp(16px, 4%, 56px);
+    /* a finger moved across turns the page (BookReader), and is not taken by the browser */
+    touch-action: pan-y pinch-zoom;
+    padding: 20px var(--reader-margin);
 }
 
-/* what the pages are seen through, one at a time */
+/* What the pages are seen through, one at a time: as wide as the window
+   less the margins, whatever panels are open beside the reader, which
+   cover their edge instead, so that the pages are not counted again
+   (BookReader). */
 .reader-view {
-    flex: 1;
-    min-width: 0;
+    flex: none;
+    width: calc(100vw - 2 * var(--reader-margin));
     overflow: hidden;
 }
 
@@ -1905,6 +1944,11 @@ div.book-cover {
    usage and settings sharing the right, one at a time. They are all built
    the same way and are all as wide. */
 .side-panel {
+    /* Over all that floats in the page, such as its lists (up to 5), and the
+       pages of a book, which go on under a panel beside them (.reader-view),
+       and under the windows and dialogs that float over everything (15 and up). */
+    position: relative;
+    z-index: 10;
     display: flex;
     flex-direction: column;
     width: 460px;
@@ -2827,7 +2871,6 @@ div.book-cover {
     .side-panel {
         position: fixed;
         inset: 0 0 0 auto;
-        z-index: 2;
         width: min(460px, 100%);
         box-shadow: 0 0 24px rgb(0 0 0 / 25%);
     }
@@ -4981,8 +5024,24 @@ div.book-cover {
     pointer-events: auto;
 }
 
+/* a list folded away, which shows what it is and that it opens */
 .side-list-toggle {
     align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+}
+
+.side-list-toggle .icon:last-child {
+    width: 14px;
+    height: 14px;
+    color: var(--muted);
+    transition: transform 0.15s;
+}
+
+.side-list.open .side-list-toggle .icon:last-child {
+    transform: rotate(180deg);
 }
 
 .side-list-body {
