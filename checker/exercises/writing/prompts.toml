@@ -8,7 +8,7 @@ $words$guidance$exam$made
 The "situation" says in one or two sentences of $language who the learner \
 writes to and why. The "points" are three things to write about, each in a \
 short sentence of $language, such as what happened, a reason and a \
-question. The learner writes about $count words.
+question, unless the exam asks for more. The learner writes about $count words.
 
 Reply with JSON alone: {"situation": "...", "points": ["...", "...", "..."]}"""
 
@@ -89,3 +89,8 @@ or a boss: a request, an excuse, a thank-you, a change of plan"""
 opinion = """
 an opinion on a question of everyday life, as posted in a \
 forum under what others wrote, with reasons and an example"""
+essay = """
+an essay on a question of society, work or education, written \
+formally for readers who do not know the writer: it introduces the \
+question, weighs what speaks for and against with examples, and ends with \
+the writer's own view"""

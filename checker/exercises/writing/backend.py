@@ -7,9 +7,10 @@
     email       an email addressed formally, to a teacher, an office or a
                 landlord
     opinion     an opinion on a question, as posted in a forum
+    essay       an essay on a question, weighing both sides, formally
     form        a form to fill in with what a short text says
 
-The first three are a situation with the points to write about, about as
+The first four are a situation with the points to write about, about as
 many words long as the option `words` says, and what is written is rated by
 a model by the `CRITERIA` of the kit, as the examiners of an exam rate it,
 with a correction and a note. A form is a text and the fields to fill in
@@ -59,14 +60,14 @@ from kit import (
     written,
 )
 
-KINDS = ("message", "email", "opinion", "form")
+KINDS = ("message", "email", "opinion", "essay", "form")
 # what is rated of what is written
 RATED = ["task", "coherence", "vocabulary", "structures"]
 WORDS = 40
 # how many fields a form has
 FIELDS = 5
 # more than anyone writes for one task
-MAX_TEXT_LENGTH = 4000
+MAX_TEXT_LENGTH = 6000
 MAX_FIELD_LENGTH = 200
 
 # what the exercise tells the models, by name

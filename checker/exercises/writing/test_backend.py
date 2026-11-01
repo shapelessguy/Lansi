@@ -74,6 +74,17 @@ def test_what_was_written_is_rated_by_the_criteria_and_graded_by_the_ratings() -
     assert one["correction"] == RATED["correction"]
 
 
+def test_an_essay_is_asked_for_as_one_that_weighs_both_sides() -> None:
+    essay = {**CONTEXT, "options": {"kind": "essay", "words": 350}}
+    model = FakeModel(TASK)
+
+    step = start(essay, model)
+
+    assert "weighs what speaks for and against" in model.asked[0]
+    assert "about 350 words" in model.asked[0]
+    assert step.show["task"]["kind"] == "essay"
+
+
 def test_writing_scores_the_ratings_as_shares_of_the_most_by_each_criterion() -> None:
     model = FakeModel(TASK, RATED)
     state = start(CONTEXT, model).state
