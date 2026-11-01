@@ -3,11 +3,19 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 import pytest
-from users import TOKEN_SECS, Users, take_vocabulary, user_directory
+from users import (
+    FAILURE_SECS,
+    MAX_FAILURES,
+    TOKEN_SECS,
+    Users,
+    take_vocabulary,
+    user_directory,
+)
 from vocabulary import Vocabularies
 
 
@@ -161,6 +169,68 @@ def test_a_token_of_another_server_says_nobody(
     elsewhere = Users(file, tmp_path / "elsewhere")
 
     assert users.user_of(elsewhere.token("ada")) is None
+
+
+def hashed(password: str) -> str:
+    """A password hashed as CyanHouse hashes them, with few rounds."""
+    salt = b"0123456789abcdef"
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 1000)
+    return f"pbkdf2_sha256$1000${salt.hex()}${digest.hex()}"
+
+
+@pytest.fixture
+def passwords(tmp_path: Path) -> Path:
+    passwords = tmp_path / "passwords.json"
+    passwords.write_text(json.dumps({"ada": hashed("Her own one 1")}), encoding="utf-8")
+    return passwords
+
+
+def test_a_user_is_let_in_with_the_password_set_in_cyanhouse(
+    file: Path, passwords: Path, tmp_path: Path
+) -> None:
+    users = Users(file, tmp_path / "data", passwords=passwords)
+
+    assert users.check("ada", "Her own one 1")
+    assert users.check("ada", "a password")
+    assert not users.check("ada", "Her own one 2")
+    assert not users.check("ben", "Her own one 1")
+
+
+def test_a_password_set_in_cyanhouse_does_not_let_in_one_without_the_permission(
+    file: Path, passwords: Path, tmp_path: Path
+) -> None:
+    file.write_text(
+        json.dumps({"ada": {"token": "a password", "permissions": {}}}),
+        encoding="utf-8",
+    )
+
+    assert not Users(file, tmp_path, passwords=passwords).check("ada", "Her own one 1")
+
+
+def test_without_the_file_of_passwords_only_the_token_lets_in(
+    file: Path, tmp_path: Path
+) -> None:
+    users = Users(file, tmp_path, passwords=tmp_path / "missing.json")
+
+    assert users.check("ada", "a password")
+    assert not users.check("ada", "Her own one 1")
+
+
+def test_after_too_many_wrong_passwords_only_the_token_lets_in_for_a_while(
+    file: Path, passwords: Path, tmp_path: Path
+) -> None:
+    clock = [1000.0]
+    users = Users(file, tmp_path, now=lambda: clock[0], passwords=passwords)
+    for _ in range(MAX_FAILURES):
+        users.check("ada", "a guess")
+
+    locked = users.check("ada", "Her own one 1")
+    token = users.check("ada", "a password")
+    clock[0] += FAILURE_SECS + 1
+
+    assert not locked
+    assert token
+    assert users.check("ada", "Her own one 1")
 
 
 def test_the_vocabulary_kept_before_there_were_users_is_handed_to_one(

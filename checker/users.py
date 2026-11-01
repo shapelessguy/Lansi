@@ -13,6 +13,14 @@ Only a user whose permission `Lansi` is true may log in to this app. The
 file is read every time someone logs in, so a change to it needs no restart.
 It holds the passwords as they are, and so is not to be shared.
 
+A user may also log in with the password of their own they set in
+CyanHouse, which keeps it hashed in a file of its own (its
+api/passwords.py), `{"ada": "pbkdf2_sha256$<rounds>$<salt>$<hash>"}`. It is
+only read here: a password is set, changed and taken away in CyanHouse.
+Such a password is easier to guess than the token, so after
+`MAX_FAILURES` wrong ones in `FAILURE_SECS` only the token lets that user
+in, until the oldest of them is long enough ago.
+
 A user who logs in is given a token, which comes back with every request and
 says who is asking. A token is the name and the time it runs out, signed
 with a secret that is made the first time and kept with the data, so that
@@ -28,6 +36,7 @@ import re
 import secrets
 import threading
 import time
+from collections import defaultdict, deque
 from collections.abc import Callable
 from pathlib import Path
 
@@ -35,6 +44,9 @@ from pathlib import Path
 PERMISSION = "Lansi"
 # how long a token is good for
 TOKEN_SECS = 30 * 24 * 60 * 60
+# wrong passwords a user may give in so many seconds before only the token works
+MAX_FAILURES = 5
+FAILURE_SECS = 15 * 60
 # A name is also the name of the directory the user's data is kept in.
 _NAME = re.compile(r"[a-z0-9_]{1,40}")
 
@@ -68,9 +80,13 @@ class Users:
         file: str | Path,
         secret_directory: str | Path,
         now: Callable[[], float] = time.time,
+        passwords: str | Path | None = None,
     ) -> None:
         # the file that says who may log in, and with which password
         self.file = Path(file)
+        # the hashed passwords the users set themselves in CyanHouse
+        self.passwords = Path(passwords) if passwords is not None else None
+        self._failures: dict[str, deque[float]] = defaultdict(deque)
         self._secret_file = Path(secret_directory) / "secret.key"
         self._now = now
         self._lock = threading.Lock()
@@ -79,11 +95,27 @@ class Users:
         return sorted(self._read())
 
     def check(self, name: str, password: str) -> bool:
-        """Whether there is such a user with this password."""
+        """Whether there is such a user with this password: the token in the
+        file, or the password they set in CyanHouse."""
         expected = self._read().get(name)
         if expected is None:
             return False
-        return hmac.compare_digest(password.encode(), expected.encode())
+        if hmac.compare_digest(password.encode(), expected.encode()):
+            return True
+        stored = self._read_passwords().get(name)
+        if not isinstance(stored, str):
+            return False
+        with self._lock:
+            failures = self._failures[name]
+            while failures and self._now() - failures[0] > FAILURE_SECS:
+                failures.popleft()
+            if len(failures) >= MAX_FAILURES:
+                return False
+        if password_matches(stored, password):
+            return True
+        with self._lock:
+            self._failures[name].append(self._now())
+        return False
 
     def token(self, name: str) -> str:
         """A token that says the request it comes with is from `name`."""
@@ -112,6 +144,15 @@ class Users:
                 self._secret_file.write_bytes(secrets.token_bytes(32))
             return self._secret_file.read_bytes()
 
+    def _read_passwords(self) -> dict[str, object]:
+        if self.passwords is None:
+            return {}
+        try:
+            passwords = json.loads(self.passwords.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return passwords if isinstance(passwords, dict) else {}
+
     def _read(self) -> dict[str, str]:
         """The password of each user who may log in to this app. A name that
         could not be a directory, a password that is empty or not text, or a
@@ -132,3 +173,18 @@ class Users:
             and isinstance(user.get("permissions"), dict)
             and user["permissions"].get(PERMISSION) is True
         }
+
+
+def password_matches(stored: str, password: str) -> bool:
+    """Whether `password` is the one `stored` is the hash of, as CyanHouse
+    makes them: "pbkdf2_sha256$<rounds>$<salt in hex>$<hash in hex>"."""
+    try:
+        method, rounds, salt, digest = stored.split("$")
+        if method != "pbkdf2_sha256":
+            return False
+        made = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), bytes.fromhex(salt), int(rounds)
+        )
+        return hmac.compare_digest(made, bytes.fromhex(digest))
+    except ValueError:
+        return False

@@ -199,6 +199,9 @@ DATA_DIRECTORY = Path(__file__).parent / "data"
 # CyanHouse, unless the variable USERS_FILE names another. It is edited by
 # hand, and read every time someone logs in.
 USERS_FILE = "~/Documents/users.json"
+# The passwords the users set themselves in CyanHouse, hashed, unless the
+# variable PASSWORDS_FILE names another. Only read here.
+PASSWORDS_FILE = "~/Documents/sharedCode/CyanHouse/data/api/data/passwords.json"
 # no AnkiWeb name or password is longer
 MAX_ANKI_LOGIN_LENGTH = 500
 # no collection has more decks to choose
@@ -3196,7 +3199,9 @@ if __name__ == "__main__":
         return account
 
     users = Users(
-        Path(os.environ.get("USERS_FILE") or USERS_FILE).expanduser(), data_directory
+        Path(os.environ.get("USERS_FILE") or USERS_FILE).expanduser(),
+        data_directory,
+        passwords=Path(os.environ.get("PASSWORDS_FILE") or PASSWORDS_FILE).expanduser(),
     )
     # The vocabularies kept before there were users go to the one user there
     # is.
