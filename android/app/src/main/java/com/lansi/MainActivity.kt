@@ -6,7 +6,6 @@ package com.lansi
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
-import android.content.Context
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
@@ -39,7 +38,8 @@ import androidx.core.view.WindowInsetsControllerCompat
  * from one address to the other (Storage), the picker of files for the
  * books, links out of Lansi opened in the browser, the full screen a book
  * is read on without the bars of the system (Chrome), and text selected
- * without the phone's own menu over it, since Lansi has its own (Page).
+ * without the phone's own menu over it, since Lansi has its own
+ * (onWindowStartingActionMode).
  */
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
-        webView = Page(this).apply {
+        webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             webViewClient = Client()
@@ -101,6 +101,16 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         handler.removeCallbacksAndMessages(null)
     }
+
+    /**
+     * Text is selected as anywhere, with its handles, but without the
+     * phone's menu of copying and sharing over the selection: the page
+     * brings up its own buttons there, which the menu would cover. It is
+     * left out here, for the whole window, as the page is shown by a view
+     * of its own while it is on the full screen (Chrome).
+     */
+    override fun onWindowStartingActionMode(callback: ActionMode.Callback, type: Int): ActionMode? =
+        super.onWindowStartingActionMode(WithoutItems(callback), type)
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
@@ -197,17 +207,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
-
-/**
- * The WebView of the page, which selects text as any does, with its
- * handles, but without the phone's menu of copying and sharing over the
- * selection: the page brings up its own buttons there, which the menu
- * would cover.
- */
-private class Page(context: Context) : WebView(context) {
-    override fun startActionMode(callback: ActionMode.Callback, type: Int): ActionMode? =
-        super.startActionMode(WithoutItems(callback), type)
 }
 
 /**
