@@ -120,6 +120,8 @@ Con un verbo riflessivo il pronome ha due posti, e l'ausiliare cambia:
 | **Mi sono** dovuto alzare presto. | **Ho** dovuto alzar**mi** presto. |
 | **Ci siamo** voluti fermare. | **Abbiamo** voluto fermar**ci**. |
 | **Si è** potuta riposare. | **Ha** potuto riposar**si**. |
+| **Si sono** dovuti sposare in fretta. | **Hanno** dovuto sposar**si** in fretta. |
+| **Mi sono** potuto lavare. | **Ho** potuto lavar**mi**. |
 
 > [!merke]
 > Pronome **prima** del modale → **essere**. Pronome **attaccato** all'infinito → **avere**.

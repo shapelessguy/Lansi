@@ -71,6 +71,7 @@ Quando dai del **Lei**, il possessivo è **Suo** (spesso con la maiuscola):
 | Questo è **il tuo** biglietto. | Questo è **il Suo** biglietto. | your ticket |
 | Dove sono **i tuoi** bagagli? | Dove sono **i Suoi** bagagli? | your luggage |
 | **La tua** carta, per favore. | **La Sua** carta, per favore. | your card |
+| Com'è **la tua** casa? | Com'è **la Sua** casa? | your house |
 
 > [!beispiel]
 > Signora, ecco **il Suo** passaporto e **la Sua** carta d'imbarco. Buon viaggio!

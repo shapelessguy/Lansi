@@ -15,6 +15,7 @@ Il **congiuntivo** è un modo del verbo. Si usa soprattutto in una frase che com
 | **So** che Marco **è** a casa. | **Penso** che Marco **sia** a casa. |
 | **È vero** che **piove**. | **Spero** che non **piova**. |
 | **Vedo** che **studi**. | **Voglio** che tu **studi**. |
+| **Sono sicuro** che **arriva** presto. | **Ho paura** che **arrivi** tardi. |
 
 > [!merke]
 > L'**indicativo** presenta un **fatto**. Il **congiuntivo** presenta una cosa **soggettiva**: quello che pensi, vuoi, temi, speri.

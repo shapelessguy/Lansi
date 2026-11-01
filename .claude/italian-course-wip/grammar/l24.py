@@ -16,6 +16,7 @@ save_lesson("ci-e-ne", "A2", "Ci e ne", [
 | **ci** | un luogo (a, in, da, su + luogo) | Vai a Roma? Sì, **ci** vado. |
 | **ne** | una quantità (di + cosa) | Quanti caffè bevi? **Ne** bevo due. |
 | **ne** | di + qualcosa | Parli del film? Sì, **ne** parlo. |
+| **ci** | a + cosa | Pensi all'esame? Sì, **ci** penso. |
 
 > [!merke]
 > **ci** e **ne** vanno nello **stesso posto** degli altri pronomi: prima del verbo coniugato, attaccati all'infinito.
@@ -84,6 +85,7 @@ Colori: {h:ci / ne}
 | Hai dei libri italiani? **Ne** ho tre. | Hai letto i libri? Sì, **li** ho letti. |
 | Vuoi del vino? Sì, **ne** voglio un bicchiere. | Bevi il vino? Sì, **lo** bevo. |
 | Quanti studenti conosci? **Ne** conosco pochi. | Conosci gli studenti? Sì, **li** conosco. |
+| Hai delle sorelle? Sì, **ne** ho due. | Conosci le mie sorelle? Sì, **le** conosco. |
 
 > [!tipp]
 > C'è un numero, *molti, pochi, un po'*, *nessuno*? → **ne**. Parli di **tutta** la cosa? → *lo, la, li, le*.
@@ -100,6 +102,7 @@ Con **ne** e *avere*, il participio si **accorda** con la quantità di cui parli
 | Quante pizze avete mangiato? | **Ne** abbiamo mangiat{e:e} due. |
 | Quanto pane hai comprato? | **Ne** ho comprat{e:o} un chilo. |
 | Quanta pasta hai fatto? | **Ne** ho fatt{e:a} troppa! |
+| Quanti libri hai letto quest'anno? | **Ne** ho lett{e:i} dieci. |
 
 > [!merke]
 > **ne** + participio: l'accordo segue il **nome** sostituito: *caffè → bevuti, pizze → mangiate*.

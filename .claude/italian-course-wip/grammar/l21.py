@@ -52,6 +52,7 @@ Colori: {h:pronome}
 | infinito | **attaccato** alla fine | Voglio comprar**lo**. |
 | modale + infinito | prima **o** attaccato | **Lo** voglio comprare. / Voglio comprar**lo**. |
 | *ecco* | attaccato | Ecco**lo**! Ecco**mi**! |
+| passato prossimo | prima dell'ausiliare | **L'**ho comprato. |
 
 > [!achtung]
 > L'infinito perde la **-e** finale: *vedere → veder**lo***, *chiamare → chiamar**ti***.

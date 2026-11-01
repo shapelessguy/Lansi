@@ -15,6 +15,7 @@ Il **congiuntivo passato** si usa dove serve il congiuntivo, per un'azione **gi�
 | Penso che Marco **sia** a casa. (adesso) | Penso che Marco **sia andato** a casa. (prima) |
 | Spero che tu **stia** bene. | Spero che tu **abbia dormito** bene. |
 | Mi dispiace che **parta**. | Mi dispiace che **sia partito**. |
+| È possibile che Luca **sia** in ufficio. | È possibile che Luca **sia** già **uscito**. |
 
 > [!merke]
 > Il congiuntivo passato è come il **passato prossimo**, ma con l'ausiliare al **congiuntivo**: *ha mangiato → abbia mangiato*.

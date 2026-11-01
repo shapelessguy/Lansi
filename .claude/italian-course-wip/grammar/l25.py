@@ -87,6 +87,7 @@ Altri verbi raddoppiano la **r**, e alcuni in **-are** tengono la **a**:
 | volere | {c:vorr}ò | dare | {c:dar}ò |
 | bere | {c:berr}ò | stare | {c:star}ò |
 | rimanere | {c:rimarr}ò | tenere | {c:terr}ò |
+| mantenere | {c:manterr}ò | rifare | {c:rifar}ò |
 
 > [!tipp]
 > *fare, dare, stare* tengono la **a**: *farò, darò, starò*. Sono i soli verbi in *-are* senza la *e*.
@@ -118,6 +119,7 @@ Il futuro serve anche per dire che cosa **pensi sia vero adesso**, quando non se
 | Che ore sono? | **Saranno** le tre. | It must be about three. |
 | Quanti anni ha? | **Avrà** quarant'anni. | He must be about forty. |
 | Perché non risponde? | **Starà** dormendo. | She's probably sleeping. |
+| Di chi è questa borsa? | **Sarà** di Giulia. | It's probably Giulia's. |
 
 > [!merke]
 > Qui il futuro **non parla del futuro**: è un'**ipotesi** sul presente. È molto comune nel parlato.

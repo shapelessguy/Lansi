@@ -16,6 +16,7 @@ Quando in una frase ci sono **due pronomi**, uno **indiretto** e uno **diretto**
 | Ti porto **la torta**. | **Te la** porto. | I'll bring it to you. |
 | Do **le chiavi a Marco**. | **Gliele** do. | I give them to him. |
 | Ci mandi **le foto**? | **Ce le** mandi? | Will you send them to us? |
+| Vi spiego **la regola**. | **Ve la** spiego. | I'll explain it to you. |
 
 > [!merke]
 > Prima l'**indiretto** (*a chi?*), poi il **diretto** (*che cosa?*). E **mi, ti, ci, vi** diventano **me, te, ce, ve**.
@@ -88,6 +89,7 @@ Il participio si **accorda** con il pronome **diretto** (*lo, la, li, le*), come
 | Chi ti ha regalato **la borsa**? | **Me l'**ha regalat{e:a} mia sorella. |
 | Hai mandato **le foto** a Luca? | Sì, **gliele** ho mandat{e:e}. |
 | Ci avete portato **i dolci**? | Sì, **ve li** abbiamo portat{e:i}. |
+| Chi vi ha detto **la notizia**? | **Ce l'**ha dett{e:a} Giulia. |
 
 > [!tipp]
 > *lo* e *la* prima di *ho, hai, ha* … diventano **l'**: *me l'ha dato, gliel'ho detto*. *li* e *le* non cambiano.

@@ -14,6 +14,7 @@ Per dire che una cosa ti **piace** usi il verbo **piacere**. Ma la frase è cost
 | **Mi piace** la pizza. | To me is pleasing the pizza. | I like pizza. |
 | **Ti piace** il calcio? | To you is pleasing football? | Do you like football? |
 | **Mi piacciono** i gatti. | To me are pleasing the cats. | I like cats. |
+| **Gli piace** cucinare. | To him is pleasing to cook. | He likes cooking. |
 
 > [!merke]
 > Con **piacere** il **soggetto** è la **cosa** che piace. La persona è *mi, ti, gli, le* … (= a me, a te, a lui, a lei).
@@ -82,6 +83,8 @@ Per rispondere si usano i pronomi **forti**: *a me, a te, a lui, a lei, a noi, a
 | Mi piace il jazz. | **Anche a me.** | **A me no.** |
 | Non mi piace il pesce. | **Neanche a me.** | **A me sì.** |
 | Ti piace ballare? | Sì, **mi piace**. | No, **non mi piace**. |
+| Mi piacciono i film gialli. | **Anche a me.** | **A me no.** |
+| Non mi piace alzarmi presto. | **Neanche a me.** | **A me sì.** |
 
 > [!beispiel]
 > – **A me** piace molto il cinema italiano. E **a te**? – **Anche a me**, ma **a mio marito** no.

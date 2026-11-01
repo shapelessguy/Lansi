@@ -17,6 +17,7 @@ Con l'imperativo i pronomi (*mi, ti, lo, la, gli, ci, ne* …) cambiano posto:
 | noi | **dopo**, attaccato | Andiamo**ci**! | Let's go there! |
 | voi | **dopo**, attaccato | Ascoltate**mi**! | Listen to me! |
 | Lei | **prima**, separato | **Lo** prenda! | Take it! |
+| tu, con *non* | prima **o** dopo | Non **lo** prendere! / Non prender**lo**! | Don't take it! |
 
 > [!merke]
 > **tu, noi, voi**: pronome **attaccato dopo**. **Lei**: pronome **prima**, come nel presente.

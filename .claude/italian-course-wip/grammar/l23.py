@@ -126,6 +126,7 @@ Per le quantità **precise** si usa **di** senza articolo:
 | un etto **di** | un etto di prosciutto | un pacco **di** | un pacco di pasta |
 | un litro **di** | un litro di latte | una scatola **di** | una scatola di biscotti |
 | mezzo chilo **di** | mezzo chilo di pane | un bicchiere **di** | un bicchiere d'acqua |
+| un pezzo **di** | un pezzo di formaggio | una tazza **di** | una tazza di tè |
 
 > [!achtung]
 > Dopo una quantità **non** c'è l'articolo: *un chilo **di** mele* (non ~~un chilo delle mele~~).

@@ -99,6 +99,8 @@ Dopo un verbo come **dire, pensare, sapere, promettere** al **passato**, per un'
 | Penso che **pioverà**. | Pensavo che **avrebbe piovuto**. |
 | So che **sarà** difficile. | Sapevo che **sarebbe stato** difficile. |
 | Prometto che **ti chiamerò**. | Ho promesso che **ti avrei chiamato**. |
+| Credo che **finirà** presto. | Credevo che **avrebbe finito** presto. |
+| Scrive che **arriverà** lunedì. | Ha scritto che **sarebbe arrivato** lunedì. |
 
 > [!merke]
 > Presente + **futuro**; passato + **condizionale passato**. Anche se l'azione deve ancora succedere: *Ha detto che **sarebbe venuto** domani.*

@@ -48,6 +48,8 @@ Colori: {v:imperfetto} · {i:passato prossimo}
 | Il sabato **giocavamo** a tennis. | Sabato scorso **abbiamo giocato** a tennis. |
 | Di solito **pranzavo** a casa. | Ieri **ho pranzato** al ristorante. |
 | **Telefonava** sempre alla mamma. | Ieri **ha telefonato** alla mamma. |
+| D'estate **dormivamo** in campagna. | L'estate scorsa **abbiamo dormito** in tenda. |
+| **Prendeva** spesso l'autobus. | Stamattina **ha preso** un taxi. |
 
 > [!merke]
 > **sempre, di solito, ogni giorno, spesso** → imperfetto. **ieri, una volta, sabato scorso, nel 2015** → passato prossimo.
@@ -63,6 +65,7 @@ Quando dici **quanto tempo** è durata un'azione finita, usi il **passato prossi
 | **Ho abitato** a Roma per dieci anni. | **Abitavo** a Roma quando ti ho conosciuto. |
 | **Abbiamo aspettato** due ore. | **Aspettavamo** da due ore quando è arrivato. |
 | **Ha lavorato** lì dal 2010 al 2020. | **Lavorava** lì in quel periodo. |
+| **Ho dormito** otto ore. | **Dormivo** quando hai chiamato. |
 
 > [!achtung]
 > *per dieci anni, due ore, tutta la vita, dal … al …* = una **fine** precisa → **passato prossimo**.
@@ -78,6 +81,7 @@ Quando dici **quanto tempo** è durata un'azione finita, usi il **passato prossi
 | ogni giorno, ogni anno | ieri, l'anno scorso |
 | da bambino, da giovane | improvvisamente, poi, dopo |
 | il lunedì (= ogni lunedì) | lunedì (= quel lunedì) |
+| tutti i giorni, la domenica | domenica scorsa, stamattina |
 
 > [!beispiel]
 > **Mentre** facevo la doccia, **all'improvviso** è andata via la luce. **Poi** ho chiamato il tecnico.
@@ -111,6 +115,9 @@ Con alcuni verbi il tempo cambia il **significato**:
 | era, faceva, era vuota | ho sentito, mi sono girato |
 | tornavo, pensavo, tremava | ho visto, l'ho preso, l'ho portato |
 | | abbiamo vissuto (per quindici anni) |
+
+> [!tipp] Consiglio
+> Imperfetto = la **scena**: com'era, che cosa succedeva. Passato prossimo = i **fatti** che fanno andare avanti la storia.
 
 ---
 

@@ -19,6 +19,9 @@ Con il **comparativo** confronti due persone o due cose:
 > [!merke]
 > **più** / **meno** + aggettivo + **di** o **che**. Per dire *as … as*: **come** o **quanto**.
 
+> [!tipp] Consiglio
+> **di** si unisce all'articolo: *più alto **del** padre, meno caro **dell'**aereo, più bella **della** foto*.
+
 ---
 
 # Più … di
@@ -65,6 +68,8 @@ Si usa **che** quando confronti due cose **dello stesso tipo** che non sono nomi
 | Il treno è più veloce **dell'**autobus. | Viaggiare in treno è più veloce **che** in autobus. |
 | Parlo più **di** te. | Parlo più **che** ascoltare. |
 | Questo libro è più interessante **del** film. | Leggo più libri **che** riviste. |
+| Sara è più giovane **di** sua sorella. | È più facile parlare **che** scrivere. |
+| Il caffè è più forte **del** tè. | Bevo più caffè **che** tè. |
 
 > [!tipp]
 > Prova a cambiare il secondo termine con *lui* o *lei*: se funziona, usa **di**. *Luca è più alto di lui* → **di**.

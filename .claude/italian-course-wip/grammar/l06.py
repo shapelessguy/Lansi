@@ -16,6 +16,7 @@ I verbi italiani hanno tre gruppi. Si riconoscono dalla fine dell'**infinito**:
 | 1° | -**are** | parlare, abitare, lavorare | to speak, live, work |
 | 2° | -**ere** | scrivere, leggere, prendere | to write, read, take |
 | 3° | -**ire** | dormire, partire, aprire | to sleep, leave, open |
+| 3° con -isc- | -**ire** | finire, capire, pulire | to finish, understand, clean |
 
 Per il presente togli **-are, -ere, -ire** e aggiungi la **desinenza** della persona:
 

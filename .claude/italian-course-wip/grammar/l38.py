@@ -99,9 +99,13 @@ Colori: {h:congiunzione} · {v:congiuntivo}
 | È entrato **senza che** io lo **sentissi**. | È entrato **senza** fare rumore. |
 | Lo faccio **senza che** tu me lo **chieda**. | Lo faccio **senza** pensarci. |
 | Parte **senza che** nessuno lo **sappia**. | Parte **senza** salutare. |
+| Ha preso la macchina **senza che** il padre lo **sapesse**. | Ha preso la macchina **senza** chiedere. |
 
 > [!merke]
 > La stessa regola vale per *prima che / prima di*, *perché / per*, *senza che / senza*: soggetto **diverso** → congiuntivo; soggetto **uguale** → infinito.
+
+> [!beispiel] Esempi
+> Luca è uscito di casa **senza** salutare, **senza che** sua madre se ne **accorgesse**.
 
 ---
 

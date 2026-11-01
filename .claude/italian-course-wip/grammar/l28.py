@@ -127,6 +127,7 @@ Molti verbi irregolari prendono la radice della forma **io** del presente:
 | in casa | **Entra**! **Siediti**! | **Entri**! **Si accomodi**! |
 | in ufficio | **Scrivi** il tuo nome. | **Scriva** il Suo nome. |
 | per scusarsi | **Scusa**! | **Scusi**! |
+| a tavola | **Prendi** ancora un po'! | **Prenda** ancora un po'! |
 
 > [!achtung]
 > Per essere più gentile aggiungi **pure** o **per favore**: *Entri **pure**! Si accomodi, **per favore**.*

@@ -16,6 +16,7 @@ Un **pronome relativo** unisce due frasi e prende il posto di un nome che c'è g
 | Ho un'amica. L'amica abita a Londra. | Ho un'amica **che** abita a Londra. |
 | Ho letto il libro. Mi hai regalato il libro. | Ho letto il libro **che** mi hai regalato. |
 | Questa è la casa. Abito **in** questa casa. | Questa è la casa **in cui** abito. |
+| Ecco il ragazzo. Parlo **con** il ragazzo. | Ecco il ragazzo **con cui** parlo. |
 
 > [!merke]
 > I relativi principali sono **che** e **cui**. Non cambiano mai, per persone e cose, singolare e plurale.
@@ -85,6 +86,7 @@ Con **a** la preposizione si può **togliere**:
 | La ragazza **la cui** madre è medico … | whose mother |
 | Il paese **i cui** abitanti sono pochi … | whose inhabitants |
 | L'azienda **le cui** auto sono elettriche … | whose cars |
+| Una città **la cui** storia è antica … | whose history |
 
 > [!achtung]
 > L'articolo va con il nome **dopo** *cui*: *la ragazza **il cui** padre* (padre è maschile).

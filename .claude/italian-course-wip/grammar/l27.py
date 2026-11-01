@@ -52,6 +52,7 @@ Il nome si può togliere. Resta l'**articolo**:
 | È il negozio meno caro. | È **il meno caro**. |
 | Sono i libri più belli. | Sono **i più belli**. |
 | Chi è lo studente più bravo? | Chi è **il più bravo**? |
+| Qual è la stagione più calda? | Qual è **la più calda**? |
 
 > [!merke]
 > Il gruppo si introduce con **di** (o **tra**): *il più bravo **di** tutti, il più bravo **tra** gli studenti*.

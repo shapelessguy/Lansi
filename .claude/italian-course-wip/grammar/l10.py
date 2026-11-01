@@ -58,6 +58,7 @@ Molti luoghi di tutti i giorni prendono **in** senza articolo. Spesso finiscono 
 | pizzeria | Mangiamo **in** pizzeria. | discoteca | Balliamo **in** discoteca. |
 | libreria | Compro un libro **in** libreria. | palestra | Vado **in** palestra. |
 | macelleria | La carne? **In** macelleria. | piscina | Nuoto **in** piscina. |
+| panetteria | Il pane? **In** panetteria. | banca | Lavoro **in** banca. |
 
 > [!beispiel]
 > Il sabato mattina vado **in** palestra, poi **in** farmacia e **in** panetteria. La sera resto **a** casa.

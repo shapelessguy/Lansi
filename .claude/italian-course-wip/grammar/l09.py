@@ -15,6 +15,7 @@ Per fare una **domanda** e per dire **di no**, l'italiano è semplice: le parole
 | Marco parla inglese. | Marco parla inglese? | Marco **non** parla inglese. |
 | Hai fame. | Hai fame? | **Non** hai fame. |
 | Vieni con noi. | Vieni con noi? | **Non** vieni con noi. |
+| Sara lavora oggi. | Sara lavora oggi? | Sara **non** lavora oggi. |
 
 > [!merke]
 > Una domanda **sì/no** è come la frase normale, con il **tono che sale** alla fine. Nello scritto c'è solo il **punto interrogativo**.

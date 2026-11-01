@@ -14,6 +14,8 @@ Due tempi composti mettono **in ordine** le azioni:
 |---|---|---|
 | trapassato prossimo | Quando sono arrivato, il treno **era** già **partito**. | had left |
 | futuro anteriore | Quando **avrai finito**, usciremo. | (when) you have finished |
+| trapassato prossimo | Avevo fame perché non **avevo mangiato**. | hadn't eaten |
+| futuro anteriore | Ti chiamo appena **sarò arrivato**. | as soon as I've arrived |
 
 > [!merke]
 > Il **trapassato** è il **passato del passato**: un'azione **prima** di un'altra azione passata. Il **futuro anteriore** è il **passato del futuro**: un'azione finita **prima** di un'altra futura.

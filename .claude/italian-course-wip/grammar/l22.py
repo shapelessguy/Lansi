@@ -17,6 +17,7 @@ Un **pronome indiretto** prende il posto di **a + persona**:
 | Scrivo **a Giulia**. | **Le** scrivo. |
 | Do il libro **ai bambini**. | **Gli** do il libro. |
 | Mando un messaggio **a te**. | **Ti** mando un messaggio. |
+| Rispondo **alla professoressa**. | **Le** rispondo. |
 
 > [!merke]
 > L'oggetto indiretto risponde alla domanda **a chi?**: *Telefono (a chi?) a Marco → gli telefono*.
