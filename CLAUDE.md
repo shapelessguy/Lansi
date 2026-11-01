@@ -65,6 +65,10 @@ A language-learning chat built on an Anki collection. Three parts:
   log in with the password they set themselves in CyanHouse, read hashed
   from its `passwords.json` (`PASSWORDS_FILE`); it is set only there.
 
+`android/` is the Android app: the GUI, as the nginx of CyanHouse serves it,
+in a WebView, so the GUI's layout is made to work on a phone too
+(`android/README.md`).
+
 `rslib/`, `proto/` and `ftl/` are Anki's Rust core, kept only because
 `deck-status` is built on it. Avoid changing them.
 

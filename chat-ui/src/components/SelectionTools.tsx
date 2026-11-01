@@ -157,10 +157,26 @@ export function SelectionTools(
                 setFound(null);
             }
         }
+        // On a touch screen a selection is made by holding a word and moving
+        // its handles, which ends in no mouseup: it is looked at once it has
+        // stopped changing for a moment.
+        let touching = false;
+        let settling: number | undefined;
+        function onPointerDown(event: PointerEvent) {
+            touching = event.pointerType === "touch";
+        }
+        function onSelectionChange() {
+            if (touching) {
+                clearTimeout(settling);
+                settling = window.setTimeout(() => look(new Event("selectionchange")), 500);
+            }
+        }
         // the buttons would be left behind by text that moves from under them
         const drop = () => setFound(null);
         document.addEventListener("mouseup", look);
         document.addEventListener("keyup", look);
+        document.addEventListener("pointerdown", onPointerDown, true);
+        document.addEventListener("selectionchange", onSelectionChange);
         document.addEventListener("mousedown", onMouseDown);
         document.addEventListener("keydown", onKeyDown);
         document.addEventListener("scroll", drop, true);
@@ -168,8 +184,11 @@ export function SelectionTools(
         window.addEventListener("resize", drop);
         return () => {
             clearTimeout(timer);
+            clearTimeout(settling);
             document.removeEventListener("mouseup", look);
             document.removeEventListener("keyup", look);
+            document.removeEventListener("pointerdown", onPointerDown, true);
+            document.removeEventListener("selectionchange", onSelectionChange);
             document.removeEventListener("mousedown", onMouseDown);
             document.removeEventListener("keydown", onKeyDown);
             document.removeEventListener("scroll", drop, true);

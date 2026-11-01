@@ -189,6 +189,7 @@ a {
     display: grid;
     place-items: center;
     height: 100vh;
+    height: 100dvh;
 }
 
 .login form {
@@ -219,6 +220,8 @@ a {
 .app {
     display: flex;
     height: 100vh;
+    /* on a phone, without the browser's bars that come and go */
+    height: 100dvh;
 }
 
 .main {
@@ -705,6 +708,22 @@ a {
     margin-left: auto;
 }
 
+/* on a phone the name and the search have a row each, above what goes with them */
+@media (max-width: 720px) {
+    .overlay-header,
+    .set-toolbar {
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 10px 12px;
+    }
+
+    .overlay-header .set-name,
+    .set-toolbar input[type="search"] {
+        flex: 1 1 100%;
+        width: auto;
+    }
+}
+
 .set-table {
     flex: 1;
     min-height: 0;
@@ -985,6 +1004,28 @@ a {
     background: var(--bg);
     color: var(--text);
     box-shadow: 0 0 0 1px var(--border);
+}
+
+/* On a phone the activities have a row of their own, under the buttons of
+   the panels, and scroll sideways if their names do not fit. */
+@media (max-width: 720px) {
+    .topbar {
+        grid-template-columns: 1fr auto;
+        row-gap: 8px;
+        padding: 8px 10px;
+    }
+
+    .topbar .activities {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .topbar .activities button {
+        flex: 1;
+        padding-inline: 8px;
+    }
 }
 
 /* books */
@@ -5847,4 +5888,21 @@ span.help:focus-visible {
     flex: none;
     width: auto;
     max-width: 50%;
+}
+
+/* What comes up as the pointer is over its row is always shown where there
+   is no pointer, as on a phone. Last, to win over the rules that hide it. */
+@media (hover: none) {
+    .contents-play,
+    .favourite-folder-actions {
+        opacity: 1;
+    }
+
+    .story-chip {
+        opacity: 0.7;
+    }
+
+    .story-chip.marked {
+        opacity: 1;
+    }
 }

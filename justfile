@@ -23,6 +23,17 @@ deck-status:
 chat-ui:
     cd chat-ui && npm install && npm run dev
 
+# Build the Android app, the GUI as the nginx of CyanHouse serves it, in a
+# WebView, into android/app/build/outputs/apk/debug/app-debug.apk. Needs the
+# Android SDK (android/local.properties) and a JDK from 17 to 21.
+[windows]
+android:
+    cd android && ./gradlew.bat assembleDebug
+
+[unix]
+android:
+    cd android && ./gradlew assembleDebug
+
 # Run the checker server on http://127.0.0.1:8092. The chat GUI sends it what
 # is being typed, and it prints the sentences it finds.
 checker: _checker-env

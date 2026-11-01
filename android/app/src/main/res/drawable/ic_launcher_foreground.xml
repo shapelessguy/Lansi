@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The speech bubble of chat-ui/public/lansi.svg, with its L and dots, moved
+     into the middle of the icon, inside the part every mask leaves. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:translateX="22"
+        android:translateY="20.25">
+        <path
+            android:fillColor="#ffffff"
+            android:pathData="M17,13h30a8,8 0,0 1,8 8v17a8,8 0,0 1,-8 8H30l-10,8.5a1.2,1.2 0,0 1,-2 -0.9V46h-1a8,8 0,0 1,-8 -8V21a8,8 0,0 1,8 -8z" />
+        <path
+            android:pathData="M22,20.5v17.5h10.5"
+            android:strokeColor="#2452b8"
+            android:strokeWidth="5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#4b8bf5"
+            android:pathData="M39.5,24m-2.6,0a2.6,2.6 0,1 1,5.2 0a2.6,2.6 0,1 1,-5.2 0" />
+        <path
+            android:fillColor="#4b8bf5"
+            android:fillAlpha="0.6"
+            android:pathData="M46.5,24m-2.6,0a2.6,2.6 0,1 1,5.2 0a2.6,2.6 0,1 1,-5.2 0" />
+        <path
+            android:fillColor="#4b8bf5"
+            android:fillAlpha="0.6"
+            android:pathData="M39.5,31m-2.6,0a2.6,2.6 0,1 1,5.2 0a2.6,2.6 0,1 1,-5.2 0" />
+    </group>
+</vector>

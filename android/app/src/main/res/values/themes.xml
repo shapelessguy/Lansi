@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The web app picks its light or dark colours by prefers-color-scheme,
+         which the WebView takes from whether this theme is light; the
+         colours are those of the page, so nothing flashes as it loads. -->
+    <style name="Theme.Lansi" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#ffffff</item>
+    </style>
+</resources>
