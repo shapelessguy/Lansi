@@ -136,6 +136,26 @@ export function applyAppearance(settings: Pick<Settings, "theme" | "accent" | "t
     page.style.setProperty("--accent-light", ACCENTS[settings.accent].light);
     page.style.setProperty("--accent-dark", ACCENTS[settings.accent].dark);
     page.style.fontSize = `${TEXT_SIZES[settings.textSize].px}px`;
+    matchTitleBar();
+}
+
+// whether the title bar follows the machine going dark or light already
+let followingTheMachine = false;
+
+/**
+ * Has the title bar of the window, where the app is installed, the colour of
+ * the page behind the top bar, as the theme in use has it.
+ */
+function matchTitleBar(): void {
+    const meta = document.querySelector<HTMLMetaElement>("meta[name=\"theme-color\"]");
+    const background = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    if (meta && background) {
+        meta.content = background;
+    }
+    if (!followingTheMachine && typeof window.matchMedia === "function") {
+        followingTheMachine = true;
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", matchTitleBar);
+    }
 }
 
 /** Replaced in a prompt by the words of the set that is in use. */

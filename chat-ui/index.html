@@ -7,6 +7,12 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="google" content="notranslate" />
         <link rel="icon" type="image/svg+xml" href="/lansi.svg" />
+        <!-- what the browser shows the app with once it is installed; asked for
+             with the cookies, as the nginx of CyanHouse lets no one in without them -->
+        <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <!-- the colour of the title bar, until the app sets that of the theme in use -->
+        <meta name="theme-color" content="#1b1b1a" />
         <title>Lansi</title>
     </head>
     <body>
