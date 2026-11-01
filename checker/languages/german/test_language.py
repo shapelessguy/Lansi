@@ -18,6 +18,10 @@ def test_german_is_the_language_of_its_directory() -> None:
     ) == [
         "A1.json",
         "A2.json",
+        "B1.json",
+        "B2.json",
+        "C1.json",
+        "C2.json",
     ]
 
 

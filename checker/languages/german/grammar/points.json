@@ -808,5 +808,392 @@
         "when": "an event that happened before another event in the past",
         "confused_with": ["zeitengebrauch-vergangenheit"],
         "requires": ["perfekt-haben", "perfekt-sein", "praeteritum-sein-haben"]
+    },
+    {
+        "id": "reflexivpronomen-dativ",
+        "level": "B1",
+        "title": "Reflexive pronouns in the dative",
+        "statement": "When a reflexive verb also has an accusative object, the reflexive pronoun is dative: Ich wasche mir die Hände, Du kaufst dir ein Auto. Only ich and du differ from the accusative (mir, dir); the others stay uns, euch, sich. Some verbs always take it in the dative, as they always have an object or a clause: sich etwas wünschen, kaufen, vorstellen, ansehen, aussuchen, vornehmen, merken.",
+        "when": "a reflexive verb with an accusative object, such as parts of the body or clothes, or sich etwas wünschen, vorstellen, merken",
+        "confused_with": ["reflexivpronomen-akkusativ"],
+        "requires": ["reflexivpronomen-akkusativ", "dativ-person-akkusativ-sache"]
+    },
+    {
+        "id": "untrennbare-praefixe",
+        "level": "B1",
+        "title": "Inseparable prefixes",
+        "statement": "The prefixes be-, emp-, ent-, er-, ge-, miss-, ver- and zer- never separate from the verb and are not stressed: Ich bestelle eine Pizza, weil ich sie bestelle, um sie zu bestellen. The participle takes no ge-: bestellt, verstanden, erzählt. Separable prefixes (an, auf, ein, mit, zu ...) are stressed, go to the end in a main clause, and take ge and zu between prefix and stem: eingekauft, einzukaufen.",
+        "when": "a verb with a prefix, in any form: present, participle, zu + infinitive, imperative",
+        "confused_with": ["trennbar-hauptsatz"],
+        "requires": ["trennbar-hauptsatz", "partizip-trennbar-untrennbar"]
+    },
+    {
+        "id": "trennbar-und-untrennbar",
+        "level": "B1",
+        "title": "Prefixes that can be separable or not",
+        "statement": "durch-, über-, um-, unter-, wider- and wieder- are separable when stressed and keep the literal sense (Er setzt mit der Fähre über; übergesetzt), and inseparable when unstressed, often with a figurative sense (Sie übersetzt den Text; übersetzt). Likewise umfahren (knock down, umgefahren) and umfahren (drive around, umfahren), wiederholen (repeat, wiederholt) and wiederholen (fetch back, wiedergeholt).",
+        "when": "a verb with durch-, über-, um-, unter-, wider- or wieder-",
+        "confused_with": ["untrennbare-praefixe"],
+        "requires": ["untrennbare-praefixe"]
+    },
+    {
+        "id": "verben-mit-praepositionen",
+        "level": "B1",
+        "title": "Verbs with a fixed preposition",
+        "statement": "Many verbs, adjectives and nouns take a fixed preposition, which must be learnt with them, and the preposition fixes the case: warten auf + accusative, sich freuen über/auf + accusative, sich interessieren für + accusative, denken an + accusative, träumen von + dative, teilnehmen an + dative, sich beschäftigen mit + dative, fragen nach + dative, Angst haben vor + dative. The preposition does not have its literal sense here.",
+        "when": "a verb such as warten, denken, sich freuen, sich interessieren, sich erinnern, träumen with what it is about",
+        "confused_with": [],
+        "requires": ["akkusativ-artikel", "dativ-artikel"]
+    },
+    {
+        "id": "fragewort-mit-praeposition",
+        "level": "B1",
+        "title": "Asking with a fixed preposition",
+        "statement": "To ask about the object of a verb with a preposition, ask about a thing with wo(r) + preposition (worauf? wofür? womit? wovon? woran?, with r before a vowel), and about a person with the preposition + wen or wem: Worauf wartest du? – Auf den Bus. Auf wen wartest du? – Auf meine Schwester.",
+        "when": "a question about what or whom a verb with a preposition refers to",
+        "confused_with": ["praepositionalpronomen"],
+        "requires": ["verben-mit-praepositionen", "fragewoerter"]
+    },
+    {
+        "id": "praepositionalpronomen",
+        "level": "B1",
+        "title": "da + preposition for a thing",
+        "statement": "To refer back to a thing or an idea after a verb with a preposition, use da(r) + preposition (dafür, darauf, damit, davon, daran, with r before a vowel): Interessierst du dich für Filme? – Ja, ich interessiere mich dafür. For a person use the preposition + a pronoun: Ich interessiere mich für ihn.",
+        "when": "referring back to a thing or a person after a verb with a preposition",
+        "confused_with": ["fragewort-mit-praeposition"],
+        "requires": ["verben-mit-praepositionen", "personalpronomen-akkusativ"]
+    },
+    {
+        "id": "praepositionalpronomen-nebensatz",
+        "level": "B1",
+        "title": "da + preposition before a clause",
+        "statement": "When what a verb with a preposition refers to is a whole clause, da(r) + preposition stands in the main clause and the clause with dass, ob, a question word or zu follows: Ich freue mich darauf, dass du kommst. Ich erinnere mich daran, dich gesehen zu haben. Er hat Angst davor, allein zu sein.",
+        "when": "a verb with a fixed preposition followed by a dass-clause, an indirect question or zu + infinitive",
+        "confused_with": [],
+        "requires": ["praepositionalpronomen", "weil-dass-wenn"]
+    },
+    {
+        "id": "konjunktiv-2-wuerde",
+        "level": "B1",
+        "title": "The Konjunktiv II with würde",
+        "statement": "For most verbs the Konjunktiv II is würde (würdest, würde, würden, würdet, würden) in second position and the infinitive at the end: Ich würde gern mit dir tanzen. In a subordinate clause würde goes to the end: wenn ich mehr Zeit hätte ... dass er kommen würde.",
+        "when": "saying what is unreal, wished or polite with an ordinary verb",
+        "confused_with": ["konjunktiv-2-eigene-formen"],
+        "requires": ["modalverben-satzklammer"]
+    },
+    {
+        "id": "konjunktiv-2-eigene-formen",
+        "level": "B1",
+        "title": "Konjunktiv II forms of their own",
+        "statement": "sein, haben and the modal verbs have forms of their own, used instead of würde: wäre, hätte, könnte, müsste, dürfte, sollte, wollte (sollte and wollte look like the past). They come from the simple past with an umlaut where it has a, o or u: war → wäre, hatte → hätte, konnte → könnte. A few common verbs have them too: käme, ginge, wüsste, gäbe (es gäbe), bräuchte.",
+        "when": "the Konjunktiv II of sein, haben, a modal verb, wissen, geben, kommen, gehen",
+        "confused_with": ["konjunktiv-2-wuerde", "praeteritum-modalverben"],
+        "requires": ["konjunktiv-2-wuerde", "praeteritum-sein-haben"]
+    },
+    {
+        "id": "irreale-bedingung",
+        "level": "B1",
+        "title": "Unreal conditions with wenn",
+        "statement": "A condition that is not true or not likely takes the Konjunktiv II in both clauses: Wenn ich viel Geld hätte, würde ich eine Weltreise machen. Wenn er Zeit hätte, käme er mit. A real condition takes the indicative: Wenn ich Zeit habe, komme ich. The clause with wenn may come first, and then the main clause starts with the verb.",
+        "when": "a condition that is imagined, not real: if I were, if I had",
+        "confused_with": ["weil-dass-wenn"],
+        "requires": ["konjunktiv-2-eigene-formen", "konjunktiv-2-wuerde", "nebensatz-vorn"]
+    },
+    {
+        "id": "konjunktiv-2-wunsch-rat",
+        "level": "B1",
+        "title": "Wishes, advice and proposals in the Konjunktiv II",
+        "statement": "A wish takes the Konjunktiv II with gern, lieber, am liebsten (Ich hätte gern mehr Zeit. Ich wäre lieber am Meer) or wenn ... doch / nur (Wenn ich doch mehr Zeit hätte!). Advice takes sollte (Du solltest früher schlafen gehen) or an deiner Stelle würde ich ...; a proposal takes könnte (Wir könnten ins Kino gehen).",
+        "when": "wishing, advising or proposing politely",
+        "confused_with": ["hoefliche-bitten"],
+        "requires": ["konjunktiv-2-eigene-formen"]
+    },
+    {
+        "id": "passiv-praesens",
+        "level": "B1",
+        "title": "The passive in the present",
+        "statement": "The passive is werden in second position and the participle at the end: Der Motor wird montiert. The accusative object of the active becomes the subject in the nominative; who does it is mostly left out, or given with von + dative: Der Brief wird von der Sekretärin geschrieben. The passive puts the action first, not who does it.",
+        "when": "saying what is done when who does it is unknown or does not matter: processes, rules, news",
+        "confused_with": ["futur-1"],
+        "requires": ["partizip-unregelmaessig", "akkusativ-objekt"]
+    },
+    {
+        "id": "passiv-modalverb",
+        "level": "B1",
+        "title": "The passive with a modal verb",
+        "statement": "With a modal verb, the modal verb is in second position and the participle with werden goes to the end: Hier muss ein Helm getragen werden. Das Fenster kann geöffnet werden. In the past the modal verb is in the simple past: Der Dom musste renoviert werden. In a subordinate clause the modal verb is last: ..., weil der Dom renoviert werden musste.",
+        "when": "a passive with müssen, können, dürfen, sollen",
+        "confused_with": [],
+        "requires": ["passiv-praesens", "modalverben-satzklammer"]
+    },
+    {
+        "id": "passiv-vergangenheit",
+        "level": "B1",
+        "title": "The passive in the past",
+        "statement": "The simple past of the passive is wurde (wurdest, wurde, wurden, wurdet, wurden) + participle: Der Dom wurde 1880 fertig gebaut. The perfect is sein + participle + worden, not geworden: Er ist lange gebaut worden. Written texts, history and news use the simple past.",
+        "when": "saying in the past what was done",
+        "confused_with": ["werden-funktionen"],
+        "requires": ["passiv-praesens", "perfekt-sein"]
+    },
+    {
+        "id": "futur-1",
+        "level": "B1",
+        "title": "The future tense and suppositions",
+        "statement": "The Futur I is werden in second position and the infinitive at the end: Die Schulen werden mehr Geld bekommen. It is used for plans, promises and forecasts, mostly in formal speech and writing; everyday speech uses the present with a word of time: Morgen fahre ich nach Berlin. With wohl, wahrscheinlich or vielleicht, werden + infinitive says what one supposes now: Er wird wohl krank sein.",
+        "when": "the future in formal speech, a promise or a forecast, or a supposition about now",
+        "confused_with": ["passiv-praesens"],
+        "requires": ["modalverben-satzklammer"]
+    },
+    {
+        "id": "werden-funktionen",
+        "level": "B1",
+        "title": "The three uses of werden",
+        "statement": "werden alone, with a noun or an adjective, means become: Ich werde Ärztin, Es wird kalt; its perfect is ist geworden. werden + participle is the passive: Das Haus wird gebaut, perfect ist gebaut worden. werden + infinitive is the future or a supposition: Er wird kommen. What follows werden tells which it is.",
+        "when": "a sentence with werden",
+        "confused_with": ["passiv-praesens", "futur-1"],
+        "requires": ["passiv-praesens", "futur-1"]
+    },
+    {
+        "id": "lassen-bedeutungen",
+        "level": "B1",
+        "title": "lassen: leave, let and have done",
+        "statement": "lassen alone means leave something somewhere or as it is: Ich lasse den Schirm zu Hause. lassen + infinitive without zu means allow (Ich lasse meine Tochter in die Disko gehen) or have something done by someone else (Ich lasse mir die Haare schneiden; Er lässt das Auto reparieren). lassen changes its vowel: du lässt, er lässt.",
+        "when": "leaving something, allowing something or having it done",
+        "confused_with": [],
+        "requires": ["modalverben-satzklammer"]
+    },
+    {
+        "id": "lassen-perfekt",
+        "level": "B1",
+        "title": "The perfect of lassen",
+        "statement": "With an infinitive, the perfect of lassen is haben + the two infinitives, lassen last: Ich habe mir die Haare schneiden lassen. Er hat seine Tochter nicht fernsehen lassen. Without an infinitive it is gelassen: Ich habe den Schirm zu Hause gelassen. In a subordinate clause haben comes before the two infinitives: ..., weil ich das Auto habe reparieren lassen.",
+        "when": "lassen in the perfect",
+        "confused_with": [],
+        "requires": ["lassen-bedeutungen", "perfekt-haben"]
+    },
+    {
+        "id": "positions-direktionsverben",
+        "level": "B1",
+        "title": "stehen or stellen, liegen or legen, sitzen or setzen, hängen",
+        "statement": "stehen, liegen, sitzen and hängen (hing, gehangen) say where something is: they have no object and take the dative with in, an, auf ...: Das Buch liegt auf dem Tisch. stellen, legen, setzen and hängen (hängte, gehängt) say that someone puts something somewhere: they have an accusative object and take the accusative: Ich lege das Buch auf den Tisch. stellen is for things standing upright, legen for things lying flat, sich setzen for sitting down.",
+        "when": "saying where something stands, lies, sits or hangs, or where someone puts it",
+        "confused_with": ["wechselpraepositionen-wo"],
+        "requires": ["wechselpraepositionen-wo", "wechselpraepositionen-wohin"]
+    },
+    {
+        "id": "positionsverben-formen",
+        "level": "B1",
+        "title": "The forms of the verbs of position and direction",
+        "statement": "The verbs of position are irregular: stehen – stand – gestanden, liegen – lag – gelegen, sitzen – saß – gesessen, hängen – hing – gehangen; their perfect is with haben (in the south also sein). The verbs of direction are regular: stellen – stellte – gestellt, legen – legte – gelegt, setzen – setzte – gesetzt, hängen – hängte – gehängt.",
+        "when": "the simple past or the participle of stehen, liegen, sitzen, hängen, stellen, legen, setzen",
+        "confused_with": ["positions-direktionsverben"],
+        "requires": ["positions-direktionsverben", "partizip-unregelmaessig"]
+    },
+    {
+        "id": "genitiv",
+        "level": "B1",
+        "title": "The genitive",
+        "statement": "The genitive says whose: das Auto des Vaters, die Tasche der Mutter, das Zimmer der Kinder. The article is des for masculine and neuter, and the noun takes -s (-es after s, ß, sch, x, z and mostly after one syllable: des Mannes); der for feminine and plural. Names take -s with no apostrophe and come first: Davids Auto; names ending in -s, -x or -z take only an apostrophe: Hans' Auto. The genitive follows the noun it belongs to.",
+        "when": "saying whose something is, or what something is of",
+        "confused_with": [],
+        "requires": ["dativ-artikel", "possessivartikel-endung"]
+    },
+    {
+        "id": "genitiv-von-dativ",
+        "level": "B1",
+        "title": "von + dative in place of the genitive",
+        "statement": "In speech the genitive is often replaced by von + dative: das Auto von meinem Vater. A plural without an article must take von, as it has no genitive form of its own: die Wünsche von Kunden (but: die Wünsche unserer Kunden, die Wünsche zufriedener Kunden).",
+        "when": "saying whose in speech, or of a plural without an article",
+        "confused_with": [],
+        "requires": ["genitiv"]
+    },
+    {
+        "id": "n-deklination",
+        "level": "B1",
+        "title": "Nouns of the n-declension",
+        "statement": "Some masculine nouns take -(e)n in every case but the nominative singular: der Herr, den Herrn, dem Herrn, des Herrn; der Kollege, den Kollegen. They are male persons and animals ending in -e (der Junge, der Kollege, der Löwe), nouns in -ant, -ent, -ist, -at, -oge, -graf (der Student, der Polizist, der Fotograf), and a few more: der Mensch, der Nachbar, der Bauer, der Bär, der Held, der Prinz. der Name, der Gedanke, der Buchstabe and das Herz add -s in the genitive: des Namens.",
+        "when": "a masculine noun such as Herr, Kollege, Student, Mensch, Nachbar in the accusative, dative or genitive",
+        "confused_with": [],
+        "requires": ["akkusativ-artikel", "dativ-artikel"]
+    },
+    {
+        "id": "adjektiv-als-nomen",
+        "level": "B1",
+        "title": "Adjectives used as nouns for persons",
+        "statement": "An adjective or participle used as a noun for a person is written with a capital letter and keeps the ending of an adjective: der Kranke, ein Kranker, die Kranke, eine Kranke, die Kranken, Kranke. So: der Deutsche but ein Deutscher; mit dem Bekannten, mit einem Bekannten; die Jugendlichen but viele Jugendliche. Common ones: der/die Deutsche, Bekannte, Verwandte, Erwachsene, Jugendliche, Kranke, Angestellte, Arbeitslose, Reisende, Verletzte.",
+        "when": "a noun made of an adjective or a participle for a person: Deutsche, Bekannte, Verwandte, Jugendliche, Angestellte",
+        "confused_with": ["n-deklination"],
+        "requires": ["adjektiv-nach-definit", "adjektiv-nach-indefinit"]
+    },
+    {
+        "id": "adjektiv-als-neutrales-nomen",
+        "level": "B1",
+        "title": "Adjectives used as nouns for things: etwas Gutes",
+        "statement": "An adjective used as a neuter noun for a thing or an idea is written with a capital letter. After etwas, nichts, viel, wenig and ein bisschen it ends in -es: etwas Neues, nichts Besonderes, viel Gutes. After alles and das it ends in -e: alles Gute, das Beste, das Schöne. anders is an exception: etwas anderes, nichts anderes.",
+        "when": "etwas, nichts, viel, wenig or alles with an adjective, such as etwas Neues, alles Gute",
+        "confused_with": ["adjektiv-als-nomen"],
+        "requires": ["adjektiv-nach-definit"]
+    },
+    {
+        "id": "indirekte-frage",
+        "level": "B1",
+        "title": "Indirect questions",
+        "statement": "A question can be asked indirectly, more politely, after Wissen Sie, Können Sie mir sagen, Ich weiß nicht, Ich frage mich: it is a subordinate clause with the verb at the end. A question with a question word keeps it: Wissen Sie, wo der Bahnhof ist? A yes/no question starts with ob: Ich weiß nicht, ob er kommt. The sentence ends with a question mark only if the main clause is a question.",
+        "when": "asking a question inside another sentence, or saying what one does not know",
+        "confused_with": ["ob-oder-wenn"],
+        "requires": ["nebensatz-verb-ende", "fragewoerter"]
+    },
+    {
+        "id": "ob-oder-wenn",
+        "level": "B1",
+        "title": "ob, wenn or dass",
+        "statement": "ob is for a question that is not answered (whether): Ich weiß nicht, ob er kommt. wenn is for a condition or a time (if, when): Wenn er kommt, koche ich. dass is for what is stated as so: Ich weiß, dass er kommt. Never use wenn for whether.",
+        "when": "a clause after wissen, fragen, sich fragen, nicht sicher sein, or a condition",
+        "confused_with": ["weil-dass-wenn"],
+        "requires": ["indirekte-frage", "weil-dass-wenn"]
+    },
+    {
+        "id": "infinitiv-mit-zu",
+        "level": "B1",
+        "title": "The infinitive with zu",
+        "statement": "Many verbs (versuchen, anfangen, aufhören, vergessen, hoffen, vorhaben, beschließen, empfehlen, raten, bitten), nouns (Zeit, Lust, Angst, die Möglichkeit haben) and es ist + adjective (es ist schön, wichtig, schwer) are followed by an infinitive with zu, at the end of the clause, after a comma: Ich versuche, pünktlich zu kommen. zu stands just before the last infinitive, and between prefix and stem of a separable verb: anzurufen, spazieren zu gehen, kommen zu können.",
+        "when": "a verb, a noun or es ist + adjective followed by another verb",
+        "confused_with": ["infinitiv-ohne-zu"],
+        "requires": ["trennbar-hauptsatz"]
+    },
+    {
+        "id": "zu-oder-dass",
+        "level": "B1",
+        "title": "zu + infinitive or a clause with dass",
+        "statement": "The infinitive with zu has no subject of its own: its subject is that of the main clause, or the person it is said to (Ich bitte dich, zu kommen). When the other verb has another subject, use dass: Ich hoffe, pünktlich zu kommen (I come), but Ich hoffe, dass er pünktlich kommt (he comes).",
+        "when": "choosing between zu + infinitive and dass after hoffen, glauben, vergessen, es ist wichtig",
+        "confused_with": [],
+        "requires": ["infinitiv-mit-zu", "weil-dass-wenn"]
+    },
+    {
+        "id": "infinitiv-ohne-zu",
+        "level": "B1",
+        "title": "The infinitive without zu",
+        "statement": "No zu stands after the modal verbs (müssen, können, dürfen, sollen, wollen, möchten), after werden, lassen, after the verbs of the senses sehen and hören, and after gehen, fahren, kommen and bleiben: Ich gehe schwimmen. Ich höre ihn singen. Sie bleibt sitzen. After lernen and helfen zu is optional with a single verb: Das Kind lernt laufen.",
+        "when": "an infinitive after a modal verb, werden, lassen, sehen, hören, gehen, bleiben or lernen",
+        "confused_with": ["infinitiv-mit-zu"],
+        "requires": ["modalverben-satzklammer"]
+    },
+    {
+        "id": "relativsatz",
+        "level": "B1",
+        "title": "The relative clause",
+        "statement": "A relative clause says more about a noun and stands right after it, between commas, even in the middle of the main clause: Der Mann, der dort steht, ist mein Nachbar. It starts with a relative pronoun and is a subordinate clause: the verb is at the end. The pronoun takes the gender and number of the noun it refers to: der Mann, der ...; das Kind, das ...; die Frau, die ...; die Leute, die ....",
+        "when": "describing a person or thing more closely with a clause: the man who, the book that",
+        "confused_with": [],
+        "requires": ["nebensatz-verb-ende", "artikel-definit-indefinit"]
+    },
+    {
+        "id": "relativpronomen-kasus",
+        "level": "B1",
+        "title": "The case of the relative pronoun",
+        "statement": "The noun fixes the gender and number of the relative pronoun, and its role in the relative clause fixes the case: der Mann, der kommt (subject, nominative); der Mann, den ich kenne (accusative); der Mann, dem ich helfe (dative). The pronouns are as the definite article, except the dative plural denen: die Leute, denen ich helfe. With a preposition, the preposition comes first and fixes the case: das Ding, mit dem man Flaschen öffnet; der Bus, auf den ich warte.",
+        "when": "a relative clause in which the pronoun is not the subject, or follows a preposition",
+        "confused_with": ["relativsatz"],
+        "requires": ["relativsatz", "akkusativ-artikel", "dativ-artikel"]
+    },
+    {
+        "id": "wenn-oder-als",
+        "level": "B1",
+        "title": "wenn or als in the past",
+        "statement": "als is for one event or one period in the past: Als ich ein Kind war, wohnte ich in Rom. Als ich ankam, regnete es. wenn is for the present and the future, and in the past for what happened again and again, often with immer: (Immer) wenn ich Oma besuchte, backte sie Kuchen.",
+        "when": "a clause of time: when something happened, happens or will happen",
+        "confused_with": ["weil-dass-wenn"],
+        "requires": ["weil-dass-wenn", "praeteritum-unregelmaessig"]
+    },
+    {
+        "id": "temporale-konjunktionen",
+        "level": "B1",
+        "title": "bevor, nachdem, während, seit and bis",
+        "statement": "bevor: the clause happens later than the main clause (Bevor ich frühstücke, dusche ich). nachdem: the clause happens first (Nachdem ich gefrühstückt habe, ...). während: both at the same time (Während ich koche, höre ich Radio). seit / seitdem: from a moment in the past until now (Seit ich Sport mache, schlafe ich besser). bis: until (Warte, bis ich komme). The verb is at the end.",
+        "when": "a clause that says when, before, after, while or since something happens",
+        "confused_with": ["wenn-oder-als"],
+        "requires": ["nebensatz-verb-ende"]
+    },
+    {
+        "id": "nachdem-zeitenfolge",
+        "level": "B1",
+        "title": "The tenses with nachdem",
+        "statement": "The clause with nachdem is one step further in the past than the main clause: present in the main clause, perfect after nachdem (Nachdem ich gegessen habe, gehe ich spazieren); simple past or perfect in the main clause, past perfect after nachdem (Nachdem ich gegessen hatte, ging ich spazieren).",
+        "when": "a clause with nachdem",
+        "confused_with": [],
+        "requires": ["temporale-konjunktionen", "plusquamperfekt"]
+    },
+    {
+        "id": "um-zu-damit",
+        "level": "B1",
+        "title": "um ... zu or damit",
+        "statement": "Both give a purpose (wozu?). um ... zu + infinitive is for the same subject as the main clause, and has none of its own: Ich lerne Deutsch, um in Berlin zu arbeiten. damit is a subordinate clause with a subject, needed when the subject is another: Ich spreche langsam, damit mich alle verstehen. With the same subject both are possible. wollen, möchten and sollen are left out: they are in the sense already.",
+        "when": "saying what something is done for: in order to, so that",
+        "confused_with": ["zu-oder-dass"],
+        "requires": ["infinitiv-mit-zu", "nebensatz-verb-ende"]
+    },
+    {
+        "id": "doppelkonnektoren",
+        "level": "B1",
+        "title": "Two-part connectors",
+        "statement": "sowohl ... als auch (both ... and) and nicht nur ... sondern auch (not only ... but also, stressing the second) join two things that are both so; weder ... noch (neither ... nor) two that are both not, with no other negation; entweder ... oder (either ... or) two of which one is so. zwar ... aber (admittedly ... but) sets a limit. The verb is plural when sowohl ... als auch joins two subjects. entweder may stand in position 0 or 1: Entweder du kommst mit, oder du bleibst hier. / Entweder kommst du mit, oder ...",
+        "when": "joining two parts of a sentence that both are, neither is, or one of which is so",
+        "confused_with": [],
+        "requires": ["konnektoren-position-0"]
+    },
+    {
+        "id": "je-desto",
+        "level": "B1",
+        "title": "je ... desto with comparatives",
+        "statement": "je + comparative opens a subordinate clause with the verb at the end, which comes first; desto or umso + comparative opens the main clause and is followed by the verb: Je länger ich lerne, desto besser verstehe ich. A noun goes right after the comparative: Je mehr Zeit ich habe, umso mehr Bücher lese ich.",
+        "when": "saying that the more one thing is so, the more another is",
+        "confused_with": [],
+        "requires": ["komparativ-formen", "nebensatz-verb-ende"]
+    },
+    {
+        "id": "praepositionen-genitiv",
+        "level": "B1",
+        "title": "Prepositions with the genitive",
+        "statement": "während (during), wegen (because of), trotz (despite), innerhalb (within, inside) and außerhalb (outside of) take the genitive: während des Essens, wegen des Regens, trotz der Kälte, innerhalb einer Woche, außerhalb der Öffnungszeiten. In speech während, wegen and trotz are often used with the dative. wegen gives a reason as weil does, trotz a counter-argument as obwohl does.",
+        "when": "saying during, because of, despite, within or outside of with a noun",
+        "confused_with": [],
+        "requires": ["genitiv"]
+    },
+    {
+        "id": "temporale-praepositionen-2",
+        "level": "B1",
+        "title": "vor, in, seit, bei and während for time",
+        "statement": "vor + dative is a point in the past (vor einer Woche, a week ago); in + dative a point in the future (in einer Woche, in a week's time); seit + dative a length of time from the past until now (seit einer Woche, for a week), with the present. bei + dative, often with a noun made of a verb, is during an activity (beim Lernen, beim Essen), as wenn is; während + genitive is the whole time of it (während des Lernens).",
+        "when": "saying when, how long ago, in how long or during what something happens",
+        "confused_with": ["temporal-vor-nach-seit"],
+        "requires": ["temporal-vor-nach-seit", "praepositionen-genitiv"]
+    },
+    {
+        "id": "adjektiv-ohne-artikel",
+        "level": "B1",
+        "title": "Adjective endings without an article",
+        "statement": "Without an article the adjective itself shows the case, with the ending of the definite article: kalter Kaffee (der), kaltes Bier (das), kalte Milch (die), kalte Getränke (die), mit kaltem Wasser (dem), mit kalter Milch (der), mit kalten Getränken (den). Only the genitive masculine and neuter end in -en: trotz schlechten Wetters. The same endings follow numbers, viele, einige, wenige and mehrere: zwei kleine Kinder, viele nette Leute.",
+        "when": "an adjective before a noun with no article, or after a number, viele, einige, wenige",
+        "confused_with": ["adjektiv-nach-indefinit"],
+        "requires": ["adjektiv-nach-definit", "adjektiv-nach-indefinit", "adjektiv-dativ"]
+    },
+    {
+        "id": "adjektiv-genitiv",
+        "level": "B1",
+        "title": "Adjective endings in the genitive",
+        "statement": "After an article in the genitive the adjective always ends in -en: des netten Mannes, der netten Frau, eines alten Hauses, meiner guten Freunde. Without an article, it ends in -er in the feminine and the plural: die Hilfe guter Freunde, trotz großer Kälte; and in -en in the masculine and neuter: trotz schlechten Wetters.",
+        "when": "an adjective before a noun in the genitive",
+        "confused_with": ["adjektiv-dativ"],
+        "requires": ["genitiv", "adjektiv-dativ"]
+    },
+    {
+        "id": "partizip-1",
+        "level": "B1",
+        "title": "The present participle as an adjective",
+        "statement": "The present participle is the infinitive + d: lachend, spielend, schlafend. Before a noun it takes the endings of an adjective: ein bellender Hund (a dog that is barking), das spielende Kind, mit weinenden Augen. It says that the noun does it, now, at the same time; the past participle says that it was done to it: die singende Frau, but das gesungene Lied. Some have become adjectives and can follow sein: spannend, anstrengend, dringend, überzeugend, reizend.",
+        "when": "describing a noun by what it is doing, with a verb before it",
+        "confused_with": ["partizip-unregelmaessig"],
+        "requires": ["adjektiv-nach-definit", "adjektiv-nach-indefinit"]
     }
 ]
