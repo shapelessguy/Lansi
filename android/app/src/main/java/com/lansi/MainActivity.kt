@@ -61,6 +61,8 @@ class MainActivity : ComponentActivity() {
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            // the sounds of the cards are played once fetched, and as they come up, rather than on a tap
+            settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = Client()
             webChromeClient = chrome
         }
