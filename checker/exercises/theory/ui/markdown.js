@@ -21,7 +21,8 @@ export const MARKS = {
     x: "what is wrong",
     h: "anything to stand out",
 };
-export const BOXES = { merke: "Merke", tipp: "Tipp", achtung: "Achtung", beispiel: "Beispiel" };
+// the kinds of box, with the title one is given when it names none
+export const BOXES = { merke: "Remember", tipp: "Tip", achtung: "Watch out", beispiel: "Example" };
 const MARK = /\{([a-z]):([^{}]+)\}/g;
 const WHOLE_MARK = /^\{([a-z]):[^{}]+\}$/;
 

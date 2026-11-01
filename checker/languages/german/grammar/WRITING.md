@@ -49,7 +49,7 @@ A lesson has 8 to 10 pages, in about this order:
 6. **Typische Fehler**: a table `Falsch | Richtig | Warum?`, 5 to 8 rows,
    the wrong sentence marked `{x:...}`. Every row in *Falsch* must really
    be wrong.
-7. **Kurz gesagt**: a `[!merke]` box with the whole lesson in 4 to 6
+7. **Kurz gesagt**: a `[!merke] Merke` box with the whole lesson in 4 to 6
    bullets, then **Probier es aus:** with 6 to 8 numbered tasks, and the
    line *Schreib deine Antworten in den Chat, oder frag, wenn etwas nicht
    klar ist.* The chat checks the answers.
@@ -115,19 +115,21 @@ A part of a sentence is coloured with `{mark:text}`:
 
 ### Boxes
 
-A quote whose first line is `[!kind]` is a coloured box:
+A quote whose first line is `[!kind]` is a coloured box. The kinds are
+fixed keywords, and the renderer's default titles are English, so **every
+box is given its German title**, always the same for a kind:
 
 ```
-> [!merke]
+> [!merke] Merke
 > The rule to remember.
 ```
 
-- `merke` (blue): the rule.
-- `tipp` (green): a way to remember it.
-- `achtung` (orange): a trap.
-- `beispiel` (purple): examples.
+- `> [!merke] Merke` (blue): the rule.
+- `> [!tipp] Tipp` (green): a way to remember it.
+- `> [!achtung] Achtung` (orange): a trap.
+- `> [!beispiel] Beispiel` (purple): examples.
 
-A title after the kind replaces the default one: `> [!tipp] Aussprache`.
+Another title may replace these where it says more: `> [!tipp] Aussprache`.
 Use one or two boxes a page, not more.
 
 ## Writing the file
