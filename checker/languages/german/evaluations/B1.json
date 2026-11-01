@@ -1,0 +1,834 @@
+{
+    "level": "B1",
+    "exam": "Goethe-Zertifikat B1",
+    "pass": {
+        "module": 60
+    },
+    "themes": [
+        "Wohnen und Nachbarschaft",
+        "Arbeit und Beruf",
+        "Ausbildung und Weiterbildung",
+        "Gesundheit und Ernährung",
+        "Reisen und Verkehr",
+        "Freizeit und Kultur",
+        "Konsum und Geld",
+        "Medien und Internet",
+        "Umwelt und Natur",
+        "Familie und Beziehungen",
+        "Feste und Traditionen",
+        "Leben in einem anderen Land"
+    ],
+    "modules": [
+        {
+            "id": "reading",
+            "title": "Lesen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "message",
+                        "answers": "truefalse",
+                        "questions": 6
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 10
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Lesen Sie den Text und die Aufgaben 1 bis 6. Wählen Sie: Sind die Aussagen Richtig oder Falsch?",
+                    "task": "A blog post or a long personal email of 200 to 250 words in which someone tells in the past of something that happened to them: a journey, a move, a new job, a party that went wrong. The statements follow the order of the text and each takes up one thing that happened, rightly or with one detail changed, in other words than the text.",
+                    "example": {
+                        "title": "Mias Reiseblog",
+                        "shown": "",
+                        "text": "Hallo zusammen,\nletzte Woche war ich zum ersten Mal allein mit dem Zug in Italien unterwegs. Eigentlich wollte ich mit meiner Freundin Tanja fahren, aber sie hatte kurz vorher eine neue Stelle bekommen und konnte keinen Urlaub nehmen. Also bin ich allein los. Die Fahrt von München nach Verona hat fast sieben Stunden gedauert, weil auf der Strecke gebaut wurde. In Verona habe ich in einer kleinen Pension gewohnt. Die Besitzerin hat mir jeden Morgen Tipps gegeben, was ich mir ansehen soll. Am dritten Tag habe ich in einem Café eine Gruppe Studenten aus Spanien kennengelernt, mit denen ich dann nach Venedig gefahren bin. Dort war es so voll, dass wir schon am Nachmittag wieder zurückgefahren sind. Mein Fazit: Allein reisen ist gar nicht so schlimm – man lernt sogar mehr Leute kennen!\nEure Mia",
+                        "questions": [
+                            {
+                                "prompt": "Mia ist mit ihrer Freundin nach Italien gefahren.",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Die Zugfahrt hat länger als normal gedauert.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Mia hat in einem großen Hotel übernachtet.",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "In Verona hat Mia Leute aus einem anderen Land getroffen.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "In Venedig ist Mia mehrere Tage geblieben.",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Mia findet, dass man allein leichter Kontakte findet.",
+                                "options": [],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 3
+                    },
+                    "instances": 2,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "instances": 1,
+                            "minutes": 7
+                        },
+                        {
+                            "instances": 1,
+                            "minutes": 10
+                        },
+                        {
+                            "instances": 2,
+                            "questions": 2,
+                            "minutes": 14
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 17
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Lesen Sie den Text aus der Presse und die Aufgaben. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A press article of 250 to 300 words, with a title, about a trend, a project or a study of everyday life, such as people who share cars, a school without marks or a town that plants gardens. The first question asks what the text is about as a whole; the others follow the order of the text and ask for a reason, an opinion or a consequence, with wrong options that use words of the text.",
+                    "example": {
+                        "title": "Wegwerfen? Nein danke!",
+                        "shown": "",
+                        "text": "In immer mehr deutschen Städten gibt es sogenannte Reparatur-Cafés. Einmal im Monat treffen sich dort Menschen, die kaputte Dinge nicht wegwerfen wollen: Toaster, Fahrräder, Hosen oder Lampen. Ehrenamtliche Helfer, oft Rentner mit technischem Beruf, zeigen den Besuchern, wie sie die Sachen selbst reparieren können. Geld kostet das nichts, aber über eine kleine Spende für Kaffee und Kuchen freuen sich die Organisatoren. „Viele Geräte sind gar nicht richtig kaputt“, erzählt Helmut Krause, der früher Elektriker war. „Oft ist nur ein Kabel locker.“ Die Idee kommt aus den Niederlanden, wo das erste Reparatur-Café 2009 eröffnet wurde. Inzwischen gibt es allein in Deutschland mehr als tausend. Kritik kommt manchmal von Handwerkern, die Angst um ihre Kunden haben. Die Organisatoren sehen das anders: Wer etwas Großes reparieren lassen will, wird an Fachbetriebe weitergeschickt.",
+                        "questions": [
+                            {
+                                "prompt": "In dem Text geht es um …",
+                                "options": [
+                                    "Treffen, bei denen man Dinge selbst reparieren lernt.",
+                                    "Geschäfte, die gebrauchte Geräte verkaufen.",
+                                    "einen neuen Beruf für Rentner."
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Die Besucher …",
+                                "options": [
+                                    "bezahlen für jede Reparatur.",
+                                    "können freiwillig etwas geben.",
+                                    "bringen Kuchen mit."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Die Organisatoren meinen, dass Handwerker …",
+                                "options": [
+                                    "keine Kunden verlieren.",
+                                    "bei ihnen mitarbeiten sollten.",
+                                    "zu teuer sind."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "adverts",
+                        "answers": "match",
+                        "questions": 7
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 9
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Lesen Sie die Situationen 1 bis 7 und die Anzeigen a bis j aus verschiedenen Medien. Wählen Sie: Welche Anzeige passt zu welcher Situation? Sie können jede Anzeige nur einmal verwenden. Für eine Situation gibt es keine passende Anzeige. In diesem Fall wählen Sie x.",
+                    "task": "Nine short adverts, a to i, of two to three lines each, on one field such as courses, holidays, jobs or offers for free time, in the text. Each question is a person who is looking for something, in one sentence with two conditions, such as a time and a price. Each advert fits at most one person; exactly one person fits none (answer x, the last option). The adverts that do not fit meet one of the two conditions.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "a) Sprachreisen nach Malta: Englisch lernen am Meer, zwei Wochen ab 890 Euro, auch für Jugendliche ab 14.\nb) Kochschule Pfeffer: Italienisch kochen am Samstagvormittag, 4 Termine, 120 Euro.\nc) Abendkurs Fotografie an der Volkshochschule, mittwochs 19–21 Uhr, für Anfänger.\nd) Wanderwochenende im Harz für Familien mit Kindern, Übernachtung in der Jugendherberge.\ne) Online-Kurs Spanisch: lernen, wann Sie wollen, 15 Euro im Monat.\nf) Tanzschule Rhythmus: Salsa für Paare, freitags ab 20 Uhr.\ng) Nähkurs für Erwachsene: eigene Kleidung nähen, dienstags vormittags.\nh) Fahrradtour an der Donau: 7 Tage, Gepäcktransport inklusive.\ni) Gitarrenunterricht für Kinder und Erwachsene, Probestunde kostenlos.",
+                        "questions": [
+                            {
+                                "prompt": "Frau Brandt arbeitet im Schichtdienst und möchte zu Hause eine Sprache lernen.",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "i",
+                                    "x"
+                                ],
+                                "answer": 4
+                            },
+                            {
+                                "prompt": "Herr und Frau Lenz möchten am Wochenende zusammen etwas Neues lernen und dabei Musik hören.",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "i",
+                                    "x"
+                                ],
+                                "answer": 5
+                            },
+                            {
+                                "prompt": "Jonas, 16, möchte in den Ferien ins Ausland und gleichzeitig eine Sprache verbessern.",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "i",
+                                    "x"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Petra sucht einen Malkurs, der am Abend stattfindet.",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "i",
+                                    "x"
+                                ],
+                                "answer": 9
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "message",
+                        "answers": "yesno",
+                        "questions": 7
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Lesen Sie die Texte 1 bis 7. Wählen Sie: Ist die Person für das Thema? Ja oder Nein?",
+                    "task": "A question of a magazine or a website on a matter of everyday life, such as whether children should have a mobile phone or whether shops should open on Sundays, as the title, and seven short readers' letters to it, of three to five sentences each, numbered and signed with a first name, an age and a town. Each question is the first name with the age, such as \"Lena, 34\", and asks whether that person is for it; about half are, some with a but, and the others are against.",
+                    "example": {
+                        "title": "Sollen Grundschulkinder ein eigenes Handy haben?",
+                        "shown": "",
+                        "text": "1. Ich finde es gut, wenn Schüler schon früh ein Handy haben. Dann können die Eltern sie immer erreichen, zum Beispiel wenn der Bus nicht kommt. Natürlich muss man Regeln machen. (Lena, 34, Kassel)\n2. Mit neun Jahren braucht kein Kind ein Smartphone. Meine Kinder spielen lieber draußen, und das soll so bleiben. (Thomas, 41, Ulm)\n3. In der Klasse meiner Tochter haben alle ein Handy. Wer keins hat, gehört nicht dazu. Deshalb hat sie zum zehnten Geburtstag eins bekommen, und ich bereue es nicht. (Ayşe, 38, Köln)",
+                        "questions": [
+                            {
+                                "prompt": "Lena, 34",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Thomas, 41",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Ayşe, 38",
+                                "options": [],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 5",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "signs",
+                        "answers": "choice",
+                        "questions": 4
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 9
+                        }
+                    ],
+                    "points": 4,
+                    "instructions": "Lesen Sie die Aufgaben 1 bis 4 und den Text dazu. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A text of rules of 200 to 250 words, with a title and short paragraphs, such as the rules of a house, a library, a gym, a course or a holiday flat: opening hours, what is allowed, what costs extra, what to do in a case of trouble. Each question is the start of a sentence about one rule, with three endings near each other, only one of which the rules say.",
+                    "example": {
+                        "title": "Hausordnung",
+                        "shown": "",
+                        "text": "Hausordnung des Studentenwohnheims Lindenhof\nRuhezeiten: Von 22 bis 7 Uhr und sonntags den ganzen Tag ist bitte Ruhe im Haus. Partys in den Zimmern sind nur am Freitag und Samstag bis Mitternacht erlaubt.\nKüche: Jede Etage hat eine Gemeinschaftsküche. Wer kocht, räumt danach sofort auf. Lebensmittel im Kühlschrank müssen einen Namen haben.\nGäste: Besucher dürfen höchstens drei Nächte bleiben. Bitte melden Sie längere Besuche im Büro an.\nWaschraum: Die Waschmaschinen im Keller funktionieren mit einer Karte, die Sie im Büro kaufen können.",
+                        "questions": [
+                            {
+                                "prompt": "Im Wohnheim muss man ruhig sein …",
+                                "options": [
+                                    "jeden Abend ab 20 Uhr.",
+                                    "am ganzen Sonntag.",
+                                    "nur in der Nacht von Samstag auf Sonntag."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Ein Freund darf im Zimmer übernachten, …",
+                                "options": [
+                                    "wenn er nicht länger als drei Nächte bleibt.",
+                                    "aber nur am Wochenende.",
+                                    "wenn er im Büro bezahlt."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "listening",
+            "title": "Hören",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "choice",
+                        "questions": 2,
+                        "plays": "2"
+                    },
+                    "instances": 5,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 7
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 9
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 10
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Sie hören nun fünf kurze Texte. Sie hören jeden Text zweimal. Zu jedem Text lösen Sie zwei Aufgaben. Wählen Sie bei jeder Aufgabe die richtige Lösung.",
+                    "task": "Short texts of the radio, the telephone or a public place, of four to six sentences: a message on an answering machine, a traffic report, an announcement at a station or in a shop, a weather report, an advert. The first question asks what the text is about or what the listener should do; the second asks for one detail, a time, a place or a price. All the options are said or likely.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Hallo Frau Schulz, hier ist die Praxis Dr. Weber. Sie haben morgen um zehn Uhr einen Termin bei uns. Leider ist Frau Doktor Weber krank. Wir können Ihnen einen neuen Termin am Donnerstag um halb elf geben, oder Sie kommen morgen zur Vertretung, Doktor Hahn, gleich um zehn. Bitte rufen Sie uns bis heute Abend zurück.",
+                        "questions": [
+                            {
+                                "prompt": "Warum ruft die Praxis an?",
+                                "options": [
+                                    "Frau Schulz hat ihren Termin vergessen.",
+                                    "Der Termin muss geändert werden.",
+                                    "Frau Schulz soll ein Rezept abholen."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Was kann Frau Schulz morgen machen?",
+                                "options": [
+                                    "Um zehn zu einem anderen Arzt gehen.",
+                                    "Um halb elf zu Dr. Weber gehen.",
+                                    "Am Abend in die Praxis kommen."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "announcement",
+                        "answers": "choice",
+                        "questions": 5,
+                        "plays": "1"
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 5,
+                    "instructions": "Sie hören nun einen Text. Sie hören den Text einmal. Dazu lösen Sie fünf Aufgaben. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "One person speaks to a group for two to three minutes: a guide at the start of a tour of a town, a museum or a factory, or the leader of a course or a trip on its first day. They say what is planned, where to meet, what to keep in mind. The questions follow the order of the talk.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Herzlich willkommen im Schokoladenmuseum! Mein Name ist Sabine und ich führe Sie heute durch unser Haus. Die Führung dauert etwa eine Stunde. Wir beginnen im ersten Stock mit der Geschichte des Kakaos, danach sehen wir unsere kleine Fabrik im Erdgeschoss. Dort dürfen Sie leider nicht fotografieren. Am Ende kommen wir zum Schokoladenbrunnen, wo jeder etwas probieren darf. Ihre Jacken und Taschen können Sie gern in den Schränken neben dem Eingang lassen. Der Museumsshop hat heute bis 19 Uhr geöffnet.",
+                        "questions": [
+                            {
+                                "prompt": "Die Führung beginnt …",
+                                "options": [
+                                    "im Erdgeschoss.",
+                                    "im ersten Stock.",
+                                    "am Schokoladenbrunnen."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "In der Fabrik …",
+                                "options": [
+                                    "darf man keine Fotos machen.",
+                                    "kann man Schokolade kaufen.",
+                                    "darf man die Jacke nicht anziehen."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "dialogue",
+                        "answers": "truefalse",
+                        "questions": 7,
+                        "plays": "1"
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Sie hören nun ein Gespräch. Sie hören das Gespräch einmal. Dazu lösen Sie sieben Aufgaben. Wählen Sie: Sind die Aussagen Richtig oder Falsch?",
+                    "task": "A conversation of twelve to sixteen turns, with the speakers' names, between two friends or colleagues who meet by chance, at a bus stop, in a café, on a train, and talk about what they have been doing and what they plan. The statements follow the order of the conversation; each takes up one thing said, rightly or wrongly.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Jana: Mensch, Paul! Dich habe ich ja ewig nicht gesehen!\nPaul: Hallo Jana! Ja, ich war ein halbes Jahr in Kanada, für meine Firma.\nJana: Toll! Und wie war es?\nPaul: Die Arbeit war anstrengend, aber am Wochenende bin ich viel gewandert. Nur der Winter war wirklich hart.\nJana: Bei mir gibt es auch Neuigkeiten. Ich habe den Job gewechselt, ich arbeite jetzt in einer Schule.\nPaul: Als Lehrerin?\nJana: Nein, im Sekretariat. Aber es macht mir viel Spaß.",
+                        "questions": [
+                            {
+                                "prompt": "Paul war beruflich im Ausland.",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Paul hat in Kanada keine Freizeit gehabt.",
+                                "options": [],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Jana unterrichtet jetzt an einer Schule.",
+                                "options": [],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "interview",
+                        "answers": "choice",
+                        "questions": 8,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 10
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Sie hören nun eine Diskussion. Sie hören die Diskussion zweimal. Dazu lösen Sie acht Aufgaben. Ordnen Sie die Aussagen zu: Wer sagt was?",
+                    "task": "A radio discussion of fourteen to eighteen turns, with the speakers' names: a presenter and two guests with different views on a question of everyday life, such as working from home or school uniforms. Each question is a statement one of the three makes, in other words than theirs; its options are the three names, the presenter first, the same for every question.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Moderator: Heute sprechen wir über die Frage: Sollen Kinder im Haushalt helfen? Bei mir sind Frau Kühn, Mutter von drei Kindern, und Herr Bauer, Erziehungswissenschaftler. Frau Kühn, wie ist das bei Ihnen?\nFrau Kühn: Bei uns hat jedes Kind eine feste Aufgabe. Die Große bringt den Müll raus, der Kleine deckt den Tisch.\nHerr Bauer: Das finde ich gut. Kinder lernen so, Verantwortung zu übernehmen. Man sollte aber nicht zu viel verlangen.\nModerator: Viele Eltern sagen ja, es geht schneller, wenn sie es selbst machen.\nFrau Kühn: Das stimmt am Anfang, aber das wird besser.",
+                        "questions": [
+                            {
+                                "prompt": "Kinder sollten nicht zu viele Aufgaben bekommen.",
+                                "options": [
+                                    "Moderator",
+                                    "Frau Kühn",
+                                    "Herr Bauer"
+                                ],
+                                "answer": 2
+                            },
+                            {
+                                "prompt": "Mit der Zeit geht die Arbeit mit den Kindern schneller.",
+                                "options": [
+                                    "Moderator",
+                                    "Frau Kühn",
+                                    "Herr Bauer"
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "writing",
+            "title": "Schreiben",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "message",
+                        "words": 80
+                    },
+                    "instances": 1,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "words": 50,
+                            "minutes": 12
+                        },
+                        {
+                            "words": 60,
+                            "minutes": 15
+                        },
+                        {
+                            "words": 70,
+                            "minutes": 18
+                        },
+                        {
+                            "words": 80,
+                            "minutes": 20
+                        }
+                    ],
+                    "points": 40,
+                    "instructions": "Schreiben Sie eine E-Mail (circa 80 Wörter). Schreiben Sie etwas zu allen drei Punkten. Achten Sie auf den Textaufbau (Anrede, Einleitung, Reihenfolge der Inhaltspunkte, Schluss).",
+                    "task": "A situation of two sentences in which something happened to the learner, such as a holiday, a move, a party or a new job, and they write to a friend about it. The prompt lists three points: describe what happened, give a reason or a feeling, and propose or ask something.",
+                    "example": {
+                        "situation": "Sie haben am Wochenende mit Freunden eine Radtour gemacht. Ihre Freundin Sophie konnte nicht mitkommen.",
+                        "points": [
+                            "Beschreiben Sie, wie die Tour war.",
+                            "Begründen Sie, warum Sie ein Problem hatten.",
+                            "Machen Sie Sophie einen Vorschlag für eine gemeinsame Tour."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "opinion",
+                        "words": 80
+                    },
+                    "instances": 1,
+                    "minutes": 25,
+                    "sizes": [
+                        {
+                            "words": 50,
+                            "minutes": 15
+                        },
+                        {
+                            "words": 60,
+                            "minutes": 18
+                        },
+                        {
+                            "words": 70,
+                            "minutes": 22
+                        },
+                        {
+                            "words": 80,
+                            "minutes": 25
+                        }
+                    ],
+                    "points": 40,
+                    "instructions": "Sie haben im Fernsehen eine Diskussionssendung gesehen. Im Online-Gästebuch der Sendung finden Sie einen Kommentar. Schreiben Sie nun Ihre Meinung (circa 80 Wörter).",
+                    "task": "The theme of a television discussion on a question of everyday life, such as whether people should eat less meat or children should learn with tablets, and the comment of one viewer of two or three sentences, with their first name, both given in the situation. The points ask the learner to give their own opinion with reasons and an example.",
+                    "example": {
+                        "situation": "In der Sendung ging es um das Thema „Online einkaufen“. Kommentar von Markus: „Ich kaufe fast alles im Internet. Das spart Zeit, und es gibt mehr Auswahl als in den Geschäften.“",
+                        "points": [
+                            "Schreiben Sie Ihre Meinung zum Thema.",
+                            "Begründen Sie Ihre Meinung.",
+                            "Nennen Sie ein Beispiel aus Ihrem Alltag."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "email",
+                        "words": 40
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "words": 30,
+                            "minutes": 8
+                        },
+                        {
+                            "words": 30,
+                            "minutes": 10
+                        },
+                        {
+                            "words": 35,
+                            "minutes": 12
+                        },
+                        {
+                            "words": 40,
+                            "minutes": 15
+                        }
+                    ],
+                    "points": 20,
+                    "instructions": "Schreiben Sie eine E-Mail (circa 40 Wörter). Vergessen Sie die Anrede und den Gruß am Schluss nicht.",
+                    "task": "A situation in which the learner cannot keep an appointment or must ask something of someone they write to formally, with Sie: a teacher, a boss, a doctor, a landlord. The points ask them to excuse themselves, say why and propose something else.",
+                    "example": {
+                        "situation": "Ihre Kursleiterin, Frau Hoffmann, hat Sie zu einem Treffen am Freitag eingeladen. Sie können nicht kommen.",
+                        "points": [
+                            "Entschuldigen Sie sich höflich.",
+                            "Sagen Sie, warum Sie nicht kommen können.",
+                            "Schlagen Sie einen anderen Termin vor."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "speaking",
+            "title": "Sprechen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "plan",
+                        "prompts": 4
+                    },
+                    "instances": 1,
+                    "minutes": 6,
+                    "sizes": [
+                        {
+                            "prompts": 2,
+                            "minutes": 3
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 4,
+                            "minutes": 6
+                        }
+                    ],
+                    "points": 28,
+                    "instructions": "Gemeinsam etwas planen. Sie und Ihr Partner planen etwas zusammen. Machen Sie Vorschläge, reagieren Sie auf die Vorschläge Ihres Partners und einigen Sie sich. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "Two people plan something together, such as a party for a colleague, a trip of the course or helping a friend move. The card says what, with four points to agree on, such as when, where, what to bring and who does what. Each prompt is what the partner says, in turn: a proposal, an objection to the learner's idea, a question, a summing up to agree to.",
+                    "example": {
+                        "card": "Ihre Kollegin Anna geht in Rente. Sie möchten zusammen mit Ihrem Partner ein Abschiedsfest für sie organisieren.\n· Wann? · Wo? · Geschenk? · Essen und Getränke?",
+                        "prompts": [
+                            "Ihr Partner sagt: „Wollen wir die Feier am Freitagabend nach der Arbeit machen?“",
+                            "Ihr Partner sagt: „Im Büro ist es zu eng. Wie wäre es mit einem Restaurant?“",
+                            "Ihr Partner sagt: „Und was schenken wir ihr? Sie reist ja gern.“",
+                            "Ihr Partner sagt: „Gut, dann kümmere ich mich um das Geschenk. Was machst du?“"
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2 und 3",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "present",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 9,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 6
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 7
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 72,
+                    "instructions": "Ein Thema präsentieren und über die Präsentation sprechen. Stellen Sie das Thema vor: Ihre persönlichen Erfahrungen, die Situation in Ihrem Heimatland, Vor- und Nachteile und Ihre Meinung. Beantworten Sie danach die Fragen. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "A theme of everyday life as a question, such as whether one should do sport every day or live in the country, with the five parts of the talk on the card: the theme, own experience, the situation in the learner's country, advantages and disadvantages with an opinion, and an end with thanks. The first prompt asks for the talk; the others are questions of the partner and the examiner on it.",
+                    "example": {
+                        "card": "Thema: Sollte man ohne Auto leben?\n· Stellen Sie Ihr Thema vor. · Berichten Sie von Ihrer Situation oder einem Erlebnis. · Berichten Sie von der Situation in Ihrem Heimatland. · Nennen Sie Vor- und Nachteile und sagen Sie Ihre Meinung. · Beenden Sie die Präsentation und bedanken Sie sich.",
+                        "prompts": [
+                            "Halten Sie Ihre Präsentation.",
+                            "Ihr Partner fragt: „Und wie machst du das im Winter, wenn es kalt ist?“",
+                            "Die Prüferin fragt: „Was müsste eine Stadt tun, damit mehr Menschen das Auto stehen lassen?“"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

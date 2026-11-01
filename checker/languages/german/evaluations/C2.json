@@ -1,0 +1,637 @@
+{
+    "level": "C2",
+    "exam": "Goethe-Zertifikat C2: Großes Deutsches Sprachdiplom",
+    "pass": {
+        "module": 60
+    },
+    "themes": [
+        "Sprache und Identität",
+        "Philosophie und Ethik",
+        "Kunst, Literatur und Kritik",
+        "Geschichte und Erinnerung",
+        "Wissenschaft und Erkenntnis",
+        "Politik, Recht und Öffentlichkeit",
+        "Wirtschaft und Globalisierung",
+        "Medien und Wahrheit",
+        "Arbeit und Sinn",
+        "Natur, Umwelt und Verantwortung",
+        "Bildung und Persönlichkeit",
+        "Technik und der Mensch"
+    ],
+    "modules": [
+        {
+            "id": "reading",
+            "title": "Lesen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 10
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 12
+                        },
+                        {
+                            "questions": 9,
+                            "minutes": 14
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Lesen Sie den Text. Aus dem Text wurden Wörter entfernt. Wählen Sie für jede Lücke das passende Wort.",
+                    "task": "An essayistic text of 350 to 400 words, with a title, from the feuilleton of a newspaper, on language, culture or thought, from which ten words were taken out, each gap marked as (1) to (10): connectors of fine sense, fixed phrases, verbs with their preposition, words of a high register. Each question is the number of a gap, such as \"Lücke 1\", with three words near in sense or form, only one of which fits by grammar, register and idiom.",
+                    "example": {
+                        "title": "Ein Wort macht Karriere",
+                        "shown": "",
+                        "text": "Kaum ein Begriff wird derzeit so (1) gebraucht wie der der Nachhaltigkeit. Was einst aus der Forstwirtschaft stammte, (2) heute als Etikett für Joghurtbecher ebenso wie für Staatshaushalte. (3) dieser Beliebigkeit lohnt es sich, an den Ursprung zu erinnern.",
+                        "questions": [
+                            {
+                                "prompt": "Lücke 1",
+                                "options": [
+                                    "inflationär",
+                                    "überschüssig",
+                                    "überhöht"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Lücke 2",
+                                "options": [
+                                    "dient",
+                                    "gilt",
+                                    "steht"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Lücke 3",
+                                "options": [
+                                    "Angesichts",
+                                    "Anlässlich",
+                                    "Infolge"
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 6
+                    },
+                    "instances": 1,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 13
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 16
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 18
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Lesen Sie den Text. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A demanding text of 600 to 700 words, with a title: an essay, a review or a commentary on a matter of culture, science or society, with an argument that turns, irony and allusions. The questions follow the order of the text and ask for the author's stance, what a phrase means in its context, the function of an example and what the text implies without saying it.",
+                    "example": {
+                        "title": "Vom Beschreiben der Gegenwart",
+                        "shown": "",
+                        "text": "Man muss die Digitalisierung nicht verteufeln, um ihr mit Skepsis zu begegnen. Der Autor des vorliegenden Bandes tut weder das eine noch das andere; er beschreibt, und gerade darin liegt die Stärke seines Buches. Dass er gelegentlich der Versuchung erliegt, jede neue App zum Symptom eines Epochenbruchs zu erklären, mag man ihm nachsehen.",
+                        "questions": [
+                            {
+                                "prompt": "Wie beurteilt der Rezensent das Buch insgesamt?",
+                                "options": [
+                                    "Eher positiv, trotz kleiner Schwächen.",
+                                    "Als einseitige Kritik der Digitalisierung.",
+                                    "Als wenig originell."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "match",
+                        "questions": 6
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 12
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Lesen Sie den Text und die Überschriften a bis h. Welche Überschrift passt zu welchem Abschnitt? Für einen Abschnitt passt keine Überschrift. In diesem Fall wählen Sie x.",
+                    "task": "A text of 500 to 600 words of popular science or a report in seven numbered paragraphs, with eight headings a to h in \"shown\" that sum up a paragraph in other words, two of them near another's. Each question is the number of a paragraph, such as \"Abschnitt 1\"; its options are the letters of the headings and x last, for the paragraph none fits.",
+                    "example": {
+                        "title": "Das unbekannte Meer",
+                        "shown": "a) Technik macht Unsichtbares sichtbar · b) Fischerei in der Krise · c) Ein Meer voller Plastik · d) Ein Irrtum der Wissenschaft · e) Neue Gesetze zum Schutz · f) Tourismus an den Küsten · g) Forschung hat ihren Preis · h) Warum Tiefseefische leuchten",
+                        "text": "1. Noch vor zwanzig Jahren galt das Mittelmeer als weitgehend erforscht. Heute wissen Meeresbiologen, wie wenig man tatsächlich über seine Tiefen weiß.\n2. Neue Tauchroboter liefern Bilder aus mehr als 3000 Metern Tiefe – und zeigen Arten, die bisher niemand gesehen hatte.\n3. Die Kosten solcher Expeditionen sind allerdings enorm, und Fördergelder werden knapper.",
+                        "questions": [
+                            {
+                                "prompt": "Abschnitt 1",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "x"
+                                ],
+                                "answer": 3
+                            },
+                            {
+                                "prompt": "Abschnitt 2",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "x"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Abschnitt 3",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "x"
+                                ],
+                                "answer": 6
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 8
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 12
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Lesen Sie den Text. Entsprechen die Aussagen dem Text? Wählen Sie: Ja, Nein oder Text sagt dazu nichts.",
+                    "task": "A commentary or an interview printed as text, of 500 to 600 words, in which an author argues a view on a debate, such as the future of the printed book or the right to be forgotten. Each question is a statement in the order of the text, with the options \"Ja\", \"Nein\" and \"Text sagt dazu nichts\", in that order, for every question; the statements turn on what the author holds rather than on facts, and those that the text does not settle are near what it says.",
+                    "example": {
+                        "title": "Totgesagte leben länger",
+                        "shown": "",
+                        "text": "Wer behauptet, das gedruckte Buch sei ein Auslaufmodell, hat offenbar seit Jahren keine Buchhandlung mehr betreten. Zwar sind die Umsätze mit E-Books gestiegen, doch sie stagnieren seit geraumer Zeit auf niedrigem Niveau. Das Papier, so scheint es, verteidigt seinen Platz mit erstaunlicher Zähigkeit.",
+                        "questions": [
+                            {
+                                "prompt": "Die Autorin hält das gedruckte Buch für gefährdet.",
+                                "options": [
+                                    "Ja",
+                                    "Nein",
+                                    "Text sagt dazu nichts"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Der Markt für E-Books wächst derzeit kaum.",
+                                "options": [
+                                    "Ja",
+                                    "Nein",
+                                    "Text sagt dazu nichts"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Junge Leute lesen lieber auf Papier.",
+                                "options": [
+                                    "Ja",
+                                    "Nein",
+                                    "Text sagt dazu nichts"
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "listening",
+            "title": "Hören",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "choice",
+                        "questions": 2,
+                        "plays": "1"
+                    },
+                    "instances": 4,
+                    "minutes": 9,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 7
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Sie hören kurze Texte aus dem Radio. Sie hören jeden Text einmal. Wählen Sie bei jeder Aufgabe die richtige Lösung.",
+                    "task": "Short texts of the radio of about one minute: a commentary, a review of a book or a play, a gloss, a report with a view. The first question asks for the speaker's stance or the point of the text; the second for an implication or the sense of a turn of phrase. The options are near each other, so that the listener must catch irony, a concession or a shift.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Es ist wieder so weit: Die Stadt feiert ihr neues Kulturzentrum, ein Bau aus Glas und Beton, der nach Auskunft des Bürgermeisters „ein Zeichen setzt“. Welches Zeichen, sagte er nicht. Vielleicht jenes, dass man für das Dreifache der geplanten Kosten auch ein Gebäude errichten kann, in dem es noch kein Programm gibt.",
+                        "questions": [
+                            {
+                                "prompt": "Wie steht der Sprecher zum neuen Kulturzentrum?",
+                                "options": [
+                                    "Er ist begeistert.",
+                                    "Er äußert sich ironisch und kritisch.",
+                                    "Er ist neutral."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Was kritisiert er vor allem?",
+                                "options": [
+                                    "Die Architektur des Gebäudes.",
+                                    "Die hohen Kosten und das fehlende Programm.",
+                                    "Die Rede des Bürgermeisters."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "interview",
+                        "answers": "choice",
+                        "questions": 10,
+                        "plays": "1"
+                    },
+                    "instances": 1,
+                    "minutes": 14,
+                    "sizes": [
+                        {
+                            "questions": 5,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 11
+                        },
+                        {
+                            "questions": 9,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Sie hören ein Gespräch. Sie hören den Text einmal. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A conversation of the radio of five to six minutes, of twenty-four to thirty turns with the speakers' names, between a presenter and two experts who see a matter of culture, science or society differently, such as artificial intelligence in art or the protection of dialects. The questions follow the order of the conversation and ask who holds what, why, and where they come closer.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Moderatorin: Herr Professor Lang, wird künstliche Intelligenz die Übersetzer überflüssig machen?\nProf. Lang: Für Gebrauchstexte vielleicht. Bei literarischen Texten sehe ich das nicht, dort geht es um Ton und Haltung.\nFrau Reiter: Da widerspreche ich nur halb. Die Programme werden auch dort besser, aber jemand muss am Ende entscheiden, was gelungen ist.",
+                        "questions": [
+                            {
+                                "prompt": "Frau Reiter meint, dass …",
+                                "options": [
+                                    "Programme literarische Texte nie übersetzen werden.",
+                                    "der Mensch als Urteilsinstanz bleibt.",
+                                    "Gebrauchstexte schwerer zu übersetzen sind."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "announcement",
+                        "answers": "choice",
+                        "questions": 8,
+                        "plays": "1"
+                    },
+                    "instances": 1,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 11
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Sie hören einen Vortrag. Sie hören den Text einmal. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A lecture of six to seven minutes of a university or an academy, on a matter of history, philosophy, economics or science, with digressions and examples. The questions follow the order of the lecture and ask for the line of the argument, the role of an example, the speaker's own position and what they conclude.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Wenn wir heute von Öffentlichkeit sprechen, meinen wir meist etwas, das es in dieser Form erst seit dem 18. Jahrhundert gibt: Kaffeehäuser, Zeitungen, Lesegesellschaften. Dort trafen sich Bürger, um über Politik zu debattieren – zumindest diejenigen, die lesen konnten und Zeit hatten. Diese Einschränkung sollten wir nicht vergessen, wenn wir heute den Verfall der Debattenkultur beklagen.",
+                        "questions": [
+                            {
+                                "prompt": "Die Sprecherin erwähnt die Kaffeehäuser, um …",
+                                "options": [
+                                    "zu zeigen, dass die frühe Öffentlichkeit nicht allen offen stand.",
+                                    "die heutige Debattenkultur zu loben.",
+                                    "die Geschichte der Zeitung zu erzählen."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "writing",
+            "title": "Schreiben",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "essay",
+                        "words": 350
+                    },
+                    "instances": 1,
+                    "minutes": 60,
+                    "sizes": [
+                        {
+                            "words": 180,
+                            "minutes": 30
+                        },
+                        {
+                            "words": 230,
+                            "minutes": 40
+                        },
+                        {
+                            "words": 280,
+                            "minutes": 48
+                        },
+                        {
+                            "words": 320,
+                            "minutes": 55
+                        }
+                    ],
+                    "points": 60,
+                    "instructions": "Schreiben Sie einen Text (circa 350 Wörter) zu einem der beiden Themen. Behandeln Sie alle Punkte. Achten Sie auf einen klaren Aufbau, eine angemessene Sprache und eine überzeugende Argumentation.",
+                    "task": "Two questions of society or culture to choose from, given in the situation, such as whether art should be publicly funded or whether progress makes us happier. The points are four: introduce the question and why it matters, set out arguments on both sides with examples, weigh them, and draw a conclusion with one's own view.",
+                    "example": {
+                        "situation": "Wählen Sie ein Thema: A) „Sollte die Kunst vom Staat finanziert werden?“ B) „Macht technischer Fortschritt uns glücklicher?“ Schreiben Sie einen Beitrag für die Kulturseite einer Zeitung.",
+                        "points": [
+                            "Führen Sie in das Thema ein und zeigen Sie seine Bedeutung.",
+                            "Stellen Sie Argumente beider Seiten mit Beispielen dar.",
+                            "Wägen Sie die Argumente gegeneinander ab.",
+                            "Ziehen Sie ein Fazit und begründen Sie Ihre Position."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "email",
+                        "words": 200
+                    },
+                    "instances": 1,
+                    "minutes": 30,
+                    "sizes": [
+                        {
+                            "words": 120,
+                            "minutes": 15
+                        },
+                        {
+                            "words": 140,
+                            "minutes": 20
+                        },
+                        {
+                            "words": 170,
+                            "minutes": 25
+                        },
+                        {
+                            "words": 190,
+                            "minutes": 28
+                        }
+                    ],
+                    "points": 40,
+                    "instructions": "Formulieren Sie den Text um. Schreiben Sie auf Grundlage der Notizen einen formellen Text (circa 200 Wörter) an die genannte Stelle. Achten Sie auf den Stil und darauf, dass alle Informationen enthalten sind.",
+                    "task": "The situation gives informal notes of five to seven lines, or a casual message a colleague wrote, with all the facts of a matter: a complaint of residents, the report of a project, a request to an authority. The learner turns them into a formal letter or report to the office or person named, in a register fitting it. The points say what the text must do: state the matter, give the facts of the notes, ask for something, close fittingly.",
+                    "example": {
+                        "situation": "Notizen nach der Versammlung der Mieter: „Heizung seit 3 Wochen kaputt – Hausverwaltung reagiert nicht – zwei Familien mit Babys, eine ältere Dame krank – Reparatur angeblich ‚in Planung‘ – wollen Mietminderung, sonst Mieterverein!“ Schreiben Sie im Namen der Mieter an die Hausverwaltung Kramer & Söhne.",
+                        "points": [
+                            "Schildern Sie den Sachverhalt sachlich.",
+                            "Geben Sie alle Informationen der Notizen wieder.",
+                            "Formulieren Sie eine klare Forderung mit Frist.",
+                            "Schließen Sie mit einer angemessenen Formel."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "speaking",
+            "title": "Sprechen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "present",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 6
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 7
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 50,
+                    "instructions": "Vortrag halten. Wählen Sie eines der beiden Themen und halten Sie einen Vortrag (circa 4 Minuten). Beantworten Sie danach die Fragen der Prüfenden. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "Two themes of culture or society to choose from, each a question with a short quotation or claim, such as on the value of boredom or on whether languages should be protected, and the points of the talk: introduce the theme, develop a line of argument with examples, take up a counter-position, and conclude. The first prompt asks for the talk; the others are demanding questions of the examiners on it.",
+                    "example": {
+                        "card": "Thema A: „Wer nichts weiß, muss alles glauben.“ (Marie von Ebner-Eschenbach) – Bildung als Schutz vor Manipulation? · Thema B: Brauchen wir ein Recht auf Nichterreichbarkeit?\n· Einführung · Argumentation mit Beispielen · Gegenposition · Schluss",
+                        "prompts": [
+                            "Halten Sie Ihren Vortrag zu einem der beiden Themen.",
+                            "Die Prüferin fragt: „Sie sprechen von Bildung – aber sind nicht gerade Gebildete oft besonders anfällig für raffinierte Propaganda?“",
+                            "Der Prüfer fragt: „Welche Rolle sollten Schulen dabei konkret spielen?“"
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "discuss",
+                        "prompts": 5
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "prompts": 4,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 50,
+                    "instructions": "Diskussion führen. Sie diskutieren mit Ihrem Partner über eine kontroverse Frage. Vertreten Sie Ihre Position differenziert, gehen Sie auf die Argumente ein und versuchen Sie, einen Kompromiss zu finden. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "A controversial question of ethics, culture or politics, such as whether genetic tests of embryos should be allowed or whether historic monuments of a dark past should be removed, with a short statement in the card that opens it and four aspects. Each prompt is what the partner says, in turn, with arguments of weight and some subtlety: a thesis, a counter-argument to the learner, a hypothetical case, a question about a nuance, a proposal for a compromise.",
+                    "example": {
+                        "card": "„Denkmäler für umstrittene historische Persönlichkeiten sollten aus dem öffentlichen Raum entfernt werden.“\n· Erinnerungskultur · Verletzung von Betroffenen · Umdeutung statt Entfernung · Wer entscheidet?",
+                        "prompts": [
+                            "Ihr Partner sagt: „Ich finde, eine Stadt ehrt mit einem Denkmal. Wer Unrecht getan hat, verdient diese Ehre nicht.“",
+                            "Ihr Partner sagt: „Aber wenn wir alles entfernen, vergessen wir doch auch, was passiert ist. Ist das nicht gefährlicher?“",
+                            "Ihr Partner sagt: „Stell dir vor, die Nachfahren der Opfer müssen jeden Tag an diesem Denkmal vorbeigehen.“",
+                            "Ihr Partner sagt: „Wer sollte deiner Meinung nach darüber entscheiden – Experten oder die Bürger?“",
+                            "Ihr Partner sagt: „Wie wäre es, wenn wir sie in ein Museum bringen und dort kommentieren?“"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

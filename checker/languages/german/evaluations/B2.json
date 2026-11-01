@@ -1,0 +1,776 @@
+{
+    "level": "B2",
+    "exam": "Goethe-Zertifikat B2",
+    "pass": {
+        "module": 60
+    },
+    "themes": [
+        "Arbeitswelt und Karriere",
+        "Bildung und Lernen",
+        "Gesundheit und Lebensstil",
+        "Umwelt und Klimaschutz",
+        "Wohnen in Stadt und Land",
+        "Medien und Digitalisierung",
+        "Konsum und Werbung",
+        "Reisen und Tourismus",
+        "Gesellschaft und Zusammenleben",
+        "Wissenschaft und Technik",
+        "Kunst und Kultur",
+        "Sport und Freizeit"
+    ],
+    "modules": [
+        {
+            "id": "reading",
+            "title": "Lesen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "message",
+                        "answers": "choice",
+                        "questions": 9
+                    },
+                    "instances": 1,
+                    "minutes": 18,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 11
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 14
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 16
+                        }
+                    ],
+                    "points": 9,
+                    "instructions": "Sie lesen in einem Forum Beiträge von vier Personen zu einem Thema. Auf welche Person passen die Aussagen 1 bis 9? Die Personen können mehrmals gewählt werden.",
+                    "task": "A question of a forum on a matter of society or of one's own life, such as living alone, moving abroad or giving up a car, as the title, and four posts of 80 to 100 words each, every one with the first name of who wrote it, telling their experience and view. Each question is a statement that fits one of the four, in other words than theirs; its options are the four names, the same for every question, and each name is the answer of two or three.",
+                    "example": {
+                        "title": "Leben ohne eigenes Auto – geht das?",
+                        "shown": "",
+                        "text": "Anja: Vor zwei Jahren habe ich mein Auto verkauft, weil die Reparaturen zu teuer wurden. Am Anfang war es ungewohnt, besonders beim Einkaufen. Inzwischen fahre ich fast alles mit dem Rad und fühle mich viel fitter.\nMarkus: Ich wohne auf dem Land. Der Bus fährt hier zweimal am Tag. Ohne Auto könnte ich meine Arbeit nicht erreichen – für mich ist das keine Frage.\nLeyla: Wir teilen uns ein Auto mit zwei Nachbarfamilien. Man muss sich zwar absprechen, aber jeder spart viel Geld.\nJens: Ich habe es versucht und nach einem halben Jahr aufgegeben. Mit zwei kleinen Kindern war mir das einfach zu stressig.",
+                        "questions": [
+                            {
+                                "prompt": "Diese Person hat körperliche Vorteile bemerkt.",
+                                "options": [
+                                    "Anja",
+                                    "Markus",
+                                    "Leyla",
+                                    "Jens"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Für diese Person ist ein Leben ohne Auto wegen der Gegend unmöglich.",
+                                "options": [
+                                    "Anja",
+                                    "Markus",
+                                    "Leyla",
+                                    "Jens"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Diese Person nennt ein Modell, bei dem man sich ein Auto mit anderen teilt.",
+                                "options": [
+                                    "Anja",
+                                    "Markus",
+                                    "Leyla",
+                                    "Jens"
+                                ],
+                                "answer": 2
+                            },
+                            {
+                                "prompt": "Diese Person ist zu ihrer alten Gewohnheit zurückgekehrt.",
+                                "options": [
+                                    "Anja",
+                                    "Markus",
+                                    "Leyla",
+                                    "Jens"
+                                ],
+                                "answer": 3
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 6
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 12
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Sie lesen in einer Zeitschrift einen Artikel. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A magazine article of 400 to 450 words, with a title, on a matter of work, science or society, such as the four-day week, sleep research or cities that ban cars, giving facts, the views of experts and examples. The questions follow the order of the text and ask for an opinion, a reason, a result or what the text says about something; the wrong options use words of the text in another sense.",
+                    "example": {
+                        "title": "Freitag ist frei",
+                        "shown": "",
+                        "text": "Seit einem Jahr arbeiten die 40 Angestellten einer Softwarefirma in Leipzig nur noch vier Tage pro Woche – bei gleichem Gehalt. Der Chef, Daniel Roth, war anfangs selbst skeptisch. „Ich hatte Angst, dass wir unsere Projekte nicht mehr rechtzeitig schaffen“, sagt er. Doch das Gegenteil ist passiert: Die Mitarbeiter sind seltener krank, und in den Besprechungen wird schneller entschieden. Eine Arbeitspsychologin der Universität Leipzig, die das Projekt begleitet, warnt jedoch vor zu viel Optimismus. Nicht in jeder Branche lasse sich das Modell übertragen, etwa in der Pflege oder im Handel, wo Menschen zu festen Zeiten da sein müssen.",
+                        "questions": [
+                            {
+                                "prompt": "Daniel Roth befürchtete zunächst, dass …",
+                                "options": [
+                                    "die Mitarbeiter häufiger krank würden.",
+                                    "die Arbeit nicht fertig würde.",
+                                    "die Gehälter sinken müssten."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Die Arbeitspsychologin meint, dass das Modell …",
+                                "options": [
+                                    "in allen Berufen funktioniert.",
+                                    "in manchen Branchen schwierig ist.",
+                                    "zu teuer für kleine Firmen ist."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 6
+                    },
+                    "instances": 1,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 11
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Sie lesen in einer Zeitung einen Artikel. Aus diesem Text wurden Sätze entfernt. Wählen Sie für jede Lücke den passenden Satz.",
+                    "task": "A newspaper article of 300 to 350 words, with a title, from which six sentences were taken out, each gap marked in the text as (1) to (6). Each question is the number of a gap, such as \"Lücke 1\", with three sentences to choose from, only one of which fits the gap by its sense and by what it refers to before and after; the other two belong to the theme and may fit another gap.",
+                    "example": {
+                        "title": "Nie zu alt für Musik",
+                        "shown": "",
+                        "text": "Immer mehr Menschen in Deutschland lernen in ihrer Freizeit ein Instrument – auch im Erwachsenenalter. (1) Musikschulen berichten, dass die Zahl ihrer erwachsenen Schüler in zehn Jahren um ein Drittel gestiegen ist. Besonders beliebt sind Klavier und Gitarre. (2) Viele Erwachsene haben nämlich Angst, sich vor einem Lehrer zu blamieren. Die Musikpädagogin Eva Lindner kennt das Problem.",
+                        "questions": [
+                            {
+                                "prompt": "Lücke 1",
+                                "options": [
+                                    "Für viele ist es ein Ausgleich zum stressigen Beruf.",
+                                    "Deshalb gibt es kaum noch Musikschulen.",
+                                    "Dort kann man auch Noten kaufen."
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Lücke 2",
+                                "options": [
+                                    "Ein Klavier kostet allerdings viel Geld.",
+                                    "Der Anfang ist trotzdem oft nicht leicht.",
+                                    "Kinder lernen schneller als Erwachsene."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "message",
+                        "answers": "yesno",
+                        "questions": 6
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 9
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Sie lesen in einer Zeitschrift Leserbriefe zu einem Artikel. Ist die Person für die Idee des Artikels? Wählen Sie Ja oder Nein.",
+                    "task": "The idea of an article on a matter of society, such as a tax on sugar or a year of social service for everyone, as the title, and six readers' letters to it, of 60 to 80 words each, numbered and signed with a first name and a town. Each question is the first name with the town, and asks whether that person is for the idea; some give a but, so that the answer is told by their view as a whole.",
+                    "example": {
+                        "title": "Ein Pflichtjahr für alle?",
+                        "shown": "",
+                        "text": "1. Ein soziales Jahr für alle jungen Menschen finde ich sinnvoll. Ich habe selbst nach der Schule in einem Altenheim gearbeitet und dort mehr gelernt als in jedem Praktikum. (Julia, Bremen)\n2. Natürlich ist es schön, anderen zu helfen. Aber man kann junge Menschen nicht dazu zwingen. Wer freiwillig hilft, macht es auch mit mehr Freude. (Stefan, Graz)",
+                        "questions": [
+                            {
+                                "prompt": "Julia, Bremen",
+                                "options": [],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Stefan, Graz",
+                                "options": [],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 5",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "signs",
+                        "answers": "match",
+                        "questions": 6
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 9
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Sie lesen eine Arbeitsanweisung. Welche Überschrift passt zu welchem Abschnitt? Für einen Abschnitt gibt es keine passende Überschrift. In diesem Fall wählen Sie x.",
+                    "task": "A set of rules or instructions of 300 to 350 words, such as the rules of a company for its staff, of a hostel or of a sports club, in seven numbered paragraphs, with eight headings a to h in \"shown\". Each question is the number of a paragraph, such as \"Abschnitt 1\"; its options are the letters of the headings and x last, for a paragraph none fits. Each heading fits one paragraph at most.",
+                    "example": {
+                        "title": "Hinweise für neue Mitarbeiterinnen und Mitarbeiter",
+                        "shown": "a) Freie Tage planen · b) Parken auf dem Gelände · c) Im Krankheitsfall · d) Weiterbildung · e) Arbeitszeiten · f) Essen in der Firma · g) Sicherheit im Gebäude · h) Kleidung",
+                        "text": "1. Bitte melden Sie sich bis 8 Uhr telefonisch bei Ihrer Abteilung, wenn Sie krank sind. Ab dem dritten Tag brauchen wir eine Bescheinigung vom Arzt.\n2. Urlaub beantragen Sie bitte mindestens vier Wochen vorher über das Online-Formular.\n3. Die Kantine ist von 11:30 bis 14 Uhr geöffnet. Mitarbeiter bekommen einen Rabatt.",
+                        "questions": [
+                            {
+                                "prompt": "Abschnitt 1",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "x"
+                                ],
+                                "answer": 2
+                            },
+                            {
+                                "prompt": "Abschnitt 2",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "x"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Abschnitt 3",
+                                "options": [
+                                    "a",
+                                    "b",
+                                    "c",
+                                    "d",
+                                    "e",
+                                    "f",
+                                    "g",
+                                    "h",
+                                    "x"
+                                ],
+                                "answer": 5
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "listening",
+            "title": "Hören",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "choice",
+                        "questions": 2,
+                        "plays": "1"
+                    },
+                    "instances": 5,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 5
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 7
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 9
+                        },
+                        {
+                            "instances": 4,
+                            "minutes": 10
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Sie hören fünf kurze Texte. Sie hören jeden Text einmal. Zu jedem Text lösen Sie zwei Aufgaben. Wählen Sie bei jeder Aufgabe die richtige Lösung.",
+                    "task": "Short texts of the radio or the telephone, of five to seven sentences: a message on an answering machine, a report on the radio, an announcement, a short talk of the news. The first question asks what is said about the matter as a whole; the second asks for a detail or a consequence. All the options are said or likely.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Liebe Hörerinnen und Hörer, eine Meldung aus der Region: Das Hallenbad in der Nordstadt bleibt wegen eines Wasserschadens noch mindestens zwei Wochen geschlossen. Die Schwimmkurse für Kinder finden in dieser Zeit im Sportbad am Stadtpark statt, allerdings eine Stunde später als sonst. Wer eine Jahreskarte hat, kann sie bis Ende des Monats kostenlos verlängern lassen.",
+                        "questions": [
+                            {
+                                "prompt": "Was wird gemeldet?",
+                                "options": [
+                                    "Ein Schwimmbad wird renoviert.",
+                                    "Ein Schwimmbad ist vorübergehend zu.",
+                                    "Ein neues Schwimmbad öffnet."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Was gilt für die Kinderkurse?",
+                                "options": [
+                                    "Sie fallen aus.",
+                                    "Sie beginnen später.",
+                                    "Sie sind jetzt kostenlos."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "interview",
+                        "answers": "choice",
+                        "questions": 6,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 9
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Sie hören ein Interview. Sie hören den Text zweimal. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A radio interview of sixteen to twenty turns, with the speakers' names: a presenter talks with someone about their unusual work, a project they started or a decision that changed their life. The questions follow the order of the interview and ask for reasons, views and experiences.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Moderatorin: Frau Jansen, Sie haben vor fünf Jahren Ihre Stelle in einer Bank gekündigt und sind Imkerin geworden. Wie kam es dazu?\nFrau Jansen: Ich hatte schon als Kind Bienen bei meinem Großvater gesehen. In der Bank saß ich nur noch vor dem Bildschirm, das hat mich unzufrieden gemacht.\nModeratorin: Und kann man von Honig leben?\nFrau Jansen: Ehrlich gesagt nur knapp. Deshalb gebe ich zusätzlich Kurse für Hobbyimker.",
+                        "questions": [
+                            {
+                                "prompt": "Frau Jansen hat ihren Beruf gewechselt, weil …",
+                                "options": [
+                                    "sie in der Bank zu wenig verdient hat.",
+                                    "ihr die Arbeit am Computer nicht gefiel.",
+                                    "ihr Großvater Hilfe brauchte."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Mit dem Honig allein …",
+                                "options": [
+                                    "verdient sie gut.",
+                                    "kann sie gerade so leben.",
+                                    "verdient sie nichts."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "interview",
+                        "answers": "choice",
+                        "questions": 6,
+                        "plays": "1"
+                    },
+                    "instances": 1,
+                    "minutes": 10,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 7
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 9
+                        }
+                    ],
+                    "points": 6,
+                    "instructions": "Sie hören eine Diskussion. Sie hören den Text einmal. Wählen Sie bei jeder Aufgabe: Wer sagt was?",
+                    "task": "A radio discussion of sixteen to twenty turns, with the speakers' names: a presenter and two guests who disagree on a question, such as a ban on fireworks or homework at school. Each question is a statement one of the three makes, in other words than theirs; its options are the three names, the presenter first, the same for every question.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Moderator: Brauchen Schüler noch Hausaufgaben? Bei mir sind die Lehrerin Frau Seidel und der Schülersprecher Lukas Weiß. Frau Seidel?\nFrau Seidel: Ich halte Hausaufgaben für wichtig. Was man im Unterricht lernt, muss man zu Hause wiederholen.\nLukas Weiß: Aber viele Schüler haben nachmittags keine Ruhe zu Hause oder niemanden, der hilft. Das ist ungerecht.\nModerator: Es gibt ja Schulen, die Lernzeiten am Nachmittag anbieten.",
+                        "questions": [
+                            {
+                                "prompt": "Manche Schulen haben eine Lösung gefunden.",
+                                "options": [
+                                    "Moderator",
+                                    "Frau Seidel",
+                                    "Lukas Weiß"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Nicht alle Schüler haben die gleichen Chancen zu Hause.",
+                                "options": [
+                                    "Moderator",
+                                    "Frau Seidel",
+                                    "Lukas Weiß"
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "announcement",
+                        "answers": "choice",
+                        "questions": 8,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 11
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Sie hören einen Vortrag. Sie hören den Text zweimal. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A talk of three to four minutes by an expert at a public event or on the radio, on a matter of science, health or society, such as why we forget, how cities stay cool in summer or the history of a habit. The questions follow the order of the talk and ask for facts, causes and what the speaker advises.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Guten Abend, meine Damen und Herren. Heute möchte ich Ihnen erklären, warum wir uns an manche Dinge besser erinnern als an andere. Unser Gehirn speichert vor allem das, was mit Gefühlen verbunden ist. Deshalb wissen viele noch genau, wo sie an ihrem ersten Schultag waren, aber nicht, was sie letzte Woche gegessen haben. Ein zweiter Faktor ist die Wiederholung: Wer Neues nach einem Tag, einer Woche und einem Monat wiederholt, behält es fast doppelt so gut.",
+                        "questions": [
+                            {
+                                "prompt": "Wir erinnern uns besonders gut an Erlebnisse, die …",
+                                "options": [
+                                    "lange her sind.",
+                                    "emotional waren.",
+                                    "oft passiert sind."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Die Sprecherin empfiehlt, …",
+                                "options": [
+                                    "Neues in Abständen zu wiederholen.",
+                                    "jeden Tag lange zu lernen.",
+                                    "sich Notizen zu machen."
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "writing",
+            "title": "Schreiben",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "opinion",
+                        "words": 150
+                    },
+                    "instances": 1,
+                    "minutes": 50,
+                    "sizes": [
+                        {
+                            "words": 90,
+                            "minutes": 25
+                        },
+                        {
+                            "words": 110,
+                            "minutes": 32
+                        },
+                        {
+                            "words": 130,
+                            "minutes": 40
+                        },
+                        {
+                            "words": 150,
+                            "minutes": 50
+                        }
+                    ],
+                    "points": 60,
+                    "instructions": "Sie schreiben einen Forumsbeitrag (circa 150 Wörter). Wählen Sie dazu drei der vier Punkte aus. Überlegen Sie sich eine passende Reihenfolge der Punkte und eine Einleitung und einen Schluss.",
+                    "task": "The theme of an online forum on a matter of society, such as working from home, learning in old age or tourism in cities, in the situation. The points are four, of which the learner chooses three: their opinion on it with reasons, other ways or forms of it, what it means for a group of people, and its advantages and disadvantages.",
+                    "example": {
+                        "situation": "Sie haben in einem Online-Forum über das Thema „Leben in der Großstadt“ diskutiert. Schreiben Sie nun Ihre Meinung dazu.",
+                        "points": [
+                            "Äußern Sie Ihre Meinung zum Leben in der Großstadt.",
+                            "Nennen Sie andere Wohnformen.",
+                            "Was bedeutet das Leben in der Stadt für Familien mit Kindern?",
+                            "Nennen Sie Vorteile und Nachteile."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "email",
+                        "words": 100
+                    },
+                    "instances": 1,
+                    "minutes": 25,
+                    "sizes": [
+                        {
+                            "words": 60,
+                            "minutes": 13
+                        },
+                        {
+                            "words": 70,
+                            "minutes": 16
+                        },
+                        {
+                            "words": 85,
+                            "minutes": 20
+                        },
+                        {
+                            "words": 100,
+                            "minutes": 25
+                        }
+                    ],
+                    "points": 40,
+                    "instructions": "Schreiben Sie eine E-Mail (circa 100 Wörter). Behandeln Sie darin die vier Punkte. Überlegen Sie sich eine passende Reihenfolge der Punkte. Vergessen Sie nicht Anrede und Gruß.",
+                    "task": "A situation of work or of a course in which the learner writes formally to a boss, a colleague they address with Sie, a course leader or an office: they cannot do what was agreed, something went wrong, they ask for a change. The prompt lists four points.",
+                    "example": {
+                        "situation": "Sie sollten morgen bei der Präsentation eines neuen Produkts in Ihrer Firma helfen. Ihr Chef, Herr Lorenz, hat Sie darum gebeten. Sie können aber nicht.",
+                        "points": [
+                            "Entschuldigen Sie sich und sagen Sie, warum Sie nicht können.",
+                            "Sagen Sie, was Sie schon vorbereitet haben.",
+                            "Schlagen Sie vor, wer Sie vertreten könnte.",
+                            "Bieten Sie an, später etwas anderes zu übernehmen."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "speaking",
+            "title": "Sprechen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "present",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 6
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 7
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 50,
+                    "instructions": "Vortrag halten. Wählen Sie eines der beiden Themen und halten Sie einen kurzen Vortrag (circa 4 Minuten). Beantworten Sie danach die Fragen. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "Two themes of society to choose from, each a short title, such as cooking at home or eating out, or learning languages at school, and the five points of the talk: present the theme, describe one or more forms of it, name the situation in the learner's country, give advantages and disadvantages, and end with an opinion. The first prompt asks for the talk; the others are questions of the partner or the examiner on it.",
+                    "example": {
+                        "card": "Thema A: Ehrenamt – unbezahlte Arbeit für andere · Thema B: Kinder und Smartphones\n· Stellen Sie das Thema vor. · Beschreiben Sie eine oder mehrere Formen. · Beschreiben Sie die Situation in Ihrem Heimatland. · Nennen Sie Vor- und Nachteile und bewerten Sie diese. · Beenden Sie Ihren Vortrag und nennen Sie Ihre Meinung.",
+                        "prompts": [
+                            "Halten Sie Ihren Vortrag zu einem der beiden Themen.",
+                            "Ihr Partner fragt: „Glaubst du, dass der Staat solche Tätigkeiten stärker unterstützen sollte?“",
+                            "Der Prüfer fragt: „Haben Sie selbst Erfahrungen damit gemacht?“"
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "discuss",
+                        "prompts": 4
+                    },
+                    "instances": 1,
+                    "minutes": 7,
+                    "sizes": [
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 6
+                        },
+                        {
+                            "prompts": 4,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 50,
+                    "instructions": "Diskussion führen. Sie diskutieren mit Ihrem Partner über eine Frage. Tauschen Sie Ihre Argumente aus, reagieren Sie auf die Argumente Ihres Partners und fassen Sie am Ende zusammen. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "A question of society to discuss, such as whether schools should start later or whether cars should be banned from city centres, with four points to argue with, on the card. Each prompt is what the partner says, in turn: their view, an objection to the learner's, a question, a proposal to sum up.",
+                    "example": {
+                        "card": "Sollten Restaurants mehr vegetarische Gerichte anbieten?\n· Gesundheit · Umwelt · Preise · Tradition",
+                        "prompts": [
+                            "Ihr Partner sagt: „Ich finde, jedes Restaurant sollte mindestens die Hälfte vegetarisch anbieten. Das ist gesünder.“",
+                            "Ihr Partner sagt: „Aber viele Gäste wollen eben Fleisch. Soll man ihnen das verbieten?“",
+                            "Ihr Partner sagt: „Und wie ist das bei euch in deinem Heimatland?“",
+                            "Ihr Partner sagt: „Können wir uns darauf einigen, dass es immer eine gute vegetarische Wahl geben sollte?“"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

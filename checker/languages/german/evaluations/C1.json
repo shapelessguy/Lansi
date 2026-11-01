@@ -1,0 +1,671 @@
+{
+    "level": "C1",
+    "exam": "Goethe-Zertifikat C1",
+    "pass": {
+        "module": 60
+    },
+    "themes": [
+        "Arbeitswelt im Wandel",
+        "Bildung und Wissenschaft",
+        "Gesundheit und Medizin",
+        "Umwelt, Klima und Energie",
+        "Wirtschaft und Konsum",
+        "Medien, Öffentlichkeit und Digitalisierung",
+        "Migration und Mehrsprachigkeit",
+        "Stadtentwicklung und Wohnen",
+        "Kultur, Kunst und Literatur",
+        "Psychologie und Verhalten",
+        "Politik und Gesellschaft",
+        "Technik und Zukunft"
+    ],
+    "modules": [
+        {
+            "id": "reading",
+            "title": "Lesen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 9
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 12
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 14
+                        }
+                    ],
+                    "points": 9,
+                    "instructions": "Lesen Sie den Text. Aus dem Text wurden Wörter entfernt. Wählen Sie für jede Lücke das passende Wort.",
+                    "task": "A text of 300 to 350 words, with a title, of popular science or culture, such as the history of a word, a study of habits or a portrait of an inventor, from which nine words were taken out, each gap marked as (1) to (9): prepositions, connectors, verbs of a fixed phrase, nouns of a collocation. Each question is the number of a gap, such as \"Lücke 1\", with three words that are alike in form or sense, only one of which fits by grammar and by sense.",
+                    "example": {
+                        "title": "Eine kurze Geschichte des Papiers",
+                        "shown": "",
+                        "text": "Wer heute ein Buch kauft, denkt selten (1) die lange Geschichte des Papiers nach. Dabei war Papier in Europa bis ins 14. Jahrhundert ein Luxus. Die meisten Texte wurden (2) Pergament geschrieben, das aus Tierhaut hergestellt wurde. Erst als die ersten Papiermühlen entstanden, (3) sich das Material schnell durch.",
+                        "questions": [
+                            {
+                                "prompt": "Lücke 1",
+                                "options": [
+                                    "über",
+                                    "an",
+                                    "von"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Lücke 2",
+                                "options": [
+                                    "mit",
+                                    "auf",
+                                    "in"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Lücke 3",
+                                "options": [
+                                    "setzte",
+                                    "stellte",
+                                    "legte"
+                                ],
+                                "answer": 0
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 7
+                    },
+                    "instances": 1,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 12
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 15
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 18
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Lesen Sie den Artikel. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A demanding article of 500 to 600 words, with a title, from a quality newspaper or a magazine of science, on a debate of society, work or research, giving the views of several experts that differ in nuance. The questions follow the order of the text and ask for the author's or an expert's view, an implication or what a phrase means in its context; the wrong options say what is near but not what the text says.",
+                    "example": {
+                        "title": "Die Kunst des Weglassens",
+                        "shown": "",
+                        "text": "Die Idee klingt verlockend: Wer weniger besitzt, lebt glücklicher. Ratgeber zum Minimalismus füllen die Bestsellerlisten, und in sozialen Netzwerken zeigen Menschen ihre fast leeren Wohnungen. Die Soziologin Martina Feld sieht darin jedoch weniger eine Abkehr vom Konsum als dessen Fortsetzung mit anderen Mitteln: „Wer sich teure Designmöbel leistet, um möglichst wenig zu besitzen, demonstriert vor allem eines – dass er es sich leisten kann.“",
+                        "questions": [
+                            {
+                                "prompt": "Martina Feld hält den Minimalismus für …",
+                                "options": [
+                                    "eine echte Alternative zur Konsumgesellschaft.",
+                                    "eine neue Form, Status zu zeigen.",
+                                    "eine Mode, die bald vorbei ist."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "article",
+                        "answers": "choice",
+                        "questions": 8
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 12
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Lesen Sie den Text. Entsprechen die Aussagen dem Text? Wählen Sie: Ja, Nein oder Text sagt dazu nichts.",
+                    "task": "A report or an essay of 450 to 550 words, with a title, on a matter of work or science, such as a study on sleep, a new way of building or the change of a branch. Each question is a statement in the order of the text, with the options \"Ja\", \"Nein\" and \"Text sagt dazu nichts\", in that order, for every question: some agree with the text, some contradict it, and two or three speak of something the text does not say, though it is near what it says.",
+                    "example": {
+                        "title": "Offen, aber stumm",
+                        "shown": "",
+                        "text": "Eine Studie der Universität Basel hat untersucht, wie sich Großraumbüros auf die Zusammenarbeit auswirken. Entgegen den Erwartungen sprachen die Mitarbeiter nach dem Umzug in offene Räume rund ein Drittel weniger miteinander. Stattdessen nahm die Zahl der E-Mails deutlich zu. Die Forscher vermuten, dass viele aus Rücksicht auf die Kollegen Gespräche vermeiden.",
+                        "questions": [
+                            {
+                                "prompt": "Die Forscher hatten mehr Gespräche im Großraumbüro erwartet.",
+                                "options": [
+                                    "Ja",
+                                    "Nein",
+                                    "Text sagt dazu nichts"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Nach dem Umzug schrieben die Mitarbeiter weniger E-Mails.",
+                                "options": [
+                                    "Ja",
+                                    "Nein",
+                                    "Text sagt dazu nichts"
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Die Mitarbeiter waren im Großraumbüro unzufriedener.",
+                                "options": [
+                                    "Ja",
+                                    "Nein",
+                                    "Text sagt dazu nichts"
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "reading",
+                        "text": "message",
+                        "answers": "choice",
+                        "questions": 8
+                    },
+                    "instances": 1,
+                    "minutes": 15,
+                    "sizes": [
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 10
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 12
+                        },
+                        {
+                            "questions": 7,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Sie lesen in einer Fachzeitschrift Stellungnahmen von vier Personen zu einem Thema. Auf welche Person treffen die Aussagen zu? Die Personen können mehrmals gewählt werden.",
+                    "task": "A question of a professional journal on a matter of work or society, such as whether universities should charge fees or companies should allow sabbaticals, as the title, and the statements of four experts of 100 to 130 words each, every one with a name and a role. Each question is a statement in other words than theirs that fits one of them; its options are the four names, the same for every question, each the answer of two.",
+                    "example": {
+                        "title": "Sollen Hochschulen Studiengebühren verlangen?",
+                        "shown": "",
+                        "text": "Prof. Dr. Ute Becker, Bildungsforscherin: Studiengebühren schrecken vor allem junge Menschen aus Familien ohne akademischen Hintergrund ab. Das zeigen alle Untersuchungen.\nJörg Haller, Unternehmer: Wer kostenlos studiert, studiert oft zu lange. Moderate Gebühren würden die Motivation erhöhen.\nSandra Yilmaz, Studentin: Ich arbeite schon jetzt zwanzig Stunden pro Woche neben dem Studium. Gebühren wären für mich das Ende.\nDr. Felix Moser, Ökonom: Entscheidend ist nicht, ob es Gebühren gibt, sondern ob es ein gutes Stipendiensystem gibt.",
+                        "questions": [
+                            {
+                                "prompt": "Diese Person verweist auf wissenschaftliche Ergebnisse.",
+                                "options": [
+                                    "Ute Becker",
+                                    "Jörg Haller",
+                                    "Sandra Yilmaz",
+                                    "Felix Moser"
+                                ],
+                                "answer": 0
+                            },
+                            {
+                                "prompt": "Diese Person hält die Frage selbst für nebensächlich.",
+                                "options": [
+                                    "Ute Becker",
+                                    "Jörg Haller",
+                                    "Sandra Yilmaz",
+                                    "Felix Moser"
+                                ],
+                                "answer": 3
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "listening",
+            "title": "Hören",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "phone",
+                        "answers": "choice",
+                        "questions": 7,
+                        "plays": "1"
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 4
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 5
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Sie hören eine Nachricht am Telefon. Sie hören den Text einmal. Wählen Sie bei jeder Aufgabe die richtige Lösung.",
+                    "task": "A long message on an answering machine, of one to two minutes, at work or at a university: a colleague hands over a task, a secretary passes on the plan of a conference, an office explains what is still missing in an application. Each question is a note the listener takes, as the start of a sentence, with three endings that are all said or near what is said, such as three dates, three rooms or three documents.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Guten Tag, Herr Weiß, hier spricht Claudia Ostermann vom Tagungsbüro. Ich rufe wegen Ihres Vortrags auf der Fachtagung im März an. Leider müssen wir Ihren Termin verschieben: Sie sprechen nicht wie geplant am Donnerstagvormittag, sondern am Freitag um 14 Uhr, und zwar in Saal B statt im großen Hörsaal. Ihre Präsentation schicken Sie uns bitte bis zum 1. März, am besten als PDF.",
+                        "questions": [
+                            {
+                                "prompt": "Der Vortrag findet statt am …",
+                                "options": [
+                                    "Donnerstagvormittag.",
+                                    "Freitagnachmittag.",
+                                    "1. März."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Der neue Raum ist …",
+                                "options": [
+                                    "der große Hörsaal.",
+                                    "Saal A.",
+                                    "Saal B."
+                                ],
+                                "answer": 2
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "interview",
+                        "answers": "choice",
+                        "questions": 10,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 14,
+                    "sizes": [
+                        {
+                            "questions": 5,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 8,
+                            "minutes": 11
+                        },
+                        {
+                            "questions": 9,
+                            "minutes": 13
+                        }
+                    ],
+                    "points": 10,
+                    "instructions": "Sie hören ein Interview. Sie hören den Text zweimal. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A radio interview of four to five minutes, of twenty to twenty-four turns with the speakers' names, in which a presenter talks with an expert or someone of note, such as a researcher, an architect or a founder, about their work and a question of society it touches. The questions follow the order of the interview and ask for views, reasons and implications.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Moderator: Frau Dr. Hartmann, Sie erforschen, wie Langeweile auf Kinder wirkt. Ist Langeweile denn etwas Gutes?\nDr. Hartmann: In Maßen auf jeden Fall. Kinder, die sich langweilen, fangen an, sich selbst Beschäftigungen auszudenken. Das fördert die Kreativität.\nModerator: Viele Eltern planen aber jede Stunde ihrer Kinder.\nDr. Hartmann: Das ist gut gemeint, nimmt den Kindern aber die Chance, eigene Interessen zu entdecken.",
+                        "questions": [
+                            {
+                                "prompt": "Dr. Hartmann meint, Langeweile …",
+                                "options": [
+                                    "schadet der Entwicklung.",
+                                    "kann die Fantasie anregen.",
+                                    "sollte man vermeiden."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 3",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "answers": "choice",
+                        "questions": 2,
+                        "plays": "1"
+                    },
+                    "instances": 4,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "instances": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "instances": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 6
+                        },
+                        {
+                            "instances": 3,
+                            "minutes": 6
+                        }
+                    ],
+                    "points": 8,
+                    "instructions": "Sie hören kurze Aussagen von Personen zu einem Thema. Sie hören jeden Text einmal. Wählen Sie bei jeder Aufgabe die richtige Lösung.",
+                    "task": "One person speaks for thirty to forty seconds on a question that a radio show asked its listeners, such as how they deal with stress or what they think of working past retirement. The first question asks for the person's view as a whole; the second for a reason or an experience they give. The options are near each other, so that the listener must catch a nuance or a turn such as \"aber\" or \"eigentlich\".",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Also, ich arbeite jetzt seit dreißig Jahren als Krankenpfleger, und eigentlich freue ich mich auf die Rente. Aber ganz aufhören möchte ich nicht. Vielleicht zwei Tage in der Woche, damit ich den Kontakt zu den Kollegen nicht verliere. Allein zu Hause sitzen – das wäre nichts für mich.",
+                        "questions": [
+                            {
+                                "prompt": "Der Sprecher möchte nach der Rente …",
+                                "options": [
+                                    "ganz aufhören zu arbeiten.",
+                                    "weniger weiterarbeiten.",
+                                    "den Beruf wechseln."
+                                ],
+                                "answer": 1
+                            },
+                            {
+                                "prompt": "Wichtig ist ihm vor allem …",
+                                "options": [
+                                    "das zusätzliche Geld.",
+                                    "der Kontakt zu anderen.",
+                                    "die Arbeit mit Patienten."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 4",
+                    "exercise": "comprehension",
+                    "options": {
+                        "by": "listening",
+                        "text": "announcement",
+                        "answers": "choice",
+                        "questions": 7,
+                        "plays": "2"
+                    },
+                    "instances": 1,
+                    "minutes": 12,
+                    "sizes": [
+                        {
+                            "questions": 3,
+                            "minutes": 6
+                        },
+                        {
+                            "questions": 4,
+                            "minutes": 8
+                        },
+                        {
+                            "questions": 5,
+                            "minutes": 9
+                        },
+                        {
+                            "questions": 6,
+                            "minutes": 11
+                        }
+                    ],
+                    "points": 7,
+                    "instructions": "Sie hören einen Vortrag. Sie hören den Text zweimal. Wählen Sie bei jeder Aufgabe die richtige Lösung a, b oder c.",
+                    "task": "A lecture of five to six minutes of a university or a public series, on a matter of science, economics or history, with a structure the speaker makes plain: a question, findings, objections, a conclusion. The questions follow the order of the lecture and ask for facts, causes, the speaker's position and what they conclude.",
+                    "example": {
+                        "title": "",
+                        "shown": "",
+                        "text": "Meine Damen und Herren, die Frage, mit der ich mich heute beschäftigen möchte, lautet: Warum kaufen wir Dinge, die wir nicht brauchen? Die klassische Wirtschaftswissenschaft ging lange davon aus, dass Menschen rational entscheiden. Die Verhaltensökonomie hat dieses Bild gründlich korrigiert. Wir lassen uns von Rabatten, vom Verhalten anderer und vor allem von Gewohnheiten leiten.",
+                        "questions": [
+                            {
+                                "prompt": "Die Verhaltensökonomie hat gezeigt, dass Menschen …",
+                                "options": [
+                                    "meistens rational entscheiden.",
+                                    "beim Kaufen oft nicht vernünftig handeln.",
+                                    "Rabatte misstrauen."
+                                ],
+                                "answer": 1
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "writing",
+            "title": "Schreiben",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "essay",
+                        "words": 230
+                    },
+                    "instances": 1,
+                    "minutes": 60,
+                    "sizes": [
+                        {
+                            "words": 120,
+                            "minutes": 30
+                        },
+                        {
+                            "words": 150,
+                            "minutes": 40
+                        },
+                        {
+                            "words": 190,
+                            "minutes": 50
+                        },
+                        {
+                            "words": 210,
+                            "minutes": 55
+                        }
+                    ],
+                    "points": 60,
+                    "instructions": "Schreiben Sie einen Forumsbeitrag (circa 230 Wörter). Gehen Sie dabei auf die Grafik ein und behandeln Sie die Punkte. Achten Sie auf eine passende Einleitung und einen passenden Schluss.",
+                    "task": "A matter of society on which the learner writes a contribution to a forum of debate, with the main figures of a statistic given in words in the situation, such as the share of people who work from home or who buy second-hand, in a few numbers. The points are four: describe what the figures show, give reasons for the trend, weigh what speaks for and against, and give and justify one's own view.",
+                    "example": {
+                        "situation": "In einem Forum wird über das Thema „Lebenslanges Lernen“ diskutiert. Eine Umfrage zeigt: 2015 nahmen 44 % der Erwachsenen an einer Weiterbildung teil, 2023 waren es 60 %. Die meisten nennen berufliche Gründe (71 %), nur 18 % lernen aus privatem Interesse.",
+                        "points": [
+                            "Beschreiben Sie, was die Umfrage zeigt.",
+                            "Nennen Sie mögliche Gründe für diese Entwicklung.",
+                            "Wägen Sie Vor- und Nachteile ab, wenn Arbeitgeber Weiterbildung verlangen.",
+                            "Begründen Sie Ihre eigene Meinung."
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "writing",
+                    "options": {
+                        "kind": "email",
+                        "words": 120
+                    },
+                    "instances": 1,
+                    "minutes": 20,
+                    "sizes": [
+                        {
+                            "words": 70,
+                            "minutes": 10
+                        },
+                        {
+                            "words": 85,
+                            "minutes": 13
+                        },
+                        {
+                            "words": 100,
+                            "minutes": 16
+                        },
+                        {
+                            "words": 110,
+                            "minutes": 18
+                        }
+                    ],
+                    "points": 40,
+                    "instructions": "Schreiben Sie eine formelle E-Mail (circa 120 Wörter). Behandeln Sie die Punkte in einer passenden Reihenfolge. Achten Sie auf den Stil.",
+                    "task": "A situation of work, of study or as a customer in which the learner writes formally to an institution or a person they do not know well: a complaint with a demand, an application with questions, a reply to an invitation with conditions. The prompt lists four points, one of which asks for something precise.",
+                    "example": {
+                        "situation": "Sie haben bei einer Sprachschule einen Intensivkurs gebucht. Der Kurs war anders als in der Beschreibung. Schreiben Sie an die Leitung der Schule.",
+                        "points": [
+                            "Beschreiben Sie, was nicht der Beschreibung entsprach.",
+                            "Erklären Sie, welche Folgen das für Sie hatte.",
+                            "Fordern Sie eine angemessene Lösung.",
+                            "Schlagen Sie vor, wie man solche Probleme künftig vermeiden kann."
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "id": "speaking",
+            "title": "Sprechen",
+            "weight": 25,
+            "parts": [
+                {
+                    "title": "Teil 1",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "present",
+                        "prompts": 3
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "prompts": 1,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 6
+                        },
+                        {
+                            "prompts": 2,
+                            "minutes": 7
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 8
+                        }
+                    ],
+                    "points": 50,
+                    "instructions": "Vortrag halten. Wählen Sie eines der beiden Themen und halten Sie einen Vortrag (circa 3–4 Minuten). Beantworten Sie danach Fragen dazu. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "Two themes of society to choose from, each with a question, such as whether museums should be free or whether flying should cost more, and the points of the talk: the importance of the matter, the situation in the learner's country, arguments for and against with examples, and a conclusion with a well-founded view. The first prompt asks for the talk; the others are questions of the partner or the examiner that challenge it.",
+                    "example": {
+                        "card": "Thema A: Sollten Museen kostenlos sein? · Thema B: Brauchen wir eine Frauenquote in Führungspositionen?\n· Bedeutung des Themas · Situation in Ihrem Land · Argumente dafür und dagegen mit Beispielen · Schluss mit begründeter Meinung",
+                        "prompts": [
+                            "Halten Sie Ihren Vortrag zu einem der beiden Themen.",
+                            "Ihre Partnerin fragt: „Aber wer soll das bezahlen, wenn die Einnahmen wegfallen?“",
+                            "Die Prüferin fragt: „Gibt es Ihrer Meinung nach einen Mittelweg?“"
+                        ]
+                    }
+                },
+                {
+                    "title": "Teil 2",
+                    "exercise": "oral",
+                    "options": {
+                        "kind": "discuss",
+                        "prompts": 5
+                    },
+                    "instances": 1,
+                    "minutes": 8,
+                    "sizes": [
+                        {
+                            "prompts": 2,
+                            "minutes": 4
+                        },
+                        {
+                            "prompts": 3,
+                            "minutes": 5
+                        },
+                        {
+                            "prompts": 4,
+                            "minutes": 6
+                        },
+                        {
+                            "prompts": 4,
+                            "minutes": 7
+                        }
+                    ],
+                    "points": 50,
+                    "instructions": "Diskussion führen. Sie diskutieren mit Ihrem Partner über eine Frage, die in der Öffentlichkeit kontrovers ist. Vertreten Sie Ihren Standpunkt, gehen Sie auf die Argumente ein und versuchen Sie, zu einem Ergebnis zu kommen. Schreiben Sie so, wie Sie sprechen würden.",
+                    "task": "A controversial question of society, such as a ban on advertising for children or a duty to vote, with a short statement in the card that opens it and four aspects to argue with. Each prompt is what the partner says, in turn, with arguments of some weight: a view, an objection, a counter-example, a question back, a proposal to agree on.",
+                    "example": {
+                        "card": "„In Innenstädten sollten keine privaten Autos mehr fahren dürfen.“\n· Lebensqualität · Handel und Wirtschaft · Menschen mit eingeschränkter Mobilität · öffentlicher Verkehr",
+                        "prompts": [
+                            "Ihr Partner sagt: „Ich halte das für überfällig. Die Luft wäre besser und die Straßen könnten Plätze für Menschen werden.“",
+                            "Ihr Partner sagt: „Den Einzelhändlern würden doch nicht die Kunden fehlen – im Gegenteil, Fußgänger bleiben länger.“",
+                            "Ihr Partner sagt: „Das Argument mit älteren Menschen höre ich oft. Aber gibt es dafür nicht längst Lösungen?“",
+                            "Ihr Partner sagt: „Wie würde so etwas in deiner Heimatstadt funktionieren?“",
+                            "Ihr Partner sagt: „Vielleicht könnten wir uns auf schrittweise autofreie Zonen einigen?“"
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
