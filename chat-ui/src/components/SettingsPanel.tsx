@@ -455,7 +455,38 @@ function ModelsTab({ settings, onChange }: TabProps) {
                 </span>
                 {picker("visionModel", "Vision model", "vision", "the chat model")}
             </div>
+            <VisionKey settings={settings} onChange={onChange} />
         </>
+    );
+}
+
+/** The key of Google Cloud Vision, which reads handwritten pages, with a button that shows it. */
+function VisionKey({ settings, onChange }: TabProps) {
+    const [showKey, setShowKey] = useState(false);
+    return (
+        <label className="field">
+            <span className="setting-name">
+                {t("Google Cloud Vision API key")}
+                <Help>
+                    {t(
+                        "Reads the photos of your handwritten pages, and finds where each word is on them. Kept in this browser only, and sent to the server with each page it reads.",
+                    )}
+                </Help>
+            </span>
+            <span className="input-row">
+                <input
+                    type={showKey ? "text" : "password"}
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="AIza…"
+                    value={settings.visionKey}
+                    onChange={(event) => onChange({ ...settings, visionKey: event.target.value.trim() })}
+                />
+                <button type="button" onClick={() => setShowKey(!showKey)}>
+                    {showKey ? t("Hide") : t("Show")}
+                </button>
+            </span>
+        </label>
     );
 }
 

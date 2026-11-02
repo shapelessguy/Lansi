@@ -29,9 +29,11 @@ from pathlib import Path
 from typing import Any
 
 from books import PICTURE_ID
+from ink import PAGE_HEIGHT, PAGE_WIDTH, checked
+from ocr import text_of
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 35
+SCHEMA_VERSION = 37
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -576,6 +578,43 @@ ALTER TABLE favourites ADD COLUMN folder_id INTEGER
 _FAVOURITE_NAMES = """
 ALTER TABLE favourites ADD COLUMN name TEXT;
 """
+
+# What came with version 36: the handwritten pages of a text, kept for a
+# short while as photos, whose table version 37 takes the place of.
+_TEXT_PHOTOS = """
+CREATE TABLE text_pages (
+    id TEXT PRIMARY KEY,
+    text_id TEXT NOT NULL REFERENCES learner_texts (id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    words TEXT NOT NULL
+);
+"""
+
+# What came with version 37: the texts that are written by hand, in pages
+# of ink, as ink.py describes it, and the words read from each page, as
+# ocr.py reads them. A text written by hand says what its pages were read
+# to say.
+_TEXT_PAGES = """
+DROP TABLE text_pages;
+ALTER TABLE learner_texts ADD COLUMN handwritten INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE text_pages (
+    id TEXT PRIMARY KEY,
+    text_id TEXT NOT NULL REFERENCES learner_texts (id) ON DELETE CASCADE,
+    -- where it comes in the text, the first page first
+    position INTEGER NOT NULL,
+    -- JSON: the strokes written on it
+    ink TEXT NOT NULL DEFAULT '[]',
+    -- JSON: each word read from it with where it is, as ocr.Word keeps
+    -- it; NULL until it is read
+    words TEXT,
+    -- in seconds since the epoch: when it was last written on, and read
+    inked_at REAL NOT NULL,
+    read_at REAL
+);
+CREATE INDEX text_pages_of_text ON text_pages (text_id, position);
+"""
 # the longest the name of a folder of the favourites, or of a favourite,
 # may be, in characters
 MAX_FOLDER_NAME = 100
@@ -735,7 +774,7 @@ def is_id(value: object) -> bool:
 
 _TEXT_COLUMNS = (
     "id, title, content, language, kind, corrects, session_id, created_at,"
-    " updated_at, locked_at"
+    " updated_at, locked_at, handwritten"
 )
 
 
@@ -750,6 +789,7 @@ def _text(
     created_at: float,
     updated_at: float,
     locked_at: float | None,
+    handwritten: int,
 ) -> dict[str, Any]:
     """A text as it is told."""
     return {
@@ -763,6 +803,7 @@ def _text(
         "createdAt": created_at,
         "updatedAt": updated_at,
         "lockedAt": locked_at,
+        "handwritten": bool(handwritten),
     }
 
 
@@ -824,6 +865,49 @@ def _log(
     }
 
 
+# What each version of the database came with, the first first: a store
+# of an older version is given what came after it.
+_MIGRATIONS = (
+    _SCHEMA,
+    _BOOKS,
+    _BOOK_SOURCES,
+    _BOOK_COVERS,
+    _BOOK_SPEECH,
+    _PRACTICE,
+    _TOPICS,
+    _GUIDANCE,
+    _USAGE,
+    _REVIEWS,
+    _WRITTEN,
+    _LOGS,
+    _FINDINGS,
+    _TASKS,
+    _ACTIVITY_LOGS,
+    _EVALUATIONS,
+    _ENGLISH_SCORES,
+    _TUTOR,
+    _MEMORIES,
+    _TEXTS,
+    _RECAPS,
+    _TUTOR_TURNS,
+    _CALENDAR,
+    _INSTANCES,
+    _HIDDEN,
+    _GRADE_PARTS,
+    _GRADE_ABOUT,
+    _EVALUATION_SIZES,
+    _TUTOR_PROCESSED,
+    _BOOK_NAVIGATION,
+    _BOOK_VERSIONS,
+    _BRIEFS,
+    _FAVOURITES,
+    _FAVOURITE_FOLDERS,
+    _FAVOURITE_NAMES,
+    _TEXT_PHOTOS,
+    _TEXT_PAGES,
+)
+
+
 class UserStore:
     """The chats, the practice and the settings of one user, in a directory
     of the user's own. It can be used from several threads."""
@@ -855,76 +939,9 @@ class UserStore:
         self._lock = threading.Lock()
         with self._lock, self._db:
             (version,) = self._db.execute("PRAGMA user_version").fetchone()
-            if version == 0:
-                self._db.executescript(_SCHEMA)
-            if version < 2:
-                self._db.executescript(_BOOKS)
-            if version < 3:
-                self._db.executescript(_BOOK_SOURCES)
-            if version < 4:
-                self._db.executescript(_BOOK_COVERS)
-            if version < 5:
-                self._db.executescript(_BOOK_SPEECH)
-            if version < 6:
-                self._db.executescript(_PRACTICE)
-            if version < 7:
-                self._db.executescript(_TOPICS)
-            if version < 8:
-                self._db.executescript(_GUIDANCE)
-            if version < 9:
-                self._db.executescript(_USAGE)
-            if version < 10:
-                self._db.executescript(_REVIEWS)
-            if version < 11:
-                self._db.executescript(_WRITTEN)
-            if version < 12:
-                self._db.executescript(_LOGS)
-            if version < 13:
-                self._db.executescript(_FINDINGS)
-            if version < 14:
-                self._db.executescript(_TASKS)
-            if version < 15:
-                self._db.executescript(_ACTIVITY_LOGS)
-            if version < 16:
-                self._db.executescript(_EVALUATIONS)
-            if version < 17:
-                self._db.executescript(_ENGLISH_SCORES)
-            if version < 18:
-                self._db.executescript(_TUTOR)
-            if version < 19:
-                self._db.executescript(_MEMORIES)
-            if version < 20:
-                self._db.executescript(_TEXTS)
-            if version < 21:
-                self._db.executescript(_RECAPS)
-            if version < 22:
-                self._db.executescript(_TUTOR_TURNS)
-            if version < 23:
-                self._db.executescript(_CALENDAR)
-            if version < 24:
-                self._db.executescript(_INSTANCES)
-            if version < 25:
-                self._db.executescript(_HIDDEN)
-            if version < 26:
-                self._db.executescript(_GRADE_PARTS)
-            if version < 27:
-                self._db.executescript(_GRADE_ABOUT)
-            if version < 28:
-                self._db.executescript(_EVALUATION_SIZES)
-            if version < 29:
-                self._db.executescript(_TUTOR_PROCESSED)
-            if version < 30:
-                self._db.executescript(_BOOK_NAVIGATION)
-            if version < 31:
-                self._db.executescript(_BOOK_VERSIONS)
-            if version < 32:
-                self._db.executescript(_BRIEFS)
-            if version < 33:
-                self._db.executescript(_FAVOURITES)
-            if version < 34:
-                self._db.executescript(_FAVOURITE_FOLDERS)
-            if version < 35:
-                self._db.executescript(_FAVOURITE_NAMES)
+            for number, script in enumerate(_MIGRATIONS, start=1):
+                if version < number:
+                    self._db.executescript(script)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
     def close(self) -> None:
@@ -1275,17 +1292,159 @@ class UserStore:
         ]
 
     def text(self, text_id: str) -> dict[str, Any] | None:
-        """A text or a correction, with what it says, if there is one."""
+        """A text or a correction, with what it says and the pages it is
+        written by hand in, if there is one."""
         with self._lock:
             row = self._db.execute(
                 f"SELECT {_TEXT_COLUMNS} FROM learner_texts WHERE id = ?", (text_id,)
             ).fetchone()
-        return None if row is None else _text(*row)
+            pages = self._text_pages(text_id)
+        return None if row is None else {**_text(*row), "pages": pages}
 
-    def save_text(self, text_id: str, title: str, content: str, language: str) -> None:
+    def _text_pages(self, text_id: str) -> list[dict[str, Any]]:
+        """The pages of a text written by hand, the first first, each with
+        its id, its size, its ink, the words read from it, or None if it
+        was not read, and when it was last written on and read."""
+        return [
+            {
+                "id": page_id,
+                "width": PAGE_WIDTH,
+                "height": PAGE_HEIGHT,
+                "ink": json.loads(ink),
+                "words": None if words is None else json.loads(words),
+                "inkedAt": inked_at,
+                "readAt": read_at,
+            }
+            for page_id, ink, words, inked_at, read_at in self._db.execute(
+                "SELECT id, ink, words, inked_at, read_at FROM text_pages"
+                " WHERE text_id = ? ORDER BY position",
+                (text_id,),
+            )
+        ]
+
+    def _handwritten(self, text_id: str) -> None:
+        """Raises ValueError unless a text is written by hand and can still
+        be changed."""
+        row = self._db.execute(
+            "SELECT handwritten, locked_at FROM learner_texts WHERE id = ?",
+            (text_id,),
+        ).fetchone()
+        if row is None or not row[0]:
+            raise ValueError("there is no text written by hand")
+        if row[1] is not None:
+            raise ValueError("a text that was corrected is not changed")
+
+    def add_text_page(
+        self, text_id: str, page_id: str, position: int | None = None
+    ) -> None:
+        """Add a blank page to a text written by hand, at `position` among its
+        pages, counted from 0, the pages from there on moved after it, or
+        after them all. Raises ValueError for a text that is not written by
+        hand, or cannot be changed."""
+        if not is_id(page_id):
+            raise ValueError("a page needs an id")
+        with self._lock, self._db:
+            self._handwritten(text_id)
+            (count,) = self._db.execute(
+                "SELECT COUNT(*) FROM text_pages WHERE text_id = ?", (text_id,)
+            ).fetchone()
+            at = count if position is None else max(0, min(position, count))
+            self._db.execute(
+                "UPDATE text_pages SET position = position + 1"
+                " WHERE text_id = ? AND position >= ?",
+                (text_id, at),
+            )
+            self._db.execute(
+                "INSERT INTO text_pages (id, text_id, position, inked_at)"
+                " VALUES (?, ?, ?, ?)",
+                (page_id, text_id, at, self._now()),
+            )
+
+    def save_ink(self, text_id: str, page_id: str, ink: object) -> None:
+        """Keep the ink of a page of a text written by hand as it is now.
+        Raises ValueError for ink that is not, as ink.py describes it, or a
+        text that cannot be changed."""
+        strokes = checked(ink)
+        now = self._now()
+        with self._lock, self._db:
+            self._handwritten(text_id)
+            changed = self._db.execute(
+                "UPDATE text_pages SET ink = ?, inked_at = ? WHERE id = ? AND text_id = ?",
+                (json.dumps(strokes), now, page_id, text_id),
+            )
+            if not changed.rowcount:
+                raise ValueError("there is no such page")
+            self._db.execute(
+                "UPDATE learner_texts SET updated_at = ? WHERE id = ?", (now, text_id)
+            )
+
+    def page_ink(self, text_id: str, page_id: str) -> list[dict[str, Any]] | None:
+        """The ink of a page of a text, if there is such a page."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT ink FROM text_pages WHERE id = ? AND text_id = ?",
+                (page_id, text_id),
+            ).fetchone()
+        return None if row is None else list(json.loads(row[0]))
+
+    def read_text_page(
+        self, text_id: str, page_id: str, words: list[dict[str, Any]]
+    ) -> None:
+        """Keep the words read from a page of a text written by hand, as
+        `ocr.Page.kept` has them, and have the text say what its pages were
+        read to say. Raises ValueError for a text that cannot be changed."""
+        now = self._now()
+        with self._lock, self._db:
+            self._handwritten(text_id)
+            self._db.execute(
+                "UPDATE text_pages SET words = ?, read_at = ? WHERE id = ? AND text_id = ?",
+                (json.dumps(words, ensure_ascii=False), now, page_id, text_id),
+            )
+            self._say_pages(text_id, now)
+
+    def _say_pages(self, text_id: str, now: float) -> None:
+        """Have a text say what its pages were read to say."""
+        self._db.execute(
+            "UPDATE learner_texts SET content = ?, updated_at = ? WHERE id = ?",
+            (text_of(self._text_pages(text_id)), now, text_id),
+        )
+
+    def delete_text_page(self, text_id: str, page_id: str) -> None:
+        """Remove a page of a text written by hand, and have the text say
+        what the pages left say. Raises ValueError for a text that cannot
+        be changed."""
+        with self._lock, self._db:
+            self._handwritten(text_id)
+            self._db.execute(
+                "DELETE FROM text_pages WHERE id = ? AND text_id = ?",
+                (page_id, text_id),
+            )
+            # the pages after it come one sooner
+            for position, (each,) in enumerate(
+                self._db.execute(
+                    "SELECT id FROM text_pages WHERE text_id = ? ORDER BY position",
+                    (text_id,),
+                ).fetchall()
+            ):
+                self._db.execute(
+                    "UPDATE text_pages SET position = ? WHERE id = ?", (position, each)
+                )
+            self._say_pages(text_id, self._now())
+
+    def save_text(
+        self,
+        text_id: str,
+        title: str,
+        content: str,
+        language: str,
+        handwritten: bool = False,
+    ) -> None:
         """Keep a text the learner writes as it is now, starting it if there
-        is none. Raises ValueError for one that is too long, or that cannot
-        be changed: a text that was corrected, or a correction."""
+        is none, `handwritten` if it is to be written by hand, in pages, with
+        a blank one to start. One written by hand says what its pages were
+        read to say whatever `content` is. Raises ValueError for
+        one that is too long, or that cannot be changed: a text that was
+        corrected, or a correction."""
         if not is_id(text_id):
             raise ValueError("a text needs an id")
         if len(title) > MAX_TEXT_TITLE or len(content) > MAX_TEXT:
@@ -1299,11 +1458,26 @@ class UserStore:
                 raise ValueError("a text that was corrected is not changed")
             self._db.execute(
                 "INSERT INTO learner_texts (id, title, content, language, kind, created_at,"
-                " updated_at) VALUES (?, ?, ?, ?, 'text', ?, ?) ON CONFLICT (id)"
-                " DO UPDATE SET title = excluded.title, content = excluded.content,"
+                " updated_at, handwritten) VALUES (?, ?, ?, ?, 'text', ?, ?, ?)"
+                " ON CONFLICT (id) DO UPDATE SET title = excluded.title, content = CASE"
+                " WHEN handwritten THEN content ELSE excluded.content END,"
                 " updated_at = excluded.updated_at",
-                (text_id, title, content, language, now, now),
+                (
+                    text_id,
+                    title,
+                    "" if handwritten else content,
+                    language,
+                    now,
+                    now,
+                    handwritten,
+                ),
             )
+            if row is None and handwritten:
+                self._db.execute(
+                    "INSERT INTO text_pages (id, text_id, position, inked_at)"
+                    " VALUES (?, ?, 0, ?)",
+                    (uuid.uuid4().hex, text_id, now),
+                )
 
     def correct_text(
         self,
@@ -1348,6 +1522,7 @@ class UserStore:
             )
 
     def delete_text(self, text_id: str) -> None:
+        """Remove a text or a correction, with its pages."""
         with self._lock, self._db:
             self._db.execute("DELETE FROM learner_texts WHERE id = ?", (text_id,))
 

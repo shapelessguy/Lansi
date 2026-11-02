@@ -11,14 +11,16 @@ import pytest
 from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore
 
-# What came with versions 24 to 35, taken out of a store to make it as one
+# What came with versions 24 to 37, taken out of a store to make it as one
 # was before: the instances the exercises made, what each replays, whether
 # a session is hidden, the parts of a grade and what it is about, the size
 # of an evaluation, which was a length, when a message of the tutor was
 # processed, what a book lists of itself, the versions of books, the brief
 # the tutor gave an exercise, the favourite exercises, their folders and
-# their names.
+# their names, and the texts written by hand and their pages.
 BEFORE_INSTANCES = """
+DROP TABLE text_pages;
+ALTER TABLE learner_texts DROP COLUMN handwritten;
 DROP TABLE favourites;
 DROP TABLE favourite_folders;
 ALTER TABLE session_exercises DROP COLUMN brief;
@@ -1379,6 +1381,116 @@ def test_a_text_that_was_corrected_is_locked_and_has_its_correction(
         store.save_text("c1", "Changed", "Changed", "German")
     with pytest.raises(ValueError):
         store.correct_text("t1", "Again", "c2", "Again", "s2")
+
+
+STROKE = {"pen": "pen", "color": "#112233", "size": 4, "points": [[10, 10, 0.5]]}
+
+
+def read_words(*words: str) -> list[dict[str, Any]]:
+    """The words of a page as ocr.py keeps them, each on a line of its own."""
+    return [
+        {
+            "text": word,
+            "box": [[0, n], [10, n], [10, n + 1], [0, n + 1]],
+            "line": n,
+            "paragraph": 0,
+            "confidence": 1.0,
+        }
+        for n, word in enumerate(words)
+    ]
+
+
+def test_a_handwritten_text_starts_with_a_blank_page(store: UserStore) -> None:
+    store.save_text("t1", "Tagebuch", "", "German", handwritten=True)
+
+    text = store.text("t1")
+    assert text is not None
+    assert text["handwritten"] is True
+    assert [(page["ink"], page["words"]) for page in text["pages"]] == [([], None)]
+
+
+def test_the_ink_of_a_page_is_kept_as_it_was_last_written(store: UserStore) -> None:
+    store.save_text("t1", "", "", "German", handwritten=True)
+    text = store.text("t1")
+    assert text is not None
+    page = text["pages"][0]["id"]
+
+    store.save_ink("t1", page, [STROKE])
+
+    assert store.page_ink("t1", page) == [STROKE]
+
+
+def test_ink_that_is_not_strokes_is_not_kept(store: UserStore) -> None:
+    store.save_text("t1", "", "", "German", handwritten=True)
+    text = store.text("t1")
+    assert text is not None
+
+    with pytest.raises(ValueError):
+        store.save_ink("t1", text["pages"][0]["id"], [{**STROKE, "pen": "crayon"}])
+
+
+def test_a_handwritten_text_says_what_its_pages_were_read_to_say(
+    store: UserStore,
+) -> None:
+    store.save_text("t1", "", "", "German", handwritten=True)
+    store.add_text_page("t1", "p2")
+    text = store.text("t1")
+    assert text is not None
+    first = text["pages"][0]["id"]
+
+    store.read_text_page("t1", "p2", read_words("Gut."))
+    store.read_text_page("t1", first, read_words("Ich", "lerne."))
+    store.save_text("t1", "Tagebuch", "Typed over", "German")
+
+    text = store.text("t1")
+    assert text is not None
+    assert (text["title"], text["content"]) == ("Tagebuch", "Ich lerne.\n\nGut.")
+
+
+def test_a_page_is_removed_with_what_it_was_read_to_say(store: UserStore) -> None:
+    store.save_text("t1", "", "", "German", handwritten=True)
+    store.add_text_page("t1", "p2")
+    text = store.text("t1")
+    assert text is not None
+    first = text["pages"][0]["id"]
+    store.read_text_page("t1", first, read_words("Eins."))
+    store.read_text_page("t1", "p2", read_words("Zwei."))
+
+    store.delete_text_page("t1", first)
+    store.add_text_page("t1", "p3")
+
+    text = store.text("t1")
+    assert text is not None
+    assert text["content"] == "Zwei."
+    assert [page["id"] for page in text["pages"]] == ["p2", "p3"]
+
+
+def test_a_page_is_added_where_it_is_asked_among_the_pages(
+    store: UserStore,
+) -> None:
+    store.save_text("t1", "", "", "German", handwritten=True)
+    text = store.text("t1")
+    assert text is not None
+    first = text["pages"][0]["id"]
+
+    store.add_text_page("t1", "p2")
+    store.add_text_page("t1", "p0", 0)
+    store.add_text_page("t1", "p1", 2)
+
+    text = store.text("t1")
+    assert text is not None
+    assert [page["id"] for page in text["pages"]] == ["p0", first, "p1", "p2"]
+
+
+def test_a_typed_or_corrected_text_takes_no_page(store: UserStore) -> None:
+    store.save_text("typed", "", "Getippt.", "German")
+    store.save_text("hand", "", "", "German", handwritten=True)
+    store.correct_text("hand", "", "c1", "", "s1")
+
+    with pytest.raises(ValueError):
+        store.add_text_page("typed", "p1")
+    with pytest.raises(ValueError):
+        store.add_text_page("hand", "p2")
 
 
 def test_texts_can_be_kept_where_there_were_memories_before_them(

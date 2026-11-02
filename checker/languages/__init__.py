@@ -99,6 +99,10 @@ class Language:
     # The name of the Hunspell dictionary its spelling is checked with, such
     # as "de_DE", where the system has it, as spelling.py finds it.
     hunspell: str | None = None
+    # What Google Cloud Vision is told a handwritten page in it is written
+    # in, as ocr.py asks it, such as "de-t-i0-handwrit": its code with
+    # "-t-i0-handwrit". Without one, Vision finds out the language itself.
+    handwriting_hint: str | None = None
 
     def __init__(self, name: str) -> None:
         self.name = name

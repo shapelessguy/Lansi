@@ -56,6 +56,7 @@ from exercising import (
 )
 from exporting import write_epub
 from grammar import GrammarError
+from ink import PAGE_HEIGHT, PAGE_WIDTH, picture
 from intake import (
     MAX_WORDS,
     Intake,
@@ -72,6 +73,7 @@ from lookups import asked_anything, translation_log, write_question_logs
 from models import Model, read_model
 from notes import run as run_note
 from notes import tables
+from ocr import read_picture
 from pdfs import read_pdf
 from processing import Processor, words_in
 from profiling import (
@@ -154,6 +156,11 @@ from word_translations import WordTranslator
 HOST = "127.0.0.1"
 # The request header the chat sends its OpenRouter key in.
 KEY_HEADER = "X-OpenRouter-Key"
+# The request header the chat sends its key of Google Cloud Vision in, with
+# a handwritten page to be read.
+VISION_KEY_HEADER = "X-Vision-Key"
+# far more than the ink of a page written full ever is
+MAX_INK_BYTES = 20_000_000
 # how long a model at an address the chat passes a request on to may take
 RELAY_TIMEOUT_SECS = 120
 # the models OpenRouter has, as the chat is told them, shared by every user
@@ -2060,7 +2067,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._log_questions(self.account.translator, api_key)
             elif self.path == "/tutor/chat" and self.account.practice:
                 self._tutor(self.account.practice, api_key)
-            elif self._tutor_chats("POST", api_key):
+            elif self._tutor_chats("POST", api_key) or self._texts("POST"):
                 pass
             elif self.path == "/vocabulary/words" and self.account.intake:
                 self._take_words(self.account.intake, api_key)
@@ -2477,10 +2484,27 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                   there is none; one that was corrected,
                                   or a correction, is not changed
             DELETE /texts/ID      delete a text or a correction
+            POST /texts/ID/pages  add a blank page to a text written by hand;
+                                  answers with the text
+            PUT /texts/ID/pages/PAGE     keep the ink of a page as `{"ink":
+                                         [...]}`, as ink.py describes it
+            POST /texts/ID/pages/PAGE/read
+                                  read a page with the key of Google Cloud
+                                  Vision in the X-Vision-Key header, and have
+                                  the text say what its pages were read to
+                                  say; answers with the text
+            DELETE /texts/ID/pages/PAGE  remove a page; answers with the text
+
+        A text written by hand is started by keeping it with `"handwritten":
+        true`, with a blank page.
         """
         store = self.account.store
         path = urlsplit(self.path).path
         one = re.fullmatch(r"/texts/([^/]+)", path)
+        if store is not None and re.fullmatch(
+            r"/texts/[^/]+/pages(/[^/]+(/read)?)?", path
+        ):
+            return self._text_pages(store, method, path)
         if store is None or not (one or path == "/texts"):
             return False
         if method == "GET" and not one:
@@ -2502,6 +2526,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 title,
                 content,
                 language if isinstance(language, str) else self.account.language,
+                body.get("handwritten") is True,
             )
             self._reply(HTTPStatus.OK, {})
         elif method == "DELETE" and one:
@@ -2509,6 +2534,54 @@ class CheckerHandler(BaseHTTPRequestHandler):
             self._reply(HTTPStatus.OK, {})
         else:
             return False
+        return True
+
+    def _text_pages(self, store: UserStore, method: str, path: str) -> bool:
+        """Answers a request about the pages of a text written by hand, as
+        `_texts` describes it, and returns whether the request was one."""
+        parts = [unquote(part) for part in path.split("/")]
+        text_id = parts[2]
+        page_id = parts[4] if len(parts) > 4 else None
+        read = len(parts) > 5
+        if method == "POST" and page_id is None:
+            # a page asked for nowhere goes after the others
+            sent = int(self.headers.get("Content-Length") or 0) > 0
+            position = self._read_body().get("position") if sent else None
+            if position is not None and type(position) is not int:
+                raise ValueError('a page is added {"position": ...}')
+            store.add_text_page(text_id, uuid.uuid4().hex, position)
+        elif method == "PUT" and page_id is not None and not read:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > MAX_INK_BYTES:
+                raise ValueError("the ink of the page is too much")
+            try:
+                body = json.loads(self.rfile.read(length))
+            except ValueError:
+                raise ValueError("body is not JSON") from None
+            store.save_ink(
+                text_id, page_id, body.get("ink") if isinstance(body, dict) else None
+            )
+            self._reply(HTTPStatus.OK, {})
+            return True
+        elif method == "POST" and page_id is not None and read:
+            ink = store.page_ink(text_id, page_id)
+            text = store.text(text_id)
+            if ink is None or text is None:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such page"})
+                return True
+            page = read_picture(
+                picture(ink),
+                PAGE_WIDTH,
+                PAGE_HEIGHT,
+                self.headers.get(VISION_KEY_HEADER) or "",
+                language_of(text["language"]).handwriting_hint,
+            )
+            store.read_text_page(text_id, page_id, page.kept()["words"])
+        elif method == "DELETE" and page_id is not None and not read:
+            store.delete_text_page(text_id, page_id)
+        else:
+            return False
+        self._reply(HTTPStatus.OK, store.text(text_id))
         return True
 
     def _note_tables(self, store: UserStore, note_id: int) -> None:

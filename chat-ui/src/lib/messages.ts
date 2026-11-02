@@ -3707,6 +3707,115 @@ export const MESSAGES = {
         German: "OpenRouter-API-Schlüssel",
         Italian: "Chiave API di OpenRouter",
     },
+    "Google Cloud Vision API key": {
+        German: "Google-Cloud-Vision-API-Schlüssel",
+        Italian: "Chiave API di Google Cloud Vision",
+    },
+    "Reads the photos of your handwritten pages, and finds where each word is on them. Kept in this browser only, and sent to the server with each page it reads.":
+        {
+            German:
+                "Liest die Fotos deiner handgeschriebenen Seiten und findet, wo jedes Wort darauf steht. Nur in diesem Browser gespeichert und mit jeder Seite, die er liest, an den Server gesendet.",
+            Italian:
+                "Legge le foto delle tue pagine scritte a mano e trova dove si trova ogni parola. Conservata solo in questo browser e inviata al server con ogni pagina che legge.",
+        },
+    "The page could not be read.": {
+        German: "Die Seite konnte nicht gelesen werden.",
+        Italian: "Non è stato possibile leggere la pagina.",
+    },
+    "The page could not be removed.": {
+        German: "Die Seite konnte nicht entfernt werden.",
+        Italian: "Non è stato possibile rimuovere la pagina.",
+    },
+    "Remove this page?": {
+        German: "Diese Seite entfernen?",
+        Italian: "Rimuovere questa pagina?",
+    },
+    "The page could not be added.": {
+        German: "Die Seite konnte nicht hinzugefügt werden.",
+        Italian: "Non è stato possibile aggiungere la pagina.",
+    },
+    "The page could not be kept.": {
+        German: "Die Seite konnte nicht gespeichert werden.",
+        Italian: "Non è stato possibile salvare la pagina.",
+    },
+    "Pen": {
+        German: "Stift",
+        Italian: "Penna",
+    },
+    "Fountain pen": {
+        German: "Füller",
+        Italian: "Stilografica",
+    },
+    "Pencil": {
+        German: "Bleistift",
+        Italian: "Matita",
+    },
+    "Highlighter": {
+        German: "Textmarker",
+        Italian: "Evidenziatore",
+    },
+    "Eraser": {
+        German: "Radiergummi",
+        Italian: "Gomma",
+    },
+    "Undo": {
+        German: "Rückgängig",
+        Italian: "Annulla",
+    },
+    "Add a page here": {
+        German: "Hier eine Seite einfügen",
+        Italian: "Aggiungi una pagina qui",
+    },
+    "Read {count} page": {
+        German: "{count} Seite lesen",
+        Italian: "Leggi {count} pagina",
+    },
+    "Read {count} pages": {
+        German: "{count} Seiten lesen",
+        Italian: "Leggi {count} pagine",
+    },
+    "Every page is read": {
+        German: "Alle Seiten sind gelesen",
+        Italian: "Tutte le pagine sono lette",
+    },
+    "Show the words read": {
+        German: "Gelesene Wörter zeigen",
+        Italian: "Mostra le parole lette",
+    },
+    "Page to write on": {
+        German: "Seite zum Schreiben",
+        Italian: "Pagina su cui scrivere",
+    },
+    "New handwritten text": {
+        German: "Neuer handschriftlicher Text",
+        Italian: "Nuovo testo scritto a mano",
+    },
+    "handwritten": {
+        German: "handschriftlich",
+        Italian: "scritto a mano",
+    },
+    "Set your Google Cloud Vision key in Settings, under Models, to read the pages.": {
+        German:
+            "Lege deinen Google-Cloud-Vision-Schlüssel in den Einstellungen unter Modelle fest, um die Seiten zu lesen.",
+        Italian:
+            "Imposta la tua chiave di Google Cloud Vision nelle Impostazioni, sotto Modelli, per leggere le pagine.",
+    },
+    "Read the pages": {
+        German: "Seiten lesen",
+        Italian: "Leggi le pagine",
+    },
+    "Turn the pages": {
+        German: "Seiten drehen",
+        Italian: "Ruota le pagine",
+    },
+    "Page {number}": {
+        German: "Seite {number}",
+        Italian: "Pagina {number}",
+    },
+    "Remove this page": {
+        German: "Diese Seite entfernen",
+        Italian: "Rimuovi questa pagina",
+    },
 } as const satisfies Record<string, Translations>;
 
 /** A text the interface shows, by what it says in English. */

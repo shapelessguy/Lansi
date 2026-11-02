@@ -3,13 +3,15 @@
 
 import { locale, plural, t } from "../lib/i18n";
 import type { Text } from "../lib/texts";
+import { Icon } from "./Icon";
 
 interface Props {
     /** The texts and their corrections, or why they could not be listed. */
     texts: Text[] | string;
     selectedId: string | null;
     onSelect: (id: string) => void;
-    onNew: () => void;
+    /** Starts a text, typed or written by hand. */
+    onNew: (handwritten: boolean) => void;
     onDelete: (text: Text) => void;
 }
 
@@ -23,8 +25,21 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
 
     return (
         <>
-            <div className="sidebar-controls">
-                <button className="primary" onClick={onNew}>{t("New text")}</button>
+            <div className="sidebar-controls new-texts">
+                <button
+                    title={t("New text")}
+                    aria-label={t("New text")}
+                    onClick={() => onNew(false)}
+                >
+                    <Icon name="new-text" />
+                </button>
+                <button
+                    title={t("New handwritten text")}
+                    aria-label={t("New handwritten text")}
+                    onClick={() => onNew(true)}
+                >
+                    <Icon name="new-handwritten" />
+                </button>
             </div>
             {typeof texts === "string" && <p className="sidebar-note error">{texts}</p>}
             {typeof texts !== "string" && own.length === 0 && (
@@ -42,9 +57,22 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
                                 onSelect(text.id)}
                         >
                             <span className="chat-title">{text.title || t("Untitled")}</span>
-                            <span className="chat-detail">
-                                {plural(text.words ?? 0, "{count} word", "{count} words")} · {day(text.updatedAt)}
-                                {text.lockedAt !== null && ` · ${t("corrected")}`}
+                            <span className="chat-detail text-detail">
+                                {text.handwritten && (
+                                    <span className="text-mark" title={t("handwritten")}>
+                                        <Icon name="pen" />
+                                    </span>
+                                )}
+                                <span title={plural(text.words ?? 0, "{count} word", "{count} words")}>
+                                    <Icon name="words" />
+                                    {text.words ?? 0}
+                                </span>
+                                <span>{day(text.updatedAt)}</span>
+                                {text.lockedAt !== null && (
+                                    <span className="text-mark" title={t("corrected")}>
+                                        <Icon name="checks" />
+                                    </span>
+                                )}
                             </span>
                         </button>
                         <button
@@ -54,7 +82,7 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
                             title={t("Delete")}
                             aria-label={t("Delete {name}", { name: text.title || t("the text") })}
                         >
-                            ×
+                            <Icon name="close" />
                         </button>
                     </li>
                 ))}
@@ -64,5 +92,11 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
 }
 
 function day(seconds: number): string {
-    return new Date(seconds * 1000).toLocaleDateString(locale(), { dateStyle: "medium" });
+    const date = new Date(seconds * 1000);
+    const thisYear = date.getFullYear() === new Date().getFullYear();
+    return date.toLocaleDateString(locale(), {
+        day: "numeric",
+        month: "short",
+        year: thisYear ? undefined : "2-digit",
+    });
 }

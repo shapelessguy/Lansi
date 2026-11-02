@@ -1223,9 +1223,9 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 texts={texts}
                                 selectedId={textId}
                                 onSelect={setTextId}
-                                onNew={() => {
+                                onNew={(handwritten) => {
                                     const id = newId();
-                                    void saveText(id, "", "", settings.language).then(() => {
+                                    void saveText(id, "", "", settings.language, handwritten).then(() => {
                                         setTextsRevision((revision) => revision + 1);
                                         setTextId(id);
                                     });

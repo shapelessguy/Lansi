@@ -9,6 +9,7 @@ import type { Settings } from "../lib/settings";
 import { blocksOf, fetchText, type Inline, saveText, type Text } from "../lib/texts";
 import type { UsageEntry } from "../lib/usage";
 import { CheckedTextarea } from "./CheckedTextarea";
+import { HandwrittenPages } from "./HandwrittenPages";
 import { PlaceSentenceChecks } from "./SentenceChecks";
 
 interface Props {
@@ -39,6 +40,10 @@ const SAVE_AFTER_MS = 700;
  * the caret in the panel on the right. It is kept as it is written. Once it is corrected it is
  * locked, and shown as it was; a correction is shown with what was wrong
  * struck through and what is right beside it.
+ *
+ * A text may instead be written by hand, in pages, as it is started: it
+ * then says what its pages were read to say, below them, and is checked as
+ * a typed one is, but not typed in.
  */
 export function TextEditor(
     {
@@ -58,6 +63,7 @@ export function TextEditor(
     const [text, setText] = useState<Text | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [state, setState] = useState<"saved" | "saving" | "changed">("saved");
+
     const timer = useRef<number>();
     const latest = useRef({ title: "", content: "" });
     // what the text came to once it was corrected, which is shown in its place
@@ -117,6 +123,12 @@ export function TextEditor(
         }, SAVE_AFTER_MS);
     }
 
+    /** What the text came to on the server, with the title that may not be kept yet. */
+    function changed(found: Text) {
+        latest.current = { ...latest.current, content: found.content ?? "" };
+        setText((current) => ({ ...found, title: current?.title ?? found.title }));
+    }
+
     if (error && !text) {
         return <p className="practice-note error">{error}</p>;
     }
@@ -131,6 +143,7 @@ export function TextEditor(
         );
     }
     const locked = text.lockedAt !== null;
+    const handwritten = text.handwritten;
     if (locked && correction !== null) {
         // corrected, it is shown with its corrections and their comments worked in
         return (
@@ -162,32 +175,56 @@ export function TextEditor(
                     })}
                 </p>
             )}
-            {/* made only once the text is there, as the box is registered for its sentences when it is made */}
-            <CheckedTextarea
-                className="text-body"
-                place="texts"
-                value={text.content ?? ""}
-                placeholder={t("Write here")}
-                aria-label={t("Text")}
-                readOnly={locked}
-                onChange={(content) => change(text.title, content)}
-                settings={settings}
-                onSettingsChange={onSettingsChange}
-                words={words}
-                onUsage={onUsage}
-                // counted under the text, as what the chat asks is under the chat
-                usageId={`text:${id}`}
-                checksSlot={checksSlot}
-                onCloseChecks={onCloseChecks}
-                onEditQuestions={onEditQuestions}
-            />
-            <div className="text-status">
-                {plural((text.content ?? "").split(/\s+/).filter(Boolean).length, "{count} word", "{count} words")}
-                {!locked
-                    && ` · ${state === "saved" ? t("Saved") : state === "saving" ? t("Saving…") : t("Not saved yet")}`}
-                {error && <span className="error">· {error}</span>}
-                <PlaceSentenceChecks place="texts" settings={settings} onChangeSettings={onSettingsChange} />
-            </div>
+            {handwritten && (
+                <HandwrittenPages
+                    textId={id}
+                    pages={text.pages ?? []}
+                    locked={locked}
+                    visionKey={settings.visionKey}
+                    onText={(found) => {
+                        changed(found);
+                        onSaved();
+                    }}
+                    onError={setError}
+                />
+            )}
+            {handwritten && error && <p className="practice-note error">{error}</p>}
+            {!handwritten && (
+                <>
+                    {/* made only once the text is there, as the box is registered for its sentences when it is made */}
+                    <CheckedTextarea
+                        className="text-body"
+                        place="texts"
+                        value={text.content ?? ""}
+                        placeholder={t("Write here")}
+                        aria-label={t("Text")}
+                        readOnly={locked}
+                        onChange={(content) => change(text.title, content)}
+                        settings={settings}
+                        onSettingsChange={onSettingsChange}
+                        words={words}
+                        onUsage={onUsage}
+                        // counted under the text, as what the chat asks is under the chat
+                        usageId={`text:${id}`}
+                        checksSlot={checksSlot}
+                        onCloseChecks={onCloseChecks}
+                        onEditQuestions={onEditQuestions}
+                    />
+                    <div className="text-status">
+                        {plural(
+                            (text.content ?? "").split(/\s+/).filter(Boolean).length,
+                            "{count} word",
+                            "{count} words",
+                        )}
+                        {!locked
+                            && ` · ${
+                                state === "saved" ? t("Saved") : state === "saving" ? t("Saving…") : t("Not saved yet")
+                            }`}
+                        {error && <span className="error">· {error}</span>}
+                        <PlaceSentenceChecks place="texts" settings={settings} onChangeSettings={onSettingsChange} />
+                    </div>
+                </>
+            )}
         </section>
     );
 }

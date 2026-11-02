@@ -23,6 +23,8 @@ export interface SavedPrompt {
 
 export interface Settings {
     apiKey: string;
+    /** The key of Google Cloud Vision, which reads handwritten pages; kept in this browser only, as `apiKey` is. */
+    visionKey: string;
     /** The language being learned, by its English name. The vocabulary is of this language. */
     language: string;
     /** The language the words in Anki are of, which need not be the one being learned at present. */
@@ -195,6 +197,7 @@ const STORAGE_KEY = "chat-ui.settings";
 export function defaultSettings(): Settings {
     return {
         apiKey: "",
+        visionKey: "",
         language: "German",
         ankiLanguage: "German",
         level: "B1",
@@ -297,6 +300,7 @@ export function normalizeSettings(stored: unknown): Settings {
     };
     return {
         apiKey: typeof candidate.apiKey === "string" ? candidate.apiKey : defaults.apiKey,
+        visionKey: typeof candidate.visionKey === "string" ? candidate.visionKey : defaults.visionKey,
         language: LANGUAGES.find((language) => language === candidate.language) ?? defaults.language,
         ankiLanguage: LANGUAGES.find((language) => language === candidate.ankiLanguage) ?? defaults.ankiLanguage,
         level: LEVELS.find((level) => level === candidate.level) ?? defaults.level,
@@ -412,15 +416,20 @@ function exerciseOptionsOf(stored: unknown): Record<string, Record<string, strin
     );
 }
 
-/** Where the key is kept: in this browser only, and never by the server. */
+/** Where the keys are kept: in this browser only, and never by the server. */
 const KEY_STORAGE_KEY = "chat-ui.key";
+const VISION_KEY_STORAGE_KEY = "chat-ui.vision-key";
 
-function loadApiKey(): string {
+function loadKey(where: string): string {
     try {
-        return localStorage.getItem(KEY_STORAGE_KEY) ?? "";
+        return localStorage.getItem(where) ?? "";
     } catch {
         return "";
     }
+}
+
+function loadApiKey(): string {
+    return loadKey(KEY_STORAGE_KEY);
 }
 
 /** The settings as they were kept in this browser, before the server kept them. */
@@ -432,9 +441,9 @@ function settingsOfThisBrowser(): Settings {
     }
 }
 
-/** The settings without the key, which is all of them the server is given. */
-export function withoutKey(settings: Settings): Omit<Settings, "apiKey"> {
-    const { apiKey: _, ...rest } = settings;
+/** The settings without the keys, which is all of them the server is given. */
+export function withoutKey(settings: Settings): Omit<Settings, "apiKey" | "visionKey"> {
+    const { apiKey: _, visionKey: __, ...rest } = settings;
     return rest;
 }
 
@@ -450,16 +459,22 @@ export async function fetchSettings(): Promise<Settings> {
     const { settings: kept }: { settings: unknown } = await response.json();
     if (kept === null) {
         const mine = settingsOfThisBrowser();
-        saveSettings({ ...mine, apiKey: mine.apiKey || loadApiKey() });
-        return { ...mine, apiKey: mine.apiKey || loadApiKey() };
+        const withKeys = {
+            ...mine,
+            apiKey: mine.apiKey || loadApiKey(),
+            visionKey: mine.visionKey || loadKey(VISION_KEY_STORAGE_KEY),
+        };
+        saveSettings(withKeys);
+        return withKeys;
     }
-    return { ...normalizeSettings(kept), apiKey: loadApiKey() };
+    return { ...normalizeSettings(kept), apiKey: loadApiKey(), visionKey: loadKey(VISION_KEY_STORAGE_KEY) };
 }
 
-/** Keeps the key in this browser, and has the server keep everything else. */
+/** Keeps the keys in this browser, and has the server keep everything else. */
 export function saveSettings(settings: Settings): void {
     try {
         localStorage.setItem(KEY_STORAGE_KEY, settings.apiKey);
+        localStorage.setItem(VISION_KEY_STORAGE_KEY, settings.visionKey);
         // what was kept here before the server kept the settings, key and all
         localStorage.removeItem(STORAGE_KEY);
     } catch {

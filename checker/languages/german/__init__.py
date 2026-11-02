@@ -22,6 +22,7 @@ class German(Language):
     equivalents = {"ß": "ss", "ä": "ae", "ö": "oe", "ü": "ue"}
     marks = "umlauts"
     hunspell = "de_DE"
+    handwriting_hint = "de-t-i0-handwrit"
     # as the Goethe-Institut asks them
     answer_words = {"truefalse": ("Richtig", "Falsch"), "yesno": ("Ja", "Nein")}
     # "der Hund", "sich freuen"

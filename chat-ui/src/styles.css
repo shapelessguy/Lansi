@@ -5184,6 +5184,441 @@ div.book-cover {
     resize: none;
 }
 
+.handwritten {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* the tools of the pen, a row that opens beside the button that shows the pen */
+.ink-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    max-width: calc(100vw - 72px);
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+}
+
+.ink-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+}
+
+.ink-toolbar .icon-button,
+.ink-full-bar .icon-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* the tools themselves without a border, only the chosen one marked */
+.ink-toolbar .icon-button {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-color: transparent;
+    background: none;
+}
+
+.ink-toolbar .icon-button:hover:not(:disabled, [aria-pressed="true"]) {
+    border-color: transparent;
+    background: var(--border);
+}
+
+.ink-full-bar button[aria-pressed="true"],
+.ink-toolbar .icon-button[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-text);
+}
+
+.ink-swatch {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    margin: 0 2px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--border);
+    cursor: pointer;
+}
+
+.ink-toolbar .ink-swatch[aria-pressed="true"],
+.ink-custom.chosen {
+    border-color: var(--bg);
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* any other colour, a wheel of them until one is chosen */
+.ink-custom {
+    background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+}
+
+.ink-custom input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* the size: a dot as big as the pen, a slider and how many pixels */
+.ink-size {
+    gap: 6px;
+}
+
+.ink-size-dot {
+    display: inline-block;
+    min-width: 2px;
+    min-height: 2px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+/* as wide whatever the size, so that the bar does not grow with it */
+.ink-size-preview {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+}
+
+.ink-size input {
+    width: 110px;
+    padding: 0;
+    border: none;
+    outline: none;
+    background: none;
+}
+
+.ink-size-value {
+    min-width: 3.2em;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* the colour the pen writes in, under its icon */
+.ink-tools-color {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px var(--bg);
+}
+
+/* how many pages are not read yet */
+.ink-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    min-width: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 0.7rem;
+    line-height: 16px;
+}
+
+.ink-page {
+    position: relative;
+    margin: 0;
+}
+
+/* a sheet of lined paper, its lines spaced as the page says */
+.ink-frame {
+    position: relative;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background-color: #fffdf7;
+    background-image: linear-gradient(to bottom, transparent calc(100% - 1px), #c9d6ea calc(100% - 1px));
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.08);
+}
+
+.ink-frame.turned {
+    background-image: linear-gradient(to right, transparent calc(100% - 1px), #c9d6ea calc(100% - 1px));
+}
+
+.ink-frame canvas,
+.ink-frame svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.ink-live {
+    touch-action: none;
+    cursor: crosshair;
+}
+
+.ink-live.erasing {
+    cursor: cell;
+}
+
+.ink-frame svg {
+    pointer-events: none;
+}
+
+.ink-frame polygon {
+    fill: var(--accent);
+    fill-opacity: 0.1;
+    stroke: var(--accent);
+    stroke-opacity: 0.7;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+/* the bin of a page, in its corner, shown as the page is pointed at */
+.ink-page-remove {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-color: transparent;
+    background: rgb(0 0 0 / 0.55);
+    color: #fff;
+    opacity: 0;
+}
+
+.ink-page:hover .ink-page-remove,
+.ink-page-remove:focus-visible {
+    opacity: 1;
+}
+
+/* where nothing can point, it is always there */
+@media (hover: none) {
+    .ink-page-remove {
+        opacity: 0.8;
+    }
+}
+
+/* the pages of a text, small, four to a row, each opened by a click */
+.ink-pages {
+    --ink-gap: 28px;
+    --ink-columns: 4;
+    container-type: inline-size;
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 16px;
+}
+
+@container (max-width: 560px) {
+    .ink-pages > .ink-slot {
+        --ink-columns: 2;
+    }
+}
+
+/* a page, with the button that adds one before it */
+.ink-slot {
+    display: flex;
+    align-items: stretch;
+    width: calc((100% - var(--ink-gap)) / var(--ink-columns));
+}
+
+.ink-slot.ink-end-slot {
+    width: var(--ink-gap);
+}
+
+.ink-thumb {
+    flex: 1;
+    min-width: 0;
+}
+
+.ink-open {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+.ink-thumb .ink-live {
+    touch-action: auto;
+    cursor: pointer;
+}
+
+.ink-open:hover .ink-frame,
+.ink-open:focus-visible .ink-frame {
+    border-color: var(--accent);
+}
+
+/* the room before a page, with a button that adds one there, seen only as it is pointed at */
+.ink-gap {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: var(--ink-gap);
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.ink-gap:hover,
+.ink-gap:focus-within {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .ink-gap {
+        opacity: 0.5;
+    }
+}
+
+.ink-gap::before,
+.ink-gap::after {
+    content: "";
+    flex: 1;
+    border-left: 1px dashed var(--muted);
+}
+
+.ink-gap .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 50%;
+    color: var(--text);
+}
+
+/* a page open on the whole screen, as wide as it fits, scrolled down */
+.ink-full {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: var(--bg);
+}
+
+/* the page as big as the screen holds it whole, with its buttons over it */
+.ink-full-page {
+    width: min(100vw, 100dvh * var(--ink-aspect));
+    margin: 0;
+}
+
+.ink-full-page .ink-frame {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.ink-full-bar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px;
+    pointer-events: none;
+}
+
+.ink-full-bar > * {
+    pointer-events: auto;
+}
+
+.ink-full-bar .icon-button {
+    background: var(--bg);
+}
+
+.ink-count {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+/* the tools, folded into one button that shows the pen and its colour */
+/* the buttons always there, as high as they are and as far down as to be
+   centred on the tools, which open without moving them */
+.ink-full-bar > .ink-group .icon-button,
+.ink-tools-toggle {
+    height: 32px;
+    padding: 0;
+}
+
+.ink-full-bar > .ink-group,
+.ink-tools-toggle {
+    margin-top: 3px;
+}
+
+.ink-controls {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* a new text, typed or written by hand, as two icons side by side */
+.sidebar-controls.new-texts {
+    grid-template-columns: 1fr 1fr;
+}
+
+.new-texts button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+}
+
+.new-texts .icon {
+    width: 22px;
+    height: 22px;
+}
+
+.text-mark {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--muted);
+}
+
+.text-mark .icon,
+.text-detail .icon {
+    width: 14px;
+    height: 14px;
+}
+
+/* how many words, when, and whether it was corrected, each by an icon */
+.text-detail {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.text-detail > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
 .text-status {
     display: flex;
     align-items: center;

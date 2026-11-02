@@ -29,6 +29,7 @@ class Italian(Language):
     }
     marks = "accents"
     hunspell = "it_IT"
+    handwriting_hint = "it-t-i0-handwrit"
     answer_words = {"truefalse": ("Vero", "Falso"), "yesno": ("Sì", "No")}
     # "il cane", "lo zaino", "l'amico", "un'amica"
     note_prefixes = frozenset(

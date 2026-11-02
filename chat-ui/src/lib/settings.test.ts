@@ -93,10 +93,11 @@ test("a stored level that there is not gives the usual one", () => {
     expect(normalizeSettings({ level: "Z9" }).level).toBe("B1");
 });
 
-test("the server is given the settings without the key", () => {
-    const given = withoutKey({ ...defaultSettings(), apiKey: "sk-or-test", level: "B2" });
+test("the server is given the settings without the keys", () => {
+    const given = withoutKey({ ...defaultSettings(), apiKey: "sk-or-test", visionKey: "AIza-test", level: "B2" });
 
     expect("apiKey" in given).toBe(false);
+    expect("visionKey" in given).toBe(false);
     expect(given.level).toBe("B2");
 });
 
