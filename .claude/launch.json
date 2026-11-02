@@ -115,7 +115,7 @@
             "runtimeExecutable": "bash",
             "runtimeArgs": [
                 "-c",
-                "CHECKER_PORT=8196 CHECKER_DATA=/tmp/claude-1000/-home-claudio-Documents-Lansi/23889814-5f3b-417a-a510-aed67d6faddc/scratchpad/data CHECKER_USERS=/tmp/claude-1000/-home-claudio-Documents-Lansi/23889814-5f3b-417a-a510-aed67d6faddc/scratchpad/users.json exec checker/.venv/bin/python checker/server.py"
+                "CHECKER_PORT=8196 CHECKER_DATA=/tmp/claude-1000/-home-claudio-Documents-Lansi/a14c5184-280e-4251-866d-6370b72caa4a/scratchpad/data USERS_FILE=/tmp/claude-1000/-home-claudio-Documents-Lansi/a14c5184-280e-4251-866d-6370b72caa4a/scratchpad/users.json PASSWORDS_FILE=/tmp/claude-1000/-home-claudio-Documents-Lansi/a14c5184-280e-4251-866d-6370b72caa4a/scratchpad/passwords.json exec checker/.venv/bin/python checker/server.py"
             ],
             "port": 8196
         },
@@ -128,6 +128,25 @@
             ],
             "port": 5188,
             "url": "http://127.0.0.1:5188"
+        },
+        {
+            "name": "ink-checker",
+            "runtimeExecutable": "bash",
+            "runtimeArgs": [
+                "-c",
+                "CHECKER_PORT=8197 CHECKER_DATA=/tmp/claude-1000/-home-claudio-Documents-Lansi/4379f866-f801-4de3-bd59-7170baf6c0ba/scratchpad/data USERS_FILE=/tmp/claude-1000/-home-claudio-Documents-Lansi/4379f866-f801-4de3-bd59-7170baf6c0ba/scratchpad/users.json PASSWORDS_FILE=/tmp/claude-1000/-home-claudio-Documents-Lansi/4379f866-f801-4de3-bd59-7170baf6c0ba/scratchpad/passwords.json exec checker/.venv/bin/python checker/server.py"
+            ],
+            "port": 8197
+        },
+        {
+            "name": "ink-ui",
+            "runtimeExecutable": "bash",
+            "runtimeArgs": [
+                "-c",
+                "cd chat-ui && CHECKER_URL=http://127.0.0.1:8197 exec npx vite --port 5189 --strictPort"
+            ],
+            "port": 5189,
+            "url": "http://127.0.0.1:5189"
         }
     ]
 }
