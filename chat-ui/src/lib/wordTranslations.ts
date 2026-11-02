@@ -100,7 +100,8 @@ export function useWordTranslations(options: Options): WordTranslations {
             usage.forEach(onUsage);
             // what is said of another language than the one wanted by now is of no use
             if (latest.current.language === language && latest.current.into === into) {
-                setStatus(next);
+                // the same as before is not set again, which would draw the whole app again every few seconds
+                setStatus((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
             }
         } catch (error) {
             setStatus((current) => ({ ...current, state: "unavailable", message: (error as Error).message }));

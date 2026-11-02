@@ -121,7 +121,8 @@ export function useAnkiImport(options: Options): ImportStatus {
                     return;
                 }
                 usage.forEach(onUsage);
-                setStatus(next);
+                // the same as before is not set again, which would draw the whole app again every few seconds
+                setStatus((current) => (sameStatus(current, next) ? current : next));
                 if (taken !== null && next.taken !== taken) {
                     onImported();
                 }
@@ -147,4 +148,8 @@ export function useAnkiImport(options: Options): ImportStatus {
     }, []);
 
     return status;
+}
+
+function sameStatus(one: object, other: object): boolean {
+    return JSON.stringify(one) === JSON.stringify(other);
 }
