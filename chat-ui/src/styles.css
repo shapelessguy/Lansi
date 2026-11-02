@@ -2084,8 +2084,11 @@ div.book-cover {
     color: var(--accent);
 }
 
+/* the columns as wide as the panel, however wide what is in them, so that
+   the chart, which takes the width it is given, fits a phone */
 .usage {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     align-content: start;
     gap: 20px;
 }
@@ -2158,6 +2161,7 @@ div.book-cover {
 
 .usage-section {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
 }
 
