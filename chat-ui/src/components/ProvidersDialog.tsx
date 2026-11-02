@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useBack } from "../lib/back";
 import { t } from "../lib/i18n";
 import { fetchProviders, type Provider } from "../lib/models";
 
@@ -100,6 +101,7 @@ export function ProvidersDialog({ model, chosen, tools, apiKey, onChange, onClos
         document.addEventListener("keydown", onKeyDown, true);
         return () => document.removeEventListener("keydown", onKeyDown, true);
     }, [onClose]);
+    useBack("cover", onClose);
 
     function toggle(slug: string) {
         onChange(chosen.includes(slug) ? chosen.filter((each) => each !== slug) : [...chosen, slug]);

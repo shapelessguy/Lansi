@@ -13,6 +13,7 @@ import {
     useState,
 } from "react";
 
+import { useBack } from "../lib/back";
 import { ask } from "../lib/dialogs";
 import { type Message, plural, t } from "../lib/i18n";
 import {
@@ -588,6 +589,7 @@ function FullPage({ onClose, children }: { onClose: () => void; children: ReactN
     const shown = useRef<HTMLDivElement>(null);
     const close = useRef(onClose);
     close.current = onClose;
+    useBack("cover", () => close.current());
 
     useEffect(() => {
         const element = shown.current;

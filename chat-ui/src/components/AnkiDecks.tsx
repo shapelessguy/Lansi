@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type AnkiDeck, ankiMediaUrl, type DeckNotes, fetchDeckNotes, type NoteState, plainText } from "../lib/anki";
+import { useBack } from "../lib/back";
 import { type Message, plural, t } from "../lib/i18n";
 
 /** The ids of a deck and of the decks inside it. */
@@ -212,6 +213,7 @@ export function DeckExplorer({ deck, onClose }: { deck: AnkiDeck; onClose: () =>
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [onClose]);
+    useBack("cover", onClose);
 
     // the notetypes, the one with the most notes first
     const notetypes = useMemo(() => {

@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { useBack } from "../lib/back";
 import { locale, type Message, t } from "../lib/i18n";
 
 import {
@@ -43,6 +44,7 @@ export function Inspector({ trace, onClose }: { trace: Trace; onClose: () => voi
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [onClose]);
+    useBack("cover", onClose);
 
     return (
         <div

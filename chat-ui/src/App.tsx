@@ -34,6 +34,7 @@ import { WordList } from "./components/WordList";
 import { WritingChecks } from "./components/WritingChecks";
 import { type AnkiState, fetchAnkiState, fetchKnownWords } from "./lib/anki";
 import { useAnkiImport } from "./lib/ankiImport";
+import { useBack } from "./lib/back";
 import {
     addBook,
     type BookVersion,
@@ -799,6 +800,20 @@ export function App({ user, initialSettings, initialChats }: Props) {
             setFront("right");
         }
     }
+
+    // Back closes the side in front, the one opened last, and then the other one
+    const leftOpen = libraryOpen || logsOpen;
+    useBack("panel", () => {
+        if (panel !== null && (!leftOpen || front === "right")) {
+            setOpenPanel(null);
+            setFront("left");
+        } else {
+            setLogsOpen(false);
+            setLibraryOpen(false);
+            setFront("right");
+        }
+    }, leftOpen || panel !== null);
+    useBack("window", () => setAsked(null), asked !== null);
 
     /** Opens the library or the logs on the left, or closes it if it is shown, as `togglePanel` does on the right. */
     function toggleLeft(logs: boolean) {

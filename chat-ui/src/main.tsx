@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { DialogHost } from "./components/DialogHost";
 import { Login } from "./components/Login";
+import { goBack } from "./lib/back";
 import { fetchChats, type StoredChat } from "./lib/chats";
 import { t } from "./lib/i18n";
 import { currentSession, logOut, onSessionChange } from "./lib/session";
@@ -65,6 +66,9 @@ function Root() {
     // a user who logs in after another starts with nothing of the other's on show
     return <App key={kept.user} user={kept.user} initialSettings={kept.settings} initialChats={kept.chats} />;
 }
+
+// the Back of the phone, in the Android app, closes what is open in the page before it leaves the app
+window.lansiBack = goBack;
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>

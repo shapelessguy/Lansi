@@ -15,8 +15,9 @@ What the app adds to the page:
   origin with a localStorage of its own, so the storage of the web app is
   carried over whenever the app goes from one to the other.
 - `MainActivity.kt`: the picker of files for the EPUB books, links out of
-  Lansi opened in the browser, Back going back in the page, and the page
-  kept clear of the bars of the system and the keyboard.
+  Lansi opened in the browser, Back closing what is open in the page, from
+  the one on top (`chat-ui/src/lib/back.ts`), before it leaves the app, and
+  the page kept clear of the bars of the system and the keyboard.
 
 ## Build
 

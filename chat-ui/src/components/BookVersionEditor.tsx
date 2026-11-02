@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useBack } from "../lib/back";
 import {
     type Book,
     type BookSection,
@@ -224,6 +225,8 @@ export function BookVersionEditor(
         document.addEventListener("keydown", onKeyDown, true);
         return () => document.removeEventListener("keydown", onKeyDown, true);
     }, [making, onClose]);
+    // nor while it is making a version, which would be lost
+    useBack("cover", () => !making && onClose());
 
     const book = source.status === "ready" ? source.book : null;
     const shownLeft = left[kind];

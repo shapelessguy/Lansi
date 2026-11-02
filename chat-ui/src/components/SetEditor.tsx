@@ -3,6 +3,7 @@
 
 import { useMemo, useState } from "react";
 
+import { useBack } from "../lib/back";
 import { ask } from "../lib/dialogs";
 import { type Message, t } from "../lib/i18n";
 import {
@@ -62,6 +63,7 @@ function compare(a: ListedWord, b: ListedWord, column: Column): number {
  */
 export function SetEditor({ set: initial, kept, vocabulary, onSave, onDelete, onClose }: Props) {
     const [set, setSet] = useState(initial);
+    useBack("cover", onClose);
     const [search, setSearch] = useState("");
     const [onlyMembers, setOnlyMembers] = useState(false);
     const [sort, setSort] = useState<{ column: Column; descending: boolean }>({ column: "lemma", descending: false });

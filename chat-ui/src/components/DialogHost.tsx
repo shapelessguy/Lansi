@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 
+import { useBack } from "../lib/back";
 import { answer, type Dialog, onDialog } from "../lib/dialogs";
 
 /**
@@ -36,6 +37,7 @@ export function DialogHost() {
         document.addEventListener("keydown", onKeyDown, true);
         return () => document.removeEventListener("keydown", onKeyDown, true);
     }, [shown]);
+    useBack("dialog", () => answer(false), shown !== null);
 
     if (!shown) {
         return null;

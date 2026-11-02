@@ -81,12 +81,21 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this) {
             if (chrome.fullScreen) {
                 chrome.leaveFullScreen()
-            } else if (webView.canGoBack()) {
-                webView.goBack()
-            } else {
-                isEnabled = false
-                onBackPressedDispatcher.onBackPressed()
-                isEnabled = true
+                return@addCallback
+            }
+            // The page closes what is open in it, from the one on top, as a
+            // dialog, a window or a panel; once nothing is, the app is left.
+            webView.evaluateJavascript("window.lansiBack ? window.lansiBack() : false") { closed ->
+                if (closed == "true" || isFinishing) {
+                    return@evaluateJavascript
+                }
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
             }
         }
         load()

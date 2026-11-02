@@ -4,6 +4,7 @@
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 
+import { useBack } from "../lib/back";
 import { t } from "../lib/i18n";
 import type { ModelChoice } from "../lib/models";
 import { type ChatMessage, streamChat } from "../lib/openrouter";
@@ -33,6 +34,7 @@ export function ExerciseChatWindow({ start, apiKey, model, usageId, onClose }: P
     const [busy, setBusy] = useState(false);
     const request = useRef<AbortController | null>(null);
     const end = useRef<HTMLDivElement>(null);
+    useBack("window", onClose);
 
     useEffect(() => {
         void reply([{ role: "user", content: start.opening }]);
