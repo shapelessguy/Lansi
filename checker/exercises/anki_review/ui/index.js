@@ -38,6 +38,71 @@ const CARD_APP = `
 .card a { color: var(--accent); }
 `;
 
+/** What is in a side but is not seen: its styles and scripts. */
+const HIDDEN = /<(style|script)\b[\s\S]*?<\/\1\s*>/gi;
+/** What ends a line of a side. */
+const BREAK = /<br\s*\/?>|<\/(?:div|p|li|tr|h\d)\s*>|<hr\b[^>]*>/gi;
+/** Where the answer of a side that shows the question too starts, as Anki marks it. */
+const ANSWER_START = /<hr\b[^>]*\bid\s*=\s*["']?answer\b[^>]*>/i;
+
+/** A side of a card as text, its lines without markup, sounds or the boxes an answer is typed in, as the backend has it. */
+function plain(side) {
+    const template = document.createElement("template");
+    template.innerHTML = side.replace(HIDDEN, " ").replace(BREAK, "\n").replace(PLAY, "").replace(TYPED, "");
+    return (template.content.textContent ?? "")
+        .split("\n")
+        .map((line) => line.split(/\s+/).filter(Boolean).join(" "))
+        .filter(Boolean)
+        .join("\n");
+}
+
+/** The question of a card and its answer, as text, the answer without the question that its side most often shows again. */
+function cardText(card) {
+    const start = card.answer.search(ANSWER_START);
+    const answer = start < 0 ? card.answer : card.answer.slice(start).replace(ANSWER_START, "");
+    return { question: plain(card.question), answer: plain(answer) || plain(card.answer) };
+}
+
+/** What the model that writes a hint is told, with the learner's prompt for it as the main instruction. */
+function hintSystem({ question, answer }, guidance) {
+    return `This is a hint for someone reviewing a flashcard, who has seen its question but not its answer. \
+Help them find the answer themselves: do not give it away, nor any word of it.
+
+---- Question ----
+${question}
+---- Answer, which they have not seen ----
+${answer}
+---- End of the card ----
+
+Follow the guidance below closely for how to write the hint: it is the main instruction.
+
+---- Hint guidance ----
+${guidance}
+---- End of the guidance ----
+
+Reply with the hint alone.`;
+}
+
+/** What the model of the chat about a card is told, with the learner's prompt for it as the main instruction. */
+function moreInfoSystem({ question, answer }, hint, guidance) {
+    return `The user just revealed the answer to a flashcard and wants more information about it. This is the start \
+of a short back-and-forth chat, not a single reply: be ready to answer whatever they ask next about this card.
+
+---- Card ----
+Question shown to the user:
+${question}
+${hint ? `\nHint already given to the user:\n${hint}\n` : ""}
+Answer revealed to the user:
+${answer}
+---- End of the card ----
+
+Follow the guidance below closely for what kind of information to focus on: it is the main instruction.
+
+---- Guidance ----
+${guidance}
+---- End of the guidance ----`;
+}
+
 /** Whether the app is dark, as the class nightMode of the cards says it is in Anki. */
 function isDark() {
     const theme = document.documentElement.dataset.theme;
@@ -109,7 +174,10 @@ function clock(millis) {
  * four buttons, each with when the card would be due again. The keys are
  * those of Anki: Space or Enter shows the answer and then answers Good, and
  * 1 to 4 answer Again to Easy. What the backend shows is a card, or that the
- * review is over.
+ * review is over. On the question, Hint has the chat model write a hint at
+ * the answer, which stays under the card; on the answer, More info opens a
+ * chat about the card. Each is asked as the learner's prompt of that name
+ * says.
  */
 export function mount(root, exercise) {
     const t = exercise.t;
@@ -119,6 +187,12 @@ export function mount(root, exercise) {
     let error = "";
     let shownAt = Date.now();
     let finished = false;
+    // the hint at the answer of the card shown, while it is asked for and once it came
+    let hint = "";
+    let hinting = false;
+    let hintError = "";
+    // whether the app this runs in can ask the chat model, which one before it could not
+    const helps = typeof exercise.ask === "function" && typeof exercise.chat === "function";
     // the texts read aloud, by the numbers that tell them apart
     const numbers = new Map();
     // counted up whenever what was being played is to stop
@@ -195,6 +269,70 @@ export function mount(root, exercise) {
         });
     }
 
+    function askHint() {
+        const card = show?.card;
+        if (!card || revealed || hinting || hint) {
+            return;
+        }
+        hinting = true;
+        hintError = "";
+        render();
+        exercise.ask([
+            { role: "system", content: hintSystem(cardText(card), exercise.prompts.hint ?? "") },
+            { role: "user", content: "Give me a hint." },
+        ]).then(
+            (given) => {
+                if (show?.card === card) {
+                    hint = given;
+                }
+            },
+            (failed) => {
+                if (show?.card === card) {
+                    hintError = failed.message;
+                }
+            },
+        ).finally(() => {
+            if (show?.card === card) {
+                hinting = false;
+                render();
+            }
+        });
+    }
+
+    function moreInfo() {
+        const card = show?.card;
+        if (!card || !revealed) {
+            return;
+        }
+        exercise.chat({
+            title: t("Ask about this card"),
+            system: moreInfoSystem(cardText(card), hint, exercise.prompts.more_info ?? ""),
+            opening: "Tell me more about this card.",
+        });
+    }
+
+    /** The hint, if there is one, and the button that asks for it on the question, or for more on the answer. */
+    function help() {
+        if (!helps) {
+            return null;
+        }
+        return element(
+            "div",
+            { className: "anki-help" },
+            hint ? element("div", { className: "anki-hint", textContent: hint }) : null,
+            hintError ? element("p", { className: "error", textContent: hintError }) : null,
+            revealed
+                ? element("button", { textContent: t("More info"), disabled: busy, onclick: moreInfo })
+                : hint
+                ? null
+                : element("button", {
+                    textContent: hinting ? t("Thinking of a hint…") : t("Hint"),
+                    disabled: busy || hinting,
+                    onclick: askHint,
+                }),
+        );
+    }
+
     function counts() {
         const { new: fresh = 0, learning = 0, review = 0 } = show.counts;
         const queue = show.card?.queue;
@@ -264,12 +402,12 @@ export function mount(root, exercise) {
                         className: `anki-button ${kind}`,
                         disabled: busy,
                         title: `${t(name)} (${rating})`,
+                        ariaLabel: t(name),
                         onclick: () => answer(rating),
                     },
-                    card.settings.show_intervals_on_buttons && card.labels[index]
-                        ? element("span", { className: "anki-due", textContent: card.labels[index] })
-                        : null,
-                    element("span", { textContent: t(name) }),
+                    // the button says when the card would be due again, its colour which it is; its
+                    // name only where the deck shows no intervals, so that the four fit a phone
+                    card.settings.show_intervals_on_buttons && card.labels[index] ? card.labels[index] : t(name),
                 ),
             ),
         );
@@ -297,6 +435,7 @@ export function mount(root, exercise) {
             card
                 ? cardSide(exercise, card, revealed ? card.answer : card.question, revealed ? "a" : "q", replay)
                 : summary(),
+            card ? help() : null,
             card ? buttons() : null,
             error ? element("p", { className: "error", textContent: error }) : null,
         ];
@@ -331,6 +470,9 @@ export function mount(root, exercise) {
         revealed = false;
         busy = false;
         error = "";
+        hint = "";
+        hinting = false;
+        hintError = "";
         shownAt = Date.now();
         timer.textContent = clock(0);
         render();

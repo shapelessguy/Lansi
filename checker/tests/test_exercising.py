@@ -449,6 +449,28 @@ def test_what_an_exercise_shows_in_other_languages_is_listed_without_what_is_not
     assert echo.messages == {"German": {"Echo": "Echo auf Deutsch"}}
 
 
+def test_the_prompts_of_an_exercise_are_listed_without_those_that_are_not_prompts(
+    directory: Path,
+) -> None:
+    (directory / "echo" / "manifest.json").write_text(
+        '{"title": "Echo", "prompts": {"hint": {"label": "Hint",'
+        ' "description": "How to hint.", "default": "Be brief."},'
+        ' "bare": {}, "broken": "not a prompt", "Not an id": {}}}',
+        encoding="utf-8",
+    )
+
+    (echo,) = exercises(directory)
+
+    assert echo.prompts == {
+        "hint": {
+            "label": "Hint",
+            "description": "How to hint.",
+            "default": "Be brief.",
+        },
+        "bare": {"label": "bare", "description": "", "default": ""},
+    }
+
+
 def test_the_sentences_of_an_exercise_are_checked_only_if_its_manifest_says_so(
     directory: Path,
 ) -> None:

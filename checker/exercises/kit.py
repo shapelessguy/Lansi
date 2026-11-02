@@ -97,6 +97,19 @@ shown as the app has it, if it does, and in English otherwise:
     "messages": {"German": {"Then": "Danach", "Retell it": "Nacherzählen"},
                  "Italian": {"Then": "Poi", "Retell it": "Riraccontala"}}
 
+The `prompts` of a manifest are prompts the learner writes, which the app
+lists in its settings, under Prompts, for each exercise that has any: each
+by its name, with the label it is shown with, what it is for, and what it is
+unless the learner writes another. The interface is given them as the
+learner wrote them, with the keywords of the settings, such as
+{{language}}, filled in, to ask the chat model with, as kit.js describes;
+the backend is not. Their label and description are shown through
+`messages` too:
+
+    "prompts": {"hint": {"label": "Hint",
+                         "description": "How a hint at the answer is written.",
+                         "default": "Describe what the answer means."}}
+
 The spelling of what is written in the text boxes of several lines of the
 interface is always checked, as kit.js describes. The `sentence_checks` of
 a manifest are whether the sentence check model also profiles each

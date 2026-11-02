@@ -83,6 +83,13 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
         document.addEventListener("fullscreenchange", follow);
         return () => document.removeEventListener("fullscreenchange", follow);
     }, []);
+    // the text alone: what opens from the bar, which is not there to close it, is closed
+    useEffect(() => {
+        if (full) {
+            setOptionsOpen(false);
+            setContentsOpen(false);
+        }
+    }, [full]);
     function toggleFull() {
         if (document.fullscreenElement) {
             document.exitFullscreen().catch(() => {});
@@ -389,7 +396,14 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
 
     const paper = PAPERS[look.paper];
     return (
-        <section className={full ? "reader full" : "reader"}>
+        <section
+            className={full ? "reader full" : "reader"}
+            // the colours of the paper, which what floats over the text on the full screen takes after
+            style={{
+                ["--paper-background" as string]: paper.background || undefined,
+                ["--paper-text" as string]: paper.color || undefined,
+            }}
+        >
             {/* how the book looks opens over the page, under the bar */}
             <div className="reader-top">
                 <header className="reader-bar">
@@ -417,44 +431,53 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
                             ↩ {t("Back")}
                         </button>
                     )}
-                    <button
-                        className="icon-button"
-                        onClick={() => turnTo(page - 1)}
-                        disabled={!book || page === 0}
-                        title={t("Previous page")}
-                        aria-label={t("Previous page")}
-                    >
-                        ‹
-                    </button>
-                    {book && <PageField page={page} pages={pages} onTurn={turnTo} />}
-                    <button
-                        className="icon-button"
-                        onClick={() => turnTo(page + 1)}
-                        disabled={!book || page >= pages - 1}
-                        title={t("Next page")}
-                        aria-label={t("Next page")}
-                    >
-                        ›
-                    </button>
-                    {document.fullscreenEnabled && (
+                    {/* the buttons that belong together are kept together, as on the bar of the app */}
+                    <div className="switch" role="group" aria-label={t("Pages")}>
                         <button
                             className="icon-button"
-                            onClick={toggleFull}
-                            title={t("Full screen")}
-                            aria-label={t("Full screen")}
+                            onClick={() => turnTo(page - 1)}
+                            disabled={!book || page === 0}
+                            title={t("Previous page")}
+                            aria-label={t("Previous page")}
                         >
-                            <Icon name="full-screen" />
+                            ‹
                         </button>
-                    )}
-                    <button
-                        className="icon-button"
-                        aria-pressed={optionsOpen}
-                        onClick={() => setOptionsOpen(!optionsOpen)}
-                        title={t("How the book looks")}
-                        aria-label={t("How the book looks")}
-                    >
-                        Aa
-                    </button>
+                        {book && <PageField page={page} pages={pages} onTurn={turnTo} />}
+                        <button
+                            className="icon-button"
+                            onClick={() => turnTo(page + 1)}
+                            disabled={!book || page >= pages - 1}
+                            title={t("Next page")}
+                            aria-label={t("Next page")}
+                        >
+                            ›
+                        </button>
+                    </div>
+                    <div className="switch reader-view-tools" role="group" aria-label={t("How the book looks")}>
+                        {document.fullscreenEnabled && (
+                            <button
+                                className="icon-button full-screen-toggle"
+                                // the button lets go of the focus, whose ring would stay on it after the switch
+                                onClick={(event) => {
+                                    toggleFull();
+                                    event.currentTarget.blur();
+                                }}
+                                title={full ? t("Leave full screen") : t("Full screen")}
+                                aria-label={full ? t("Leave full screen") : t("Full screen")}
+                            >
+                                <Icon name={full ? "leave-full-screen" : "full-screen"} />
+                            </button>
+                        )}
+                        <button
+                            className="icon-button"
+                            aria-pressed={optionsOpen}
+                            onClick={() => setOptionsOpen(!optionsOpen)}
+                            title={t("How the book looks")}
+                            aria-label={t("How the book looks")}
+                        >
+                            Aa
+                        </button>
+                    </div>
                 </header>
                 {contentsOpen && book && (
                     <BookContents

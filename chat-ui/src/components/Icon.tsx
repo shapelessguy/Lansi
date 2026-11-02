@@ -58,6 +58,7 @@ const ICONS = {
     ),
     usage: <path d="M5 20v-8M12 20V4M19 20v-5" />,
     "full-screen": <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />,
+    "leave-full-screen": <path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5" />,
     settings: (
         <>
             <path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" />

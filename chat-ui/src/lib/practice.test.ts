@@ -1,7 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { onOpenRouter } from "./models";
 import {
@@ -12,6 +12,7 @@ import {
     DEFAULT_INSTANCES,
     defaultOptions,
     exerciseKit,
+    fetchExercises,
     interfaceAddress,
     lessonsRead,
     lessonsToReview,
@@ -19,6 +20,7 @@ import {
     optionsOf,
     type PracticeSession,
     practiceUsage,
+    promptsOf,
     resumeAt,
     scoreOf,
     secondsLeft,
@@ -224,6 +226,60 @@ describe("exerciseKit", () => {
         await expect(kit.ankiMedia("hund.png")).resolves.toBe("blob:hund.png");
         await expect(kit.ankiMedia("")).rejects.toThrow();
         expect(asked).toEqual(["hund.png"]);
+    });
+
+    it("gives the interface its prompts, asks the model with messages alone, and opens a chat that has a prompt", async () => {
+        const chats: unknown[] = [];
+        const { kit } = exerciseKit(async () => null, () => undefined, () => undefined, undefined, "anki", {
+            prompts: { hint: "Be brief." },
+            ask: async (messages) => `reply to ${messages.length}`,
+            chat: (start) => chats.push(start),
+        });
+
+        await expect(kit.ask([{ role: "user", content: "Hint?" }])).resolves.toBe("reply to 1");
+        await expect(kit.ask([])).rejects.toThrow();
+        kit.chat({ title: "About it", system: "Be kind.", opening: "Tell me more." });
+        kit.chat({ title: "Broken" } as never);
+
+        expect(kit.prompts).toEqual({ hint: "Be brief." });
+        expect(chats).toEqual([{ title: "About it", system: "Be kind.", opening: "Tell me more." }]);
+    });
+
+    it("refuses to ask a model when the app gives it none", async () => {
+        const { kit } = exerciseKit(async () => null, () => undefined);
+
+        expect(kit.prompts).toEqual({});
+        await expect(kit.ask([{ role: "user", content: "Hint?" }])).rejects.toThrow();
+    });
+});
+
+describe("promptsOf", () => {
+    it("is the prompts of an exercise as the learner wrote them, or as its manifest has them where they wrote none", async () => {
+        const exercises = [{
+            id: "anki",
+            title: "Anki",
+            description: "",
+            theory: false,
+            options: {},
+            prompts: {
+                hint: { label: "Hint", description: "", default: "Be brief." },
+                more_info: { label: "More info", description: "", default: "Tell more." },
+                other: { label: "Other", description: "", default: "As it is." },
+            },
+        }];
+        vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ exercises }))));
+        try {
+            await fetchExercises();
+        } finally {
+            vi.unstubAllGlobals();
+        }
+
+        expect(promptsOf("anki", { hint: "Be vague.", more_info: "  ", gone: "Kept nowhere." })).toEqual({
+            hint: "Be vague.",
+            more_info: "Tell more.",
+            other: "As it is.",
+        });
+        expect(promptsOf("unknown", { hint: "Be vague." })).toEqual({});
     });
 });
 

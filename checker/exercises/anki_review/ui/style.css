@@ -45,20 +45,20 @@
 }
 
 .anki-buttons {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
 }
 
+/* four on one row, as wide as each other, on a phone too */
 .anki-button {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 76px;
-}
-
-.anki-due {
-    color: var(--muted);
-    font-size: 0.8em;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 88px;
+    padding-inline: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 .anki-button.again {
@@ -75,4 +75,22 @@
 
 .anki-button.easy {
     border-color: #3b82f6;
+}
+
+/* the hint at the answer, and the buttons that ask the chat model about the card */
+.anki-help {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.anki-hint {
+    align-self: stretch;
+    padding: 10px 14px;
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--panel);
+    white-space: pre-wrap;
 }

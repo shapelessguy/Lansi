@@ -151,9 +151,17 @@ export const MESSAGES = {
         German: "Schließen",
         Italian: "Chiudi",
     },
+    "Pages": {
+        German: "Seiten",
+        Italian: "Pagine",
+    },
     "Full screen": {
         German: "Vollbild",
         Italian: "Schermo intero",
+    },
+    "Leave full screen": {
+        German: "Vollbild verlassen",
+        Italian: "Esci dallo schermo intero",
     },
     "Close {name}": {
         German: "{name} schließen",
@@ -2570,13 +2578,25 @@ export const MESSAGES = {
         German: "Schlüsselwörter",
         Italian: "Parole chiave",
     },
-    "Write these in any prompt, whether of a context, of the speech model or of a question about each sentence, and each is replaced by what it stands for:":
+    "Write these in any prompt, whether of a context, of the speech model, of an exercise or of a question about each sentence, and each is replaced by what it stands for:":
         {
             German:
-                "Schreib diese in einen beliebigen Prompt, ob eines Kontexts, des Sprachmodells oder einer Frage zu jedem Satz, und jedes wird durch das ersetzt, wofür es steht:",
+                "Schreib diese in einen beliebigen Prompt, ob eines Kontexts, des Sprachmodells, einer Übung oder einer Frage zu jedem Satz, und jedes wird durch das ersetzt, wofür es steht:",
             Italian:
-                "Scrivile in qualsiasi prompt, di un contesto, del modello vocale o di una domanda su ogni frase, e ognuna viene sostituita da ciò che rappresenta:",
+                "Scrivile in qualsiasi prompt, di un contesto, del modello vocale, di un esercizio o di una domanda su ogni frase, e ognuna viene sostituita da ciò che rappresenta:",
         },
+    "Reset to the default": {
+        German: "Auf den Standard zurücksetzen",
+        Italian: "Ripristina il predefinito",
+    },
+    "There is no model here.": {
+        German: "Hier gibt es kein Modell.",
+        Italian: "Qui non c'è un modello.",
+    },
+    "Ask a follow-up": {
+        German: "Stell eine Nachfrage",
+        Italian: "Fai un'altra domanda",
+    },
     "the language you are learning ({language})": {
         German: "die Sprache, die du lernst ({language})",
         Italian: "la lingua che stai imparando ({language})",

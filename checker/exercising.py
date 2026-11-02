@@ -228,6 +228,10 @@ class Manifest:
     # describes, such as a favourite shows: each path with what is blanked
     # in it; empty for one that shows nothing of it.
     preview: list[tuple[str, str]] = field(default_factory=list)
+    # The prompts the learner writes for it in the settings, by name: each
+    # `{"label": ..., "description": ..., "default": ...}`, which its
+    # interface is given as the learner wrote them, as kit.js describes.
+    prompts: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 # Whether the sentences written in an exercise may be checked.
@@ -276,6 +280,7 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
                     if data.get("sentence_checks") in SENTENCE_CHECKS
                     else "never",
                     read_preview(data.get("preview")),
+                    _read_prompts(data.get("prompts")),
                 )
             )
     return sorted(
@@ -303,6 +308,21 @@ def _read_translations(value: object) -> dict[str, dict[str, str]]:
         }
         for language, texts in (value.items() if isinstance(value, dict) else [])
         if isinstance(language, str) and isinstance(texts, dict)
+    }
+
+
+def _read_prompts(value: object) -> dict[str, dict[str, str]]:
+    """The prompts of a manifest that the learner writes, each with its
+    label, what it is for and what it is unless the learner writes another,
+    those that are not as kit.py describes left out."""
+    return {
+        name: {
+            "label": str(prompt.get("label") or name),
+            "description": str(prompt.get("description") or ""),
+            "default": str(prompt.get("default") or ""),
+        }
+        for name, prompt in (value.items() if isinstance(value, dict) else [])
+        if _ID.fullmatch(name) and isinstance(prompt, dict)
     }
 
 

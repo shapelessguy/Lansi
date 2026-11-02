@@ -9,6 +9,18 @@
             "anki_decks": true
         }
     },
+    "prompts": {
+        "hint": {
+            "label": "Hint",
+            "description": "How the hint a card's Hint button asks for is written. The model sees the whole card, and is told not to give the answer away.",
+            "default": "Describe the meaning, category or context of the answer in your own words, in {{language}} at level {{level}}."
+        },
+        "more_info": {
+            "label": "More info",
+            "description": "What the chat that a card's More info button starts, once its answer is shown, is about. The model sees the question, the answer and the hint, if one was asked for.",
+            "default": "Give useful background, context or related facts about the answer, such as how it is used, its forms and words related to it, to deepen my understanding. I am learning {{language}} at level {{level}}."
+        }
+    },
     "once": true,
     "first": true,
     "own_tool": true,
@@ -30,7 +42,13 @@
             "Your answers are synced to Anki.": "Deine Antworten werden mit Anki synchronisiert.",
             "Finish": "Beenden",
             "Show answer": "Antwort zeigen",
-            "{count} reviewed": "{count} wiederholt"
+            "{count} reviewed": "{count} wiederholt",
+            "Hint": "Hinweis",
+            "More info": "Mehr Infos",
+            "How the hint a card's Hint button asks for is written. The model sees the whole card, and is told not to give the answer away.": "Wie der Hinweis geschrieben wird, den die Schaltfläche Hinweis einer Karte anfordert. Das Modell sieht die ganze Karte und soll die Antwort nicht verraten.",
+            "What the chat that a card's More info button starts, once its answer is shown, is about. The model sees the question, the answer and the hint, if one was asked for.": "Worum es in dem Chat geht, den die Schaltfläche Mehr Infos einer Karte startet, sobald ihre Antwort gezeigt wird. Das Modell sieht die Frage, die Antwort und den Hinweis, falls einer angefordert wurde.",
+            "Thinking of a hint…": "Ein Hinweis wird gesucht…",
+            "Ask about this card": "Frag zu dieser Karte"
         },
         "Italian": {
             "Review Anki cards": "Ripassa le carte di Anki",
@@ -49,7 +67,13 @@
             "Your answers are synced to Anki.": "Le tue risposte vengono sincronizzate con Anki.",
             "Finish": "Termina",
             "Show answer": "Mostra risposta",
-            "{count} reviewed": "{count} ripassate"
+            "{count} reviewed": "{count} ripassate",
+            "Hint": "Suggerimento",
+            "More info": "Più informazioni",
+            "How the hint a card's Hint button asks for is written. The model sees the whole card, and is told not to give the answer away.": "Come viene scritto il suggerimento che chiede il pulsante Suggerimento di una carta. Il modello vede tutta la carta, e gli si chiede di non svelare la risposta.",
+            "What the chat that a card's More info button starts, once its answer is shown, is about. The model sees the question, the answer and the hint, if one was asked for.": "Di cosa parla la chat che il pulsante Più informazioni di una carta avvia, una volta mostrata la risposta. Il modello vede la domanda, la risposta e il suggerimento, se è stato chiesto.",
+            "Thinking of a hint…": "Sto pensando a un suggerimento…",
+            "Ask about this card": "Chiedi di questa carta"
         }
     }
 }

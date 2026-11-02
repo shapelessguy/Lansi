@@ -8,19 +8,23 @@ import { ankiMediaUrl } from "../lib/anki";
 import type { ProfileUsage } from "../lib/checker";
 import { t } from "../lib/i18n";
 import type { Where } from "../lib/logs";
+import { streamChat } from "../lib/openrouter";
 import {
+    type ExerciseChat,
     exerciseKit,
     knowExercises,
     type Learner,
     loadInterface,
+    promptsOf,
     sentencesChecked,
     sentencesCheckedAlong,
     stepExercise,
 } from "../lib/practice";
 import type { WordLists } from "../lib/sets";
-import type { Settings } from "../lib/settings";
+import { expandPrompt, type Settings } from "../lib/settings";
 import { type CheckedPlace, placeChecked, profilingOf } from "../lib/writing";
 import { SettingsChecksPanel } from "./ChecksPanel";
+import { ExerciseChatWindow } from "./ExerciseChatWindow";
 import { SidePanel } from "./SidePanel";
 import { useWritingPlace } from "./WritingChecks";
 
@@ -88,8 +92,10 @@ export function ExerciseView(
     const [rendered, setRendered] = useState(false);
     // counted up to start again after a failure
     const [attempt, setAttempt] = useState(0);
-    const latest = useRef({ learner, onUsage, onFinish, onReadAloud, onStarted });
-    latest.current = { learner, onUsage, onFinish, onReadAloud, onStarted };
+    // the chat the exercise opened over the page, if it did
+    const [chat, setChat] = useState<{ start: ExerciseChat; nonce: number } | null>(null);
+    const latest = useRef({ learner, onUsage, onFinish, onReadAloud, onStarted, settings, words });
+    latest.current = { learner, onUsage, onFinish, onReadAloud, onStarted, settings, words };
 
     // its spelling is checked as everywhere, and its sentences as the
     // manifest and the learner say, asked at each check, so that the
@@ -142,6 +148,32 @@ export function ExerciseView(
                 (text, number) => latest.current.onReadAloud(text, number),
                 ankiMediaUrl,
                 exercise,
+                {
+                    prompts: Object.fromEntries(
+                        Object.entries(promptsOf(exercise, settings.exercisePrompts[exercise])).map((
+                            [name, prompt],
+                        ) => [
+                            name,
+                            expandPrompt(prompt, words, settings.language, settings.level, settings.translateInto),
+                        ]),
+                    ),
+                    ask: async (messages) => {
+                        const { settings } = latest.current;
+                        let reply = "";
+                        await streamChat({
+                            apiKey: settings.apiKey,
+                            model: settings.model,
+                            messages,
+                            signal: new AbortController().signal,
+                            usageId: sessionId,
+                            onText: (piece) => {
+                                reply += piece;
+                            },
+                        });
+                        return reply.trim();
+                    },
+                    chat: (start) => setChat({ start, nonce: Date.now() }),
+                },
             );
             unmount = ui.mount(root, kit);
             show(first);
@@ -161,6 +193,19 @@ export function ExerciseView(
 
     return (
         <div className="exercise">
+            {chat && createPortal(
+                <section className="floating-window wide" aria-label={chat.start.title || t("Ask about it")}>
+                    <ExerciseChatWindow
+                        key={chat.nonce}
+                        start={chat.start}
+                        apiKey={settings.apiKey}
+                        model={settings.model}
+                        usageId={sessionId}
+                        onClose={() => setChat(null)}
+                    />
+                </section>,
+                document.body,
+            )}
             {!rendered && !error && (
                 <div className="exercise-waiting" style={{ minHeight: WAITING_HEIGHT }} role="status">
                     <span className="exercise-spinner" aria-hidden="true" />

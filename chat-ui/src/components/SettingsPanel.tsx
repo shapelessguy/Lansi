@@ -8,6 +8,7 @@ import { newId } from "../lib/ids";
 import { ask } from "../lib/dialogs";
 import { languageName, locale, type Message, t } from "../lib/i18n";
 import { fetchOpenRouterModels, type ListedModel, type ModelKind } from "../lib/models";
+import { type ExerciseInfo, fetchExercises } from "../lib/practice";
 import { isAskable, newQuestion, type ProfileQuestion, type QuestionOption } from "../lib/questions";
 import type { WordSet } from "../lib/sets";
 import {
@@ -684,7 +685,7 @@ function ContentTab({ settings, onChange }: TabProps) {
             <h3>{t("Keywords")}</h3>
             <p className="hint">
                 {t(
-                    "Write these in any prompt, whether of a context, of the speech model or of a question about each sentence, and each is replaced by what it stands for:",
+                    "Write these in any prompt, whether of a context, of the speech model, of an exercise or of a question about each sentence, and each is replaced by what it stands for:",
                 )}
             </p>
             <PromptKeywords settings={settings} />
@@ -742,8 +743,59 @@ function ContentTab({ settings, onChange }: TabProps) {
                     onChange={(event) => onChange({ ...settings, speechDirection: event.target.value })}
                 />
             </label>
+            <ExercisePrompts settings={settings} onChange={onChange} />
         </>
     );
+}
+
+/** The prompts of each exercise whose manifest declares any, as the learner wrote them or else as it has them. */
+function ExercisePrompts({ settings, onChange }: TabProps) {
+    const [exercises, setExercises] = useState<ExerciseInfo[]>([]);
+    useEffect(() => {
+        fetchExercises().then(setExercises, () => undefined);
+    }, []);
+
+    function write(exercise: string, name: string, text: string | null) {
+        const { [name]: _, ...others } = settings.exercisePrompts[exercise] ?? {};
+        onChange({
+            ...settings,
+            exercisePrompts: {
+                ...settings.exercisePrompts,
+                [exercise]: text === null ? others : { ...others, [name]: text },
+            },
+        });
+    }
+
+    return exercises.filter((exercise) => Object.keys(exercise.prompts ?? {}).length).map((exercise) => (
+        <section key={exercise.id}>
+            <h3>{exercise.title}</h3>
+            {Object.entries(exercise.prompts ?? {}).map(([name, prompt]) => {
+                const written = settings.exercisePrompts[exercise.id]?.[name];
+                return (
+                    <label key={name} className="field">
+                        <span className="setting-name">
+                            {prompt.label}
+                            {prompt.description && <Help>{prompt.description}</Help>}
+                        </span>
+                        <textarea
+                            rows={4}
+                            placeholder={prompt.default}
+                            value={written ?? prompt.default}
+                            onChange={(event) => write(exercise.id, name, event.target.value)}
+                        />
+                        {written !== undefined && written !== prompt.default && (
+                            <button
+                                type="button"
+                                onClick={() => write(exercise.id, name, null)}
+                            >
+                                {t("Reset to the default")}
+                            </button>
+                        )}
+                    </label>
+                );
+            })}
+        </section>
+    ));
 }
 
 function QuestionEditor(

@@ -5,6 +5,7 @@ import type { ProfileUsage } from "./checker";
 import { filled, type InterfaceLanguage, interfaceLanguage, plural, t, translated } from "./i18n";
 import { announceLogged } from "./logs";
 import { type ModelChoice, modelRequest } from "./models";
+import type { ChatMessage } from "./openrouter";
 import { checkerFetch } from "./session";
 import type { Settings } from "./settings";
 import type { BackgroundTask } from "./tasks";
@@ -79,6 +80,17 @@ export interface ExerciseInfo {
     sentence_checks?: "always" | "optional" | "never";
     /** What it shows, in each language the interface is written in but English, by what it says in English. */
     messages?: ExerciseMessages;
+    /** The prompts the learner writes for it in the settings, by their names. */
+    prompts?: Record<string, ExercisePrompt>;
+}
+
+/** A prompt an exercise has the learner write, as its manifest declares it. */
+export interface ExercisePrompt {
+    label: string;
+    /** What it is for. */
+    description: string;
+    /** What it is unless the learner writes another. */
+    default: string;
 }
 
 /**
@@ -89,6 +101,8 @@ export type ExerciseMessages = Partial<Record<InterfaceLanguage, Record<string, 
 
 /** What each exercise shows in the other languages, by its id, as the server last listed them. */
 const exerciseMessages = new Map<string, ExerciseMessages>();
+/** The prompts each exercise has the learner write, by its id, as the server last listed them. */
+const exercisePrompts = new Map<string, Record<string, ExercisePrompt>>();
 /** Whether the sentences are checked in each exercise, by its id, as the server last listed them. */
 const exerciseSentenceChecks = new Map<string, ExerciseInfo["sentence_checks"]>();
 
@@ -140,7 +154,20 @@ export function exerciseText(id: string, text: string, values: Record<string, st
     return own === undefined ? translated(text, values) : filled(own, values);
 }
 
-/** An exercise as it is shown: its title, description and options in the language of the interface. */
+/**
+ * The prompts of the exercise `id` as the learner wrote them in `written`,
+ * by their names, each that they left empty or never wrote as its manifest
+ * has it, as the server last listed them.
+ */
+export function promptsOf(id: string, written: Record<string, string> = {}): Record<string, string> {
+    return Object.fromEntries(
+        Object.entries(exercisePrompts.get(id) ?? {}).map((
+            [name, prompt],
+        ) => [name, written[name]?.trim() ? written[name] : prompt.default]),
+    );
+}
+
+/** An exercise as it is shown: its title, description, options and prompts in the language of the interface. */
 function shownExercise(exercise: ExerciseInfo): ExerciseInfo {
     const text = (said: string) => exerciseText(exercise.id, said);
     return {
@@ -159,6 +186,12 @@ function shownExercise(exercise: ExerciseInfo): ExerciseInfo {
                         ),
                     }
                     : { ...option, label: text(option.label) },
+            ]),
+        ),
+        prompts: Object.fromEntries(
+            Object.entries(exercise.prompts ?? {}).map(([name, prompt]) => [
+                name,
+                { ...prompt, label: text(prompt.label), description: text(prompt.description) },
             ]),
         ),
     };
@@ -320,6 +353,7 @@ export async function fetchExercises(): Promise<ExerciseInfo[]> {
     exercises.forEach((exercise) => {
         exerciseMessages.set(exercise.id, exercise.messages ?? {});
         exerciseSentenceChecks.set(exercise.id, exercise.sentence_checks);
+        exercisePrompts.set(exercise.id, exercise.prompts ?? {});
     });
     return exercises.map(shownExercise);
 }
@@ -730,6 +764,29 @@ export interface ExerciseKit {
     language: InterfaceLanguage;
     /** `text`, what the interface shows, in that language, with each `{name}` in it given its value. */
     t(text: string, values?: Record<string, string | number>): string;
+    /** Its prompts as the learner wrote them in the settings, by their names, with the keywords filled in. */
+    prompts: Record<string, string>;
+    /** What the chat model replies to `messages`. */
+    ask(messages: ChatMessage[]): Promise<string>;
+    /** Opens a chat over the page, which the chat model starts by answering `opening`, as `system` tells it. */
+    chat(start: ExerciseChat): void;
+}
+
+/** A chat an exercise opens over the page. */
+export interface ExerciseChat {
+    /** What the chat is called, in the language of the interface. */
+    title: string;
+    /** What the model is told the chat is about and how to answer. */
+    system: string;
+    /** What the model is asked first, which the learner is not shown. */
+    opening: string;
+}
+
+/** How the interface of an exercise asks the chat model, and its prompts to ask it with. */
+export interface ExerciseAsking {
+    prompts: Record<string, string>;
+    ask(messages: ChatMessage[]): Promise<string>;
+    chat(start: ExerciseChat): void;
 }
 
 /** The interface of an exercise, ready to be mounted, as `exercises/kit.js` describes. */
@@ -794,6 +851,11 @@ export function exerciseKit(
     readAloud: (text: string, number: number) => void = () => undefined,
     ankiMedia: (name: string) => Promise<string> = () => Promise.reject(new Error(t("There is no Anki here."))),
     exercise = "",
+    asking: ExerciseAsking = {
+        prompts: {},
+        ask: () => Promise.reject(new Error(t("There is no model here."))),
+        chat: () => undefined,
+    },
 ): { kit: ExerciseKit; show: (show: unknown) => void } {
     let handler: (show: unknown) => void = () => undefined;
     const kit: ExerciseKit = {
@@ -815,6 +877,16 @@ export function exerciseKit(
             typeof name === "string" && name ? ankiMedia(name) : Promise.reject(new Error("A file has a name.")),
         language: interfaceLanguage(),
         t: (text, values = {}) => (typeof text === "string" ? exerciseText(exercise, text, values) : String(text)),
+        prompts: { ...asking.prompts },
+        ask: (messages) =>
+            Array.isArray(messages) && messages.length
+                ? asking.ask(messages)
+                : Promise.reject(new Error("The model is asked with messages.")),
+        chat(start) {
+            if (start && typeof start.system === "string" && typeof start.opening === "string") {
+                asking.chat({ title: String(start.title ?? ""), system: start.system, opening: start.opening });
+            }
+        },
     };
     return { kit, show: (shown) => handler(shown) };
 }

@@ -100,6 +100,8 @@ export interface Settings {
     evaluationTimed: boolean;
     /** The prompts the learner saved to transform books with, in the order they were saved. */
     transformPrompts: SavedPrompt[];
+    /** The prompts the learner wrote for the exercises whose manifests declare them, by exercise and name; empty is the default. */
+    exercisePrompts: Record<string, Record<string, string>>;
 }
 
 /** What each look of the app is called, to be shown with `t`. */
@@ -251,6 +253,7 @@ export function defaultSettings(): Settings {
         evaluationSize: 3,
         evaluationTimed: true,
         transformPrompts: [],
+        exercisePrompts: {},
     };
 }
 
@@ -368,6 +371,7 @@ export function normalizeSettings(stored: unknown): Settings {
         transformPrompts: Array.isArray(candidate.transformPrompts)
             ? candidate.transformPrompts.filter(isSavedPrompt)
             : defaults.transformPrompts,
+        exercisePrompts: exercisePromptsOf(candidate.exercisePrompts),
     };
 }
 
@@ -412,6 +416,23 @@ function exerciseOptionsOf(stored: unknown): Record<string, Record<string, strin
                         typeof value === "string" || (typeof value === "number" && Number.isFinite(value))
                     ),
                 ) as Record<string, string | number>,
+            ]),
+    );
+}
+
+/** The prompts of the exercises in stored settings, those that are not text left out. */
+function exercisePromptsOf(stored: unknown): Record<string, Record<string, string>> {
+    if (typeof stored !== "object" || stored === null) {
+        return {};
+    }
+    return Object.fromEntries(
+        Object.entries(stored)
+            .filter(([, prompts]) => typeof prompts === "object" && prompts !== null)
+            .map(([exercise, prompts]) => [
+                exercise,
+                Object.fromEntries(
+                    Object.entries(prompts as Record<string, unknown>).filter(([, value]) => typeof value === "string"),
+                ) as Record<string, string>,
             ]),
     );
 }

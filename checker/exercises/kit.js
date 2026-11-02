@@ -36,6 +36,21 @@
 //                             has for it: as the `messages` of the manifest
 //                             have it, as kit.py describes, or else as the
 //                             app has it, or else as it is
+//   exercise.prompts          the `prompts` of the manifest, by their names,
+//                             as the learner wrote them in the settings or
+//                             else as the manifest has them, with the
+//                             keywords of the settings filled in, as kit.py
+//                             describes
+//   exercise.ask(messages)    resolves with what the learner's chat model
+//                             replies to `messages`, each `{role, content}`
+//                             with a role of "system", "user" or
+//                             "assistant", or rejects with why it could not
+//   exercise.chat({title, system, opening})
+//                             opens a chat over the page, called `title`,
+//                             in which the chat model, told `system`,
+//                             answers `opening`, which is not shown, and
+//                             then what the learner writes; nothing of it
+//                             is kept once it is closed
 //
 // What the interface shows the learner, as opposed to what the backend made
 // in the language learned, is written in English and shown through

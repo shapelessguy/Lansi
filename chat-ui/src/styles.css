@@ -1107,11 +1107,62 @@ a {
     position: fixed;
     inset: 0;
     z-index: 12;
-    background: var(--bg);
+    background: var(--paper-background, var(--bg));
 }
 
+/* Of the bar, only the player of what is read aloud, while there is one,
+   and the way out of the full screen are kept, at the top right over the
+   text, which takes the whole height. */
 .reader.full .reader-bar {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+    padding: 0;
+    border: none;
+    /* in the colour of the text of the paper, so as to sit on a light paper as well as a dark one */
+    color: var(--paper-text, var(--text));
+}
+
+.reader.full .reader-bar > :not(.speech-dock, .reader-view-tools),
+.reader.full .reader-view-tools > :not(.full-screen-toggle) {
     display: none;
+}
+
+/* see through, so as to take after the paper under it */
+.reader.full .reader-view-tools,
+.reader.full .speech-player.docked {
+    border-color: color-mix(in srgb, currentColor 22%, transparent);
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    color: inherit;
+    backdrop-filter: blur(6px);
+}
+
+.reader.full .speech-player.docked button,
+.reader.full .speech-player.docked select {
+    border-color: color-mix(in srgb, currentColor 22%, transparent);
+    background: transparent;
+    color: inherit;
+}
+
+.reader.full .full-screen-toggle {
+    color: inherit;
+}
+
+/* the list of a menu opens over the app rather than the paper, in its colours */
+.reader.full .speech-player.docked option {
+    background: var(--panel);
+    color: var(--text);
+}
+
+.reader.full .reader-view-tools {
+    opacity: 0.55;
+    transition: opacity 0.15s;
+}
+
+.reader.full .reader-view-tools:hover,
+.reader.full .reader-view-tools:focus-within {
+    opacity: 1;
 }
 
 .reader-bar {
@@ -1125,6 +1176,29 @@ a {
 /* the bar, with how the book looks opening over the page under it */
 .reader-top {
     position: relative;
+}
+
+/* the groups of buttons of the bar, as on the bar of the app: their
+   buttons as narrow as the icons and signs in them, and the one on in its colours */
+.reader-bar .switch button {
+    /* an icon centred as a sign is, rather than sitting on the line of the text */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: 30px;
+    padding: 4px 8px;
+}
+
+.reader-bar .switch button[aria-pressed="true"] {
+    background: var(--bg);
+    color: var(--text);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+.reader-bar .switch .page-field {
+    align-self: center;
+    padding-inline: 4px;
 }
 
 .reader-title {
@@ -1929,6 +2003,11 @@ div.book-cover {
 /* left of the side panel, which stays open beside it */
 .floating-window.beside-panel {
     right: calc(460px + 16px);
+}
+
+/* for a chat that is read at length, such as one an exercise opens */
+.floating-window.wide {
+    width: min(600px, calc(100vw - 32px));
 }
 
 /* where there is no room beside it, over the panel as before */

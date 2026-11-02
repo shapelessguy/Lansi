@@ -253,3 +253,12 @@ test("the prompts saved to transform books with are kept, and what is not one is
     ]);
     expect(normalizeSettings({}).transformPrompts).toEqual([]);
 });
+
+test("the prompts written for the exercises are kept, and what is not text left out", () => {
+    const settings = normalizeSettings({
+        exercisePrompts: { anki: { hint: "Be brief.", more_info: 3 }, broken: "not prompts" },
+    });
+
+    expect(settings.exercisePrompts).toEqual({ anki: { hint: "Be brief." } });
+    expect(normalizeSettings({}).exercisePrompts).toEqual({});
+});
