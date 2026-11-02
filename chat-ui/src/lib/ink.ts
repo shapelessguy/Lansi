@@ -51,7 +51,7 @@ export function strokeWidth(pen: Pen, size: number, pressure: number): number {
  */
 const PEN_DRAWING: Record<Pen, { thinning: number; alpha: number }> = {
     pen: { thinning: 0.25, alpha: 1 },
-    fountain: { thinning: 0.7, alpha: 1 },
+    fountain: { thinning: 0.45, alpha: 1 },
     pencil: { thinning: 0.15, alpha: 0.8 },
     highlighter: { thinning: 0, alpha: 0.35 },
 };
@@ -190,7 +190,7 @@ function grain(context: CanvasRenderingContext2D, color: string, piece: number):
             pixels.data[at] = red;
             pixels.data[at + 1] = green;
             pixels.data[at + 2] = blue;
-            pixels.data[at + 3] = caught < 0.3 ? caught * 200 : 150 + caught * 105;
+            pixels.data[at + 3] = caught < 0.15 ? 60 + caught * 400 : 190 + caught * 65;
         }
         drawn.putImageData(pixels, 0, 0);
         grains.set(color, tile);
@@ -228,7 +228,7 @@ const PENCIL_PIECE = 8;
 function drawPencil(context: CanvasRenderingContext2D, stroke: Stroke, points: Stroke["points"]) {
     const color = stroke.color;
     const width = (pressure: number) => strokeWidth(stroke.pen, stroke.size, pressure) * 0.7;
-    const shade = (pressure: number) => 0.45 + 0.5 * pressure;
+    const shade = (pressure: number) => 0.6 + 0.4 * pressure;
     const mid = (a: Stroke["points"][number], b: Stroke["points"][number]): [number, number] => [
         (a[0] + b[0]) / 2,
         (a[1] + b[1]) / 2,

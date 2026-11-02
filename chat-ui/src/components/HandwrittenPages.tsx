@@ -27,6 +27,7 @@ import {
     type Stroke,
     touches,
 } from "../lib/ink";
+import { moveSound, startSound, stopSound } from "../lib/inkSound";
 import { addPage, deletePage, fetchText, type HandwrittenPage, readPage, saveInk, type Text } from "../lib/texts";
 import { Icon, type IconName } from "./Icon";
 
@@ -65,6 +66,7 @@ function stepOf(size: number): number {
 
 /** Where this browser keeps whether the pages are shown turned. */
 const TURNED_KEY = "chat-ui.turned-pages";
+
 /** How far a mouse moves, in pixels of the screen, before the next point of a stroke is kept. */
 const MOUSE_STEP = 3;
 /** How near a stroke the eraser takes it, in units of the page. */
@@ -643,6 +645,8 @@ let lastInk = 0;
 
 /** A page to be written on: its ink drawn on one canvas, and the stroke being written on another above it. */
 function InkPage({ page, ink, choice, tool, locked, turned, showWords, onWrite }: PageProps) {
+    // where the pen was last, on the screen, and when, which how fast it moves is told from
+    const lastAt = useRef({ x: 0, y: 0, time: 0 });
     // how wide and high it is shown, in units of the page
     const wide = turned ? page.height : page.width;
     const high = turned ? page.width : page.height;
@@ -757,11 +761,25 @@ function InkPage({ page, ink, choice, tool, locked, turned, showWords, onWrite }
             left: ink,
             finger: null,
         };
+        startSound(erasing ? "eraser" : choice.pen);
+        lastAt.current = { x: event.clientX, y: event.clientY, time: event.timeStamp };
         if (erasing) {
             rub(event);
         } else {
             drawLive();
         }
+    }
+
+    /** Makes the sound of the tool as fast as it moved since it was last told. */
+    function sounded(event: ReactPointerEvent<HTMLCanvasElement>) {
+        const last = lastAt.current;
+        const elapsed = event.timeStamp - last.time;
+        if (elapsed <= 0) {
+            return;
+        }
+        const speed = Math.hypot(event.clientX - last.x, event.clientY - last.y) / elapsed;
+        lastAt.current = { x: event.clientX, y: event.clientY, time: event.timeStamp };
+        moveSound(speed, event.pointerType === "pen" && event.pressure > 0 ? event.pressure : MOUSE_PRESSURE);
     }
 
     function rub(event: PointerEvent | ReactPointerEvent) {
@@ -808,6 +826,7 @@ function InkPage({ page, ink, choice, tool, locked, turned, showWords, onWrite }
             return;
         }
         const moves = event.nativeEvent.getCoalescedEvents?.() ?? [event.nativeEvent];
+        sounded(event);
         if (!now.stroke) {
             moves.forEach(rub);
             return;
@@ -828,6 +847,7 @@ function InkPage({ page, ink, choice, tool, locked, turned, showWords, onWrite }
     function up(event: ReactPointerEvent<HTMLCanvasElement>) {
         const now = writing.current;
         writing.current = null;
+        stopSound();
         inkDown = false;
         lastInk = Date.now();
         // where a mouse was lifted, which it may not have moved far enough from the last point to give;
