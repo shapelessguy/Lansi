@@ -1482,6 +1482,68 @@ def test_a_page_is_added_where_it_is_asked_among_the_pages(
     assert [page["id"] for page in text["pages"]] == ["p0", first, "p1", "p2"]
 
 
+def test_the_corrections_of_before_are_deleted_and_their_texts_can_be_corrected_again(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.save_text("t1", "Wochenende", "Ich bin gegeht.", "German")
+    before.correct_text("t1", "Ich bin gegeht.", "c1", "~~gegeht~~ **gegangen**", "s1")
+    before._db.execute("PRAGMA user_version = 37")  # noqa: SLF001
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+
+    assert [each["id"] for each in store.texts()] == ["t1"]
+    text = store.text("t1")
+    assert text is not None and text["lockedAt"] is None
+
+
+def test_a_text_can_be_changed_again_once_its_correction_is_deleted(
+    store: UserStore,
+) -> None:
+    store.save_text("t1", "Wochenende", "Ich bin gegeht.", "German")
+    store.correct_text("t1", "Ich bin gegeht.", "c1", "{}", "s1")
+
+    store.delete_text("c1")
+
+    text = store.text("t1")
+    assert text is not None and text["lockedAt"] is None
+    store.save_text("t1", "Wochenende", "Ich bin gegangen.", "German")
+
+
+def test_a_text_whose_correction_was_deleted_before_is_unlocked(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    for text_id in ("t1", "t2"):
+        before.save_text(text_id, "Text", "Ich bin gegeht.", "German")
+        before.correct_text(text_id, "Ich bin gegeht.", f"c{text_id}", "{}", "s1")
+    before._db.executescript(  # noqa: SLF001
+        "DELETE FROM learner_texts WHERE id = 'ct1'; PRAGMA user_version = 38;"
+    )
+    before.close()
+
+    store = UserStore(tmp_path / "ada")
+
+    locked = {each["id"]: each["lockedAt"] is not None for each in store.texts()}
+    assert locked == {"t1": False, "t2": True, "ct2": True}
+
+
+def test_a_text_left_locked_without_its_correction_is_unlocked_when_opened(
+    tmp_path: Path,
+) -> None:
+    before = UserStore(tmp_path / "ada")
+    before.save_text("t1", "Text", "Ich bin gegeht.", "German")
+    before.correct_text("t1", "Ich bin gegeht.", "c1", "{}", "s1")
+    # as a server of before deleted a correction
+    before._db.executescript("DELETE FROM learner_texts WHERE id = 'c1';")  # noqa: SLF001
+    before.close()
+
+    text = UserStore(tmp_path / "ada").text("t1")
+
+    assert text is not None and text["lockedAt"] is None
+
+
 def test_a_typed_or_corrected_text_takes_no_page(store: UserStore) -> None:
     store.save_text("typed", "", "Getippt.", "German")
     store.save_text("hand", "", "", "German", handwritten=True)

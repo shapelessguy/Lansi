@@ -197,6 +197,10 @@ class Manifest:
     # text: how many times it is done, and how long it may take, are not
     # for the learner to choose.
     once: bool = False
+    # Whether the app runs it itself, as the learner asks for it, such as
+    # correcting one of their texts, rather than it being chosen among the
+    # exercises: it is neither offered with them nor by the tutor.
+    built_in: bool = False
     # Whether it is about the topics of the session; one that is about
     # neither them nor a lesson, such as reviewing the learner's Anki cards,
     # is chosen only when neither is.
@@ -238,6 +242,21 @@ class Manifest:
 SENTENCE_CHECKS = ("always", "optional", "never")
 
 
+def text_words(text: dict[str, Any]) -> list[str]:
+    """The words of a text of the learner's, in order, as their ids, their
+    places among them, name them when it is corrected: those read from its
+    pages, for one written by hand, and those between its spaces, for a
+    typed one, a mark such as a comma going with the word it is written
+    against, as it does when a page is read."""
+    if text.get("handwritten"):
+        return [
+            str(word["text"])
+            for page in text.get("pages") or []
+            for word in page.get("words") or []
+        ]
+    return str(text.get("content") or "").split()
+
+
 def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
     """The exercises there are, those listed first, then those of theory,
     then the others by their titles: each directory with a manifest, a
@@ -270,6 +289,7 @@ def exercises(directory: Path = EXERCISES_DIRECTORY) -> list[Manifest]:
                     _read_options(data.get("options")),
                     data.get("lesson") is not False,
                     data.get("once") is True,
+                    data.get("built_in") is True,
                     data.get("topics") is not False,
                     data.get("first") is True,
                     data.get("own_tool") is True,
@@ -1563,6 +1583,8 @@ class Practice:
                     "id": text["id"],
                     "title": text["title"],
                     "content": text["content"],
+                    "handwritten": text["handwritten"],
+                    "words": text_words(text),
                 }
                 for name, text in texts.items()
                 if text

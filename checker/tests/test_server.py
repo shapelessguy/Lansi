@@ -1724,6 +1724,37 @@ def test_a_session_of_practice_keeps_the_logs_of_its_exercises(with_users: str) 
     ]
 
 
+def test_a_text_is_corrected_in_the_background_in_a_session_of_its_own(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    text = {"title": "Wochenende", "content": "Ich bin gegeht.", "language": "German"}
+    send(f"{with_users}/texts/t1", "PUT", ada, json.dumps(text).encode())
+    learner = {"into": "English", "level": "A2", "model": "some/model"}
+
+    status, started, _ = send(
+        f"{with_users}/texts/t1/correct", "POST", ada, json.dumps(learner).encode()
+    )
+    missing, _, _ = send(
+        f"{with_users}/texts/nothing/correct", "POST", ada, json.dumps(learner).encode()
+    )
+
+    task = json.loads(started)["task"]
+    assert status == 200
+    assert (task["kind"], task["subject"], task["title"]) == (
+        "correction",
+        "t1",
+        "Wochenende",
+    )
+    # done here as soon as it is started, as every task of this server is
+    _, listed, _ = send(f"{with_users}/tasks", "GET", ada)
+    [done] = [each for each in json.loads(listed)["tasks"] if each["id"] == task["id"]]
+    assert done["state"] == "done" and done["done"] == 3
+    # the exercise here grades nothing, so its session, ended, is not kept
+    assert done["result"] == [{"text": "t1", "correction": None}]
+    assert missing == 400
+
+
 def test_the_sessions_of_one_user_are_not_those_of_another(with_users: str) -> None:
     ada = log_in(with_users, "ada", "a password")
     ben = log_in(with_users, "ben", "another one")

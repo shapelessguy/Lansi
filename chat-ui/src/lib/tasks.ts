@@ -29,6 +29,8 @@ export interface BackgroundTask {
     kind: string;
     /** What it is done to, in a few words. */
     title: string;
+    /** The id of what it is done to, if it is one thing, such as the text a correction is of. */
+    subject?: string;
     /** How many steps there are to it, and how many of them are done. */
     total: number;
     done: number;
@@ -118,6 +120,7 @@ export function describeTask(task: BackgroundTask): string {
             icon: "Making the icon",
             embeddings: "Embedding the words",
             log: "Writing the log",
+            correction: "Correcting the text",
             questions: "Logging what was asked",
             transform: "Transforming the parts",
         } as Record<string, Message>)[task.kind] ?? "Looking into the words";
@@ -134,6 +137,9 @@ export function describeTask(task: BackgroundTask): string {
     }
     if (task.kind === "log") {
         return t("The log is written.");
+    }
+    if (task.kind === "correction") {
+        return t("The text is corrected.");
     }
     if (task.kind === "transform") {
         return t("The version is made.");
@@ -162,6 +168,7 @@ export function taskName(task: BackgroundTask): string {
         icon: "Topic icon",
         embeddings: "Embed vocabulary",
         log: "Exercise log",
+        correction: "Correct text",
         questions: "Questions log",
         transform: "Transform book",
     } as Record<string, Message>)[task.kind];
@@ -170,7 +177,10 @@ export function taskName(task: BackgroundTask): string {
 
 /** The words of a task that are worth a mention: those that are new, and those that could not be taken. */
 export function mentioned(task: BackgroundTask): TakenWord[] {
-    if (task.kind === "icon" || task.kind === "embeddings" || task.kind === "questions" || task.kind === "transform") {
+    if (
+        task.kind === "icon" || task.kind === "embeddings" || task.kind === "questions" || task.kind === "transform"
+        || task.kind === "correction"
+    ) {
         return [];
     }
     const worth = task.kind === "speech" ? ["failed"] : ["added", "form", "failed"];

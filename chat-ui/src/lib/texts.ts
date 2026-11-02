@@ -42,6 +42,8 @@ export interface HandwrittenWord {
     paragraph: number;
     /** How sure the reading of it is, from 0 to 1. */
     confidence: number;
+    /** Each of its letters with its box, the first first, if they were all placed when it was read. */
+    letters?: { text: string; box: [number, number][] }[];
 }
 
 /** A page of a text written by hand: its size, its ink, and the words read from it, if it was read. */
@@ -92,68 +94,6 @@ export async function saveText(
 
 export async function deleteText(id: string): Promise<void> {
     await checkerFetch(`/texts/${encodeURIComponent(id)}`, { method: "DELETE" });
-}
-
-/** A piece of a line of a correction: text as it is, what was wrong, what is right, or a comment on why. */
-export type Inline = { kind: "plain" | "wrong" | "right" | "comment"; text: string };
-
-/** A block of a correction: a heading, an item of a numbered list, or a paragraph, with its lines. */
-export type Block =
-    | { kind: "heading"; level: number; inline: Inline[] }
-    | { kind: "item"; number: number; inline: Inline[] }
-    | { kind: "paragraph"; lines: Inline[][] };
-
-/** The pieces of a line: `~~what was wrong~~`, `**what is right**`, `_(why)_`, and the text between them. */
-export function inlineOf(line: string): Inline[] {
-    const pieces: Inline[] = [];
-    const marks = /~~(.+?)~~|\*\*(.+?)\*\*|_\((.+?)\)_/g;
-    let at = 0;
-    for (const found of line.matchAll(marks)) {
-        if (found.index > at) {
-            pieces.push({ kind: "plain", text: line.slice(at, found.index) });
-        }
-        pieces.push(
-            found[1] !== undefined
-                ? { kind: "wrong", text: found[1] }
-                : found[2] !== undefined
-                ? { kind: "right", text: found[2] }
-                : { kind: "comment", text: found[3] },
-        );
-        at = found.index + found[0].length;
-    }
-    if (at < line.length) {
-        pieces.push({ kind: "plain", text: line.slice(at) });
-    }
-    return pieces;
-}
-
-/**
- * The blocks of a correction, which is Markdown made by the exercise that
- * corrected the text: headings, a numbered list of the mistakes, and
- * paragraphs whose lines are kept as they were written.
- */
-export function blocksOf(markdown: string): Block[] {
-    const blocks: Block[] = [];
-    let paragraph: Inline[][] | null = null;
-    for (const line of markdown.split("\n")) {
-        const heading = /^(#{1,3}) (.*)$/.exec(line);
-        const item = /^(\d+)\. (.*)$/.exec(line);
-        if (heading || item || !line.trim()) {
-            paragraph = null;
-        }
-        if (heading) {
-            blocks.push({ kind: "heading", level: heading[1].length, inline: inlineOf(heading[2]) });
-        } else if (item) {
-            blocks.push({ kind: "item", number: Number(item[1]), inline: inlineOf(item[2]) });
-        } else if (line.trim()) {
-            if (paragraph === null) {
-                paragraph = [];
-                blocks.push({ kind: "paragraph", lines: paragraph });
-            }
-            paragraph.push(inlineOf(line));
-        }
-    }
-    return blocks;
 }
 
 /** What a request about a page answered: the text, or why it failed. */

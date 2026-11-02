@@ -150,14 +150,26 @@ Chat = Callable[[dict[str, Any], Model], dict[str, Any]]
 # What a model is told so that it answers without reasoning first, as the
 # chat and text models do unless a request says otherwise.
 NO_REASONING = {"enabled": False}
+# What a model that is to reason is told, and how long it is given, all in
+# all and for the first piece of its answer, which comes once it has reasoned.
+REASONING = {"enabled": True, "effort": "high"}
+REASONING_WITHIN_SECS = 300
 
 
 def send_chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
     """Send a chat request to `model`. One that does not say how the model
-    is to reason has it answer without reasoning, and a model that cannot
-    but reason is asked again as the request was. Raises ProfileError."""
+    is to reason has it answer without reasoning, unless the model is to
+    reason, and a model that cannot but reason is asked again as the
+    request was. Raises ProfileError."""
     if "reasoning" in body:
         return _post_chat(body, model)
+    if model.reasoning:
+        return _post_chat(
+            {**body, "reasoning": REASONING},
+            model,
+            REASONING_WITHIN_SECS,
+            REASONING_WITHIN_SECS,
+        )
     try:
         return _post_chat({**body, "reasoning": NO_REASONING}, model)
     except ProfileError as error:
@@ -166,14 +178,19 @@ def send_chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
         return _post_chat(body, model)
 
 
-def _post_chat(body: dict[str, Any], model: Model) -> dict[str, Any]:
+def _post_chat(
+    body: dict[str, Any],
+    model: Model,
+    timeout: float = CHAT_TIMEOUT_SECS,
+    within: float = CHAT_WITHIN_SECS,
+) -> dict[str, Any]:
     return post(
         model.endpoint("chat/completions"),
         model.routed(body),
         model.headers(),
         model.where,
-        CHAT_TIMEOUT_SECS,
-        CHAT_WITHIN_SECS,
+        timeout,
+        within,
     )
 
 

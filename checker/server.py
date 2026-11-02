@@ -131,6 +131,7 @@ from tutor import (
     memory_tools,
     practised,
     recap,
+    text_tools,
     wait_for,
     with_notes,
     words_tool,
@@ -323,11 +324,14 @@ TASK_CATEGORIES = {
     "embeddings": "vocabulary",
     "icon": "practice",
     "log": "practice",
+    "correction": "practice",
     "questions": "translation",
     "memories": "tutor",
     # the books, which are read as texts are
     "transform": "text",
 }
+# the exercise that corrects a text, which is run when the learner asks for it
+CORRECTING = "correcting"
 # the bins the usage over time is added up in, in milliseconds
 USAGE_BINS = {"hour": 3_600_000, "day": 86_400_000}
 # the longest id usage may be counted under, in characters
@@ -2067,7 +2071,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._log_questions(self.account.translator, api_key)
             elif self.path == "/tutor/chat" and self.account.practice:
                 self._tutor(self.account.practice, api_key)
-            elif self._tutor_chats("POST", api_key) or self._texts("POST"):
+            elif self._tutor_chats("POST", api_key) or self._texts("POST", api_key):
                 pass
             elif self.path == "/vocabulary/words" and self.account.intake:
                 self._take_words(self.account.intake, api_key)
@@ -2471,7 +2475,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return False
         return True
 
-    def _texts(self, method: str) -> bool:
+    def _texts(self, method: str, api_key: str | None = None) -> bool:
         """Answers a request about the learner's texts, such as their
         homework, and the corrections of them, and returns whether the
         request was one.
@@ -2494,6 +2498,9 @@ class CheckerHandler(BaseHTTPRequestHandler):
                                   the text say what its pages were read to
                                   say; answers with the text
             DELETE /texts/ID/pages/PAGE  remove a page; answers with the text
+            POST /texts/ID/correct
+                                  correct the text in the background, as
+                                  `_correct_text` says; answers with the task
 
         A text written by hand is started by keeping it with `"handwritten":
         true`, with a blank page.
@@ -2501,6 +2508,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
         store = self.account.store
         path = urlsplit(self.path).path
         one = re.fullmatch(r"/texts/([^/]+)", path)
+        correct = re.fullmatch(r"/texts/([^/]+)/correct", path)
+        if store is not None and correct and method == "POST":
+            practice = self.account.practice
+            if practice is None:
+                return False
+            self._correct_text(practice, store, unquote(correct.group(1)), api_key)
+            return True
         if store is not None and re.fullmatch(
             r"/texts/[^/]+/pages(/[^/]+(/read)?)?", path
         ):
@@ -2536,6 +2550,81 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return False
         return True
 
+    def _correct_text(
+        self,
+        practice: Practice,
+        store: UserStore,
+        text_id: str,
+        api_key: str | None,
+    ) -> None:
+        """Corrects a text in the background, so that it is corrected
+        though the app is closed: a session of the exercise that corrects
+        texts is started, the exercise done and finished, and the session
+        ended, as the app would, the text then locked with its correction
+        kept. The POST names the models and the learner as one that makes a
+        step of an exercise does, and how the words are chosen as one that
+        starts a session does. A text being corrected is not corrected
+        twice at once."""
+        body = self._read_body()
+        text = store.text(text_id)
+        if text is None or text["kind"] != "text":
+            raise ValueError("there is no such text")
+        if text["lockedAt"] is not None:
+            raise ValueError("the text was corrected already")
+        if any(
+            task["kind"] == "correction"
+            and task["subject"] == text_id
+            and task["state"] == "running"
+            for task in self.account.tasks.listing()
+        ):
+            raise ValueError("the text is being corrected")
+        learner, ask, draw, look = self._models(body, api_key)
+        choosing = read_choosing(body, api_key or "")
+
+        def counted(used: list[Profile]) -> None:
+            usage = [describe_usage(profile) for profile in used]
+            count_usage(store, "practice", "practice", usage)
+
+        def correct(step: Step) -> tuple[list[dict[str, Any]], list[Any]]:
+            session, used = practice.start_session(
+                text["language"],
+                "",
+                [],
+                {CORRECTING: 1},
+                choosing,
+                {CORRECTING: {"text": text_id}},
+            )
+            counted(used)
+            try:
+                for op in ("start", "finish"):
+                    _, used = practice.step(
+                        session["id"], CORRECTING, op, None, learner, ask, draw, look
+                    )
+                    counted(used)
+                    step()
+            except Exception as error:
+                counted(spent_by(error))
+                practice.end_session(
+                    session["id"], "abandoned", learner, ask, draw, look
+                )
+                raise
+            _, used = practice.end_session(
+                session["id"], "finished", learner, ask, draw, look
+            )
+            counted(used)
+            step()
+            made = [
+                each["id"]
+                for each in store.texts()
+                if each["kind"] == "correction" and each["corrects"] == text_id
+            ]
+            return [{"text": text_id, "correction": made[0] if made else None}], []
+
+        task = self.account.tasks.start(
+            "correction", text["title"] or "Untitled", 3, correct, subject=text_id
+        )
+        self._reply(HTTPStatus.OK, {"task": task})
+
     def _text_pages(self, store: UserStore, method: str, path: str) -> bool:
         """Answers a request about the pages of a text written by hand, as
         `_texts` describes it, and returns whether the request was one."""
@@ -2564,25 +2653,33 @@ class CheckerHandler(BaseHTTPRequestHandler):
             self._reply(HTTPStatus.OK, {})
             return True
         elif method == "POST" and page_id is not None and read:
-            ink = store.page_ink(text_id, page_id)
-            text = store.text(text_id)
-            if ink is None or text is None:
+            if store.page_ink(text_id, page_id) is None or store.text(text_id) is None:
                 self._reply(HTTPStatus.NOT_FOUND, {"error": "no such page"})
                 return True
-            page = read_picture(
-                picture(ink),
-                PAGE_WIDTH,
-                PAGE_HEIGHT,
-                self.headers.get(VISION_KEY_HEADER) or "",
-                language_of(text["language"]).handwriting_hint,
-            )
-            store.read_text_page(text_id, page_id, page.kept()["words"])
+            self._read_page(store, text_id, page_id)
         elif method == "DELETE" and page_id is not None and not read:
             store.delete_text_page(text_id, page_id)
         else:
             return False
         self._reply(HTTPStatus.OK, store.text(text_id))
         return True
+
+    def _read_page(self, store: UserStore, text_id: str, page_id: str) -> None:
+        """Read a page of a text written by hand with the key of Google
+        Cloud Vision the request has, and keep the words read from it.
+        Raises ValueError, such as OcrError, if it cannot be read."""
+        ink = store.page_ink(text_id, page_id)
+        text = store.text(text_id)
+        if ink is None or text is None:
+            raise ValueError("there is no such page")
+        page = read_picture(
+            picture(ink),
+            PAGE_WIDTH,
+            PAGE_HEIGHT,
+            self.headers.get(VISION_KEY_HEADER) or "",
+            language_of(text["language"]).handwriting_hint,
+        )
+        store.read_text_page(text_id, page_id, page.kept()["words"])
 
     def _note_tables(self, store: UserStore, note_id: int) -> None:
         """Reply with the tables of the database of a note of the tutor, or
@@ -2659,7 +2756,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
         "tasks": [...]}` in place of something the learner wrote tells the
         tutor how an exercise it offered went, once the `tasks` that write
         its log are done: what it is told is the first of the messages
-        added."""
+        added.
+
+        The key of Google Cloud Vision, in the X-Vision-Key header, reads
+        the pages of a text written by hand the tutor reads that were
+        written on since they were last read."""
         store = self.account.store
         assert store is not None
         body = self._read_body()
@@ -2715,6 +2816,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             ),
             *exercise_tool(practice.exercises(), lessons, store.topics(), store),
             *evaluation_tool(levels),
+            *text_tools(store, partial(self._read_page, store)),
         ]
         told = instructions(
             language,
@@ -2730,7 +2832,13 @@ class CheckerHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         # what is shown of the turn, kept with the answer to be shown again
-        turn: dict[str, Any] = {"thinking": "", "steps": [], "offers": [], "exams": []}
+        turn: dict[str, Any] = {
+            "thinking": "",
+            "steps": [],
+            "offers": [],
+            "exams": [],
+            "corrections": [],
+        }
         # the last request to the model, kept for the inspector of the chat
         last = LastCall(
             str(messages[-1].get("content") or "")
@@ -2756,6 +2864,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                     turn["offers"].append(shown)
                 elif shown.get("kind") == "evaluation":
                     turn["exams"].append(shown)
+                elif shown.get("kind") == "correction":
+                    turn["corrections"].append(shown)
             self.wfile.write(json.dumps(event, ensure_ascii=False).encode() + b"\n")
             self.wfile.flush()
 

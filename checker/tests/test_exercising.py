@@ -20,6 +20,7 @@ from exercising import (
     Practice,
     Runner,
     exercises,
+    text_words,
     ui_file,
 )
 from models import Model
@@ -1328,16 +1329,14 @@ def test_a_text_of_the_learner_is_corrected_in_a_session_of_no_lesson_and_locked
     store.correct_text("t2", "Schon korrigiert.", "c2", "", "s0")
     practice = Practice(store, directory=directory)
     [correcting] = [each for each in practice.exercises() if each["id"] == "correcting"]
-    marked = json.dumps(
-        {
-            "parts": [
-                {"text": "Ich bin "},
-                {"wrong": "gegeht", "right": "gegangen", "why": "irregular"},
-                {"text": "."},
-            ],
-            "summary": "Participles.",
-        }
-    )
+    participle = {
+        "type": "replace",
+        "from_id": 2,
+        "to_id": 2,
+        "text": "gegangen.",
+        "explanation": "irregular",
+    }
+    marked = json.dumps({"corrections": [participle], "summary": "Participles."})
 
     session, _ = practice.start_session(
         "German", "", [], {"correcting": 1}, options={"correcting": {"text": "t1"}}
@@ -1352,7 +1351,10 @@ def test_a_text_of_the_learner_is_corrected_in_a_session_of_no_lesson_and_locked
 
     # only the texts not corrected yet may be chosen
     assert correcting["options"]["text"]["choices"] == {"t1": "Wochenende"}
-    assert shown["title"] == "Wochenende" and len(shown["parts"]) == 3
+    assert shown["title"] == "Wochenende"
+    # the model was told the words of the text by their ids
+    assert shown["words"] == ["Ich", "bin", "gegeht."]
+    assert shown["corrections"] == [participle]
     text = store.text("t1")
     assert text is not None and text["lockedAt"] is not None
     [correction] = [
@@ -1361,11 +1363,38 @@ def test_a_text_of_the_learner_is_corrected_in_a_session_of_no_lesson_and_locked
         if each["kind"] == "correction" and each["corrects"] == "t1"
     ]
     kept = store.text(correction["id"])
-    assert kept is not None and "~~gegeht~~ **gegangen**" in kept["content"]
+    assert kept is not None
+    assert json.loads(kept["content"])["corrections"] == [participle]
     with pytest.raises(ValueError, match="not corrected yet"):
         practice.start_session(
             "German", "", [], {"correcting": 1}, options={"correcting": {"text": "t1"}}
         )
+
+
+def test_a_text_is_corrected_by_the_words_read_from_its_pages_or_typed_in_it() -> None:
+    typed = {"content": "Ich bin  gegeht,\nja.", "handwritten": False}
+    handwritten = {
+        "content": "Ich bin gegeht",
+        "handwritten": True,
+        "pages": [
+            {"words": [{"text": "Ich"}, {"text": "bin"}]},
+            {"words": None},
+            {"words": [{"text": "gegeht"}]},
+        ],
+    }
+
+    assert text_words(typed) == ["Ich", "bin", "gegeht,", "ja."]
+    assert text_words(handwritten) == ["Ich", "bin", "gegeht"]
+
+
+def test_an_exercise_the_app_runs_itself_is_said_to_be_built_in(
+    directory: Path,
+) -> None:
+    shutil.copytree(EXERCISES_DIRECTORY / "correcting", directory / "correcting")
+
+    [correcting] = [each for each in exercises(directory) if each.id == "correcting"]
+
+    assert correcting.built_in
 
 
 def test_what_an_exercise_is_steered_with_is_kept_as_its_brief_with_its_lines(

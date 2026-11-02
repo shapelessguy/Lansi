@@ -5456,6 +5456,45 @@ div.book-cover {
     pointer-events: none;
 }
 
+/* a page that is only shown is pointed at, not written on */
+.ink-live.locked {
+    touch-action: auto;
+    cursor: default;
+}
+
+/* the words each mark of a correction is about, which show what it says as they are pointed at or tapped */
+.ink-frame .ink-note-area polygon {
+    pointer-events: all;
+    fill: transparent;
+    stroke: none;
+    cursor: help;
+}
+
+.ink-frame .ink-note-area.shown polygon {
+    fill: var(--danger);
+    fill-opacity: 0.08;
+}
+
+.ink-note {
+    position: absolute;
+    width: max-content;
+    z-index: 2;
+    max-width: min(320px, 90%);
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    pointer-events: none;
+}
+
+.ink-note.turned {
+    max-width: 320px;
+}
+
 .ink-frame polygon {
     fill: var(--accent);
     fill-opacity: 0.1;
@@ -5493,6 +5532,18 @@ div.book-cover {
 }
 
 /* the pages of a text, small, four to a row, each opened by a click */
+/* above the pages, what is done to them all, such as reading them */
+.ink-overview-bar {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.ink-read {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .ink-pages {
     --ink-gap: 28px;
     --ink-columns: 4;
@@ -5626,6 +5677,15 @@ div.book-cover {
     pointer-events: auto;
 }
 
+/* on a page turned, the bar runs up its top, on the left of the screen, turned with it, to be read with the tablet turned */
+.ink-full-bar.turned {
+    top: 100dvh;
+    right: auto;
+    width: 100dvh;
+    transform: rotate(-90deg);
+    transform-origin: top left;
+}
+
 .ink-full-bar .icon-button {
     background: var(--bg);
 }
@@ -5698,44 +5758,34 @@ div.book-cover {
     gap: 3px;
 }
 
-.text-status {
+/* the title of a text, with the toggle of the checks of its sentences and the button that corrects it beside it */
+.text-header {
     display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.text-header .text-title-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.text-correct {
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    color: var(--muted);
-    font-size: 0.85rem;
+    gap: 6px;
+    white-space: nowrap;
 }
 
-.text-status .toggle {
-    margin-left: auto;
-}
-
-.text-correction {
-    line-height: 1.8;
-}
-
-.text-correction h2 {
-    margin: 0 0 12px;
-    font-size: 1.25rem;
-}
-
-.text-correction h3 {
-    margin: 20px 0 8px;
-    font-size: 1rem;
-}
-
-.text-correction p {
-    margin: 0 0 8px;
-}
-
-.text-correction-number {
-    color: var(--muted);
-}
-
-.text-correction del {
-    color: var(--danger);
-    text-decoration: line-through;
-    text-decoration-thickness: 2px;
+/* a link in a line of text, such as to the correction of a text */
+.link-button {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .text-corrected-title {
@@ -5743,23 +5793,80 @@ div.book-cover {
     font-size: 1.2rem;
 }
 
-/* why a mistake was one, beside its correction */
-.text-correction .text-comment {
-    margin: 0 2px;
-    padding: 0 6px;
-    border-radius: 4px;
-    background: var(--panel);
-    color: var(--muted);
-    font-size: 0.85em;
-    font-style: italic;
+/* a typed text with its corrections in it, its lines as they were written */
+.corrected-text {
+    line-height: 1.9;
+    white-space: pre-wrap;
 }
 
-.text-correction ins {
+.corrected-text del,
+.correction-list del,
+.ink-note del {
+    color: var(--danger);
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+}
+
+.corrected-text ins,
+.correction-list ins,
+.ink-note ins {
     color: var(--level-a1);
     font-weight: 600;
     text-decoration: none;
 }
 
+.corrected-text sup {
+    margin-left: 1px;
+    color: var(--muted);
+    font-size: 0.65em;
+}
+
+.corrected-text .corrected-suggested {
+    text-decoration: underline 2px #1e63c8;
+}
+
+.corrected-text .corrected-suggestion {
+    margin-left: 4px;
+    color: #1e63c8;
+    font-weight: 500;
+}
+
+.corrected-text .corrected-comment {
+    background: #ffd40066;
+    color: inherit;
+}
+
+.corrected-text .corrected-praised {
+    text-decoration: underline 2px #2e9d4a;
+}
+
+.corrected-text .corrected-illegible {
+    text-decoration: underline dotted 2px var(--muted);
+}
+
+.corrected-text .corrected-moved {
+    font-style: italic;
+}
+
+/* the corrections of a text, numbered, with what it most needs above them */
+.correction-list ol {
+    margin: 0;
+    padding-left: 1.6em;
+    line-height: 1.7;
+}
+
+.correction-summary {
+    margin: 4px 0 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    background: var(--panel);
+}
+
+.correction-item.praise {
+    color: #2e9d4a;
+}
+
+/* a correction, under the text it is of */
 /* The practice sessions, in the panel of the logs: the list fills the
    panel, which scrolls, and each session wraps onto lines of its own as
    the panel is narrow. */

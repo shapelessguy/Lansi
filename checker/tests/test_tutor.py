@@ -39,6 +39,7 @@ from tutor import (
     practised,
     read_messages,
     recap,
+    text_tools,
     wait_for,
     with_notes,
     words_tool,
@@ -1591,3 +1592,115 @@ def test_an_exercise_of_no_lesson_is_offered_practising_none_with_its_brief() ->
     ):
         with pytest.raises(ToolError):
             tool.run(arguments)
+
+
+def _words(*words: str) -> list[dict[str, Any]]:
+    """The words of a page as ocr.py keeps them, each on a line of its own."""
+    return [
+        {
+            "text": word,
+            "box": [[0, n], [10, n], [10, n + 1], [0, n + 1]],
+            "line": n,
+            "paragraph": 0,
+            "confidence": 0.9,
+        }
+        for n, word in enumerate(words)
+    ]
+
+
+def _texts(store: UserStore, read_page: Any = None) -> dict[str, Tool]:
+    def unread(text_id: str, page_id: str) -> None:
+        raise AssertionError("no page is to be read")
+
+    return {tool.name: tool for tool in text_tools(store, read_page or unread)}
+
+
+def test_the_tutor_lists_the_texts_and_reads_a_typed_one_as_it_is_written(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.save_text("t1", "Homework", "Ich habe gelernt.", "German")
+    tools = _texts(store)
+
+    [listed] = json.loads(tools["texts"].run({}).content)
+    read = json.loads(tools["read_text"].run({"id": "t1"}).content)
+
+    assert listed["id"] == "t1" and listed["corrected"] is False
+    assert read["text"] == "Ich habe gelernt." and "words" not in read
+
+
+def test_the_tutor_reads_a_handwritten_text_as_its_words_reading_the_pages_written_on_since(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.save_text("t1", "Diary", "", "German", handwritten=True)
+    text = store.text("t1")
+    assert text is not None
+    page = text["pages"][0]["id"]
+    store.save_ink(
+        "t1",
+        page,
+        [{"pen": "pen", "color": "#000000", "size": 4, "points": [[1, 1, 0.5]]}],
+    )
+    read: list[str] = []
+
+    def read_page(text_id: str, page_id: str) -> None:
+        read.append(page_id)
+        store.read_text_page(text_id, page_id, _words("Ich", "lerne."))
+
+    tools = _texts(store, read_page)
+    given = json.loads(tools["read_text"].run({"id": "t1"}).content)
+    # read once, and not again as nothing was written since
+    tools["read_text"].run({"id": "t1"})
+
+    assert read == [page]
+    assert given["text"] == "Ich lerne."
+    assert [(word["id"], word["text"], word["page"]) for word in given["words"]] == [
+        (0, "Ich", 1),
+        (1, "lerne.", 1),
+    ]
+
+
+def test_a_page_that_cannot_be_read_is_said_to_the_tutor(tmp_path: Path) -> None:
+    store = UserStore(tmp_path)
+    store.save_text("t1", "Diary", "", "German", handwritten=True)
+    text = store.text("t1")
+    assert text is not None
+    store.save_ink(
+        "t1",
+        text["pages"][0]["id"],
+        [{"pen": "pen", "color": "#000000", "size": 4, "points": [[1, 1, 0.5]]}],
+    )
+
+    def read_page(text_id: str, page_id: str) -> None:
+        raise ValueError("no key")
+
+    with pytest.raises(ToolError, match="no key"):
+        _texts(store, read_page)["read_text"].run({"id": "t1"})
+
+
+def test_the_correction_of_a_text_is_offered_only_while_it_is_not_corrected(
+    tmp_path: Path,
+) -> None:
+    store = UserStore(tmp_path)
+    store.save_text("t1", "Homework", "Ich habe gelernt.", "German")
+    store.save_text("t2", "Empty", "", "German")
+    tools = _texts(store)
+
+    done = tools["correct_text"].run({"id": "t1"})
+    with pytest.raises(ToolError):
+        tools["correct_text"].run({"id": "t2"})
+    store.correct_text(
+        "t1",
+        "Ich habe gelernt.",
+        "c1",
+        json.dumps({"words": [], "corrections": [], "summary": "Good."}),
+        "s1",
+    )
+
+    assert tools["correct_text"].offers
+    assert done.shown == {"kind": "correction", "text": "t1", "title": "Homework"}
+    with pytest.raises(ToolError):
+        tools["correct_text"].run({"id": "t1"})
+    read = json.loads(tools["read_text"].run({"id": "t1"}).content)
+    assert read["correction"] == {"summary": "Good.", "corrections": []}

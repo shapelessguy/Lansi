@@ -1,6 +1,6 @@
 # The tutor's tools
 
-What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `remember` writes down a fact about the learner, called with `remember_what`, `agree_strategy` a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `write_note` writes a note the tutor keeps for itself, called with `note_title`, `note_content` and `note_replaces`, `read_note` reads one again, called with `note_id`, and `sql` runs a statement on the database of one, called with `note_id`, `sql_query` and `sql_offset`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse`, `count` and `words_offset`; `favourites` lists the exercises the learner keeps among their favourites and `exercise_done` gives all of one they did, called with `session_id` and `exercise_of_session`; `exercise` offers the learner an exercise of practice, and `exercise_again` one they did, done again, called with those and `fresh`, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, and in the schema of `options` as `option_is_number` or `option_is_choice` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `size` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
+What the tutor is told of each of its tools, and of what each is called with: `lessons`, `sessions`, `logs` and `evaluations` look up what the learner has done, `recaps`, `strategy` and `calendar` look up what the tutor wrote down of the lessons, the last two called with `from` and `to`; `remember` writes down a fact about the learner, called with `remember_what`, `agree_strategy` a strategy, called with `strategy_what` and `replaces`, `plan` an entry of the calendar, called with `day` and `plan_what`, and `cross_out` crosses out either, called with `entry` and `why`; `write_note` writes a note the tutor keeps for itself, called with `note_title`, `note_content` and `note_replaces`, `read_note` reads one again, called with `note_id`, and `sql` runs a statement on the database of one, called with `note_id`, `sql_query` and `sql_offset`; `words_known` looks up the words they know, called with `categories`, `set`, `anki_only`, `sorted_by`, `reverse`, `count` and `words_offset`; `favourites` lists the exercises the learner keeps among their favourites and `exercise_done` gives all of one they did, called with `session_id` and `exercise_of_session`; `exercise` offers the learner an exercise of practice, and `exercise_again` one they did, done again, called with those and `fresh`, each listed in it as `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say, each option as `option_choices` or `option_number` says, and in the schema of `options` as `option_is_number` or `option_is_choice` says, `own_exercise` is said of an exercise that is offered with a tool of its own, such as one that makes nothing, and `offered` is what the tutor is told once either has; `evaluation` offers a mock exam, and `offered_evaluation` is what the tutor is told once it has. `texts` lists the learner's texts, such as their homework, `read_text` reads one, and `correct_text` offers to correct one, all three called with `text_id`, and `offered_correction` is what the tutor is told once it has. `focus` and `words` are what an exercise is steered with, and `level`, `size` and `timed` what a mock exam is set to. The names of the others are those of what the tools are called with: `count` and `kind` of `sessions` and `logs`, and `exercise_id`, `lesson`, `instances`, `topics` and `options` of an exercise.
 
 Variables:
 - `$exercises`: the exercises there are, one to a line as "- id: title. what it is", with what `exercise_theory`, `exercise_no_lesson`, `exercise_once` and `exercise_options` say of it after
@@ -11,7 +11,7 @@ Variables:
 - `$least`, `$usual`: the least an option may be, and what it is unless another fits better
 - `$most`: how many there may be at most, or the most an option may be
 - `$kinds`: the kinds of logs there are, joined by commas
-- `$offered`: the exercise or the mock exam offered, with what it was called with, as JSON
+- `$offered`: the exercise, the mock exam or the correction offered, with what it was called with, as JSON
 - `$levels`: the levels there are mock exams of, joined by commas
 - `$sizes`: how long the mock exam of each level takes at each size, from the first, as "A1: 43 min, 50 min, …", the levels joined by semicolons
 - `$page`: how many rows of what a query gives sql gives at once
@@ -105,6 +105,26 @@ Whether each part must be done in its time, as in the real exam.
 ## Prompt: offered_evaluation
 
 The mock exam was offered to the learner, who decides whether to start it; it runs in the tab of evaluations, and its log comes once it is over: $offered
+
+## Prompt: texts
+
+List the learner's texts, such as their homework, the one started last first: each with its id, its title, the day it was started, whether it is written by hand, how many words it has, and whether it was corrected.
+
+## Prompt: read_text
+
+Read one of the learner's texts. A typed one is given as it is written. One written by hand is given as what its pages were read to say and as each word read from them, with its id, its page, paragraph and line, and how sure the reading of it is, the pages written on since they were last read being read first. A text that was corrected comes with its correction: what it most needs, and each correction, naming the words by their ids.
+
+## Prompt: correct_text
+
+Offer to correct one of the learner's texts that is not corrected yet: each mistake is marked with its correction and why, and the text is locked from then on, as it was handed in. Ask your student first whether the text is finished and they want it corrected; the offer then appears under your message, and the correction starts only once they press it.
+
+## Prompt: text_id
+
+The id of the text, as texts lists it.
+
+## Prompt: offered_correction
+
+The correction of the text was offered to the learner, who decides whether to start it; once it is done, read_text gives it: $offered
 
 ## Prompt: focus
 

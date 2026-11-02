@@ -1397,6 +1397,156 @@ def memory_tools(store: Any, chat_id: str | None = None) -> list[Tool]:
     ]
 
 
+def _needs_reading(page: dict[str, Any]) -> bool:
+    """Whether a page written by hand has ink that was not read since it
+    was written."""
+    return bool(page["ink"]) and (
+        page["words"] is None or page["inkedAt"] > (page["readAt"] or 0)
+    )
+
+
+def text_tools(store: Any, read_page: Callable[[str, str], None]) -> list[Tool]:
+    """The tools with which the tutor lists the learner's texts in `store`,
+    such as their homework, reads one, a text written by hand as the words
+    read from its pages, which `read_page` reads first where they were
+    written on since, and offers to correct one not corrected yet, which
+    the learner starts."""
+
+    def own(text_id: object) -> dict[str, Any]:
+        text: dict[str, Any] | None = (
+            store.text(text_id) if isinstance(text_id, str) else None
+        )
+        if text is None or text["kind"] != "text":
+            raise ToolError(f"there is no text {text_id!r}; the texts tool lists them")
+        return text
+
+    def correction_of(text_id: str) -> dict[str, Any] | None:
+        for each in store.texts():
+            if each["kind"] == "correction" and each["corrects"] == text_id:
+                kept = store.text(each["id"])
+                try:
+                    record = json.loads(kept["content"] or "")
+                except ValueError:
+                    return None
+                return {
+                    "summary": record.get("summary", ""),
+                    "corrections": record.get("corrections", []),
+                }
+        return None
+
+    def list_texts(_: dict[str, Any]) -> Done:
+        listed = [
+            {
+                "id": text["id"],
+                "title": text["title"],
+                "started": _day(text["createdAt"]),
+                "handwritten": text["handwritten"],
+                "words": text["words"],
+                "corrected": text["lockedAt"] is not None,
+            }
+            for text in sorted(
+                store.texts(), key=lambda each: each["createdAt"], reverse=True
+            )
+            if text["kind"] == "text"
+        ]
+        return Done(json.dumps(listed, ensure_ascii=False))
+
+    def read_text(arguments: dict[str, Any]) -> Done:
+        text = own(arguments.get("id"))
+        given: dict[str, Any] = {
+            "id": text["id"],
+            "title": text["title"],
+            "started": _day(text["createdAt"]),
+            "corrected": text["lockedAt"] is not None,
+        }
+        if text["handwritten"]:
+            unread = [page for page in text["pages"] if _needs_reading(page)]
+            for page in unread:
+                try:
+                    read_page(text["id"], page["id"])
+                except ValueError as error:
+                    raise ToolError(f"the pages could not be read: {error}") from None
+            if unread:
+                text = own(text["id"])
+            # numbered across the pages, as the corrections name them
+            words: list[dict[str, Any]] = []
+            for number, page in enumerate(text["pages"], start=1):
+                for word in page["words"] or []:
+                    words.append(
+                        {
+                            "id": len(words),
+                            "text": word["text"],
+                            "page": number,
+                            "paragraph": word["paragraph"],
+                            "line": word["line"],
+                            "confidence": round(word.get("confidence", 1), 2),
+                        }
+                    )
+            given["text"] = text["content"] or ""
+            given["words"] = words
+        else:
+            given["text"] = text["content"] or ""
+        if text["lockedAt"] is not None:
+            given["correction"] = correction_of(text["id"])
+        return Done(json.dumps(given, ensure_ascii=False))
+
+    def offer_correction(arguments: dict[str, Any]) -> Done:
+        text = own(arguments.get("id"))
+        if text["lockedAt"] is not None:
+            raise ToolError(
+                "the text was corrected already; read_text gives its correction"
+            )
+        empty = (
+            not any(page["ink"] for page in text["pages"])
+            if text["handwritten"]
+            else not (text["content"] or "").strip()
+        )
+        if empty:
+            raise ToolError("the text is empty: there is nothing to correct yet")
+        offered = {"kind": "correction", "text": text["id"], "title": text["title"]}
+        return Done(
+            PROMPTS(
+                "tutor.tools.offered_correction",
+                offered=json.dumps(offered, ensure_ascii=False),
+            ),
+            offered,
+        )
+
+    def text_id(name: str) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": PROMPTS(f"tutor.tools.{name}")}
+            },
+            "required": ["id"],
+        }
+
+    return [
+        Tool(
+            "texts",
+            PROMPTS("tutor.tools.texts"),
+            {"type": "object", "properties": {}},
+            list_texts,
+            lambda _: "Looking at your texts",
+        ),
+        Tool(
+            "read_text",
+            PROMPTS("tutor.tools.read_text"),
+            text_id("text_id"),
+            read_text,
+            lambda _: "Reading your text",
+        ),
+        Tool(
+            "correct_text",
+            PROMPTS("tutor.tools.correct_text"),
+            text_id("text_id"),
+            offer_correction,
+            lambda _: "Preparing the correction of your text",
+            offers=True,
+        ),
+    ]
+
+
 def words_tool(
     known: Callable[[Asked], tuple[list[Known], int]],
     sets: list[str],
@@ -1653,11 +1803,13 @@ def exercise_tool(
     nothing, has a tool of its own, by its id, called with its options.
     None where there is no exercise to offer."""
     # one that has nothing to choose, such as a text where there is none,
-    # cannot be offered
+    # cannot be offered, nor one the app runs itself, such as correcting a
+    # text, which the learner asks for
     offerable = {
         manifest["id"]: manifest
         for manifest in manifests
-        if all(
+        if not manifest.get("built_in")
+        and all(
             option.get("choices", True)
             for option in (manifest.get("options") or {}).values()
         )

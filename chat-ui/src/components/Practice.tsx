@@ -693,7 +693,7 @@ export function Practice(
                         {exercises.status === "error" && <p className="practice-note error">{exercises.message}</p>}
                         <ul className="practice-list">
                             {exercises.status === "ready"
-                                && exercises.items.map((exercise) => (
+                                && exercises.items.filter((exercise) => !exercise.built_in).map((exercise) => (
                                     <li key={exercise.id} className="practice-exercise">
                                         <button
                                             className="practice-choice practice-exercise-choice"

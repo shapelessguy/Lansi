@@ -33,7 +33,7 @@ from ink import PAGE_HEIGHT, PAGE_WIDTH, checked
 from ocr import text_of
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 37
+SCHEMA_VERSION = 39
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -865,6 +865,29 @@ def _log(
     }
 
 
+# What came with version 38: a correction says, in JSON, the words of the
+# text it corrects and what is to be done to them, as the exercise that
+# corrects texts gives it, in place of Markdown; those of before are
+# deleted, and the texts they corrected can be corrected again.
+_TEXT_CORRECTIONS = """
+DELETE FROM learner_texts WHERE kind = 'correction';
+UPDATE learner_texts SET locked_at = NULL WHERE kind = 'text';
+"""
+
+
+# What came with version 39: a text whose correction was deleted can be
+# changed, and corrected, again, as deleting a correction now has it; those
+# whose correction was deleted before are unlocked, as they are each time
+# the store is opened.
+_ORPHAN_LOCKS = """
+UPDATE learner_texts SET locked_at = NULL
+WHERE kind = 'text' AND id NOT IN (
+    SELECT corrects FROM learner_texts
+    WHERE kind = 'correction' AND corrects IS NOT NULL
+);
+"""
+
+
 # What each version of the database came with, the first first: a store
 # of an older version is given what came after it.
 _MIGRATIONS = (
@@ -905,6 +928,8 @@ _MIGRATIONS = (
     _FAVOURITE_NAMES,
     _TEXT_PHOTOS,
     _TEXT_PAGES,
+    _TEXT_CORRECTIONS,
+    _ORPHAN_LOCKS,
 )
 
 
@@ -943,6 +968,9 @@ class UserStore:
                 if version < number:
                     self._db.executescript(script)
             self._db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            # a text whose correction is gone, as one deleted by an older
+            # server, which left it locked, can be corrected again
+            self._db.executescript(_ORPHAN_LOCKS)
 
     def close(self) -> None:
         self._db.close()
@@ -1522,8 +1550,14 @@ class UserStore:
             )
 
     def delete_text(self, text_id: str) -> None:
-        """Remove a text or a correction, with its pages."""
+        """Remove a text or a correction, with its pages: the text a
+        correction is of can then be changed, and corrected, again."""
         with self._lock, self._db:
+            self._db.execute(
+                "UPDATE learner_texts SET locked_at = NULL WHERE id ="
+                " (SELECT corrects FROM learner_texts WHERE id = ? AND kind = 'correction')",
+                (text_id,),
+            )
             self._db.execute("DELETE FROM learner_texts WHERE id = ?", (text_id,))
 
     def delete_tutor_chat(self, chat_id: str) -> None:

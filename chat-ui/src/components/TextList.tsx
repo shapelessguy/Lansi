@@ -16,12 +16,20 @@ interface Props {
 }
 
 /**
- * The learner's texts, such as their homework, the one written in last
- * first. One that was corrected is locked, and opens with its corrections
- * worked in.
+ * The learner's texts, such as their homework, the one started last first,
+ * each kept in its place as it is written in. A text that was corrected is
+ * locked, and its correction shown under it as it is opened, not listed.
  */
 export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props) {
-    const own = typeof texts === "string" ? [] : texts.filter((text) => text.kind === "text");
+    const all = typeof texts === "string" ? [] : texts;
+    const byStart = (a: Text, b: Text) => b.createdAt - a.createdAt;
+    const own = all.filter((text) => text.kind === "text").sort(byStart);
+    // a correction whose text was deleted is listed on its own, last
+    const listed = [
+        ...own,
+        ...all.filter((each) => each.kind === "correction" && !own.some((text) => text.id === each.corrects))
+            .sort(byStart),
+    ];
 
     return (
         <>
@@ -44,12 +52,12 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
             {typeof texts === "string" && <p className="sidebar-note error">{texts}</p>}
             {typeof texts !== "string" && own.length === 0 && (
                 <p className="sidebar-note">
-                    {t("Write your homework, or any text, here. The tutor can open one in an exercise that corrects it.")}
+                    {t("Write your homework, or any text, here, and correct it once it is done.")}
                 </p>
             )}
             <ul className="chat-list">
-                {own.map((text) => (
-                    <li key={text.id} className={text.id === selectedId ? "chat-item active" : "chat-item"}>
+                {listed.map((text) => (
+                    <li key={text.id} className={`chat-item${text.id === selectedId ? " active" : ""}`}>
                         <button
                             className="chat-open"
                             aria-current={text.id === selectedId ? "true" : undefined}
@@ -58,17 +66,24 @@ export function TextList({ texts, selectedId, onSelect, onNew, onDelete }: Props
                         >
                             <span className="chat-title">{text.title || t("Untitled")}</span>
                             <span className="chat-detail text-detail">
+                                {text.kind === "correction" && (
+                                    <span className="text-mark" title={t("correction")}>
+                                        <Icon name="checks" />
+                                    </span>
+                                )}
                                 {text.handwritten && (
                                     <span className="text-mark" title={t("handwritten")}>
                                         <Icon name="pen" />
                                     </span>
                                 )}
-                                <span title={plural(text.words ?? 0, "{count} word", "{count} words")}>
-                                    <Icon name="words" />
-                                    {text.words ?? 0}
-                                </span>
+                                {text.kind === "text" && (
+                                    <span title={plural(text.words ?? 0, "{count} word", "{count} words")}>
+                                        <Icon name="words" />
+                                        {text.words ?? 0}
+                                    </span>
+                                )}
                                 <span>{day(text.updatedAt)}</span>
-                                {text.lockedAt !== null && (
+                                {text.kind === "text" && text.lockedAt !== null && (
                                     <span className="text-mark" title={t("corrected")}>
                                         <Icon name="checks" />
                                     </span>

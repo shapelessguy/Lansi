@@ -51,6 +51,9 @@ class Task:
     # transforms a book, how many tokens the model has reasoned and written
     # of each part
     progress: list[dict[str, Any]] = field(default_factory=list)
+    # the id of what it is done to, if it is one thing, such as the text a
+    # correction is of, so that the app tells it is being done to that
+    subject: str = ""
 
 
 class Step:
@@ -109,10 +112,20 @@ class Tasks:
         self._tasks: list[Task] = []
         self._lock = threading.Lock()
 
-    def start(self, kind: str, title: str, total: int, job: Job) -> dict[str, Any]:
-        """Start `job` in the background, as a task of `total` steps, and
-        return the task as it is at the start."""
-        task = Task(uuid.uuid4().hex, kind, title, total, started_at=self._now())
+    def start(
+        self, kind: str, title: str, total: int, job: Job, subject: str = ""
+    ) -> dict[str, Any]:
+        """Start `job` in the background, as a task of `total` steps, done to
+        `subject`, if it is done to one thing, and return the task as it is
+        at the start."""
+        task = Task(
+            uuid.uuid4().hex,
+            kind,
+            title,
+            total,
+            started_at=self._now(),
+            subject=subject,
+        )
         with self._lock:
             self._tasks = [task, *self._tasks][:KEPT]
             started = asdict(task)

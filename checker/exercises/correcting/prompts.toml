@@ -2,25 +2,72 @@ correcting = """
 You correct a text that someone learning $language wrote, as a teacher \
 corrects homework. $level
 
-The text is called "$title". Mark every real mistake: grammar, spelling, \
-the choice of a word, a word missing or one too many, and punctuation where \
-it changes how the text reads. Do not rewrite what is right, and do not \
-change the learner's style or what they mean: correct only what is wrong, \
-each mistake as the shortest stretch of text that has to change.
+The text is called "$title". $reading Mark every real mistake: grammar, \
+spelling, endings, a word that is wrong where it is, a word missing or one \
+too many, word order, and punctuation where it changes how the text reads. \
+A word that is right stays as it is, even where you would have chosen \
+another: a synonym, or a word you like better, is never a correction; at \
+most, where the learner's word sounds unnatural, use suggest. Do not change \
+the learner's style or what they mean. Each correction covers as few words \
+as have to change: where one word of a sentence is wrong, correct that \
+word, not the sentence around it.
 $guidance
-The text, between the lines:
----
-$text
----
+The text is given as its words, each by its id, in order. A mark such as a \
+comma or a full stop is part of the word it is written against, so a \
+missing or wrong mark is corrected by replacing that word.
 
-Reply with JSON alone. "parts" is the whole text, cut where there are \
-mistakes, in order: a part that is right is {"text": "..."}, and a mistake \
-is {"wrong": "...", "right": "...", "why": "..."}, with "right" empty for \
-words to leave out and "wrong" empty for words to add. Keep the text as it \
-is written, with its line breaks, apart from the mistakes you mark. "why" \
-says in a short sentence in $into what was wrong. "summary" says in one or \
-two sentences in $into what the learner most needs to work on, as this \
-text shows it, or that it was right.
+$words
 
-{"parts": [{"text": "..."}, {"wrong": "...", "right": "...", "why": "..."}], \
+Think it through first, sentence by sentence, and check each id against \
+the word it names before you use it. Then reply with JSON alone. \
+"corrections" lists what is to be done, each an object with its "type", \
+the ids it is about, and "was", the words from from_id to to_id (or the \
+word of id) exactly as they are given above; an insert or a move has \
+"after", the word of after_id, instead or as well, unless after_id is -1:
+- {"type": "replace", "from_id": A, "to_id": B, "text": "..."}: the words \
+from A to B, both in, are wrong, and "text" is what is right. When a word \
+has only a wrong ending or letter, give the whole word as it should be: \
+the app finds the letters that changed.
+- {"type": "erase", "from_id": A, "to_id": B}: the words are one too many.
+- {"type": "insert", "after_id": A, "text": "..."}: words are missing \
+after word A; -1 for before the first word.
+- {"type": "move", "from_id": A, "to_id": B, "after_id": C}: the words go \
+after word C instead, -1 for before the first word.
+- {"type": "join", "from_id": A, "to_id": B, "text": "..."}: the words are \
+one word, "text".
+- {"type": "split", "id": A, "text": "..."}: the word is several, "text", \
+with the spaces where they go.
+- {"type": "suggest", "from_id": A, "to_id": B, "text": "..."}: the words \
+are right, but "text" is what someone who speaks $language would say. Use \
+it sparingly.
+- {"type": "comment", "from_id": A, "to_id": B, "text": "..."}: a short \
+note on the words, in $into, with nothing to change.
+- {"type": "praise", "from_id": A, "to_id": B, "text": "..."}: the words \
+are something hard done well; say what, in $into. At most two of these.
+- {"type": "misread", "from_id": A, "to_id": B, "text": "..."}: the words \
+were read wrong from the handwriting, and "text" is what is written; it is \
+not the learner's mistake.
+- {"type": "illegible", "from_id": A, "to_id": B}: the words cannot be \
+read, and what was meant cannot be told.
+Every one but misread and illegible has "category", the kind of mistake or \
+remark in one or two words in English, such as "spelling", "agreement", \
+"ending", "tense", "preposition" or "word order", and "explanation", one \
+short sentence in $into saying why. No two corrections change the same \
+word: where mistakes touch, make them one. "summary" says in one or two \
+sentences in $into what the learner most needs to work on, as this text \
+shows it, or that it was right.
+
+{"corrections": [{"type": "replace", "from_id": 3, "to_id": 3, \
+"was": "...", "text": "...", "category": "...", "explanation": "..."}], \
 "summary": "..."}"""
+
+[reading]
+handwritten = """It was written by hand, and its words were read from \
+the page by a machine, which often mistakes letters that look alike in \
+handwriting, such as I and J, l and 1, rn and m, u and n, a and o, or e and \
+c, and may miss an accent. Where a word differs from the right one only in \
+such a letter, take it as a misreading, not the learner's mistake, and say \
+so with misread: a learner rarely misspells a common word that way. Where \
+a word cannot be read at all, say so with illegible."""
+typed = """It was typed, so its words are exactly as the learner wrote \
+them: do not use misread or illegible."""

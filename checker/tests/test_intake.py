@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import threading
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -1030,6 +1031,24 @@ def test_a_chat_model_is_asked_to_answer_without_reasoning(
         {"enabled": False},
         {"effort": "high"},
     ]
+
+
+def test_a_model_that_is_to_reason_is_asked_to_and_given_longer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent: list[tuple[dict[str, Any], tuple[Any, ...]]] = []
+
+    def answering(url: str, body: dict[str, Any], *rest: Any) -> dict[str, Any]:
+        sent.append((body, rest))
+        return {}
+
+    monkeypatch.setattr(intake_module, "post", answering)
+
+    send_chat({"messages": []}, replace(CHAT, reasoning=True))
+
+    [(body, rest)] = sent
+    assert body["reasoning"] == {"enabled": True, "effort": "high"}
+    assert rest[-1] > intake_module.CHAT_WITHIN_SECS
 
 
 def test_a_model_that_cannot_but_reason_is_asked_again_as_the_request_was(

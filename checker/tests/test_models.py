@@ -52,6 +52,12 @@ def test_a_model_named_with_no_address_is_on_openrouter() -> None:
     )
 
 
+def test_a_model_named_to_reason_is_to_reason() -> None:
+    assert read_model({"model": "m", "url": "", "reasoning": True}, "k").reasoning
+    assert not read_model({"model": "m", "url": ""}, "k").reasoning
+    assert not read_model("m", "k").reasoning
+
+
 def test_nothing_named_is_a_model_for_the_usual_one_to_be_used() -> None:
     model = read_model(None, "the-key")
 

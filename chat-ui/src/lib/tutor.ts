@@ -61,6 +61,14 @@ export interface EvaluationOffer {
     timed: boolean;
 }
 
+/** A text of the learner's the tutor offered to correct, which the learner starts. */
+export interface CorrectionOffer {
+    kind: "correction";
+    /** The id of the text. */
+    text: string;
+    title: string;
+}
+
 /** A request to the model, as the server sent it. */
 export interface ModelRequest {
     model: string;
@@ -96,7 +104,7 @@ export type TutorEvent =
         type: "tool_done";
         id: string;
         failed: boolean;
-        shown: Offer | EvaluationOffer | null;
+        shown: Offer | EvaluationOffer | CorrectionOffer | null;
         content?: string;
         ms?: number;
     }
@@ -120,6 +128,8 @@ export interface TutorTurn {
     offers: Offer[];
     /** The mock exams it offered. */
     exams: EvaluationOffer[];
+    /** The texts it offered to correct. */
+    corrections: CorrectionOffer[];
     text: string;
     /** Whether it is still coming. */
     busy: boolean;
@@ -152,6 +162,8 @@ export interface TutorAsking {
     level: string;
     /** How the tutor is to talk with the learner, as they set it; empty for its own way. */
     tone: string;
+    /** The key of Google Cloud Vision, which the pages of a text written by hand the tutor reads are read with. */
+    visionKey?: string;
 }
 
 /** An exercise the tutor offered that was done, which the tutor is told how it went, once its log is written. */
@@ -166,7 +178,7 @@ export interface Practised {
 export const USAGE_ID = "tutor";
 
 export function emptyTurn(): TutorTurn {
-    return { thinking: "", steps: [], offers: [], exams: [], text: "", busy: true };
+    return { thinking: "", steps: [], offers: [], exams: [], corrections: [], text: "", busy: true };
 }
 
 /** `turn` with `event` taken into it. */
@@ -186,6 +198,9 @@ export function withEvent(turn: TutorTurn, event: TutorEvent): TutorTurn {
                 ),
                 offers: event.shown?.kind === "exercise" ? [...turn.offers, event.shown] : turn.offers,
                 exams: event.shown?.kind === "evaluation" ? [...turn.exams, event.shown] : turn.exams,
+                corrections: event.shown?.kind === "correction"
+                    ? [...turn.corrections, event.shown]
+                    : turn.corrections,
             };
         case "done":
         case "error":
@@ -270,7 +285,10 @@ export async function askTutor(
     try {
         response = await checkerFetch("/tutor/chat", {
             method: "POST",
-            headers: asking.apiKey ? { "X-OpenRouter-Key": asking.apiKey } : {},
+            headers: {
+                ...(asking.apiKey ? { "X-OpenRouter-Key": asking.apiKey } : {}),
+                ...(asking.visionKey ? { "X-Vision-Key": asking.visionKey } : {}),
+            },
             body: JSON.stringify({
                 messages: withoutReasoning(messages),
                 model: modelRequest(asking.model),
@@ -339,6 +357,7 @@ export interface KeptTurn {
     steps?: Step[];
     offers?: KeptOffer[];
     exams?: EvaluationOffer[];
+    corrections?: CorrectionOffer[];
 }
 
 /** A chat with the tutor as it is listed, with the first thing the learner wrote. */
@@ -380,6 +399,7 @@ export function keptTurn(text: string, kept: KeptTurn = {}): TutorTurn {
         steps: kept.steps ?? [],
         offers: kept.offers ?? [],
         exams: kept.exams ?? [],
+        corrections: kept.corrections ?? [],
         text,
         busy: false,
     };

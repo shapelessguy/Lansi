@@ -13,7 +13,9 @@ they are the learner's to be corrected.
 A mark such as a comma, which Vision reads as a word of its own, goes with
 the word it is written against. A word is placed by the four corners of
 the box around it, from its top left in the order it is read, as
-`[[x, y], ...]` in pixels of the picture.
+`[[x, y], ...]` in pixels of the picture, and so is each of its letters,
+which Vision finds in the same reading, so that a mark can be put on one
+letter of a word, such as a wrong ending.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ import json
 import unicodedata
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 VISION_URL = "https://vision.googleapis.com/v1/images:annotate"
@@ -54,15 +56,21 @@ class Word:
     # of a line does
     spaced: bool = True
     ends: bool = False
+    # each of its letters, or such as a comma, with its box, the first
+    # first, if Vision placed each of them
+    letters: list[tuple[str, Box]] = field(default_factory=list)
 
     def kept(self) -> dict[str, Any]:
-        return {
+        kept: dict[str, Any] = {
             "text": self.text,
             "box": self.box,
             "line": self.line,
             "paragraph": self.paragraph,
             "confidence": round(self.confidence, 3),
         }
+        if self.letters:
+            kept["letters"] = [{"text": text, "box": box} for text, box in self.letters]
+        return kept
 
 
 @dataclass
@@ -145,6 +153,11 @@ def page_of(read: dict[str, Any], width: int, height: int) -> Page:
                 after = (
                     (symbols[-1].get("property") or {}).get("detectedBreak") or {}
                 ).get("type")
+                placed = [
+                    (symbol["text"], _box(symbol["boundingBox"], width, height))
+                    for symbol in symbols
+                    if symbol.get("text") and symbol.get("boundingBox")
+                ]
                 if words and (starts or words[-1].ends):
                     line += 1
                     paragraph += starts
@@ -158,6 +171,8 @@ def page_of(read: dict[str, Any], width: int, height: int) -> Page:
                         float(word.get("confidence", 0)),
                         bool(after),
                         after in LINE_ENDS,
+                        # only if every letter was placed
+                        placed if "".join(each[0] for each in placed) == text else [],
                     )
                 )
     return Page(width, height, _with_marks_joined(words))
@@ -198,6 +213,9 @@ def _with_marks_joined(words: list[Word]) -> list[Word]:
             before.box = [before.box[0], word.box[1], word.box[2], before.box[3]]
             before.confidence = min(before.confidence, word.confidence)
             before.spaced, before.ends = word.spaced, word.ends
+            before.letters = (
+                before.letters + word.letters if before.letters and word.letters else []
+            )
         else:
             joined.append(word)
     return joined

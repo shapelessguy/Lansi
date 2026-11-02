@@ -6,6 +6,7 @@ import Markdown from "react-markdown";
 
 import { isAtEnd } from "../lib/chats";
 import type { ProfileUsage } from "../lib/checker";
+import { correctText } from "../lib/corrections";
 import { ask as askLearner } from "../lib/dialogs";
 import { locale, plural, t } from "../lib/i18n";
 import { newId } from "../lib/ids";
@@ -19,6 +20,7 @@ import type { BackgroundTask } from "../lib/tasks";
 import {
     askTutor,
     closeTutorChat,
+    type CorrectionOffer,
     deleteTutorChat,
     doingNow,
     emptyTurn,
@@ -72,6 +74,8 @@ interface Props {
     onSpeakReplies: (speak: boolean) => void;
     /** Starts a mock exam the tutor offered, which runs in the tab of evaluations. */
     onStartEvaluation: (exam: EvaluationOffer) => void;
+    /** Opens a text of the learner's in the tab of texts, such as one the tutor offered to correct. */
+    onOpenText: (id: string) => void;
     /** Has an answer read aloud, by the chat and its place among what is said in it, as the chat's are. */
     onSpeak: (chatId: string, place: number, text: string) => void;
     /** Told each event of the requests to the server. */
@@ -123,6 +127,7 @@ export function Tutor(
         speakReplies,
         onSpeakReplies,
         onStartEvaluation,
+        onOpenText,
         onSpeak,
         onTrace,
         settings,
@@ -610,6 +615,15 @@ export function Tutor(
                                         onStart={() => onStartEvaluation(exam)}
                                     />
                                 ))}
+                                {(each.turn.corrections ?? []).map((offer, place) => (
+                                    <CorrectionCard
+                                        key={`correction:${place}`}
+                                        offer={offer}
+                                        disabled={!usable || closed}
+                                        onStart={async () => onTask(await correctText(offer.text, settings))}
+                                        onOpen={() => onOpenText(offer.text)}
+                                    />
+                                ))}
                             </TurnView>
                         )
                 )}
@@ -847,6 +861,58 @@ function OfferCard(
 }
 
 /** A mock exam the tutor offered, with how it is set, and a button that starts it in the tab of evaluations. */
+/**
+ * A text the tutor offered to correct, which the learner corrects with a
+ * press, after which it is corrected in the background, as in the tab of
+ * texts, and can be opened there.
+ */
+function CorrectionCard(
+    { offer, disabled, onStart, onOpen }: {
+        offer: CorrectionOffer;
+        disabled: boolean;
+        onStart: () => Promise<void>;
+        onOpen: () => void;
+    },
+) {
+    const [state, setState] = useState<"offered" | "starting" | "started">("offered");
+    const [error, setError] = useState<string | null>(null);
+    return (
+        <div className="tutor-offer">
+            <div className="tutor-offer-about">
+                <strong>{t("Correct «{title}»", { title: offer.title || t("Untitled") })}</strong>
+                <div className="tutor-offer-what">
+                    {error ?? t("Each mistake is marked, and the text is locked from then on.")}
+                </div>
+            </div>
+            {state === "started"
+                ? (
+                    <button type="button" className="link-button tutor-offer-state" onClick={onOpen}>
+                        {t("Correcting, in Texts")}
+                    </button>
+                )
+                : (
+                    <button
+                        className="primary"
+                        disabled={disabled || state === "starting"}
+                        onClick={() => {
+                            setError(null);
+                            setState("starting");
+                            onStart().then(
+                                () => setState("started"),
+                                (failed: Error) => {
+                                    setError(failed.message);
+                                    setState("offered");
+                                },
+                            );
+                        }}
+                    >
+                        {t("Correct")}
+                    </button>
+                )}
+        </div>
+    );
+}
+
 function ExamCard({ exam, disabled, onStart }: { exam: EvaluationOffer; disabled: boolean; onStart: () => void }) {
     const [started, setStarted] = useState(false);
     return (

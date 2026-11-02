@@ -120,7 +120,15 @@ test("a kept answer is shown with its steps and the exercises it offered", () =>
     expect(turn.steps.map((step) => step.doing)).toEqual(["Looking at the lessons"]);
     expect(turn.offers.map((offer) => offer.exercise)).toEqual(["cloze"]);
     expect(turn.busy).toBe(false);
-    expect(keptTurn("Old.")).toEqual({ thinking: "", steps: [], offers: [], exams: [], text: "Old.", busy: false });
+    expect(keptTurn("Old.")).toEqual({
+        thinking: "",
+        steps: [],
+        offers: [],
+        exams: [],
+        corrections: [],
+        text: "Old.",
+        busy: false,
+    });
 });
 
 test("only the reasoning of the latest answers is sent again, and the rest of them is", () => {
@@ -174,6 +182,7 @@ test("a turn that is stopped keeps what it thought and wrote, and nothing of it 
         }],
         offers: [],
         exams: [],
+        corrections: [],
         text: "So",
         busy: true,
     };

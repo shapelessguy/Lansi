@@ -3,9 +3,11 @@
 
 import {
     type CSSProperties,
+    forwardRef,
     type PointerEvent as ReactPointerEvent,
     type ReactNode,
     useEffect,
+    useImperativeHandle,
     useLayoutEffect,
     useRef,
     useState,
@@ -40,6 +42,24 @@ interface Props {
     /** Told the text as the server has it after a page was added, removed or read. */
     onText: (text: Text) => void;
     onError: (message: string) => void;
+    /** What is drawn over the ink of each page, by its id, such as its corrections. */
+    marks?: Record<string, Stroke[]>;
+    /** What each mark says, by the id of its page, shown as it is pointed at or tapped on the page open. */
+    notes?: Record<string, PageNote[]>;
+}
+
+/** What a mark on a page says, shown over the boxes of the words it is about, in units of the page. */
+export interface PageNote {
+    boxes: [number, number][][];
+    note: ReactNode;
+    /** What kind of correction it is, which it is styled by. */
+    kind: string;
+}
+
+/** What the text a handwritten text is in may have its pages do. */
+export interface HandwrittenPagesHandle {
+    /** Reads the pages not read since they were written on; resolves with whether every one was. */
+    readUnread: () => Promise<boolean>;
 }
 
 /** How often the pages are taken again from the server, as another device may write on them, in milliseconds. */
@@ -94,7 +114,10 @@ type Tool = "write" | "erase";
  * text then says what they were read to say; the box of each word read can
  * be shown on its page.
  */
-export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onError }: Props) {
+export const HandwrittenPages = forwardRef<HandwrittenPagesHandle, Props>(function HandwrittenPages(
+    { textId, pages, locked, visionKey, onText, onError, marks, notes }: Props,
+    ref,
+) {
     const [choice, setChoice] = useState<PenChoice>(loadPen);
     const [tool, setTool] = useState<Tool>("write");
     const [showWords, setShowWords] = useState(false);
@@ -263,7 +286,7 @@ export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onE
             && (page.words === null || changed.has(page.id) || page.inkedAt > (page.readAt ?? 0));
     }
 
-    async function readAll() {
+    async function readAll(): Promise<boolean> {
         setReading(true);
         try {
             for (const page of pages.filter(needsReading)) {
@@ -280,12 +303,22 @@ export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onE
                 onText(text);
             }
             setShowWords(true);
+            return true;
         } catch (failed) {
             onError((failed as Error).message);
+            return false;
         } finally {
             setReading(false);
         }
     }
+
+    useImperativeHandle(ref, () => ({ readUnread: readAll }));
+
+    /** The ink of a page as it is shown, with what is drawn over it. */
+    const shownInk = (page: HandwrittenPage) => {
+        const over = marks?.[page.id];
+        return over?.length ? [...inkOf(page), ...over] : inkOf(page);
+    };
 
     function add(position: number) {
         addPage(textId, position).then(onText, (failed: Error) => onError(failed.message));
@@ -394,23 +427,6 @@ export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onE
                 </>
             )}
             <div className="ink-group">
-                {!locked && (
-                    <button
-                        type="button"
-                        className="icon-button ink-read"
-                        disabled={reading || unread === 0 || !visionKey}
-                        title={!visionKey
-                            ? t("Set your Google Cloud Vision key in Settings, under Models, to read the pages.")
-                            : unread
-                            ? plural(unread, "Read {count} page", "Read {count} pages")
-                            : t("Every page is read")}
-                        aria-label={t("Read the pages")}
-                        onClick={() => void readAll()}
-                    >
-                        {reading ? <span className="spinner" aria-hidden="true" /> : <Icon name="read" />}
-                        {unread > 0 && !reading && <span className="ink-badge">{unread}</span>}
-                    </button>
-                )}
                 <ToolButton
                     icon="word-boxes"
                     label={t("Show the words read")}
@@ -424,6 +440,26 @@ export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onE
     return (
         <div className="handwritten">
             {/* not there behind an open page, which would draw each stroke twice */}
+            {!opened && !locked && (
+                <div className="ink-overview-bar">
+                    <button
+                        type="button"
+                        className="ink-read"
+                        disabled={reading || unread === 0 || !visionKey}
+                        title={!visionKey
+                            ? t("Set your Google Cloud Vision key in Settings, under Models, to read the pages.")
+                            : undefined}
+                        onClick={() => void readAll()}
+                    >
+                        {reading ? <span className="spinner" aria-hidden="true" /> : <Icon name="read" />}
+                        {reading
+                            ? t("Reading…")
+                            : unread
+                            ? plural(unread, "Read {count} page", "Read {count} pages")
+                            : t("Every page is read")}
+                    </button>
+                </div>
+            )}
             {!opened && (
                 <div className="ink-pages">
                     {pages.map((page, number) => (
@@ -439,11 +475,12 @@ export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onE
                                 >
                                     <InkPage
                                         page={page}
-                                        ink={inkOf(page)}
+                                        ink={shownInk(page)}
                                         choice={choice}
                                         tool={tool}
                                         locked
-                                        turned={turned}
+                                        // turned only as it is open, which is what the tablet is turned for
+                                        turned={false}
                                         showWords={false}
                                         onWrite={() => undefined}
                                     />
@@ -471,7 +508,7 @@ export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onE
             )}
             {opened && (
                 <FullPage onClose={() => setOpenId(null)}>
-                    <div className="ink-full-bar">
+                    <div className={turned ? "ink-full-bar turned" : "ink-full-bar"}>
                         <div className="ink-group">
                             <ToolButton icon="close" label={t("Close")} onClick={() => setOpenId(null)} />
                             <ToolButton
@@ -498,23 +535,24 @@ export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onE
                                 </>
                             )}
                         </div>
-                        <div className="ink-controls">
-                            {toolsOpen && tools}
-                            <button
-                                type="button"
-                                className="icon-button ink-tools-toggle"
-                                title={t("Pen")}
-                                aria-label={t("Pen")}
-                                aria-expanded={toolsOpen}
-                                onClick={() => setToolsOpen(!toolsOpen)}
-                            >
-                                <Icon name={tool === "erase" ? "eraser" : choice.pen} />
-                                {tool === "write" && (
-                                    <span className="ink-tools-color" style={{ background: choice.color }} />
-                                )}
-                                {unread > 0 && !locked && <span className="ink-badge">{unread}</span>}
-                            </button>
-                        </div>
+                        {!locked && (
+                            <div className="ink-controls">
+                                {toolsOpen && tools}
+                                <button
+                                    type="button"
+                                    className="icon-button ink-tools-toggle"
+                                    title={t("Pen")}
+                                    aria-label={t("Pen")}
+                                    aria-expanded={toolsOpen}
+                                    onClick={() => setToolsOpen(!toolsOpen)}
+                                >
+                                    <Icon name={tool === "erase" ? "eraser" : choice.pen} />
+                                    {tool === "write" && (
+                                        <span className="ink-tools-color" style={{ background: choice.color }} />
+                                    )}
+                                </button>
+                            </div>
+                        )}
                     </div>
                     <figure
                         className="ink-page ink-full-page"
@@ -525,12 +563,13 @@ export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onE
                         <InkPage
                             key={opened.id}
                             page={opened}
-                            ink={inkOf(opened)}
+                            ink={shownInk(opened)}
                             choice={choice}
                             tool={tool}
                             locked={locked}
                             turned={turned}
                             showWords={showWords && !needsReading(opened)}
+                            notes={notes?.[opened.id]}
                             onWrite={(before, after) => write(opened.id, before, after)}
                         />
                     </figure>
@@ -538,7 +577,7 @@ export function HandwrittenPages({ textId, pages, locked, visionKey, onText, onE
             )}
         </div>
     );
-}
+});
 
 /**
  * A page open on the whole screen, as the browser can show it, and over
@@ -632,6 +671,8 @@ interface PageProps {
     /** Whether it is shown turned a quarter, its long side across, its top on the left. */
     turned: boolean;
     showWords: boolean;
+    /** What its marks say, shown as each is pointed at, or tapped. */
+    notes?: PageNote[];
     /** Told what the ink of the page was before a stroke or a rubbing of the eraser, and what it is after. */
     onWrite: (before: Stroke[], after: Stroke[]) => void;
 }
@@ -644,7 +685,9 @@ let inkDown = false;
 let lastInk = 0;
 
 /** A page to be written on: its ink drawn on one canvas, and the stroke being written on another above it. */
-function InkPage({ page, ink, choice, tool, locked, turned, showWords, onWrite }: PageProps) {
+function InkPage({ page, ink, choice, tool, locked, turned, showWords, notes, onWrite }: PageProps) {
+    // the note shown, as its mark is pointed at, or tapped, which keeps it until the page is tapped again
+    const [noted, setNoted] = useState<{ at: number; tapped: boolean } | null>(null);
     // where the pen was last, on the screen, and when, which how fast it moves is told from
     const lastAt = useRef({ x: 0, y: 0, time: 0 });
     // how wide and high it is shown, in units of the page
@@ -884,12 +927,13 @@ function InkPage({ page, ink, choice, tool, locked, turned, showWords, onWrite }
             <canvas ref={base} aria-hidden="true" />
             <canvas
                 ref={live}
-                className={tool === "erase" ? "ink-live erasing" : "ink-live"}
+                className={locked ? "ink-live locked" : tool === "erase" ? "ink-live erasing" : "ink-live"}
                 aria-label={t("Page to write on")}
                 onPointerDown={down}
                 onPointerMove={move}
                 onPointerUp={up}
                 onPointerCancel={up}
+                onClick={() => setNoted(null)}
             />
             {showWords && page.words && (
                 <svg viewBox={`0 0 ${wide} ${high}`} preserveAspectRatio="none" aria-hidden="true">
@@ -905,6 +949,93 @@ function InkPage({ page, ink, choice, tool, locked, turned, showWords, onWrite }
                     </g>
                 </svg>
             )}
+            {notes && notes.length > 0 && (
+                <svg className="ink-notes" viewBox={`0 0 ${wide} ${high}`} preserveAspectRatio="none">
+                    <g transform={turned ? `matrix(0 -1 1 0 0 ${page.width})` : undefined}>
+                        {notes.map((note, at) => (
+                            <g
+                                key={at}
+                                className={`ink-note-area ${note.kind}${noted?.at === at ? " shown" : ""}`}
+                                onPointerEnter={(event) =>
+                                    event.pointerType === "mouse"
+                                    && setNoted((current) => current?.tapped ? current : { at, tapped: false })}
+                                onPointerLeave={(event) =>
+                                    event.pointerType === "mouse"
+                                    && setNoted((current) =>
+                                        current?.tapped ? current : null
+                                    )}
+                                onClick={() =>
+                                    setNoted((current) =>
+                                        current?.at === at && current.tapped ? null : { at, tapped: true }
+                                    )}
+                            >
+                                {note.boxes.map((box, place) => (
+                                    <polygon
+                                        key={place}
+                                        points={box.map(([x, y]) => `${x},${y}`).join(" ")}
+                                    />
+                                ))}
+                            </g>
+                        ))}
+                    </g>
+                </svg>
+            )}
+            {noted && notes?.[noted.at] && (
+                <NoteBubble
+                    note={notes[noted.at]}
+                    place={notePlace(notes[noted.at].boxes, page.width, wide, high, turned)}
+                    turned={turned}
+                />
+            )}
+        </div>
+    );
+}
+
+/** The box around the words a note is about, in shares of the page as it is shown on the screen. */
+interface NotePlace {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+}
+
+function notePlace(
+    boxes: [number, number][][],
+    width: number,
+    wide: number,
+    high: number,
+    turned: boolean,
+): NotePlace {
+    const points = boxes.flat().map(([x, y]) => turned ? [y, width - x] : [x, y]);
+    const xs = points.map(([x]) => x / wide);
+    const ys = points.map(([, y]) => y / high);
+    return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys) };
+}
+
+/**
+ * The note of a mark, under the words it is about, or over them near the
+ * bottom of the page, from where they start. On a page turned it is turned
+ * with it, to be read as the page is, the tablet turned.
+ */
+function NoteBubble({ note, place, turned }: { note: PageNote; place: NotePlace; turned: boolean }) {
+    const style: CSSProperties = turned
+        ? {
+            // the bottom of the page turned is on the right of the screen, and its left at the bottom
+            top: `max(${place.bottom * 100}%, min(320px, 100%))`,
+            transformOrigin: "top left",
+            ...(place.right > 0.7
+                ? { left: `calc(${place.left * 100}% - 6px)`, transform: "rotate(-90deg) translateY(-100%)" }
+                : { left: `calc(${place.right * 100}% + 6px)`, transform: "rotate(-90deg)" }),
+        }
+        : {
+            left: `min(${place.left * 100}%, calc(100% - min(320px, 90%)))`,
+            ...(place.bottom > 0.7
+                ? { bottom: `calc(${(1 - place.top) * 100}% + 6px)` }
+                : { top: `calc(${place.bottom * 100}% + 6px)` }),
+        };
+    return (
+        <div className={turned ? `ink-note turned ${note.kind}` : `ink-note ${note.kind}`} role="tooltip" style={style}>
+            {note.note}
         </div>
     );
 }

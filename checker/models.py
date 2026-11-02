@@ -50,6 +50,9 @@ class Model:
     # the providers of OpenRouter that alone are to serve it, by their
     # slugs; none for any
     providers: tuple[str, ...] = ()
+    # whether it is to reason before it answers, as for correcting a text,
+    # where a model that answers at once does it badly
+    reasoning: bool = False
 
     @property
     def on_openrouter(self) -> bool:
@@ -144,5 +147,6 @@ def read_model(value: object, openrouter_key: str = "") -> Model:
             ()
             if url
             else tuple(dict.fromkeys(each.strip()[:MAX_LENGTH] for each in providers)),
+            value.get("reasoning") is True,
         )
     raise ValueError("a model is named by its id, or with its address")

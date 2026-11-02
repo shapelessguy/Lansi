@@ -140,6 +140,7 @@ const TASK_CATEGORIES: Record<string, UsageCategory> = {
     speech: "speech",
     icon: "practice",
     log: "practice",
+    correction: "practice",
     questions: "translation",
     memories: "tutor",
 };
@@ -634,8 +635,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
             if (task.kind === "log" || task.kind === "questions") {
                 setLogsRevision((revision) => revision + 1);
             }
-            if (task.kind === "log") {
-                // an exercise is over, which may have corrected a text
+            if (task.kind === "log" || task.kind === "correction") {
+                // a text was corrected, or an exercise is over, which may have corrected one
                 setTextsRevision((revision) => revision + 1);
             }
             if (task.kind === "memories") {
@@ -717,9 +718,11 @@ export function App({ user, initialSettings, initialChats }: Props) {
             into: settings.translateInto,
             level: settings.level,
             tone: settings.tutorTone,
+            visionKey: settings.visionKey,
         }),
         [
             settings.apiKey,
+            settings.visionKey,
             settings.reasoningModel,
             settings.model,
             settings.language,
@@ -1199,6 +1202,10 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                 })}
                             onOpenSettings={() => openSettings("models")}
                             onStartEvaluation={startOfferedEvaluation}
+                            onOpenText={(id) => {
+                                setTextId(id);
+                                setActivity("texts");
+                            }}
                             speakReplies={settings.speakReplies}
                             onSpeakReplies={(speakReplies) => updateSettings({ ...settings, speakReplies })}
                             onSpeak={speakMessage}
@@ -1236,7 +1243,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                             if (agreed) {
                                                 await deleteText(text.id);
                                                 setTextsRevision((revision) => revision + 1);
-                                                setTextId((open) => (open === text.id ? null : open));
+                                                // a correction deleted leaves its text open, to be corrected again
+                                                setTextId((open) => (open === text.id ? text.corrects : open));
                                             }
                                         },
                                     );
@@ -1265,6 +1273,17 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                         ? null
                                         : texts.find((text) => text.corrects === textId)?.id ?? null}
                                     onSaved={() => setTextsRevision((revision) => revision + 1)}
+                                    onOpenText={setTextId}
+                                    onCorrected={() => setTextsRevision((revision) => revision + 1)}
+                                    onTask={addTask}
+                                    onDeleteCorrection={(correction) => {
+                                        void ask(t("Delete the correction?")).then(async (agreed) => {
+                                            if (agreed) {
+                                                await deleteText(correction.id);
+                                                setTextsRevision((revision) => revision + 1);
+                                            }
+                                        });
+                                    }}
                                 />
                             )
                             : (

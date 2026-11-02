@@ -311,6 +311,30 @@ export const MESSAGES = {
         German: "Wortschatz einbetten",
         Italian: "Incorporamento del vocabolario",
     },
+    "Correcting the text": {
+        German: "Text wird korrigiert",
+        Italian: "Correzione del testo",
+    },
+    "The text is corrected.": {
+        German: "Der Text ist korrigiert.",
+        Italian: "Il testo è corretto.",
+    },
+    "Correct text": {
+        German: "Text korrigieren",
+        Italian: "Correggi il testo",
+    },
+    "Correct «{title}»": {
+        German: "„{title}“ korrigieren",
+        Italian: "Correggi «{title}»",
+    },
+    "Each mistake is marked, and the text is locked from then on.": {
+        German: "Jeder Fehler wird markiert, und der Text ist danach gesperrt.",
+        Italian: "Ogni errore viene segnato, e da allora il testo è bloccato.",
+    },
+    "Correcting, in Texts": {
+        German: "Wird korrigiert, in Texte",
+        Italian: "In correzione, in Testi",
+    },
     "Exercise log": {
         German: "Übungsbericht",
         Italian: "Resoconto dell'esercizio",
@@ -366,16 +390,6 @@ export const MESSAGES = {
     "Delete chat: {name}": {
         German: "Chat löschen: {name}",
         Italian: "Elimina chat: {name}",
-    },
-    "New text": {
-        German: "Neuer Text",
-        Italian: "Nuovo testo",
-    },
-    "Write your homework, or any text, here. The tutor can open one in an exercise that corrects it.": {
-        German:
-            "Schreib hier deine Hausaufgaben oder einen beliebigen Text. Der Tutor kann ihn in einer Übung öffnen, die ihn korrigiert.",
-        Italian:
-            "Scrivi qui i tuoi compiti o qualsiasi testo. Il tutor può aprirne uno in un esercizio che lo corregge.",
     },
     "{count} word": {
         German: "{count} Wort",
@@ -1108,6 +1122,14 @@ export const MESSAGES = {
     "Nothing to correct.": {
         German: "Nichts zu korrigieren.",
         Italian: "Niente da correggere.",
+    },
+    "New text": {
+        German: "Neuer Text",
+        Italian: "Nuovo testo",
+    },
+    "correction": {
+        German: "Korrektur",
+        Italian: "correzione",
     },
     "Correcting…": {
         German: "Wird korrigiert…",
@@ -3820,9 +3842,73 @@ export const MESSAGES = {
         Italian:
             "Imposta la tua chiave di Google Cloud Vision nelle Impostazioni, sotto Modelli, per leggere le pagine.",
     },
-    "Read the pages": {
-        German: "Seiten lesen",
-        Italian: "Leggi le pagine",
+    "Correct": {
+        German: "Korrigieren",
+        Italian: "Correggi",
+    },
+    "Correct this text: each mistake is marked, and the correction kept as a text of its own; the text is then locked.":
+        {
+            German:
+                "Diesen Text korrigieren: Jeder Fehler wird markiert und die Korrektur als eigener Text gespeichert; der Text wird dann gesperrt.",
+            Italian:
+                "Correggi questo testo: ogni errore viene segnato e la correzione salvata come testo a sé; il testo viene poi bloccato.",
+        },
+    "Set your OpenRouter key in Settings to correct the text.": {
+        German: "Gib in den Einstellungen deinen OpenRouter-Schlüssel ein, um den Text zu korrigieren.",
+        Italian: "Inserisci la tua chiave OpenRouter nelle impostazioni per correggere il testo.",
+    },
+    "Write something first.": {
+        German: "Schreib zuerst etwas.",
+        Italian: "Prima scrivi qualcosa.",
+    },
+    "Delete the correction": {
+        German: "Korrektur löschen",
+        Italian: "Elimina la correzione",
+    },
+    "Delete the correction, so that the text can be changed and corrected again": {
+        German: "Die Korrektur löschen, damit der Text geändert und erneut korrigiert werden kann",
+        Italian: "Elimina la correzione, così che il testo si possa cambiare e correggere di nuovo",
+    },
+    "Delete the correction?": {
+        German: "Die Korrektur löschen?",
+        Italian: "Eliminare la correzione?",
+    },
+    "Open the text as it was written": {
+        German: "Text so öffnen, wie er geschrieben wurde",
+        Italian: "Apri il testo com'era scritto",
+    },
+    "This correction cannot be read.": {
+        German: "Diese Korrektur kann nicht gelesen werden.",
+        Italian: "Questa correzione non si può leggere.",
+    },
+    "The text this corrects was deleted.": {
+        German: "Der korrigierte Text wurde gelöscht.",
+        Italian: "Il testo corretto è stato eliminato.",
+    },
+    "No mistakes.": {
+        German: "Keine Fehler.",
+        Italian: "Nessun errore.",
+    },
+    "could not be read": {
+        German: "konnte nicht gelesen werden",
+        Italian: "non si è potuto leggere",
+    },
+    "to the start": {
+        German: "an den Anfang",
+        Italian: "all'inizio",
+    },
+    "after «{word}»": {
+        German: "nach «{word}»",
+        Italian: "dopo «{word}»",
+    },
+    "Write your homework, or any text, here, and correct it once it is done.": {
+        German:
+            "Schreib hier deine Hausaufgaben oder einen beliebigen Text und lass ihn korrigieren, wenn er fertig ist.",
+        Italian: "Scrivi qui i compiti o qualsiasi testo, e fallo correggere quando è finito.",
+    },
+    "Reading…": {
+        German: "Wird gelesen…",
+        Italian: "Lettura in corso…",
     },
     "Turn the pages": {
         German: "Seiten drehen",

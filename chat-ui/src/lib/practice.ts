@@ -60,6 +60,8 @@ export interface ExerciseInfo {
     once?: boolean;
     /** Whether it practises a lesson; one that does not, such as correcting a text, needs none. */
     lesson?: boolean;
+    /** Whether the app runs it itself, as the learner asks for it, such as correcting a text, so that it is not chosen. */
+    built_in?: boolean;
     /** Whether it is about the topics chosen; one that is about neither them nor a lesson is done on its own. */
     topics?: boolean;
     /** Whether it is listed before every other, such as reviewing the Anki cards. */
@@ -289,6 +291,8 @@ export interface Learner {
     /** The language the learner reads explanations in. */
     into: string;
     level: string;
+    /** Whether `model` is to reason before it answers, as it is when a text is corrected. */
+    reasoning?: boolean;
 }
 
 /** How many instances of an exercise there are unless the learner says otherwise. */
@@ -315,6 +319,12 @@ export async function call<Reply>(path: string, init: RequestInit = {}): Promise
 }
 
 /** A POST of `body`, with the models of `learner` and who they are, if given. */
+/** A model as a request names it, told to reason before it answers. */
+function reasoningRequest(choice: ModelChoice): object {
+    const named = modelRequest(choice);
+    return { ...(typeof named === "string" ? { model: named, url: "", key: "" } : named), reasoning: true };
+}
+
 export function posting(body: object, learner?: Learner): RequestInit {
     return {
         method: "POST",
@@ -324,7 +334,7 @@ export function posting(body: object, learner?: Learner): RequestInit {
             learner
                 ? {
                     ...body,
-                    model: modelRequest(learner.model),
+                    model: learner.reasoning ? reasoningRequest(learner.model) : modelRequest(learner.model),
                     image_model: modelRequest(learner.imageModel),
                     vision_model: modelRequest(learner.visionModel),
                     into: learner.into,

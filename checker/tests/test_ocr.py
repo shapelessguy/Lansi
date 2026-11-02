@@ -9,9 +9,26 @@ import pytest
 from ocr import OcrError, page_of, read_picture, text_of
 
 
-def symbol(char: str, after: str | None = None) -> dict[str, Any]:
-    """A symbol as Vision reads it, with the break `after` it, if any."""
+def box(x: int, y: int, wide: int, high: int = 20) -> dict[str, Any]:
+    """A box as Vision gives it, `wide` and `high` from `x` and `y`."""
+    return {
+        "vertices": [
+            {"x": x, "y": y},
+            {"x": x + wide, "y": y},
+            {"x": x + wide, "y": y + high},
+            {"x": x, "y": y + high},
+        ]
+    }
+
+
+def symbol(
+    char: str, after: str | None = None, at: tuple[int, int] | None = None
+) -> dict[str, Any]:
+    """A symbol as Vision reads it, with the break `after` it, if any, ten
+    pixels wide from `at`, if it is placed."""
     found: dict[str, Any] = {"text": char}
+    if at:
+        found["boundingBox"] = box(at[0], at[1], 10)
     if after:
         found["property"] = {"detectedBreak": {"type": after}}
     return found
@@ -20,18 +37,14 @@ def symbol(char: str, after: str | None = None) -> dict[str, Any]:
 def word(text: str, x: int, y: int, after: str | None = "SPACE") -> dict[str, Any]:
     """A word as Vision reads it, ten pixels wide for each letter, at `x`
     and `y`, followed by `after`."""
-    right = x + 10 * len(text)
+    last = len(text) - 1
     return {
-        "boundingBox": {
-            "vertices": [
-                {"x": x, "y": y},
-                {"x": right, "y": y},
-                {"x": right, "y": y + 20},
-                {"x": x, "y": y + 20},
-            ]
-        },
+        "boundingBox": box(x, y, 10 * len(text)),
         "confidence": 0.9,
-        "symbols": [symbol(char) for char in text[:-1]] + [symbol(text[-1], after)],
+        "symbols": [
+            symbol(char, after if at == last else None, (x + 10 * at, y))
+            for at, char in enumerate(text)
+        ],
     }
 
 
@@ -55,6 +68,22 @@ def test_a_comma_goes_with_the_word_it_is_written_against() -> None:
 
     assert [each.text for each in page.words] == ["Hallo,", "du"]
     assert page.words[0].box == [[0, 0], [60, 0], [60, 20], [0, 20]]
+
+
+def test_each_letter_of_a_word_is_kept_with_its_box() -> None:
+    page = page_of(reading([word("Hund", 0, 0, None), word(",", 40, 0)]), 500, 500)
+
+    letters = page.words[0].kept()["letters"]
+    assert [each["text"] for each in letters] == ["H", "u", "n", "d", ","]
+    assert letters[2]["box"] == [[20, 0], [30, 0], [30, 20], [20, 20]]
+
+
+def test_a_word_whose_letters_were_not_all_placed_keeps_none() -> None:
+    read = word("Hund", 0, 0)
+    del read["symbols"][1]["boundingBox"]
+    page = page_of(reading([read]), 500, 500)
+
+    assert "letters" not in page.words[0].kept()
 
 
 def test_an_opening_quotation_mark_goes_with_the_word_after_it() -> None:
