@@ -1195,7 +1195,7 @@ def memory_tools(store: Any, chat_id: str | None = None) -> list[Tool]:
         replaces = arguments.get("replaces")
         replaced = None if replaces is None else held(replaces, ("note",))
         note_id = store.add_memory(
-            f"{title}\n{content.strip('\r\n')}", chat_id, kind="note"
+            title + "\n" + content.strip("\r\n"), chat_id, kind="note"
         )
         if replaced:
             # the new note goes on with the tables of the one it replaces

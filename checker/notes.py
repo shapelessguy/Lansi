@@ -70,7 +70,8 @@ def run(path: Path, query: str, offset: int = 0) -> dict[str, Any]:
                     f"the statement ran longer than {QUERY_SECS:g} seconds"
                 ) from None
             raise NoteError(str(error)) from None
-        except (sqlite3.Error, ValueError) as error:
+        # sqlite3.Warning is what Python before 3.12 raises for more than one statement
+        except (sqlite3.Error, sqlite3.Warning, ValueError) as error:
             raise NoteError(str(error)) from None
     finally:
         base.close()
