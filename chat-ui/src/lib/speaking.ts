@@ -51,24 +51,40 @@ export const AHEAD = 2;
 /** How often the audio of a sentence is asked for again while it is still being made. */
 const TRIES = 6;
 
+/** The attribute each paragraph of a book that is laid out has, with its place among all of them. */
+export const BLOCK_ATTRIBUTE = "data-block";
+
+/** The paragraphs of a book laid out in `root`, in order, as only some parts of a book are laid out at once. */
+export function laidBlocks(root: Element): HTMLElement[] {
+    return [...root.querySelectorAll<HTMLElement>(`[${BLOCK_ATTRIBUTE}]`)];
+}
+
+/** The place of a paragraph of a book that is laid out, among all of them. */
+export function placeOf(block: Element): number {
+    return Number(block.getAttribute(BLOCK_ATTRIBUTE));
+}
+
+/** The paragraph of a book, by its place among all of them, in `root`, if it is laid out. */
+export function bookBlock(root: Element, place: number): HTMLElement | undefined {
+    return root.querySelector<HTMLElement>(`[${BLOCK_ATTRIBUTE}="${place}"]`) ?? undefined;
+}
+
 /** The paragraph of a book that a place in it is in, by its place among the paragraphs, and how far into its text. */
 function placeIn(root: Element, node: Node, offset: number): { block: number; at: number } | null {
-    // a place between two paragraphs is the start of the second
-    if (node === root) {
-        return offset < root.children.length ? { block: offset, at: 0 } : null;
-    }
-    let block: Node = node;
-    while (block.parentNode && block.parentNode !== root) {
-        block = block.parentNode;
-    }
-    const index = Array.prototype.indexOf.call(root.children, block);
-    if (index < 0) {
-        return null;
+    const element = node instanceof Element ? node : node.parentElement;
+    const block = element?.closest(`[${BLOCK_ATTRIBUTE}]`);
+    if (!block || !root.contains(block)) {
+        // a place between two paragraphs is the start of the second
+        const after = node instanceof Element && root.contains(node) ? node.childNodes[offset] : undefined;
+        const next = after instanceof Element
+            ? after.matches(`[${BLOCK_ATTRIBUTE}]`) ? after : after.querySelector(`[${BLOCK_ATTRIBUTE}]`)
+            : null;
+        return next ? { block: placeOf(next), at: 0 } : null;
     }
     const before = document.createRange();
     before.selectNodeContents(block);
     before.setEnd(node, offset);
-    return { block: index, at: before.toString().length };
+    return { block: placeOf(block), at: before.toString().length };
 }
 
 /** What `range` selects of the book whose paragraphs are the children of `root`. */
@@ -79,7 +95,8 @@ export function bookSelection(range: Range, root: Element): BookSelection | null
         return null;
     }
     // a selection that runs out of the book ends with its last paragraph
-    const end = to ?? { block: root.children.length - 1, at: Number.MAX_SAFE_INTEGER };
+    const blocks = laidBlocks(root);
+    const end = to ?? { block: placeOf(blocks[blocks.length - 1]), at: Number.MAX_SAFE_INTEGER };
     return { startBlock: from.block, start: from.at, endBlock: end.block, end: end.at };
 }
 

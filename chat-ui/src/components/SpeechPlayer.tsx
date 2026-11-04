@@ -8,6 +8,7 @@ import { ask } from "../lib/dialogs";
 import { t } from "../lib/i18n";
 import {
     audioPlayer,
+    bookBlock,
     fetchSentenceAudio,
     listenAt,
     loadSpeed,
@@ -17,6 +18,7 @@ import {
     saveSpeed,
     type SpeechSource,
     SPEEDS,
+    type SpokenSentence,
     type Spot,
     spotBeside,
     startReading,
@@ -42,6 +44,8 @@ class Declined extends Error {}
 /** What the sentence that is listened to is marked with in the book, and what tells the reader to show it. */
 const HIGHLIGHT = "spoken";
 export const SPOKEN_EVENT = "lansi:spoken";
+/** What the reader of books tells as it lays out other parts of a book. */
+export const LAID_OUT_EVENT = "lansi:book-laid-out";
 
 /**
  * Plays the sentences of a book that were selected, or those of a message
@@ -209,20 +213,35 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
         }
     }, [base, reading, readingId, index]);
 
-    // the sentence that is heard is marked in the book, and the reader told to show it
+    // The sentence that is heard is marked in the book, and the reader told
+    // to show it: where it is, if its part of the book is laid out, and
+    // otherwise its paragraph, which the reader lays out, to be marked then.
+    const [laidOut, setLaidOut] = useState(0);
+    useEffect(() => {
+        const count = () => setLaidOut((before) => before + 1);
+        window.addEventListener(LAID_OUT_EVENT, count);
+        return () => window.removeEventListener(LAID_OUT_EVENT, count);
+    }, []);
+    // the sentence the reader was last told to show, once it was found in the book
+    const toldShown = useRef<SpokenSentence | null>(null);
     useEffect(() => {
         if (!sentence || bookId === null) {
             return;
         }
-        const block = document.querySelector(".reader-columns")?.children[sentence.block];
+        const columns = document.querySelector(".reader-columns");
+        const block = columns ? bookBlock(columns, sentence.block) : undefined;
         const range = block ? rangeOf(block, sentence) : null;
         if (range) {
             CSS.highlights?.set(HIGHLIGHT, new Highlight(range));
-            window.dispatchEvent(new CustomEvent(SPOKEN_EVENT, { detail: { bookId, range } }));
         } else {
             CSS.highlights?.delete(HIGHLIGHT);
         }
-    }, [bookId, sentence]);
+        // the book laid out anew leaves the page where it is, if the sentence was shown already
+        if (toldShown.current !== sentence) {
+            toldShown.current = range ? sentence : null;
+            window.dispatchEvent(new CustomEvent(SPOKEN_EVENT, { detail: { bookId, range, block: sentence.block } }));
+        }
+    }, [bookId, sentence, laidOut]);
 
     const last = index >= sentences.length - 1;
     const clipUrl = clip && "url" in clip ? clip.url : null;

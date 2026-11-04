@@ -2,8 +2,10 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { type Message, t } from "./i18n";
+import type { Stroke } from "./ink";
 import type { ModelChoice } from "./models";
 import { checkerFetch } from "./session";
+import type { BookSelection } from "./speaking";
 import type { BackgroundTask } from "./tasks";
 
 /** A book as it is listed, without what it says. */
@@ -309,6 +311,118 @@ export function sectionsAt(sections: BookSection[] | undefined, place: number): 
     return found ? [found, ...sectionsAt(found.sections, place)] : [];
 }
 
+/** A stretch of the blocks of a book, from the first to the one after the last, laid out on its own. */
+export interface BookWindow {
+    start: number;
+    end: number;
+}
+
+/** How large the parts of a book are laid out, in characters, a picture counting as a page of text. */
+export const WINDOWS = {
+    /** A section no longer than this is laid out whole; about forty pages of a phone. */
+    most: 60_000,
+    /** A part shorter than this, such as a title page, is laid out with the one after it, or the last with the one before. */
+    least: 3_000,
+    /** A section with none under it is cut, between its paragraphs, only if it is longer than this. */
+    cut: 180_000,
+    picture: 1_500,
+};
+
+/**
+ * The parts a book is laid out in, in order, which hold every block once.
+ * They follow its sections, by their sizes alone: a section that is not
+ * too long is a part of its own, and one that is is made of the parts of
+ * those under it, what comes before the first of them going with it, and
+ * so on down. A section with none under it is kept whole unless it is far
+ * too long, and is then cut between its paragraphs into parts alike in
+ * size. A section too short to stand alone goes with the one after it
+ * under the same section, or the last with the one before it.
+ */
+export function bookWindows(
+    blocks: BookBlock[],
+    sections: BookSection[],
+    sizes: typeof WINDOWS = WINDOWS,
+): BookWindow[] {
+    // the characters before each block, to tell how large a stretch is at once
+    const before = [0];
+    for (const block of blocks) {
+        before.push(before[before.length - 1] + (block.image ? sizes.picture : block.text.length));
+    }
+    const sizeOf = (start: number, end: number) => before[end] - before[start];
+
+    function split(start: number, end: number, under: BookSection[]): BookWindow[] {
+        const inside = under
+            .filter((each) => start <= each.start && each.end <= end && each.start < each.end)
+            .sort((a, b) => a.start - b.start);
+        if (sizeOf(start, end) <= sizes.most || inside.length === 0) {
+            return cut(start, end);
+        }
+        // each section under it takes what comes before it, the last what comes after it too
+        const groups = inside.map((each, at) =>
+            split(
+                at === 0 ? start : each.start,
+                at === inside.length - 1 ? end : inside[at + 1].start,
+                each.sections ?? [],
+            )
+        );
+        // One too short to stand alone goes with the one after it, the last
+        // with the one before: never with a part of another section than this.
+        for (let at = 0; at < groups.length && groups.length > 1; at++) {
+            const [short, ...more] = groups[at];
+            if (!short || more.length > 0 || sizeOf(short.start, short.end) >= sizes.least) {
+                continue;
+            }
+            const next = groups.slice(at + 1).find((group) => group.length > 0);
+            if (next) {
+                next[0] = { start: short.start, end: next[0].end };
+                groups[at] = [];
+            } else {
+                const before = groups.slice(0, at).reverse().find((group) => group.length > 0);
+                if (before) {
+                    before[before.length - 1] = { start: before[before.length - 1].start, end: short.end };
+                    groups[at] = [];
+                }
+            }
+        }
+        return groups.flat();
+    }
+
+    function cut(start: number, end: number): BookWindow[] {
+        const size = sizeOf(start, end);
+        if (size <= sizes.cut) {
+            return [{ start, end }];
+        }
+        const count = Math.ceil(size / sizes.most);
+        const parts: BookWindow[] = [];
+        let from = start;
+        for (let at = start + 1; at < end && parts.length < count - 1; at++) {
+            if (sizeOf(start, at) >= (size * (parts.length + 1)) / count) {
+                parts.push({ start: from, end: at });
+                from = at;
+            }
+        }
+        parts.push({ start: from, end });
+        return parts;
+    }
+
+    return blocks.length === 0 ? [] : split(0, blocks.length, sections);
+}
+
+/** The part of a book a block is laid out in, by its place among the parts, of parts in order. */
+export function windowAt(windows: BookWindow[], place: number): number {
+    let low = 0;
+    let high = windows.length - 1;
+    while (low < high) {
+        const middle = (low + high + 1) >> 1;
+        if (windows[middle].start <= place) {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    return Math.max(0, low);
+}
+
 const BASE = "/books";
 
 async function send(path: string, init?: RequestInit): Promise<Response> {
@@ -343,6 +457,57 @@ export async function fetchBooks(): Promise<ListedBook[]> {
 
 export async function fetchBook(id: string): Promise<Book> {
     return (await send(`/${id}`)).json();
+}
+
+/** How a note on a book is written: typed, or by hand. */
+export type NoteKind = "typed" | "handwritten";
+
+/** What a note on a book says, typed or in ink. */
+export interface NoteBody {
+    kind: NoteKind;
+    text: string;
+    ink: Stroke[];
+}
+
+/**
+ * A note written on a stretch of the text of a book, or of one version of
+ * it, from a character of one paragraph to one of the same paragraph or a
+ * later one, with the text that is there. The book itself is not changed.
+ */
+export interface BookNote extends BookSelection, NoteBody {
+    id: string;
+    quote: string;
+    /** In seconds since the epoch. */
+    createdAt: number;
+    updatedAt: number;
+}
+
+export async function fetchBookNotes(bookId: string): Promise<BookNote[]> {
+    const { notes }: { notes: BookNote[] } = await (await send(`/${bookId}/notes`)).json();
+    return notes;
+}
+
+/** Has the server keep a note on `selection`, which is `quote`. Returns the note as it is kept. */
+export async function addBookNote(
+    bookId: string,
+    selection: BookSelection,
+    quote: string,
+    body: NoteBody,
+): Promise<BookNote> {
+    const added = await send(`/${bookId}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ ...selection, quote, ...body }),
+    });
+    return added.json();
+}
+
+export async function changeBookNote(bookId: string, noteId: string, body: NoteBody): Promise<BookNote> {
+    const changed = await send(`/${bookId}/notes/${noteId}`, { method: "PUT", body: JSON.stringify(body) });
+    return changed.json();
+}
+
+export async function deleteBookNote(bookId: string, noteId: string): Promise<void> {
+    await send(`/${bookId}/notes/${noteId}`, { method: "DELETE" });
 }
 
 /** Has the server read an EPUB file and keep its text. Returns the book as it is listed. */

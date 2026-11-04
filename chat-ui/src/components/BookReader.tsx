@@ -1,18 +1,25 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
+    addBookNote,
     type Book,
     type BookBlock,
+    type BookNote,
+    bookWindows,
+    changeBookNote,
     changeReading,
+    deleteBookNote,
     fetchBook,
+    fetchBookNotes,
     fetchPicture,
     FONTS,
     loadReading,
     MAX_FONT_SIZE,
     MIN_FONT_SIZE,
+    type NoteBody,
     pageCount,
     pageOf,
     PAPERS,
@@ -22,13 +29,15 @@ import {
     shownSize,
     SPACINGS,
     swipeTurn,
+    windowAt,
 } from "../lib/books";
 import { t } from "../lib/i18n";
 import type { Where } from "../lib/logs";
-import type { BookSelection } from "../lib/speaking";
+import { BLOCK_ATTRIBUTE, bookBlock, type BookSelection, laidBlocks, placeOf } from "../lib/speaking";
 import { BookContents } from "./BookContents";
+import { BookNoteBox } from "./BookNoteBox";
 import { Icon } from "./Icon";
-import { SPOKEN_EVENT } from "./SpeechPlayer";
+import { LAID_OUT_EVENT, SPOKEN_EVENT } from "./SpeechPlayer";
 
 interface Props {
     /** The book to read, by its id, if one was chosen. */
@@ -45,7 +54,25 @@ interface Props {
      * its width, as when one on the left gives way to one on the right.
      */
     besides?: string;
+    /** The selection a note was last asked to be written on, which the box to write it opens for as it changes. */
+    noteAsked?: NoteAsked | null;
 }
+
+/** A selection of the book in the reader that a note is to be written on, and the text it is. */
+export interface NoteAsked {
+    selection: BookSelection;
+    quote: string;
+    /** Changes each time a note is asked for. */
+    nonce: number;
+}
+
+/** The note open in its box: one kept, or one to write on a selection. */
+type NoteOpen = { note: BookNote } | { note: null; selection: BookSelection; quote: string };
+
+/** What the stretches of text with a note on them are highlighted as (styles.css). */
+const NOTE_HIGHLIGHT = "book-note";
+/** How far, in pixels, a click may have been dragged and still open the note it is on. */
+const CLICK_SLOP = 8;
 
 type BookState =
     | { status: "loading" }
@@ -54,6 +81,8 @@ type BookState =
 
 /** The space between one page and the next, in pixels. It is not seen. */
 const PAGE_GAP = 48;
+/** How long a page turned to slides, in milliseconds (the transition of the columns). */
+const SLIDE_MS = 250;
 /** How long the wheel is not listened to after it has turned a page, in milliseconds. */
 const WHEEL_PAUSE_MS = 250;
 /** How many pages each key turns. */
@@ -68,7 +97,7 @@ const KEYS: Record<string, number> = {
 };
 
 /** Shows a book a page at a time: its text, each part in its size, and nothing else. */
-export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
+export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }: Props) {
     const [state, setState] = useState<BookState>({ status: "loading" });
     const [attempt, setAttempt] = useState(0);
     // how the text looks: its size, its font, its colours and how far apart its lines are
@@ -126,7 +155,45 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
     // how large the pages are, as text, to tell when it changes
     const [viewSize, setViewSize] = useState("");
     const book = state.status === "ready" && state.book.id === bookId ? state.book : null;
+    // The book is laid out in parts (bookWindows): the one that is read, and
+    // the one before it and the one after it, so that the pages turn on into
+    // them as into any other. Each is laid out in columns of its own, beside
+    // the one before it, so that it starts on a page of its own and its pages
+    // stay as they are whichever parts are laid out beside it.
+    const windows = useMemo(() => book ? bookWindows(book.blocks, book.sections) : [], [book]);
+    const [chosenWindow, setChosenWindow] = useState<{ bookId: string; at: number } | null>(null);
+    // the part where the book was left, as it was opened
+    const opened = useMemo(
+        () => windowAt(windows, book ? places.current[book.id] ?? 0 : 0),
+        [windows, book],
+    );
+    const at = book && chosenWindow?.bookId === book.id ? chosenWindow.at : opened;
+    const mounted = useMemo(() => {
+        const from = Math.max(0, at - 1);
+        const to = Math.min(windows.length - 1, at + 1);
+        return {
+            start: windows[from]?.start ?? 0,
+            end: windows[to]?.end ?? 0,
+            windows: windows.slice(from, to + 1),
+        };
+    }, [windows, at]);
+    // The page each part laid out starts on, from 0, by its first block, as
+    // the parts are counted; kept for what reads it at once as well.
+    const [firstPages, setFirstPages] = useState<Record<number, number>>({});
+    const counted = useRef<Record<number, number>>({});
+    // whether the page last turned to slides there, as one turned by a hand does
+    const [slides, setSlides] = useState(false);
+    // counted up as the text laid out changes its size, as when a font comes, to count the pages again
+    const [relaid, setRelaid] = useState(0);
     const title = names?.title ?? book?.title ?? "";
+    // the notes written on the book, by the id of the book they are of
+    const [notes, setNotes] = useState<{ bookId: string; notes: BookNote[] } | null>(null);
+    const bookNotes = useMemo(() => book && notes?.bookId === book.id ? notes.notes : [], [book, notes]);
+    const [noteOpen, setNoteOpen] = useState<NoteOpen | null>(null);
+    // the stretch of the page each note is on, as it is laid out
+    const noteRanges = useRef<{ note: BookNote; range: Range }[]>([]);
+    // where the last click on the text was pressed, to tell it from a drag
+    const pressed = useRef({ x: 0, y: 0 });
 
     useEffect(() => {
         setTrail([]);
@@ -139,10 +206,90 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
             (fetched) => current && setState({ status: "ready", book: fetched }),
             (error: Error) => current && setState({ status: "error", message: error.message }),
         );
+        fetchBookNotes(bookId).then(
+            (fetched) => current && setNotes({ bookId, notes: fetched }),
+            (error: Error) => console.warn("the notes on the book could not be had:", error),
+        );
         return () => {
             current = false;
         };
     }, [bookId, attempt]);
+
+    // the box to write a note in opens for each selection a note is asked for on
+    const askedSeen = useRef(noteAsked?.nonce);
+    useEffect(() => {
+        if (!noteAsked || noteAsked.nonce === askedSeen.current) {
+            return;
+        }
+        askedSeen.current = noteAsked.nonce;
+        if (book) {
+            window.getSelection()?.removeAllRanges();
+            setNoteOpen({ note: null, selection: noteAsked.selection, quote: noteAsked.quote });
+        }
+    }, [noteAsked, book]);
+
+    // The stretches of text with a note on them are highlighted, which
+    // leaves the page as it is: the book is laid out once, so the stretches
+    // are found again only as the notes change.
+    useEffect(() => {
+        const laid = columns.current;
+        if (!book || !laid || typeof Highlight === "undefined") {
+            return;
+        }
+        noteRanges.current = bookNotes.flatMap((note) => {
+            const range = noteRange(laid, note);
+            return range ? [{ note, range }] : [];
+        });
+        CSS.highlights?.set(NOTE_HIGHLIGHT, new Highlight(...noteRanges.current.map(({ range }) => range)));
+        return () => {
+            CSS.highlights?.delete(NOTE_HIGHLIGHT);
+            noteRanges.current = [];
+        };
+    }, [book, bookNotes, mounted]);
+
+    /** The note on the text at a point of the window, if one is there. */
+    function noteAt(x: number, y: number): BookNote | null {
+        const found = noteRanges.current.find(({ range }) =>
+            [...range.getClientRects()].some((rect) =>
+                rect.left <= x && x <= rect.right && rect.top <= y && y <= rect.bottom
+            )
+        );
+        return found?.note ?? null;
+    }
+
+    // a note opens as the text it is on is clicked or tapped, as a link does
+    function onTextClick(event: React.MouseEvent) {
+        const dragged = Math.hypot(event.clientX - pressed.current.x, event.clientY - pressed.current.y);
+        const selecting = !(window.getSelection()?.isCollapsed ?? true);
+        if (dragged > CLICK_SLOP || selecting || (event.target as Element).closest("a")) {
+            return;
+        }
+        const note = noteAt(event.clientX, event.clientY);
+        if (note) {
+            setNoteOpen({ note });
+        }
+    }
+
+    async function saveNote(open: NoteOpen, body: NoteBody) {
+        if (!book) {
+            return;
+        }
+        const kept = open.note
+            ? await changeBookNote(book.id, open.note.id, body)
+            : await addBookNote(book.id, open.selection, open.quote, body);
+        const others = bookNotes.filter((each) => each.id !== kept.id);
+        setNotes({ bookId: book.id, notes: [...others, kept].sort(byPlace) });
+        setNoteOpen(null);
+    }
+
+    async function deleteNote(note: BookNote) {
+        if (!book) {
+            return;
+        }
+        await deleteBookNote(book.id, note.id);
+        setNotes({ bookId: book.id, notes: bookNotes.filter((each) => each.id !== note.id) });
+        setNoteOpen(null);
+    }
 
     useEffect(() => {
         const shown = view.current;
@@ -175,11 +322,64 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
         return () => observer.disconnect();
     }, [book, besides, active]);
 
-    /** The page, from 0, that a paragraph starts on, by its place among the paragraphs. */
-    const pageWith = useCallback((place: number): number => {
-        const block = columns.current?.children[place] as HTMLElement | undefined;
-        return block && view.current ? pageOf(block.offsetLeft, view.current.clientWidth, PAGE_GAP) : 0;
+    /**
+     * The page, from 0, among those laid out, of what is `x` from the left
+     * of the window in the part of the book `inside` is in, which is where
+     * the part starts and the page in it.
+     */
+    const pageAt = useCallback((x: number, inside: Element): number => {
+        const part = inside.closest<HTMLElement>(".reader-window");
+        const width = view.current?.clientWidth ?? 0;
+        if (!part || width === 0) {
+            return 0;
+        }
+        const first = counted.current[Number(part.dataset.start)] ?? 0;
+        return first + pageOf(x - part.getBoundingClientRect().left, width, PAGE_GAP);
     }, []);
+
+    /** The page, from 0, that a paragraph starts on, if it is laid out. */
+    const pageOfBlock = useCallback((block: HTMLElement): number => {
+        const part = block.closest<HTMLElement>(".reader-window");
+        const width = view.current?.clientWidth ?? 0;
+        if (!part || width === 0) {
+            return 0;
+        }
+        return (counted.current[Number(part.dataset.start)] ?? 0) + pageOf(block.offsetLeft, width, PAGE_GAP);
+    }, []);
+
+    /** The page, from 0, that a paragraph starts on, by its place among the paragraphs, if it is laid out. */
+    const pageWith = useCallback((place: number): number => {
+        const block = columns.current && bookBlock(columns.current, place);
+        return block ? pageOfBlock(block) : 0;
+    }, [pageOfBlock]);
+
+    // the pages are counted again as the text laid out changes its size, such as when its font has come
+    useEffect(() => {
+        const laid = columns.current;
+        if (!laid) {
+            return;
+        }
+        let frame = 0;
+        let seen = false;
+        const again = () => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => setRelaid((before) => before + 1));
+        };
+        const observer = new ResizeObserver(() => {
+            // it is told of each paragraph as it starts to watch it, which is the size counted already
+            if (seen) {
+                again();
+            }
+            seen = true;
+        });
+        laidBlocks(laid).forEach((block) => observer.observe(block));
+        document.fonts?.addEventListener("loadingdone", again);
+        return () => {
+            observer.disconnect();
+            document.fonts?.removeEventListener("loadingdone", again);
+            cancelAnimationFrame(frame);
+        };
+    }, [book, mounted, active]);
 
     // The book is opened where it was left. The pages are counted again, and
     // the place found among them, whenever the text is laid out anew: when
@@ -191,16 +391,49 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
         if (!book || !shown || !laid || !active || shown.clientWidth === 0) {
             return;
         }
-        const count = pageCount(laid.scrollWidth, shown.clientWidth, PAGE_GAP);
-        setPages(count);
-        const block = laid.children[places.current[book.id] ?? 0] as HTMLElement | undefined;
+        // each part has as many pages as its columns, and starts after the one before it
+        const firsts: Record<number, number> = {};
+        let count = 0;
+        for (const part of laid.children as HTMLCollectionOf<HTMLElement>) {
+            firsts[Number(part.dataset.start)] = count;
+            count += pageCount(part.scrollWidth, shown.clientWidth, PAGE_GAP);
+        }
+        counted.current = firsts;
+        setFirstPages(firsts);
+        setPages(Math.max(1, count));
+        const block = bookBlock(laid, places.current[book.id] ?? 0);
         const left = block && leftOf(block, offsets.current[book.id] ?? 0);
-        const wanted = left === undefined || left === null
-            ? pageWith(places.current[book.id] ?? 0)
-            : pageOf(left - laid.getBoundingClientRect().left, shown.clientWidth, PAGE_GAP);
+        const wanted = !block ? 0 : left === null || left === undefined ? pageOfBlock(block) : pageAt(left, block);
         // the place is not kept again, so that it stays what was read however often the size changes
-        setPage(Math.min(count - 1, wanted));
-    }, [book, active, look.fontSize, look.font, look.spacing, viewSize, pageWith]);
+        setPage(Math.min(Math.max(1, count) - 1, wanted));
+        // what is laid out anew is shown where it is, not slid to
+        setSlides(false);
+        window.dispatchEvent(new CustomEvent(LAID_OUT_EVENT));
+    }, [book, active, look.fontSize, look.font, look.spacing, viewSize, pageAt, pageOfBlock, mounted, relaid]);
+
+    // The part that is read is laid out with those beside it once the page
+    // turned into it has slid there, as they are laid out anew.
+    const settling = useRef<number | undefined>(undefined);
+    useEffect(() => () => window.clearTimeout(settling.current), []);
+    const settle = useCallback((place: number, now = false) => {
+        if (!book) {
+            return;
+        }
+        window.clearTimeout(settling.current);
+        const wanted = windowAt(windows, place);
+        if (wanted === at) {
+            return;
+        }
+        const choose = () => setChosenWindow({ bookId: book.id, at: wanted });
+        if (now) {
+            choose();
+        } else {
+            settling.current = window.setTimeout(choose, SLIDE_MS + 50);
+        }
+    }, [book, windows, at]);
+
+    const latestPage = useRef(page);
+    latestPage.current = page;
 
     const keepPlace = useCallback((id: string, place: number, offset = 0) => {
         const kept = changeReading((before) => ({
@@ -218,42 +451,57 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
         if (!book || !shown || !laid) {
             return;
         }
-        const count = pageCount(laid.scrollWidth, shown.clientWidth, PAGE_GAP);
-        const next = Math.min(count - 1, Math.max(0, wanted));
+        const next = Math.min(pages - 1, Math.max(0, wanted));
         setPage(next);
+        // the next page or the one before slides there, one further off is shown at once
+        setSlides(Math.abs(next - latestPage.current) <= 1);
         // The place is the first character on the page: in the paragraph the
         // page is in the middle of, or that ends on it, if one does, and
         // otherwise at the start of the first paragraph that starts on it.
+        const blocks = laidBlocks(laid);
         let low = 0;
-        let high = laid.children.length - 1;
+        let high = blocks.length - 1;
         while (low < high) {
             const middle = (low + high) >> 1;
-            if (pageWith(middle) >= next) {
+            if (pageOfBlock(blocks[middle]) >= next) {
                 high = middle;
             } else {
                 low = middle + 1;
             }
         }
-        const into = pageWith(low) < next ? low : low - 1;
-        const block = laid.children[into] as HTMLElement | undefined;
+        const into = blocks[low] && pageOfBlock(blocks[low]) < next ? low : low - 1;
+        const block = blocks[into];
         if (block) {
-            const start = laid.getBoundingClientRect().left;
-            const offset = firstWhere(block, (left) => pageOf(left - start, shown.clientWidth, PAGE_GAP) >= next);
+            const offset = firstWhere(block, (left) => pageAt(left, block) >= next);
             if (offset < (block.textContent?.length ?? 0)) {
-                keepPlace(book.id, into, offset);
+                keepPlace(book.id, placeOf(block), offset);
+                settle(placeOf(block));
                 return;
             }
         }
-        keepPlace(book.id, low);
-    }, [book, pageWith, keepPlace]);
-
-    /** Shows the page a paragraph is on, and has the book left at that paragraph. */
-    const goTo = useCallback((place: number) => {
-        if (book) {
-            setPage(pageWith(place));
-            keepPlace(book.id, place);
+        if (blocks[low]) {
+            keepPlace(book.id, placeOf(blocks[low]));
+            settle(placeOf(blocks[low]));
         }
-    }, [book, pageWith, keepPlace]);
+    }, [book, pages, pageAt, pageOfBlock, keepPlace, settle]);
+
+    /**
+     * Shows the page a paragraph is on, and has the book left at that
+     * paragraph: at once if it is laid out, and otherwise once its part is.
+     */
+    const goTo = useCallback((place: number) => {
+        if (!book) {
+            return;
+        }
+        keepPlace(book.id, place);
+        setSlides(false);
+        if (mounted.start <= place && place < mounted.end) {
+            setPage(pageWith(place));
+            settle(place);
+        } else {
+            settle(place, true);
+        }
+    }, [book, pageWith, keepPlace, mounted, settle]);
 
     // a link in the book leads to another paragraph of it, and back from there
     const follow = useCallback((to: number) => {
@@ -272,8 +520,22 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
     }
 
     // the keys turn the pages while the reader is on show
-    const latestPage = useRef(page);
-    latestPage.current = page;
+    // The section the page shown is in, among those laid out, as the first
+    // of its pages and how many it has: the page is told by its place in it.
+    const starts = mounted.windows.map((each) => firstPages[each.start] ?? 0);
+    let shownWindow = 0;
+    while (shownWindow + 1 < starts.length && starts[shownWindow + 1] <= page) {
+        shownWindow++;
+    }
+    const section = {
+        first: starts[shownWindow] ?? 0,
+        count: Math.max(1, (starts[shownWindow + 1] ?? pages) - (starts[shownWindow] ?? 0)),
+    };
+    const latestSection = useRef(section);
+    latestSection.current = section;
+    // the first page of the book and the last, which nothing is turned past
+    const atStart = page === 0 && mounted.start === 0;
+    const atEnd = page >= pages - 1 && mounted.end >= (book?.blocks.length ?? 0);
     useEffect(() => {
         if (!active || !book) {
             return;
@@ -288,7 +550,12 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
             }
             if (event.key in KEYS) {
                 event.preventDefault();
-                turnTo(latestPage.current + KEYS[event.key]);
+                // Home and End go to the first and the last page of the section
+                const { first, count } = latestSection.current;
+                const step = KEYS[event.key];
+                turnTo(
+                    step === -Infinity ? first : step === Infinity ? first + count - 1 : latestPage.current + step,
+                );
             }
         }
         window.addEventListener("keydown", onKeyDown);
@@ -301,21 +568,30 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
             return;
         }
         function onSpoken(event: Event) {
-            const { bookId: spoken, range } = (event as CustomEvent<{ bookId: string; range: Range }>).detail;
+            const { bookId: spoken, range, block } = (
+                event as CustomEvent<{ bookId: string; range: Range | null; block: number }>
+            ).detail;
             const shown = view.current;
             const laid = columns.current;
             if (spoken !== book?.id || !shown || !laid || shown.clientWidth === 0) {
                 return;
             }
-            const from = range.getBoundingClientRect().left - laid.getBoundingClientRect().left;
-            const wanted = pageOf(from, shown.clientWidth, PAGE_GAP);
+            // a sentence of a part that is not laid out is shown once its part is
+            if (!range) {
+                goTo(block);
+                return;
+            }
+            const inside = range.startContainer instanceof Element
+                ? range.startContainer
+                : range.startContainer.parentElement;
+            const wanted = inside ? pageAt(range.getBoundingClientRect().left, inside) : latestPage.current;
             if (wanted !== latestPage.current) {
                 turnTo(wanted);
             }
         }
         window.addEventListener(SPOKEN_EVENT, onSpoken);
         return () => window.removeEventListener(SPOKEN_EVENT, onSpoken);
-    }, [book, turnTo]);
+    }, [book, turnTo, goTo, pageAt]);
 
     // a turn of the wheel arrives as many small ones, which are to turn one page
     const wheelAt = useRef(0);
@@ -335,6 +611,7 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
     // how far, in pixels, the page is drawn by the finger, while it is
     const [drawn, setDrawn] = useState(0);
     function onPointerDown(event: React.PointerEvent) {
+        pressed.current = { x: event.clientX, y: event.clientY };
         swipe.current = event.pointerType === "touch"
             ? { x: event.clientX, y: event.clientY, at: event.timeStamp }
             : null;
@@ -349,7 +626,7 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
             return;
         }
         // past the first page or the last the page gives only a little
-        const end = (page === 0 && across > 0) || (page === pages - 1 && across < 0);
+        const end = (atStart && across > 0) || (atEnd && across < 0);
         setDrawn(end ? across / 4 : across);
     }
     function letGo() {
@@ -372,13 +649,6 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
             turnTo(page + turned);
         }
     }
-    // A page turned to the next or the one before slides there, as one let go
-    // by the finger does; one further off is shown at once.
-    const shownPage = useRef(page);
-    const slides = drawn === 0 && Math.abs(page - shownPage.current) <= 1;
-    useEffect(() => {
-        shownPage.current = page;
-    }, [page]);
 
     function changeLook(change: Partial<Reading>) {
         setLook(changeReading((kept) => ({ ...kept, ...change })));
@@ -434,19 +704,23 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
                     {/* the buttons that belong together are kept together, as on the bar of the app */}
                     <div className="switch" role="group" aria-label={t("Pages")}>
                         <button
-                            className="icon-button"
+                            className="icon-button page-turn"
                             onClick={() => turnTo(page - 1)}
-                            disabled={!book || page === 0}
+                            disabled={!book || atStart}
                             title={t("Previous page")}
                             aria-label={t("Previous page")}
                         >
                             ‹
                         </button>
-                        {book && <PageField page={page} pages={pages} onTurn={turnTo} />}
+                        {book && (
+                            <span className="count page-field" title={t("Page")}>
+                                {page - section.first + 1}/{section.count}
+                            </span>
+                        )}
                         <button
-                            className="icon-button"
+                            className="icon-button page-turn"
                             onClick={() => turnTo(page + 1)}
-                            disabled={!book || page >= pages - 1}
+                            disabled={!book || atEnd}
                             title={t("Next page")}
                             aria-label={t("Next page")}
                         >
@@ -599,29 +873,110 @@ export function BookReader({ bookId, active, names, onPlay, besides }: Props) {
                             className="reader-columns"
                             data-selectable="book"
                             data-where={JSON.stringify(
-                                { kind: "book", id: book.id, title, page } satisfies Where,
+                                { kind: "book", id: book.id, title, page: page - section.first } satisfies Where,
                             )}
                             ref={columns}
+                            onClick={onTextClick}
+                            onMouseMove={(event) =>
+                                event.currentTarget.classList.toggle(
+                                    "on-note",
+                                    noteAt(event.clientX, event.clientY) !== null,
+                                )}
                             style={{
                                 // a picture is no higher than a page
                                 ["--page-height" as string]: `${Number(viewSize.split("x")[1]) || 0}px`,
                                 // the pages as high as they were counted, which the keyboard of a phone leaves as
                                 // they are, rather than as high as the view
                                 height: Number(viewSize.split("x")[1]) || undefined,
-                                columnGap: `${PAGE_GAP}px`,
                                 // a page further on is its own width and the gap to the left
                                 // and one drawn by a finger is moved with it
                                 transform: `translateX(calc(${-page} * (100% + ${PAGE_GAP}px) + ${drawn}px))`,
-                                transition: slides ? "transform 0.25s ease-out" : "none",
+                                transition: slides && drawn === 0 ? `transform ${SLIDE_MS}ms ease-out` : "none",
                             }}
                         >
-                            <Blocks bookId={book.id} blocks={book.blocks} onFollow={follow} />
+                            {mounted.windows.map((part) => (
+                                <div
+                                    key={part.start}
+                                    className="reader-window"
+                                    data-start={part.start}
+                                    style={{
+                                        // after the pages of the parts before it
+                                        left: `calc(${firstPages[part.start] ?? 0} * (100% + ${PAGE_GAP}px))`,
+                                        columnGap: `${PAGE_GAP}px`,
+                                    }}
+                                >
+                                    <Blocks
+                                        bookId={book.id}
+                                        blocks={book.blocks}
+                                        start={part.start}
+                                        end={part.end}
+                                        onFollow={follow}
+                                    />
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
             )}
+            {noteOpen && (
+                <BookNoteBox
+                    quote={noteOpen.note ? noteOpen.note.quote : noteOpen.quote}
+                    note={noteOpen.note}
+                    onSave={(body) => saveNote(noteOpen, body)}
+                    onDelete={() => (noteOpen.note ? deleteNote(noteOpen.note) : Promise.resolve())}
+                    onClose={() => setNoteOpen(null)}
+                />
+            )}
         </section>
     );
+}
+
+/** The notes on a book in the order of its text. */
+function byPlace(a: BookNote, b: BookNote): number {
+    return a.startBlock - b.startBlock || a.start - b.start || a.createdAt - b.createdAt;
+}
+
+/** Where a character of the text of `block` is, by its place in it, from 0, as a point of a range; its end if it is past it. */
+function pointIn(block: Element, offset: number): [Node, number] {
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    let left = offset;
+    let last: Text | null = null;
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+        if (left <= node.data.length) {
+            return [node, left];
+        }
+        left -= node.data.length;
+        last = node;
+    }
+    return last ? [last, last.data.length] : [block, block.childNodes.length];
+}
+
+/**
+ * The stretch of the page a note is on, among the paragraphs laid out in
+ * `laid`, as much of it as is laid out, if any is.
+ */
+function noteRange(laid: Element, note: BookNote): Range | null {
+    const blocks = laidBlocks(laid);
+    const first = blocks[0];
+    const last = blocks[blocks.length - 1];
+    if (!first || !last || note.endBlock < placeOf(first) || note.startBlock > placeOf(last)) {
+        return null;
+    }
+    const from = bookBlock(laid, note.startBlock);
+    const to = bookBlock(laid, note.endBlock);
+    // a note that starts before what is laid out, or ends after it, is cut where it is
+    const range = document.createRange();
+    if (from) {
+        range.setStart(...pointIn(from, note.start));
+    } else {
+        range.setStartBefore(first);
+    }
+    if (to) {
+        range.setEnd(...pointIn(to, note.end));
+    } else {
+        range.setEndAfter(last);
+    }
+    return range;
 }
 
 /** Where a character of the text of `block` is, by its place in it, from 0, if it is laid out. */
@@ -677,79 +1032,37 @@ function firstWhere(block: HTMLElement, reached: (left: number) => boolean): num
     return low;
 }
 
-interface PageFieldProps {
-    /** The page that is shown, from 0, and how many there are. */
-    page: number;
-    pages: number;
-    /** Told the page to turn to, from 0. */
-    onTurn: (page: number) => void;
-}
-
-/**
- * The page that is shown, as a number that can be written over to turn to
- * another: Enter or leaving it turns there, Escape leaves it as it was.
- */
-function PageField({ page, pages, onTurn }: PageFieldProps) {
-    // what is written in it while it is being written in
-    const [draft, setDraft] = useState<string | null>(null);
-
-    function turn() {
-        const wanted = Number.parseInt(draft ?? "", 10);
-        setDraft(null);
-        if (Number.isFinite(wanted)) {
-            onTurn(Math.min(pages, Math.max(1, wanted)) - 1);
-        }
-    }
-
-    return (
-        <span className="count page-field">
-            <input
-                type="text"
-                inputMode="numeric"
-                value={draft ?? String(page + 1)}
-                size={Math.max(2, String(pages).length)}
-                title={t("Page")}
-                aria-label={t("Page")}
-                onFocus={(event) => event.target.select()}
-                onChange={(event) => setDraft(event.target.value.replace(/\D/g, ""))}
-                onBlur={turn}
-                onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                        event.currentTarget.blur();
-                    } else if (event.key === "Escape") {
-                        setDraft(null);
-                        // the number that was there is put back before it is left
-                        requestAnimationFrame(() => (event.target as HTMLInputElement).blur());
-                    }
-                }}
-            />
-            {` / ${pages}`}
-        </span>
-    );
-}
-
 interface BlocksProps {
     /** The book the blocks are of, for their pictures. */
     bookId: string;
     blocks: BookBlock[];
+    /** The blocks laid out, from the first to the one after the last. */
+    start: number;
+    end: number;
     /** Told the paragraph a link in the book leads to, by its place among them, when it is followed. */
     onFollow: (to: number) => void;
 }
 
 /** The paragraphs of a book, which are many, and are not gone through again when a page is turned. */
-const Blocks = memo(function Blocks({ bookId, blocks, onFollow }: BlocksProps) {
+const Blocks = memo(function Blocks({ bookId, blocks, start, end, onFollow }: BlocksProps) {
     return (
         <>
-            {blocks.map((block, index) =>
-                block.image
+            {blocks.slice(start, end).map((block, at) => {
+                // each says its place in the book, as only some parts of it are laid out
+                const place = { [BLOCK_ATTRIBUTE]: start + at };
+                return block.image
                     ? (
-                        // a paragraph of its own, as each block is one child of the columns
-                        <p key={index} className="book-picture">
+                        // a paragraph of its own, as each block is one
+                        <p key={at} className="book-picture" {...place}>
                             <BookPicture bookId={bookId} block={block} />
                         </p>
                     )
                     : (
-                        <p key={index} style={block.size === 1 ? undefined : { fontSize: `${shownSize(block)}em` }}>
+                        <p
+                            key={at}
+                            {...place}
+                            style={block.size === 1 ? undefined : { fontSize: `${shownSize(block)}em` }}
+                        >
                             {block.links
                                 ? segments(block).map((segment, at) =>
                                     typeof segment.to === "number"
@@ -780,8 +1093,8 @@ const Blocks = memo(function Blocks({ bookId, blocks, onFollow }: BlocksProps) {
                                 )
                                 : block.text}
                         </p>
-                    )
-            )}
+                    );
+            })}
         </>
     );
 });
@@ -828,15 +1141,21 @@ function BookPicture({ bookId, block }: { bookId: string; block: BookBlock }) {
     return (
         <img
             ref={shown}
-            src={source ?? undefined}
+            // An empty picture until it comes, of the size it will be: one with
+            // nothing to show takes no room, and the pages would move as it came.
+            src={source ?? BLANK_PICTURE}
             alt={block.alt ?? ""}
             width={block.width}
             height={block.height}
+            style={block.width && block.height ? { aspectRatio: `${block.width} / ${block.height}` } : undefined}
             decoding="async"
             draggable={false}
         />
     );
 }
+
+/** A picture of a single pixel that cannot be seen. */
+const BLANK_PICTURE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 /** Whether what has the focus is typed in, which brings up the keyboard on a phone. */
 function typing(): boolean {

@@ -4,6 +4,7 @@
 import { expect, test } from "vitest";
 
 import {
+    bookWindows,
     keptStretches,
     MAX_FONT_SIZE,
     MIN_FONT_SIZE,
@@ -21,6 +22,7 @@ import {
     stretchTokens,
     suggestedStories,
     swipeTurn,
+    windowAt,
 } from "./books";
 
 test("the text of a block is cut where its links start and end", () => {
@@ -224,4 +226,127 @@ test("a slow swipe turns the page once it has drawn it a third of the way", () =
 test("a move of a finger that is short or up and down turns no page", () => {
     expect(swipeTurn(-30, 0, 200, 400)).toBe(0);
     expect(swipeTurn(-120, 90, 200, 400)).toBe(0);
+});
+
+/** Blocks of text, each as long as its number says. */
+function sized(...lengths: number[]) {
+    return lengths.map((length) => ({ text: "x".repeat(length), size: 1 }));
+}
+
+const SIZES = { most: 100, least: 10, cut: 300, picture: 20 };
+
+test("a book is laid out in parts by the sections at the top when each is not too long", () => {
+    const blocks = sized(5, 60, 30, 80, 90);
+    const sections = [
+        { title: "Title", start: 0, end: 1 },
+        { title: "1", start: 1, end: 3 },
+        { title: "2", start: 3, end: 4 },
+        { title: "3", start: 4, end: 5 },
+    ];
+
+    // the title page is too short to stand alone and goes with the first chapter
+    expect(bookWindows(blocks, sections, SIZES)).toEqual([
+        { start: 0, end: 3 },
+        { start: 3, end: 4 },
+        { start: 4, end: 5 },
+    ]);
+});
+
+test("a section that is too long is laid out in the parts of those under it, as deep as it takes", () => {
+    const blocks = sized(2, 2, 70, 70, 70, 70);
+    const sections = [{
+        title: "2",
+        start: 0,
+        end: 6,
+        sections: [{
+            title: "Present",
+            start: 1,
+            end: 6,
+            sections: [
+                { title: "2.1", start: 2, end: 4 },
+                { title: "2.2", start: 4, end: 6 },
+            ],
+        }],
+    }];
+
+    // the headings before the first section under them go with it
+    expect(bookWindows(blocks, sections, SIZES)).toEqual([
+        { start: 0, end: 4 },
+        { start: 4, end: 6 },
+    ]);
+});
+
+test("a section with none under it is kept whole when it is long but not far too long", () => {
+    const blocks = sized(90, 90, 90);
+
+    expect(bookWindows(blocks, [{ title: "1", start: 0, end: 3 }], SIZES)).toEqual([{ start: 0, end: 3 }]);
+});
+
+test("a book with no sections is cut between its paragraphs into parts alike in size when it is far too long", () => {
+    const blocks = sized(...Array<number>(10).fill(40));
+
+    expect(bookWindows(blocks, [], SIZES)).toEqual([
+        { start: 0, end: 3 },
+        { start: 3, end: 5 },
+        { start: 5, end: 8 },
+        { start: 8, end: 10 },
+    ]);
+});
+
+test("a short part at the end of a book is laid out with the one before it", () => {
+    const blocks = sized(80, 80, 3);
+    const sections = [
+        { title: "1", start: 0, end: 1 },
+        { title: "2", start: 1, end: 2 },
+        { title: "Colophon", start: 2, end: 3 },
+    ];
+
+    expect(bookWindows(blocks, sections, SIZES)).toEqual([{ start: 0, end: 1 }, { start: 1, end: 3 }]);
+});
+
+test("a short section at the end of a chapter stays with its chapter rather than going with the next", () => {
+    const blocks = sized(2, 70, 70, 5, 2, 70, 70);
+    const sections = [
+        {
+            title: "7",
+            start: 0,
+            end: 4,
+            sections: [
+                { title: "7.1", start: 1, end: 2 },
+                { title: "7.2", start: 2, end: 3 },
+                { title: "7.9", start: 3, end: 4 },
+            ],
+        },
+        {
+            title: "8",
+            start: 4,
+            end: 7,
+            sections: [{ title: "8.1", start: 5, end: 6 }, { title: "8.2", start: 6, end: 7 }],
+        },
+    ];
+
+    expect(bookWindows(blocks, sections, SIZES)).toEqual([
+        { start: 0, end: 2 },
+        { start: 2, end: 4 },
+        { start: 4, end: 6 },
+        { start: 6, end: 7 },
+    ]);
+});
+
+test("a picture counts as a page of text when a book is laid out in parts", () => {
+    const blocks = [...sized(70), { text: "", size: 1, image: "p1" }, ...sized(70)];
+    const sections = [{
+        title: "1",
+        start: 0,
+        end: 3,
+        sections: [{ title: "1.1", start: 0, end: 2 }, { title: "1.2", start: 2, end: 3 }],
+    }];
+
+    expect(bookWindows(blocks, sections, SIZES)).toEqual([{ start: 0, end: 2 }, { start: 2, end: 3 }]);
+});
+
+test("the part a block is laid out in is the last that starts at it or before it", () => {
+    const windows = [{ start: 0, end: 3 }, { start: 3, end: 7 }, { start: 7, end: 9 }];
+
+    expect([0, 2, 3, 6, 7, 8].map((place) => windowAt(windows, place))).toEqual([0, 0, 1, 1, 2, 2]);
 });
