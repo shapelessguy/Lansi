@@ -27,7 +27,14 @@ from models import Model
 from notes import run as run_note
 from profiling import Answer, Profile, Profiler, Questions, WordRating
 from sentences import Sentence
-from server import Account, Accounts, describe, in_background, make_server
+from server import (
+    Account,
+    Accounts,
+    describe,
+    in_background,
+    listed_session,
+    make_server,
+)
 from speaking import Speaker
 from spelling import Speller, SpellingIssue
 from storage import UserStore
@@ -773,6 +780,17 @@ def test_an_anki_account_is_linked_and_its_words_given_to_its_user() -> None:
     assert before == (200, {"linked": False, "last_sync": None, "error": None})
     assert linked == (200, {"linked": True, "last_sync": None, "error": None})
     assert words == (200, ANKI_WORDS)
+
+
+def test_the_anki_words_are_counted_without_being_sent() -> None:
+    account = Account(LiveChecker(Speller(language=None)), anki=FakeAnki())
+    login = {"username": "ada@example.com", "password": "right"}
+
+    with server_of(account) as url:
+        ask(f"{url}/anki/link", "POST", login)
+        counted = ask(f"{url}/anki/words/count", "GET")
+
+    assert counted == (200, {"count": len(ANKI_WORDS["rows"])})
 
 
 def test_a_wrong_anki_password_is_refused_with_the_reason() -> None:
@@ -1773,6 +1791,35 @@ def test_the_sessions_of_one_user_are_not_those_of_another(with_users: str) -> N
     assert status == 404
 
 
+def test_a_session_is_listed_without_what_its_exercises_were_told() -> None:
+    session = {
+        "id": "s1",
+        "words": {"mode": "only", "lemmas": ["Hund", "Katze"]},
+        "guidance": {"cloze": "Use the dative."},
+        "briefs": {"cloze": "A long brief."},
+        "exercises": {"cloze": 2},
+    }
+
+    listed = listed_session(session)
+
+    assert listed == {
+        "id": "s1",
+        "words": {"mode": "only", "count": 2},
+        "exercises": {"cloze": 2},
+    }
+    assert listed_session({**session, "words": None})["words"] is None
+
+
+def test_the_lessons_are_listed_without_their_pages_of_theory(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+
+    _, listed, _ = send(f"{with_users}/lessons?language=German", "GET", ada)
+
+    lessons = json.loads(listed)["lessons"]
+    assert lessons
+    assert all("more_info" not in lesson and lesson["title"] for lesson in lessons)
+
+
 def test_a_session_of_a_lesson_there_is_not_is_refused(with_users: str) -> None:
     ada = log_in(with_users, "ada", "a password")
     body = {"language": "German", "lesson": "nothing", "exercises": {"cloze": 1}}
@@ -1825,6 +1872,28 @@ def test_a_topic_is_made_with_an_icon_and_removed(with_users: str) -> None:
     assert json.loads(listed)["topics"][0]["icon"] is True
     assert (status, icon[:4], kind) == (200, b"\x89PNG", "image/png")
     assert json.loads(after) == {"topics": []}
+
+
+def test_the_icon_of_a_topic_is_kept_by_the_browser(with_users: str) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    body = {"title": "Beim Arzt", "image_model": "m/image"}
+    request = urllib.request.Request(
+        f"{with_users}/topics",
+        data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {ada}", "X-OpenRouter-Key": "sk-test"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request) as response:
+        topic_id = json.load(response)["topic"]["id"]
+
+    asked = urllib.request.Request(
+        f"{with_users}/topics/{topic_id}/icon",
+        headers={"Authorization": f"Bearer {ada}"},
+    )
+    with urllib.request.urlopen(asked) as response:
+        kept = response.headers["Cache-Control"]
+
+    assert kept.startswith("private, max-age=")
 
 
 def test_a_topic_is_changed_by_its_id(with_users: str) -> None:

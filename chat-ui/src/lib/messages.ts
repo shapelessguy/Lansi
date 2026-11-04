@@ -3922,6 +3922,34 @@ export const MESSAGES = {
         German: "Diese Seite entfernen",
         Italian: "Rimuovi questa pagina",
     },
+    "Note": {
+        German: "Notiz",
+        Italian: "Nota",
+    },
+    "Write a note on the selected text": {
+        German: "Eine Notiz zum ausgewählten Text schreiben",
+        Italian: "Scrivi una nota sul testo selezionato",
+    },
+    "How the note is written": {
+        German: "Wie die Notiz geschrieben wird",
+        Italian: "Come è scritta la nota",
+    },
+    "Typed": {
+        German: "Getippt",
+        Italian: "Digitata",
+    },
+    "Handwritten": {
+        German: "Handschriftlich",
+        Italian: "A mano",
+    },
+    "Write your note…": {
+        German: "Schreib deine Notiz…",
+        Italian: "Scrivi la tua nota…",
+    },
+    "Remove this note?": {
+        German: "Diese Notiz entfernen?",
+        Italian: "Rimuovere questa nota?",
+    },
 } as const satisfies Record<string, Translations>;
 
 /** A text the interface shows, by what it says in English. */

@@ -1,7 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { t } from "../lib/i18n";
 import { iconOf, matchesTopic, type Topic } from "../lib/topics";
@@ -22,24 +22,48 @@ interface Props {
     onRemakeIcon: (id: string) => void;
 }
 
-/** The icon of a topic, once it has been made and fetched, or its first letter until then. */
+/**
+ * The icon of a topic, once it has been made and fetched, or its first
+ * letter until then. It is fetched once it comes into view, as there may be
+ * many topics, most of them scrolled out of it or in a pane that is hidden.
+ */
 function TopicIcon({ topic }: { topic: Topic }) {
     const [source, setSource] = useState<string | null>(null);
+    const [seen, setSeen] = useState(false);
+    const letter = useRef<HTMLSpanElement>(null);
+
+    useEffect(() => {
+        const shown = letter.current;
+        if (seen || !shown) {
+            return;
+        }
+        const watching = new IntersectionObserver((entries) => {
+            if (entries.some((entry) => entry.isIntersecting)) {
+                setSeen(true);
+            }
+        });
+        watching.observe(shown);
+        return () => watching.disconnect();
+    }, [seen]);
 
     useEffect(() => {
         let current = true;
         setSource(null);
-        if (topic.icon) {
+        if (topic.icon && seen) {
             iconOf(topic.id).then((url) => current && setSource(url), () => undefined);
         }
         return () => {
             current = false;
         };
-    }, [topic.id, topic.icon]);
+    }, [topic.id, topic.icon, seen]);
 
     return source
         ? <img className="topic-icon" src={source} alt="" />
-        : <span className="topic-icon empty" aria-hidden="true">{topic.title.slice(0, 1).toUpperCase()}</span>;
+        : (
+            <span ref={letter} className="topic-icon empty" aria-hidden="true">
+                {topic.title.slice(0, 1).toUpperCase()}
+            </span>
+        );
 }
 
 interface FormProps {

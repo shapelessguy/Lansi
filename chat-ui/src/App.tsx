@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { orModel } from "./lib/models";
 
 import { BookList, chosenVersion } from "./components/BookList";
-import { BookReader } from "./components/BookReader";
+import { BookReader, type NoteAsked } from "./components/BookReader";
 import { BookVersionEditor } from "./components/BookVersionEditor";
 import { Chat } from "./components/Chat";
 import { ChatList } from "./components/ChatList";
@@ -32,7 +32,7 @@ import { UsagePanel } from "./components/UsagePanel";
 import { VocabularyList } from "./components/VocabularyList";
 import { WordList } from "./components/WordList";
 import { WritingChecks } from "./components/WritingChecks";
-import { type AnkiState, fetchAnkiState, fetchKnownWords } from "./lib/anki";
+import { type AnkiState, countKnownWords, fetchAnkiState, fetchKnownWords } from "./lib/anki";
 import { useAnkiImport } from "./lib/ankiImport";
 import { useBack } from "./lib/back";
 import {
@@ -88,6 +88,7 @@ import {
 import { logOut } from "./lib/session";
 import { deleteSet, fetchSets, membersOf, newSet, saveSet, wordLists, type WordSet } from "./lib/sets";
 import { applyAppearance, exerciseVocabularyOf, expandPrompt, saveSettings, type Settings } from "./lib/settings";
+import { useShownOnce } from "./lib/shownOnce";
 import { bookSource, exerciseSource, messageSource, type SpeechSource, type Voice } from "./lib/speaking";
 import { type BackgroundTask, fetchTasks, TASKS_INTERVAL_MS, withTask } from "./lib/tasks";
 import { deleteText, fetchTexts, saveText, type Text } from "./lib/texts";
@@ -174,6 +175,11 @@ export function App({ user, initialSettings, initialChats }: Props) {
     const [activity, setActivity] = useState<Activity>(() => loadLayout().activity);
     const [textId, setTextId] = useState<string | null>(() => loadLayout().text);
     const [sidebarTab, setSidebarTab] = useState<LibraryTab>(() => loadLayout().libraryTab);
+    // what a pane or a tab lists is fetched the first time it is shown, rather than as the page opens
+    const practiceShown = useShownOnce(activity === "practice");
+    const evaluationsShown = useShownOnce(activity === "evaluations");
+    const memoriesShown = useShownOnce(logsOpen && logsTab === "memories");
+    const ankiWordsShown = useShownOnce(libraryOpen && sidebarTab === "words");
     // Where the window has no room for a panel on each side, only the side
     // opened last is shown, and the other one, still open, behind it comes
     // back when it is closed.
@@ -453,17 +459,26 @@ export function App({ user, initialSettings, initialChats }: Props) {
         [],
     );
 
+    // how many Anki words there are, for the tab, which is all that is wanted of them until it is opened
+    const [ankiWordCount, setAnkiWordCount] = useState<number | null>(null);
     const loadWords = useCallback(() => {
         if (!ankiWords) {
             return;
         }
+        if (!ankiWordsShown) {
+            countKnownWords().then(setAnkiWordCount, () => undefined);
+            return;
+        }
         setWordsState({ status: "loading" });
         fetchKnownWords().then(
-            (words) => setWordsState({ status: "ready", words }),
+            (words) => {
+                setWordsState({ status: "ready", words });
+                setAnkiWordCount(words.length);
+            },
             (error: Error) => setWordsState({ status: "error", message: error.message }),
         );
         // the words are fetched again once the first sync has brought them
-    }, [ankiWords, anki?.last_sync, decksRevision]);
+    }, [ankiWords, ankiWordsShown, anki?.last_sync, decksRevision]);
 
     useEffect(loadWords, [loadWords]);
 
@@ -566,6 +581,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
         decisionModel: settings.profileModel,
         language: settings.language,
         ankiLanguage: settings.ankiLanguage,
+        watching: (libraryOpen && sidebarTab === "vocabulary") || panel === "usage",
         onUsage: useCallback(
             (used) => addUsageEntry(profileUsage(used, Date.now(), "vocabulary")),
             [addUsageEntry],
@@ -651,6 +667,8 @@ export function App({ user, initialSettings, initialChats }: Props) {
     }, [addUsageEntry]);
     // what is read aloud, with a number that tells it from what was read before
     const [listening, setListening] = useState<{ source: SpeechSource; nonce: number } | null>(null);
+    // the selection of the book in the reader a note was last asked to be written on
+    const [noteAsked, setNoteAsked] = useState<NoteAsked | null>(null);
     const speakMessage = useCallback(
         (chatId: string, place: number, text: string) =>
             setListening({ source: messageSource(chatId, place, text), nonce: Date.now() }),
@@ -922,7 +940,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             />
                         </div>
                         <div className="tab-panel" role="tabpanel" hidden={logsTab !== "memories"}>
-                            <MemoryList revision={memoriesRevision} />
+                            {memoriesShown && <MemoryList revision={memoriesRevision} />}
                         </div>
                         <div className="tab-panel" role="tabpanel" hidden={logsTab !== "exercises"}>
                             <ExercisesDone
@@ -982,7 +1000,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                                     >
                                         Anki
                                         <span className="count">
-                                            {wordsState.status === "ready" && wordsState.words.length}
+                                            {ankiWordCount}
                                         </span>
                                     </button>
                                 )}
@@ -1316,52 +1334,57 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             names={readNames}
                             onPlay={(selection) =>
                                 bookId && setListening({ source: bookSource(bookId, selection), nonce: Date.now() })}
+                            noteAsked={noteAsked}
                         />
                     </div>
                     <div className="pane" hidden={activity !== "practice"}>
-                        <Practice
-                            resuming={resuming}
-                            active={activity === "practice"}
-                            settings={settings}
-                            words={words}
-                            checksSlot={panel === "checks" && activity === "practice" ? panelSlot : null}
-                            onCloseChecks={() => setOpenPanel(null)}
-                            onEditQuestions={() => openSettings("questions")}
-                            learner={learner}
-                            wordsOfSet={wordsOfSet}
-                            topicsRevision={topicsRevision}
-                            embedding={embeddingTask}
-                            onUsage={addPracticeUsage}
-                            onTask={addTask}
-                            onChangeSettings={updateSettings}
-                            onOpenSettings={() => openSettings("models")}
-                            onReadAloud={(sessionId, exercise, number, text) =>
-                                setListening({
-                                    source: exerciseSource(sessionId, exercise, number, text),
-                                    nonce: Date.now(),
-                                })}
-                        />
+                        {practiceShown && (
+                            <Practice
+                                resuming={resuming}
+                                active={activity === "practice"}
+                                settings={settings}
+                                words={words}
+                                checksSlot={panel === "checks" && activity === "practice" ? panelSlot : null}
+                                onCloseChecks={() => setOpenPanel(null)}
+                                onEditQuestions={() => openSettings("questions")}
+                                learner={learner}
+                                wordsOfSet={wordsOfSet}
+                                topicsRevision={topicsRevision}
+                                embedding={embeddingTask}
+                                onUsage={addPracticeUsage}
+                                onTask={addTask}
+                                onChangeSettings={updateSettings}
+                                onOpenSettings={() => openSettings("models")}
+                                onReadAloud={(sessionId, exercise, number, text) =>
+                                    setListening({
+                                        source: exerciseSource(sessionId, exercise, number, text),
+                                        nonce: Date.now(),
+                                    })}
+                            />
+                        )}
                     </div>
                     <div className="pane" hidden={activity !== "evaluations"}>
-                        <Evaluations
-                            opening={openingEvaluation}
-                            settings={settings}
-                            words={words}
-                            checksSlot={panel === "checks" && activity === "evaluations" ? panelSlot : null}
-                            onCloseChecks={() => setOpenPanel(null)}
-                            onEditQuestions={() => openSettings("questions")}
-                            learner={learner}
-                            onUsage={addEvaluationUsage}
-                            onTask={addTask}
-                            onChangeSettings={updateSettings}
-                            onOpenSettings={openSettings}
-                            onReadAloud={(sessionId, exercise, number, text) =>
-                                setListening({
-                                    source: exerciseSource(sessionId, exercise, number, text, "evaluation"),
-                                    nonce: Date.now(),
-                                })}
-                            onEnded={() => setLogsRevision((revision) => revision + 1)}
-                        />
+                        {evaluationsShown && (
+                            <Evaluations
+                                opening={openingEvaluation}
+                                settings={settings}
+                                words={words}
+                                checksSlot={panel === "checks" && activity === "evaluations" ? panelSlot : null}
+                                onCloseChecks={() => setOpenPanel(null)}
+                                onEditQuestions={() => openSettings("questions")}
+                                learner={learner}
+                                onUsage={addEvaluationUsage}
+                                onTask={addTask}
+                                onChangeSettings={updateSettings}
+                                onOpenSettings={openSettings}
+                                onReadAloud={(sessionId, exercise, number, text) =>
+                                    setListening({
+                                        source: exerciseSource(sessionId, exercise, number, text, "evaluation"),
+                                        nonce: Date.now(),
+                                    })}
+                                onEnded={() => setLogsRevision((revision) => revision + 1)}
+                            />
+                        )}
                     </div>
                 </main>
                 <aside
@@ -1441,6 +1464,7 @@ export function App({ user, initialSettings, initialChats }: Props) {
                     onLogged={() => setLogsRevision((revision) => revision + 1)}
                     onPlay={(selection) =>
                         bookId && setListening({ source: bookSource(bookId, selection), nonce: Date.now() })}
+                    onNote={(selection, quote) => setNoteAsked({ selection, quote, nonce: Date.now() })}
                     onChat={(translated) => {
                         setAsked({ translated, nonce: Date.now() });
                     }}

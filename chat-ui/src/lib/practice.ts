@@ -24,7 +24,6 @@ export interface Lesson {
     level: string;
     title: string;
     points: LessonPoint[];
-    more_info: string;
 }
 
 /** A setting of an exercise that is one of a few choices. */
@@ -259,8 +258,11 @@ export interface PracticeSession {
     started_at: number;
     finished_at: number | null;
     status: "running" | "finished" | "abandoned";
-    /** The words the exercises are given, those nearest the topics first, if any. */
-    words: { mode: "only" | "prefer"; lemmas: string[] } | null;
+    /**
+     * The words the exercises are given, those nearest the topics first, if
+     * any: in a list of sessions only how many, and which with the session itself.
+     */
+    words: { mode: "only" | "prefer"; lemmas?: string[]; count?: number } | null;
     /** Whether the exercises bring the topics together. */
     mix_topics: boolean;
     /** The exercises, in the order they are done, with how many instances of each there are. */

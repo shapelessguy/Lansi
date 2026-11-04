@@ -1,7 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canAsk } from "../lib/models";
 
 import type { ProfileUsage } from "../lib/checker";
@@ -163,13 +163,17 @@ export function Practice(
     useEffect(load, [load]);
     useEffect(() => setLessonId(null), [language]);
 
+    const topicsListed = useRef(false);
     useEffect(() => {
         let current = true;
         fetchTopics().then(
             (items) => {
                 if (current) {
-                    // icons made since are fetched again
-                    items.forEach((topic) => forgetIcon(topic.id));
+                    // icons made since are fetched again; those of the first listing are as the browser kept them
+                    if (topicsListed.current) {
+                        items.forEach((topic) => forgetIcon(topic.id));
+                    }
+                    topicsListed.current = true;
                     setTopics({ status: "ready", items });
                     setChosenTopics((chosen) => chosen.filter((id) => items.some((topic) => topic.id === id)));
                 }
@@ -491,7 +495,7 @@ export function Practice(
                                         session.words.mode === "only"
                                             ? "only {count} of your words"
                                             : "mostly {count} of your words",
-                                        { count: session.words.lemmas.length },
+                                        { count: session.words.count ?? session.words.lemmas?.length ?? 0 },
                                     )
                                 }`}
                         </span>

@@ -102,7 +102,7 @@ const PEN_NAMES: Record<Pen, Message> = {
 
 const SWATCHES = ["#1a1a1a", "#1f4fbf", "#c62828", "#2e7d32", "#f9a825"];
 
-type Tool = "write" | "erase";
+export type Tool = "write" | "erase";
 
 /**
  * The pages of a text written by hand, each written on with a pen, a finger
@@ -343,89 +343,14 @@ export const HandwrittenPages = forwardRef<HandwrittenPagesHandle, Props>(functi
     const tools = (
         <div className="ink-toolbar" role="toolbar" aria-label={t("Pen")}>
             {!locked && (
-                <>
-                    <div className="ink-group">
-                        {PENS.map((pen) => (
-                            <ToolButton
-                                key={pen}
-                                icon={pen}
-                                label={t(PEN_NAMES[pen])}
-                                pressed={tool === "write" && choice.pen === pen}
-                                onClick={() => {
-                                    setTool("write");
-                                    setChoice({ ...choice, pen });
-                                }}
-                            />
-                        ))}
-                        <ToolButton
-                            icon="eraser"
-                            label={t("Eraser")}
-                            pressed={tool === "erase"}
-                            onClick={() => setTool("erase")}
-                        />
-                    </div>
-                    <div className="ink-group">
-                        {SWATCHES.map((color) => (
-                            <button
-                                key={color}
-                                type="button"
-                                className="ink-swatch"
-                                style={{ background: color }}
-                                title={color}
-                                aria-label={color}
-                                aria-pressed={choice.color === color}
-                                onClick={() => {
-                                    setTool("write");
-                                    setChoice({ ...choice, color });
-                                }}
-                            />
-                        ))}
-                        <label
-                            className={SWATCHES.includes(choice.color)
-                                ? "ink-swatch ink-custom"
-                                : "ink-swatch ink-custom chosen"}
-                            style={SWATCHES.includes(choice.color) ? undefined : { background: choice.color }}
-                            title={t("Colour")}
-                        >
-                            <input
-                                type="color"
-                                aria-label={t("Colour")}
-                                value={choice.color}
-                                onChange={(event) => {
-                                    setTool("write");
-                                    setChoice({ ...choice, color: event.target.value });
-                                }}
-                            />
-                        </label>
-                    </div>
-                    <div className="ink-group ink-size">
-                        <span className="ink-size-preview" aria-hidden="true">
-                            <span
-                                className="ink-size-dot"
-                                style={{
-                                    width: Math.min(choice.size, 22),
-                                    height: Math.min(choice.size, 22),
-                                    background: choice.color,
-                                }}
-                            />
-                        </span>
-                        <input
-                            type="range"
-                            min={0}
-                            max={SIZE_STEPS}
-                            step={1}
-                            title={t("Size")}
-                            aria-label={t("Size")}
-                            aria-valuetext={`${choice.size} px`}
-                            value={stepOf(choice.size)}
-                            onChange={(event) => setChoice({ ...choice, size: sizeOf(Number(event.target.value)) })}
-                        />
-                        <span className="ink-size-value">{choice.size} px</span>
-                    </div>
-                    <div className="ink-group">
-                        <ToolButton icon="undo" label={t("Undo")} disabled={undoable === 0} onClick={undoLast} />
-                    </div>
-                </>
+                <PenTools
+                    choice={choice}
+                    tool={tool}
+                    canUndo={undoable > 0}
+                    onChoice={setChoice}
+                    onTool={setTool}
+                    onUndo={undoLast}
+                />
             )}
             <div className="ink-group">
                 <ToolButton
@@ -639,6 +564,104 @@ function PageGap({ onAdd }: { onAdd: () => void }) {
     );
 }
 
+/** The pens, their colours and sizes, the eraser and Undo, as the toolbar of a page written by hand has them. */
+export function PenTools(
+    { choice, tool, canUndo, onChoice, onTool, onUndo }: {
+        choice: PenChoice;
+        tool: Tool;
+        canUndo: boolean;
+        onChoice: (choice: PenChoice) => void;
+        onTool: (tool: Tool) => void;
+        onUndo: () => void;
+    },
+) {
+    return (
+        <>
+            <div className="ink-group">
+                {PENS.map((pen) => (
+                    <ToolButton
+                        key={pen}
+                        icon={pen}
+                        label={t(PEN_NAMES[pen])}
+                        pressed={tool === "write" && choice.pen === pen}
+                        onClick={() => {
+                            onTool("write");
+                            onChoice({ ...choice, pen });
+                        }}
+                    />
+                ))}
+                <ToolButton
+                    icon="eraser"
+                    label={t("Eraser")}
+                    pressed={tool === "erase"}
+                    onClick={() => onTool("erase")}
+                />
+            </div>
+            <div className="ink-group">
+                {SWATCHES.map((color) => (
+                    <button
+                        key={color}
+                        type="button"
+                        className="ink-swatch"
+                        style={{ background: color }}
+                        title={color}
+                        aria-label={color}
+                        aria-pressed={choice.color === color}
+                        onClick={() => {
+                            onTool("write");
+                            onChoice({ ...choice, color });
+                        }}
+                    />
+                ))}
+                <label
+                    className={SWATCHES.includes(choice.color)
+                        ? "ink-swatch ink-custom"
+                        : "ink-swatch ink-custom chosen"}
+                    style={SWATCHES.includes(choice.color) ? undefined : { background: choice.color }}
+                    title={t("Colour")}
+                >
+                    <input
+                        type="color"
+                        aria-label={t("Colour")}
+                        value={choice.color}
+                        onChange={(event) => {
+                            onTool("write");
+                            onChoice({ ...choice, color: event.target.value });
+                        }}
+                    />
+                </label>
+            </div>
+            <div className="ink-group ink-size">
+                <span className="ink-size-preview" aria-hidden="true">
+                    <span
+                        className="ink-size-dot"
+                        style={{
+                            width: Math.min(choice.size, 22),
+                            height: Math.min(choice.size, 22),
+                            background: choice.color,
+                        }}
+                    />
+                </span>
+                <input
+                    type="range"
+                    min={0}
+                    max={SIZE_STEPS}
+                    step={1}
+                    title={t("Size")}
+                    aria-label={t("Size")}
+                    aria-valuetext={`${choice.size} px`}
+                    value={stepOf(choice.size)}
+                    onChange={(event) => onChoice({ ...choice, size: sizeOf(Number(event.target.value)) })}
+                />
+                <span className="ink-size-value">{choice.size} px</span>
+            </div>
+            <div className="ink-group">
+                <ToolButton icon="undo" label={t("Undo")} disabled={!canUndo} onClick={onUndo} />
+            </div>
+        </>
+    );
+}
+
 /** A button that shows only its icon, and says what it does when the pointer rests on it. */
 function ToolButton(
     { icon, label, pressed, disabled, onClick }: {
@@ -664,7 +687,7 @@ function ToolButton(
     );
 }
 
-interface PageProps {
+export interface PageProps {
     page: HandwrittenPage;
     ink: Stroke[];
     choice: PenChoice;
@@ -687,7 +710,7 @@ let inkDown = false;
 let lastInk = 0;
 
 /** A page to be written on: its ink drawn on one canvas, and the stroke being written on another above it. */
-function InkPage({ page, ink, choice, tool, locked, turned, showWords, notes, onWrite }: PageProps) {
+export function InkPage({ page, ink, choice, tool, locked, turned, showWords, notes, onWrite }: PageProps) {
     // the note shown, as its mark is pointed at, or tapped, which keeps it until the page is tapped again
     const [noted, setNoted] = useState<{ at: number; tapped: boolean } | null>(null);
     // where the pen was last, on the screen, and when, which how fast it moves is told from

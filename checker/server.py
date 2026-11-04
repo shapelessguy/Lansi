@@ -417,6 +417,27 @@ def favourites_of(store: UserStore) -> dict[str, Any]:
     return {"favourites": store.favourites(), "folders": store.favourite_folders()}
 
 
+def listed_session(session: dict[str, Any]) -> dict[str, Any]:
+    """A session as the list of them has it: without what its exercises were
+    told, which is long and asked for only with the session itself, and with
+    how many words it was given rather than which."""
+    listed = {
+        key: value
+        for key, value in session.items()
+        if key not in ("briefs", "guidance")
+    }
+    words = session.get("words")
+    if words is not None:
+        listed["words"] = {"mode": words["mode"], "count": len(words["lemmas"])}
+    return listed
+
+
+def _without_theory(lesson: dict[str, Any]) -> dict[str, Any]:
+    """A lesson without its pages of theory, which only the theory exercise
+    reads, and which are most of what the lessons weigh."""
+    return {key: value for key, value in lesson.items() if key != "more_info"}
+
+
 def _folder_id(value: object) -> int | None:
     """The id of a folder of the favourites a request names, or None for
     the top. Raises ValueError."""
@@ -531,7 +552,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
         try:
             if self._anki("PUT"):
                 return
-            if self._books("PUT") or self._speech("PUT") or self._texts("PUT"):
+            if (
+                self._books("PUT")
+                or self._book_notes("PUT")
+                or self._speech("PUT")
+                or self._texts("PUT")
+            ):
                 return
             if self._topics("PUT") or self._practice("PUT"):
                 return
@@ -545,7 +571,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         if self._tutor_chats("DELETE") or self._texts("DELETE"):
             return
-        if self._books("DELETE") or self._speech("DELETE") or self._topics("DELETE"):
+        if (
+            self._books("DELETE")
+            or self._book_notes("DELETE")
+            or self._speech("DELETE")
+            or self._topics("DELETE")
+        ):
             return
         if self._anki("DELETE") or self._practice("DELETE"):
             return
@@ -752,7 +783,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
         reasons first, as it does if the request does not say, the most
         tokens it may reason in for each part, if there is a most, and what
         each part is called. The task says how many tokens the model has
-        reasoned and written of each part as it goes.
+        reasoned and written of each part as it goes. The notes on a book
+        are answered by `_book_notes`.
         """
         store = self.account.store
         path = urlsplit(self.path).path
@@ -870,6 +902,45 @@ class CheckerHandler(BaseHTTPRequestHandler):
             self._reply(HTTPStatus.OK, {"books": store.books()})
         elif method == "DELETE" and one:
             store.delete_book(one.group(1))
+            self._reply(HTTPStatus.OK, {})
+        else:
+            return False
+        return True
+
+    def _book_notes(self, method: str) -> bool:
+        """Answers a request about the notes the user writes on a book, or a
+        version of it, and returns whether the request was one.
+
+            GET /books/ID/notes  the notes, in the order of the text
+            POST /books/ID/notes  keep a note on a stretch of the text,
+                               answered with the note as it is kept
+            PUT /books/ID/notes/N  have a note say something else,
+                               answered with the note
+            DELETE /books/ID/notes/N  remove a note
+
+        A note, as `UserStore.add_book_note` describes it, is sent as JSON,
+        and what it says is changed by sending its `kind` with its `text`
+        or `ink`.
+        """
+        store = self.account.store
+        found = re.fullmatch(
+            r"/books/([^/]+)/notes(?:/([^/]+))?", urlsplit(self.path).path
+        )
+        if store is None or found is None:
+            return False
+        book_id, note_id = found.groups()
+        if method == "GET" and note_id is None:
+            self._reply(HTTPStatus.OK, {"notes": store.book_notes(book_id)})
+        elif method == "POST" and note_id is None:
+            self._reply(HTTPStatus.OK, store.add_book_note(book_id, self._read_body()))
+        elif method == "PUT" and note_id is not None:
+            changed = store.change_book_note(book_id, note_id, self._read_body())
+            if changed is None:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such note"})
+            else:
+                self._reply(HTTPStatus.OK, changed)
+        elif method == "DELETE" and note_id is not None:
+            store.delete_book_note(book_id, note_id)
             self._reply(HTTPStatus.OK, {})
         else:
             return False
@@ -1327,9 +1398,12 @@ class CheckerHandler(BaseHTTPRequestHandler):
         """Answers a request about practice, and returns whether the request
         was one.
 
-            GET /lessons?language=L      the lessons of a language
+            GET /lessons?language=L      the lessons of a language, without
+                                         their pages of theory, which the
+                                         theory exercise is given itself
             GET /exercises               the exercises there are
-            GET /sessions                the sessions, the latest first
+            GET /sessions                the sessions, the latest first, as
+                                         `listed_session` has them
             GET /sessions/S              a session, with its grades and the
                                          logs of its exercises, by exercise
             POST /sessions               start a session of `{"language": ...,
@@ -1416,11 +1490,15 @@ class CheckerHandler(BaseHTTPRequestHandler):
             if method == "GET" and url.path == "/lessons":
                 language = parse_qs(url.query).get("language", [""])[0].strip()
                 lessons = practice.lessons(language or self.account.language)
-                self._reply(HTTPStatus.OK, {"lessons": lessons})
+                self._reply(
+                    HTTPStatus.OK,
+                    {"lessons": [_without_theory(lesson) for lesson in lessons]},
+                )
             elif method == "GET" and url.path == "/exercises":
                 self._reply(HTTPStatus.OK, {"exercises": practice.exercises()})
             elif method == "GET" and url.path == "/sessions":
-                self._reply(HTTPStatus.OK, {"sessions": store.sessions()})
+                sessions = [listed_session(session) for session in store.sessions()]
+                self._reply(HTTPStatus.OK, {"sessions": sessions})
             elif method == "GET" and one:
                 session = store.session(one.group(1))
                 if session is None:
@@ -1748,6 +1826,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", found[1])
                 self.send_header("Content-Length", str(len(found[0])))
+                # an icon made again is asked for past this, by the app
+                self.send_header("Cache-Control", "private, max-age=604800")
                 self.end_headers()
                 self.wfile.write(found[0])
             elif method == "POST" and icon:
@@ -1885,6 +1965,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
             DELETE /anki/link  forget the account and its collection
             GET /anki/words    the words of the chosen decks that have a
                                card in review
+            GET /anki/words/count
+                               how many of them there are, `{"count": N}`
             GET /anki/decks    the decks of the collection, each saying
                                whether it is chosen
             PUT /anki/decks    choose the `{"decks": [id, ...]}` that are
@@ -1909,6 +1991,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 "/anki",
                 "/anki/link",
                 "/anki/words",
+                "/anki/words/count",
                 "/anki/decks",
             )
         ):
@@ -1948,6 +2031,10 @@ class CheckerHandler(BaseHTTPRequestHandler):
             elif method == "GET" and path == "/anki/words":
                 skipped = store.skipped_anki_decks() if store else []
                 self._reply(HTTPStatus.OK, anki.known_words(skipped))
+            elif method == "GET" and path == "/anki/words/count":
+                skipped = store.skipped_anki_decks() if store else []
+                count = len(anki.known_words(skipped)["rows"])
+                self._reply(HTTPStatus.OK, {"count": count})
             elif method in ("GET", "PUT") and path == "/anki/decks" and store:
                 if method == "PUT":
                     decks = self._read_body().get("decks")
@@ -1993,7 +2080,7 @@ class CheckerHandler(BaseHTTPRequestHandler):
             return
         if self._practice("GET") or self._topics("GET") or self._evaluating("GET"):
             return
-        if self._books("GET") or self._speech("GET"):
+        if self._books("GET") or self._book_notes("GET") or self._speech("GET"):
             return
         if self._anki("GET"):
             return
@@ -2055,7 +2142,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
                 self._log_in()
             elif not self._find_account() or self._kept("POST") or self._anki("POST"):
                 pass
-            elif self._books("POST", api_key) or self._speech("POST", api_key):
+            elif (
+                self._books("POST", api_key)
+                or self._book_notes("POST")
+                or self._speech("POST", api_key)
+            ):
                 pass
             elif self._practice("POST", api_key) or self._topics("POST", api_key):
                 pass

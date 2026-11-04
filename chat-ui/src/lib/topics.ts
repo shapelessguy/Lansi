@@ -64,7 +64,7 @@ export function remakeIcon(
     imageModel: ModelChoice,
     apiKey: string,
 ): Promise<{ task: BackgroundTask | null }> {
-    icons.delete(id);
+    forgetIcon(id);
     return call(
         `/topics/${encodeURIComponent(id)}/icon`,
         { method: "POST", body: JSON.stringify({ image_model: modelRequest(imageModel) }) },
@@ -88,15 +88,22 @@ export async function deleteTopic(id: string): Promise<void> {
 
 // the icons that were fetched, each as an address the page can show
 const icons = new Map<string, Promise<string>>();
+// the topics whose icons are made again, which the browser keeps the old one of
+const remade = new Set<string>();
 
-/** The icon of a topic, as an address an image can be shown from. It is fetched once. */
+/**
+ * The icon of a topic, as an address an image can be shown from. It is
+ * fetched once, and kept by the browser from one opening of the page to the next.
+ */
 export function iconOf(id: string): Promise<string> {
     let icon = icons.get(id);
     if (!icon) {
-        icon = checkerFetch(`/topics/${encodeURIComponent(id)}/icon`).then(async (response) => {
+        const init: RequestInit = remade.has(id) ? { cache: "reload" } : {};
+        icon = checkerFetch(`/topics/${encodeURIComponent(id)}/icon`, init).then(async (response) => {
             if (!response.ok) {
                 throw new Error("no icon");
             }
+            remade.delete(id);
             return URL.createObjectURL(await response.blob());
         });
         // one that could not be had is asked for again next time
@@ -106,9 +113,10 @@ export function iconOf(id: string): Promise<string> {
     return icon;
 }
 
-/** Forgets the icon of a topic, so that a new one is fetched. */
+/** Forgets the icon of a topic, so that a new one is fetched, past the one the browser keeps. */
 export function forgetIcon(id: string): void {
     icons.delete(id);
+    remade.add(id);
 }
 
 /**

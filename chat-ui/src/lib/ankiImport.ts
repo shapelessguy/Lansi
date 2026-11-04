@@ -8,8 +8,14 @@ import type { ProfileUsage } from "./checker";
 import { t } from "./i18n";
 import { checkerFetch } from "./session";
 
-/** How often the checker server is told the settings and asked how the import is going. */
+/** How often the checker server is asked how the import is going while it takes words in, or is watched. */
 const INTERVAL_MS = 3000;
+/**
+ * How often it is told the settings otherwise, which it keeps only while it
+ * runs: once it is started again, the import waits for them, and this is
+ * how long at most.
+ */
+const IDLE_INTERVAL_MS = 60_000;
 
 /** What the checker server's import of the Anki words into the vocabulary is doing. */
 export interface ImportStatus {
@@ -80,15 +86,25 @@ interface Options {
     language: string;
     /** The language the Anki words are of, and so the vocabulary they go into. */
     ankiLanguage: string;
+    /** Whether what the import does is on show, as the vocabulary or the usage is, and so followed closely. */
+    watching: boolean;
     onUsage: (used: ProfileUsage) => void;
     /** Told each time more words have been taken in. */
     onImported: () => void;
 }
 
+/** Whether the import is taking words in, and so worth following closely. */
+export function importBusy(status: ImportStatus): boolean {
+    return status.state === "importing" || (status.state === "waiting" && (status.remaining ?? 0) > 0);
+}
+
 /**
  * Keeps the checker server's import of the Anki words going by the settings,
  * and follows what it is doing. The importing itself is the server's: every
- * ten seconds it looks through the Anki words for ones the vocabulary lacks.
+ * ten seconds it looks through the Anki words for ones the vocabulary lacks,
+ * whether the app is open or not. The server is told the settings at once
+ * when they change, and asked again every few seconds only while words are
+ * taken in or the import is watched; otherwise once a minute.
  */
 export function useAnkiImport(options: Options): ImportStatus {
     const [status, setStatus] = useState<ImportStatus>({
@@ -99,11 +115,15 @@ export function useAnkiImport(options: Options): ImportStatus {
     });
     const latest = useRef(options);
     latest.current = options;
+    // how many words the server had taken in when it was asked last, to tell when it takes more
+    const taken = useRef<number | null>(null);
+    const { enabled, apiKey, model, decisionModel, language, ankiLanguage, watching } = options;
+    // what the server is told, which it is told again at once when it changes
+    const told = JSON.stringify([enabled, apiKey, model, decisionModel, language, ankiLanguage]);
 
     useEffect(() => {
         let stopped = false;
         let timer: ReturnType<typeof setTimeout>;
-        let taken: number | null = null;
 
         async function sync() {
             const { enabled, apiKey, model, decisionModel, language, ankiLanguage, onUsage, onImported } =
@@ -123,10 +143,11 @@ export function useAnkiImport(options: Options): ImportStatus {
                 usage.forEach(onUsage);
                 // the same as before is not set again, which would draw the whole app again every few seconds
                 setStatus((current) => (sameStatus(current, next) ? current : next));
-                if (taken !== null && next.taken !== taken) {
+                if (taken.current !== null && next.taken !== taken.current) {
                     onImported();
                 }
-                taken = next.taken;
+                taken.current = next.taken;
+                schedule(importBusy(next));
             } catch (error) {
                 if (!stopped) {
                     setStatus((current) => ({
@@ -134,18 +155,19 @@ export function useAnkiImport(options: Options): ImportStatus {
                         state: "unavailable",
                         message: (error as Error).message,
                     }));
+                    schedule(false);
                 }
             }
-            if (!stopped) {
-                timer = setTimeout(sync, INTERVAL_MS);
-            }
+        }
+        function schedule(closely: boolean) {
+            timer = setTimeout(sync, closely || latest.current.watching ? INTERVAL_MS : IDLE_INTERVAL_MS);
         }
         sync();
         return () => {
             stopped = true;
             clearTimeout(timer);
         };
-    }, []);
+    }, [told, watching]);
 
     return status;
 }

@@ -33,7 +33,7 @@ from ink import PAGE_HEIGHT, PAGE_WIDTH, checked
 from ocr import text_of
 
 # Raised with every change to the tables.
-SCHEMA_VERSION = 39
+SCHEMA_VERSION = 40
 
 _SCHEMA = """
 CREATE TABLE chats (
@@ -888,6 +888,80 @@ WHERE kind = 'text' AND id NOT IN (
 """
 
 
+# What came with version 40: the notes the learner writes on a book, each
+# on a stretch of its text, from a place in a block to a place in the same
+# block or a later one, with the text it was then. A note is typed, or
+# written by hand in ink, as ink.py describes it. It is of the book, or the
+# version of it, it was written on, whose blocks are not those of another.
+_BOOK_NOTES = """
+CREATE TABLE book_notes (
+    id TEXT PRIMARY KEY,
+    book_id TEXT NOT NULL REFERENCES books (id) ON DELETE CASCADE,
+    start_block INTEGER NOT NULL,
+    start_offset INTEGER NOT NULL,
+    end_block INTEGER NOT NULL,
+    end_offset INTEGER NOT NULL,
+    quote TEXT NOT NULL,
+    -- one of NOTE_KINDS
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL DEFAULT '',
+    -- JSON: the strokes it is written in, if it is written by hand
+    ink TEXT NOT NULL DEFAULT '[]',
+    -- in seconds since the epoch
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+CREATE INDEX book_notes_of_book ON book_notes (book_id);
+"""
+
+# how a note on a book is written
+NOTE_KINDS = ("typed", "handwritten")
+# What is given of a note on a book.
+_NOTE_COLUMNS = (
+    "id, start_block, start_offset, end_block, end_offset, quote, kind, text,"
+    " ink, created_at, updated_at"
+)
+
+
+def _book_note(
+    note_id: str,
+    start_block: int,
+    start: int,
+    end_block: int,
+    end: int,
+    quote: str,
+    kind: str,
+    text: str,
+    ink: str,
+    created_at: float,
+    updated_at: float,
+) -> dict[str, Any]:
+    return {
+        "id": note_id,
+        "startBlock": start_block,
+        "start": start,
+        "endBlock": end_block,
+        "end": end,
+        "quote": quote,
+        "kind": kind,
+        "text": text,
+        "ink": json.loads(ink),
+        "createdAt": created_at,
+        "updatedAt": updated_at,
+    }
+
+
+def _note_body(note: dict[str, Any]) -> tuple[str, str, str]:
+    """How a note on a book is written, what it says typed and its ink, as
+    they are kept. Raises ValueError for what is not."""
+    kind, text = note.get("kind"), note.get("text", "")
+    if kind not in NOTE_KINDS:
+        raise ValueError(f"a note is one of {', '.join(NOTE_KINDS)}")
+    if not isinstance(text, str) or len(text) > MAX_TEXT:
+        raise ValueError(f"the text of a note is at most {MAX_TEXT} characters")
+    return kind, text, json.dumps(checked(note.get("ink", [])))
+
+
 # What each version of the database came with, the first first: a store
 # of an older version is given what came after it.
 _MIGRATIONS = (
@@ -930,6 +1004,7 @@ _MIGRATIONS = (
     _TEXT_PAGES,
     _TEXT_CORRECTIONS,
     _ORPHAN_LOCKS,
+    _BOOK_NOTES,
 )
 
 
@@ -1845,12 +1920,98 @@ class UserStore:
             for each in removed:
                 self._db.execute("DELETE FROM books WHERE id = ?", (each,))
                 self._db.execute("DELETE FROM book_speech WHERE book_id = ?", (each,))
+                self._db.execute("DELETE FROM book_notes WHERE book_id = ?", (each,))
         for each in filter(is_id, removed):
             (self._covers / each).unlink(missing_ok=True)
             (self._originals / f"{each}.epub").unlink(missing_ok=True)
             shutil.rmtree(self._speech / each, ignore_errors=True)
             shutil.rmtree(self._pictures / each, ignore_errors=True)
             shutil.rmtree(self._drafts / each, ignore_errors=True)
+
+    def book_notes(self, book_id: str) -> list[dict[str, Any]]:
+        """The notes written on a book, or a version of it, in the order
+        of the text, as `_book_note` gives them."""
+        with self._lock:
+            rows = self._db.execute(
+                f"SELECT {_NOTE_COLUMNS} FROM book_notes WHERE book_id = ?"
+                " ORDER BY start_block, start_offset, created_at",
+                (book_id,),
+            ).fetchall()
+        return [_book_note(*row) for row in rows]
+
+    def add_book_note(self, book_id: str, note: dict[str, Any]) -> dict[str, Any]:
+        """Keep a note written on a stretch of the text of a book, which
+        `note` gives as `startBlock`, `start`, `endBlock` and `end`, with
+        the text it is as `quote`, how it is written as `kind` and what it
+        says as `text` or `ink`. Returns it as it is kept. Raises
+        ValueError for a note that is not, or a book there is not."""
+        given = [note.get(name) for name in ("startBlock", "start", "endBlock", "end")]
+        quote = note.get("quote")
+        places = [place for place in given if isinstance(place, int) and place >= 0]
+        if len(places) != len(given):
+            raise ValueError("a note is on places in the book")
+        start_block, start, end_block, end = places
+        if (end_block, end) < (start_block, start):
+            raise ValueError("a note ends after it starts")
+        if not isinstance(quote, str) or len(quote) > MAX_TEXT:
+            raise ValueError("a note is on a stretch of the text")
+        kind, text, ink = _note_body(note)
+        now = self._now()
+        note_id = uuid.uuid4().hex
+        with self._lock, self._db:
+            row = self._db.execute(
+                "SELECT json_array_length(blocks) FROM books WHERE id = ?", (book_id,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("there is no such book")
+            if end_block >= row[0]:
+                raise ValueError("a note is on places in the book")
+            self._db.execute(
+                f"INSERT INTO book_notes ({_NOTE_COLUMNS}, book_id)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (note_id, *places, quote, kind, text, ink, now, now, book_id),
+            )
+        return _book_note(
+            note_id,
+            start_block,
+            start,
+            end_block,
+            end,
+            quote,
+            kind,
+            text,
+            ink,
+            now,
+            now,
+        )
+
+    def change_book_note(
+        self, book_id: str, note_id: str, note: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Have a note on a book say what `note` says, as `kind` and `text`
+        or `ink`, where it was; returns it as it is kept, or None if there
+        is no such note. Raises ValueError for what a note cannot say."""
+        kind, text, ink = _note_body(note)
+        with self._lock, self._db:
+            changed = self._db.execute(
+                "UPDATE book_notes SET kind = ?, text = ?, ink = ?, updated_at = ?"
+                " WHERE id = ? AND book_id = ?",
+                (kind, text, ink, self._now(), note_id, book_id),
+            )
+            if not changed.rowcount:
+                return None
+            row = self._db.execute(
+                f"SELECT {_NOTE_COLUMNS} FROM book_notes WHERE id = ?", (note_id,)
+            ).fetchone()
+        return _book_note(*row)
+
+    def delete_book_note(self, book_id: str, note_id: str) -> None:
+        """Remove a note on a book, if there is one."""
+        with self._lock, self._db:
+            self._db.execute(
+                "DELETE FROM book_notes WHERE id = ? AND book_id = ?",
+                (note_id, book_id),
+            )
 
     def transform_drafts(self, book_id: str, key: str) -> dict[str, Any]:
         """What has been written of the parts of the transformed version of

@@ -219,6 +219,12 @@ interface AnkiWords {
     field_names: Record<string, string[]>;
 }
 
+/** How many words `fetchKnownWords` would fetch, without fetching them. */
+export async function countKnownWords(): Promise<number> {
+    const { count } = await ankiReply<{ count: number }>(checkerFetch("/anki/words/count"));
+    return count;
+}
+
 /**
  * Fetches every word with at least one card that has graduated to review,
  * through the checker server, which alone reaches the deck-status server.

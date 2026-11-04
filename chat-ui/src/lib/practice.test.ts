@@ -336,7 +336,6 @@ describe("lessonsToReview", () => {
         level: "A1",
         title: `Lesson ${number}`,
         points: [],
-        more_info: "",
     }));
 
     it("is the lessons practised last, in the order they are taught in", () => {

@@ -11,14 +11,18 @@ import pytest
 from starter_topics import STARTER_TOPICS, starter_icon
 from storage import UserStore
 
-# What came with versions 24 to 37, taken out of a store to make it as one
+# What came with version 40, taken out of a store to make it as one was
+# before: the notes on books.
+BEFORE_NOTES = "DROP TABLE book_notes;"
+# What came with versions 24 to 37 and after them, taken out of a store to make it as one
 # was before: the instances the exercises made, what each replays, whether
 # a session is hidden, the parts of a grade and what it is about, the size
 # of an evaluation, which was a length, when a message of the tutor was
 # processed, what a book lists of itself, the versions of books, the brief
 # the tutor gave an exercise, the favourite exercises, their folders and
 # their names, and the texts written by hand and their pages.
-BEFORE_INSTANCES = """
+BEFORE_INSTANCES = f"""
+{BEFORE_NOTES}
 DROP TABLE text_pages;
 ALTER TABLE learner_texts DROP COLUMN handwritten;
 DROP TABLE favourites;
@@ -398,6 +402,64 @@ def test_a_book_that_is_removed_is_gone(store: UserStore) -> None:
 
     assert store.books() == []
     assert store.book("book-1") is None
+
+
+def test_a_note_on_a_book_is_kept_on_its_stretch_of_text_until_removed(
+    store: UserStore,
+) -> None:
+    blocks = [{"text": "Erster.", "size": 1}, {"text": "Zweiter Satz.", "size": 1}]
+    store.add_book("book-1", "Der Hund", "", "", blocks)
+    stroke = {"pen": "pen", "color": "#1a1a1a", "size": 3, "points": [[1, 2, 0.5]]}
+    on = {"startBlock": 1, "start": 0, "endBlock": 1, "end": 7, "quote": "Zweiter"}
+
+    typed = store.add_book_note("book-1", {**on, "kind": "typed", "text": "second"})
+    drawn = store.add_book_note(
+        "book-1",
+        {**on, "startBlock": 0, "end": 3, "kind": "handwritten", "ink": [stroke]},
+    )
+    changed = store.change_book_note(
+        "book-1", typed["id"], {"kind": "typed", "text": "2nd"}
+    )
+    store.delete_book_note("book-1", drawn["id"])
+
+    assert drawn["ink"] == [stroke]
+    assert changed is not None
+    assert (changed["text"], changed["quote"], changed["startBlock"]) == (
+        "2nd",
+        "Zweiter",
+        1,
+    )
+    assert store.book_notes("book-1") == [changed]
+    assert store.change_book_note("book-2", typed["id"], {"kind": "typed"}) is None
+
+
+def test_a_note_is_not_kept_off_the_text_of_its_book_or_on_a_book_there_is_not(
+    store: UserStore,
+) -> None:
+    store.add_book("book-1", "Der Hund", "", "", [{"text": "Text.", "size": 1}])
+    note = {"startBlock": 0, "start": 0, "endBlock": 0, "end": 4, "quote": "Text"}
+
+    for wrong in (
+        {**note, "endBlock": 1},
+        {**note, "end": -1},
+        {**note, "start": 4, "end": 2},
+        {**note, "kind": "drawn"},
+    ):
+        with pytest.raises(ValueError):
+            store.add_book_note("book-1", {"kind": "typed", **wrong})
+    with pytest.raises(ValueError):
+        store.add_book_note("book-2", {**note, "kind": "typed"})
+    assert store.book_notes("book-1") == []
+
+
+def test_the_notes_on_a_book_go_with_it(store: UserStore) -> None:
+    store.add_book("book-1", "Der Hund", "", "", [{"text": "Text.", "size": 1}])
+    note = {"startBlock": 0, "start": 0, "endBlock": 0, "end": 4, "quote": "Text"}
+    store.add_book_note("book-1", {**note, "kind": "typed", "text": "a dog"})
+
+    store.delete_book("book-1")
+
+    assert store.book_notes("book-1") == []
 
 
 def test_what_is_written_of_a_transformed_version_is_kept_by_part_until_dropped(
@@ -1488,7 +1550,7 @@ def test_the_corrections_of_before_are_deleted_and_their_texts_can_be_corrected_
     before = UserStore(tmp_path / "ada")
     before.save_text("t1", "Wochenende", "Ich bin gegeht.", "German")
     before.correct_text("t1", "Ich bin gegeht.", "c1", "~~gegeht~~ **gegangen**", "s1")
-    before._db.execute("PRAGMA user_version = 37")  # noqa: SLF001
+    before._db.executescript(f"{BEFORE_NOTES} PRAGMA user_version = 37;")  # noqa: SLF001
     before.close()
 
     store = UserStore(tmp_path / "ada")
@@ -1519,7 +1581,8 @@ def test_a_text_whose_correction_was_deleted_before_is_unlocked(
         before.save_text(text_id, "Text", "Ich bin gegeht.", "German")
         before.correct_text(text_id, "Ich bin gegeht.", f"c{text_id}", "{}", "s1")
     before._db.executescript(  # noqa: SLF001
-        "DELETE FROM learner_texts WHERE id = 'ct1'; PRAGMA user_version = 38;"
+        f"DELETE FROM learner_texts WHERE id = 'ct1'; {BEFORE_NOTES}"
+        " PRAGMA user_version = 38;"
     )
     before.close()
 

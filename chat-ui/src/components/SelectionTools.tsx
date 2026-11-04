@@ -39,6 +39,8 @@ interface Props {
     onLogged: () => void;
     /** Told what was selected of the book in the reader when it is to be read aloud. */
     onPlay: (selection: BookSelection) => void;
+    /** Told what was selected of the book in the reader, and the text it is, when a note is to be written on it. */
+    onNote: (selection: BookSelection, quote: string) => void;
 }
 
 /** How wide the buttons and the box they open are at most, and the room each needs above a selection, in pixels. */
@@ -157,7 +159,7 @@ function placed(anchor: Anchor) {
  * vocabulary as well.
  */
 export function SelectionTools(
-    { translating, describing, decisionModel, onUsage, onChat, onTask, onLogged, onPlay }: Props,
+    { translating, describing, decisionModel, onUsage, onChat, onTask, onLogged, onPlay, onNote }: Props,
 ) {
     // what the buttons are shown for, until something is done with it
     const [found, setFound] = useState<Found | null>(null);
@@ -210,16 +212,17 @@ export function SelectionTools(
             }
         }
         // On a touch screen a selection is made by holding a word and moving
-        // its handles, which ends in no mouseup: it is looked at once it has
-        // stopped changing for a moment.
+        // its handles, with a finger or a stylus such as the S Pen, which
+        // ends in no mouseup: it is looked at once it has stopped changing
+        // for a moment.
         let touching = false;
         let settling: number | undefined;
         function onPointerDown(event: PointerEvent) {
-            touching = event.pointerType === "touch";
+            touching = event.pointerType !== "mouse";
         }
         // a tap that leaves the selection as it was, such as one on it, changes nothing to be told of
         function onPointerUp(event: PointerEvent) {
-            if (event.pointerType === "touch") {
+            if (event.pointerType !== "mouse") {
                 look(event);
             }
         }
@@ -342,6 +345,17 @@ export function SelectionTools(
                             title={t("Read the selected sentences aloud")}
                         >
                             ▶ {t("Play")}
+                        </button>
+                    )}
+                    {found.book && (
+                        <button
+                            onClick={() => {
+                                onNote(found.book!, found.picked.selection.trim());
+                                setFound(null);
+                            }}
+                            title={t("Write a note on the selected text")}
+                        >
+                            ✎ {t("Note")}
                         </button>
                     )}
                 </div>
