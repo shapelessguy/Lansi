@@ -169,6 +169,7 @@ const ICONS = {
         </>
     ),
     trash: <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />,
+    download: <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />,
     // those of a player, filled
     play: <path d="M7 4.5v15l12-7.5Z" fill="currentColor" />,
     pause: (

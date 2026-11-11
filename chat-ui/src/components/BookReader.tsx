@@ -43,6 +43,7 @@ import {
 import { t } from "../lib/i18n";
 import { useMediaQuery } from "../lib/layout";
 import type { Where } from "../lib/logs";
+import { keepOffline, useOffline } from "../lib/offline";
 import { BLOCK_ATTRIBUTE, bookBlock, type BookPlace, type BookSelection, laidBlocks, placeOf } from "../lib/speaking";
 import { BookContents } from "./BookContents";
 import { BookNoteBox } from "./BookNoteBox";
@@ -174,6 +175,8 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         }
     }, [active]);
     const [contentsOpen, setContentsOpen] = useState(false);
+    // how much of the book is kept on the device, which is brought up to date while it is open
+    const offline = useOffline(bookId);
     // the paragraph at the top of the page of each book, and the character
     // of it the page starts at, by the id of the book
     const places = useRef(look.places);
@@ -968,6 +971,8 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                             setContentsOpen(false);
                             playSection(section);
                         }}
+                        offline={offline}
+                        onKeepOffline={(keep) => keepOffline(book.id, keep)}
                     />
                 )}
                 {narrow && !full && (

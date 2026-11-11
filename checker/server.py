@@ -1123,6 +1123,8 @@ class CheckerHandler(BaseHTTPRequestHandler):
 
             POST /books/ID/speech        have the sentences read that a
                                          selection has all or part of
+            GET /books/ID/speech         the sentences of the book whose
+                                         audio is kept, to keep it offline
             GET /books/ID/speech/S       the audio of the sentence S, as a
                                          file; one being made is waited for
             PUT /books/ID/speech/R       say where the listener of the
@@ -1137,7 +1139,11 @@ class CheckerHandler(BaseHTTPRequestHandler):
         `sentences`, each with its id, where it is, and whether its audio
         is `ready`. The audio that is not is made in the background, as the
         `task` of the reply, whose `reading` is what a PUT and a DELETE
-        name; there is none if all of it is kept. If the audio of more than
+        name; there is none if all of it is kept. A GET of a book lists the
+        `sentences` whose audio is kept as they are now written, each with
+        its id, where it is, its text and the `model` and the `voice` that
+        read it, and how many sentences the book has in all, as `total`;
+        nothing is made for it. If the audio of more than
         ASK_ABOVE sentences is to be made, the POST is answered 409 with how
         many as `toMake`, unless it brings `"agreed": true`, as it does once
         the listener agrees to have them all made.
@@ -1159,6 +1165,29 @@ class CheckerHandler(BaseHTTPRequestHandler):
         kind, book_id, name = found.groups()
         if method == "POST" and name is None:
             self._read_aloud(speaker, store, kind, book_id, api_key or "")
+        elif method == "GET" and name is None and kind == "books":
+            book = store.book(book_id)
+            if book is None:
+                self._reply(HTTPStatus.NOT_FOUND, {"error": "no such book"})
+                return True
+            blocks = book["blocks"]
+            sentences = sentences_between(blocks, 0, 0, len(blocks) - 1, sys.maxsize)
+            spoken = store.spoken(book_id)
+            self._reply(
+                HTTPStatus.OK,
+                {
+                    "sentences": [
+                        {
+                            **asdict(sentence),
+                            "model": spoken[sentence.id][1],
+                            "voice": spoken[sentence.id][2],
+                        }
+                        for sentence in sentences
+                        if spoken.get(sentence.id, ("",))[0] == sentence.text
+                    ],
+                    "total": len(sentences),
+                },
+            )
         elif method == "GET" and name:
             try:
                 audio, kind = speaker.audio(book_id, name, SPEECH_WAIT_SECS)

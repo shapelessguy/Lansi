@@ -70,6 +70,13 @@ function Root() {
 // the Back of the phone, in the Android app, closes what is open in the page before it leaves the app
 window.lansiBack = goBack;
 
+// the app is kept on the device, to open without a connection (public/sw.js)
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((caught: unknown) =>
+        console.warn("the app cannot be kept offline:", caught)
+    );
+}
+
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <Root />

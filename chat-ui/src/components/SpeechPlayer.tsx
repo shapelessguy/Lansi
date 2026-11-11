@@ -219,7 +219,12 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                 continue;
             }
             asked.current.add(place);
-            fetchSentenceAudio(base, reading.sentences[place].id, leaving.current.signal).then(
+            fetchSentenceAudio(
+                base,
+                reading.sentences[place].id,
+                leaving.current.signal,
+                reading.sentences[place].ready,
+            ).then(
                 (blob) => {
                     const url = URL.createObjectURL(blob);
                     urls.current.push(url);

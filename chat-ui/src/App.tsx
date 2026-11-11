@@ -75,6 +75,7 @@ import {
     useMediaQuery,
 } from "./lib/layout";
 import { LOGGED_EVENT } from "./lib/logs";
+import { syncAll } from "./lib/offline";
 import type { ChatMessage } from "./lib/openrouter";
 import {
     choosingOf,
@@ -347,6 +348,10 @@ export function App({ user, initialSettings, initialChats }: Props) {
     }, []);
 
     useEffect(loadBooks, [loadBooks]);
+    // the books kept on the device are brought up to date with the server as the app starts
+    useEffect(() => {
+        syncAll();
+    }, []);
 
     /**
      * Has the reader show a book or a version, by its id. With `book`, the

@@ -3962,6 +3962,31 @@ export const MESSAGES = {
         German: "Diese Notiz entfernen?",
         Italian: "Rimuovere questa nota?",
     },
+    "Keeps the text and all its audio on this device, to read and listen without a connection.": {
+        German: "Behält den Text und sein ganzes Audio auf diesem Gerät, um ohne Verbindung zu lesen und zuzuhören.",
+        Italian:
+            "Tiene il testo e tutto il suo audio su questo dispositivo, per leggere e ascoltare senza connessione.",
+    },
+    "Downloading the audio… {done} / {count}": {
+        German: "Audio wird heruntergeladen… {done} / {count}",
+        Italian: "Download dell'audio… {done} / {count}",
+    },
+    "The text is on this device. No audio has been made of it yet.": {
+        German: "Der Text ist auf diesem Gerät. Davon wurde noch kein Audio erstellt.",
+        Italian: "Il testo è su questo dispositivo. Non ne è stato ancora creato l'audio.",
+    },
+    "Audio of {done} of {total} sentences on this device · {size}": {
+        German: "Audio von {done} von {total} Sätzen auf diesem Gerät · {size}",
+        Italian: "Audio di {done} frasi su {total} su questo dispositivo · {size}",
+    },
+    "Downloading…": {
+        German: "Wird heruntergeladen…",
+        Italian: "Download in corso…",
+    },
+    "Available offline": {
+        German: "Offline verfügbar",
+        Italian: "Disponibile offline",
+    },
 } as const satisfies Record<string, Translations>;
 
 /** A text the interface shows, by what it says in English. */

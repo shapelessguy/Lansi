@@ -2,6 +2,8 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { t } from "./i18n";
+import { cachedFetch } from "./offlineCache";
+
 /** Who is logged in, and the token the checker server gave them to say so. */
 export interface Session {
     user: string;
@@ -10,7 +12,7 @@ export interface Session {
 
 const STORAGE_KEY = "chat-ui.session";
 /** Where the dev server forwards requests to the checker server, under the base the GUI is served at. */
-const BASE = `${import.meta.env.BASE_URL}checker`;
+export const BASE = `${import.meta.env.BASE_URL}checker`;
 
 export function normalizeSession(stored: unknown): Session | null {
     if (typeof stored !== "object" || stored === null) {
@@ -84,14 +86,20 @@ export function logOut(): void {
 /**
  * Asks the checker server for something as whoever is logged in. If the
  * server no longer takes the token, the session is over, and the login is
- * shown again.
+ * shown again. What the device keeps of the server (offlineCache.ts) is
+ * given when the server cannot be reached, and, with `keptFirst`, without
+ * asking it at all.
  */
-export async function checkerFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export async function checkerFetch(path: string, init: RequestInit = {}, keptFirst = false): Promise<Response> {
     const headers = new Headers(init.headers);
     if (current) {
         headers.set("Authorization", `Bearer ${current.token}`);
     }
-    const response = await fetch(`${BASE}${path}`, { ...init, headers });
+    const url = `${BASE}${path}`;
+    const ask = () => fetch(url, { ...init, headers });
+    const response = current && (init.method ?? "GET") === "GET"
+        ? await cachedFetch(current.user, path, url, ask, keptFirst)
+        : await ask();
     if (response.status === 401) {
         setSession(null);
     }

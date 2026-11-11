@@ -3,6 +3,7 @@
 
 import { t } from "./i18n";
 import { type ModelChoice, modelRequest } from "./models";
+import { offlineReading } from "./offline";
 import { checkerFetch } from "./session";
 import { pcmToWav } from "./speech";
 import type { BackgroundTask } from "./tasks";
@@ -278,18 +279,43 @@ export async function startReading(
     signal?: AbortSignal,
     agreed = false,
 ): Promise<Reading> {
-    const response = await checkerFetch(`${source.base}/speech`, {
-        method: "POST",
-        headers: voice.apiKey ? { "X-OpenRouter-Key": voice.apiKey } : {},
-        body: JSON.stringify({
-            ...source.wanted,
-            model: modelRequest(voice.model),
-            voice: voice.voice,
-            instructions: voice.instructions,
-            agreed,
-        }),
-        signal,
-    });
+    // without the server, a book kept on the device is read from what it has of it
+    const offline = async (caught: unknown) => {
+        const wanted = source.wanted as Record<string, number>;
+        const kept = source.bookId === null ? null : await offlineReading(source.bookId, {
+            startBlock: wanted.start_block,
+            start: wanted.start,
+            endBlock: wanted.end_block,
+            end: wanted.end,
+        });
+        if (kept === null) {
+            throw caught;
+        }
+        return kept;
+    };
+    let response: Response;
+    try {
+        response = await checkerFetch(`${source.base}/speech`, {
+            method: "POST",
+            headers: voice.apiKey ? { "X-OpenRouter-Key": voice.apiKey } : {},
+            body: JSON.stringify({
+                ...source.wanted,
+                model: modelRequest(voice.model),
+                voice: voice.voice,
+                instructions: voice.instructions,
+                agreed,
+            }),
+            signal,
+        });
+    } catch (caught) {
+        if (signal?.aborted) {
+            throw caught;
+        }
+        return offline(caught);
+    }
+    if (response.status >= 502 && response.status <= 504) {
+        return offline(new Error(t("The server cannot be reached.")));
+    }
     const reply = await response.json().catch(() => ({}));
     if (response.status === 409 && typeof reply.toMake === "number") {
         throw new ManyToMake(reply.toMake);
@@ -302,9 +328,15 @@ export async function startReading(
 
 /**
  * The audio of a sentence of the book or the chat at `base`. One that is still being made is waited
- * for. Throws if there is none in the end, with the reason.
+ * for. Throws if there is none in the end, with the reason. With `ready`, as the audio is kept already,
+ * what the device has of it is played without asking the server.
  */
-export async function fetchSentenceAudio(base: string, sentenceId: string, signal?: AbortSignal): Promise<Blob> {
+export async function fetchSentenceAudio(
+    base: string,
+    sentenceId: string,
+    signal?: AbortSignal,
+    ready = false,
+): Promise<Blob> {
     let reason = "";
     for (let attempt = 0; attempt < TRIES; attempt++) {
         let response: Response;
@@ -312,7 +344,7 @@ export async function fetchSentenceAudio(base: string, sentenceId: string, signa
             const timeout = AbortSignal.timeout(AUDIO_WAIT_MS);
             response = await checkerFetch(`${base}/speech/${sentenceId}`, {
                 signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-            });
+            }, ready);
             if (response.ok) {
                 return await response.blob();
             }

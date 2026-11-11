@@ -1592,6 +1592,33 @@ def test_the_sentences_of_a_book_are_read_aloud_once_and_their_audio_kept(
     assert [one["status"] for one in task["result"]] == ["made", "made"]
 
 
+def test_the_sentences_of_a_book_whose_audio_is_kept_are_listed_to_keep_offline(
+    with_users: str,
+) -> None:
+    ada = log_in(with_users, "ada", "a password")
+    file = epub(page("<p>Der Hund schläft. Die Katze nicht. Danach?</p>"))
+    _, added, _ = send(f"{with_users}/books", "POST", ada, file)
+    book = f"{with_users}/books/{json.loads(added)['id']}"
+    body = {"start_block": 0, "start": 0, "end_block": 0, "end": 5}
+    voiced = json.dumps({**body, "model": "some/tts", "voice": "Kore"}).encode()
+
+    _, before, _ = send(f"{book}/speech", "GET", ada)
+    post(f"{book}/speech", voiced, key="sk-test", token=ada)
+    send(f"{book}/speech/0.0", "GET", ada)
+    _, after, _ = send(f"{book}/speech", "GET", ada)
+    missing, _, _ = send(f"{with_users}/books/nothing/speech", "GET", ada)
+
+    assert json.loads(before) == {"sentences": [], "total": 3}
+    listed = json.loads(after)
+    assert listed["total"] == 3
+    assert [
+        (one["id"], one["block"], one["start"], one["end"], one["text"], one["voice"])
+        for one in listed["sentences"]
+    ] == [("0.0", 0, 0, 17, "Der Hund schläft.", "Kore")]
+    assert listed["sentences"][0]["model"]
+    assert missing == 404
+
+
 def test_the_audio_of_many_sentences_to_make_is_made_once_the_listener_agrees(
     with_users: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

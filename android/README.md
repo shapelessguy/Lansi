@@ -11,7 +11,9 @@ What the app adds to the page:
   and `PUBLIC_HOST` from anywhere; the app opens the one at home when the
   Wi-Fi the phone is on holds the address `LAN_HOST` points at and it
   answers from there, and the other otherwise, without waiting, and
-  chooses again when the page can no longer be loaded.
+  chooses again when the page can no longer be loaded. With no connection
+  at all it opens the one it opened last, whose service worker has the
+  page, and the books kept offline, on the phone.
 - `Storage.kt`: the login kept from one name to the other. Each is an
   origin with a localStorage of its own, so the storage of the web app is
   carried over whenever the app goes from one to the other.

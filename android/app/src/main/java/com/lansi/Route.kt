@@ -33,9 +33,37 @@ object Route {
     /** Whether `url` is of Lansi, by either address, rather than a link out of it. */
     fun isLansi(url: Uri): Boolean = "${url.scheme}://${url.authority}" in origins
 
-    /** The address to open now. It asks the network, so it is called off the main thread. */
-    fun pick(context: Context): String =
-        if (LAN_URL.isNotEmpty() && onHomeNetwork(context) && answers(LAN_URL)) LAN_URL else PUBLIC_URL
+    /**
+     * The address to open now. It asks the network, so it is called off the
+     * main thread. With no connection at all, it is the one opened last,
+     * which has the app and the books kept offline: each address keeps
+     * its own.
+     */
+    fun pick(context: Context): String {
+        val picked = when {
+            LAN_URL.isNotEmpty() && onHomeNetwork(context) && answers(LAN_URL) -> LAN_URL
+            online(context) -> PUBLIC_URL
+            else -> return lastPicked(context) ?: PUBLIC_URL
+        }
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).edit().putString(LAST, picked).apply()
+        return picked
+    }
+
+    private const val PREFERENCES = "route"
+    private const val LAST = "last"
+
+    /** The address opened last, if it is still one of the two. */
+    private fun lastPicked(context: Context): String? =
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).getString(LAST, null)
+            ?.takeIf { it == LAN_URL || it == PUBLIC_URL }
+
+    /** Whether the phone is on a network that reaches the internet. */
+    private fun online(context: Context): Boolean {
+        val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return false
+        val network = connectivity.activeNetwork ?: return false
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
 
     /**
      * Whether the phone is on a Wi-Fi whose addresses hold the one the name at
