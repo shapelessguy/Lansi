@@ -1,9 +1,9 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { expect, test } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 
-import { normalizeSpeed, spotBeside, startingAt, stepped, wanted } from "./speaking";
+import { fetchSentenceAudio, normalizeSpeed, spotBeside, startingAt, stepped, Unreachable, wanted } from "./speaking";
 
 test("the next and the previous sentence are a step away, and there is none beyond the ends", () => {
     expect(stepped(2, 1, 5)).toBe(3);
@@ -53,4 +53,26 @@ test("a reading starts at the sentence that goes on past the place it is to star
     expect(startingAt(sentences, { block: 4, offset: 45 })).toBe(2);
     expect(startingAt(sentences, { block: 4, offset: 0 })).toBe(0);
     expect(startingAt(sentences, { block: 9, offset: 0 })).toBe(0);
+});
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+});
+
+test("audio asked for while the connection is lost is to be asked for again, rather than given up on", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    await expect(fetchSentenceAudio("/books/b", "1.0")).rejects.toBeInstanceOf(Unreachable);
+});
+
+test("audio that the server says cannot be had is given up on", async () => {
+    vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "no credit" }), { status: 404 })),
+    );
+
+    const failed = fetchSentenceAudio("/books/b", "1.0");
+
+    await expect(failed).rejects.toThrow("no credit");
+    await expect(failed).rejects.not.toBeInstanceOf(Unreachable);
 });

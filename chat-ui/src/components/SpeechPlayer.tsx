@@ -25,6 +25,7 @@ import {
     startReading,
     stepped,
     stopReading,
+    Unreachable,
     type Voice,
     wanted,
 } from "../lib/speaking";
@@ -55,6 +56,8 @@ export const CONTROL_EVENT = "lansi:speech-control";
 export type SpeechControl = "toggle" | "next" | "previous";
 /** What the reader of books tells as it lays out other parts of a book. */
 export const LAID_OUT_EVENT = "lansi:book-laid-out";
+/** How long, in milliseconds, the player waits before asking again for audio when the server could not be reached. */
+const RETRY_MS = 3000;
 
 /**
  * Plays the sentences of a book that were selected, or those of a message
@@ -121,6 +124,10 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
     const [playing, setPlaying] = useState(true);
     // whether the browser kept the audio from starting by itself
     const [held, setHeld] = useState(false);
+    // whether the server could not be reached the last time audio was asked for, which is asked for again
+    // every so often until it can
+    const [unreachable, setUnreachable] = useState(false);
+    const [retries, setRetries] = useState(0);
     // how fast the audio is played, which is remembered for the next time
     const [speed, setSpeed] = useState(loadSpeed);
     const asked = useRef(new Set<number>());
@@ -217,13 +224,35 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                     const url = URL.createObjectURL(blob);
                     urls.current.push(url);
                     setClips((current) => ({ ...current, [place]: { url } }));
+                    setUnreachable(false);
                 },
-                (caught: Error) =>
-                    leaving.current.signal.aborted
-                    || setClips((current) => ({ ...current, [place]: { failed: caught.message } })),
+                (caught: Error) => {
+                    if (leaving.current.signal.aborted) {
+                        return;
+                    }
+                    // a connection that is lost for a while is waited out, rather than the sentence passed over
+                    if (caught instanceof Unreachable) {
+                        asked.current.delete(place);
+                        setUnreachable(true);
+                    } else {
+                        setClips((current) => ({ ...current, [place]: { failed: caught.message } }));
+                    }
+                },
             );
         }
-    }, [base, reading, readingId, index]);
+    }, [base, reading, readingId, index, retries]);
+    useEffect(() => {
+        if (!unreachable) {
+            return;
+        }
+        const again = () => setRetries((count) => count + 1);
+        const timer = setTimeout(again, RETRY_MS);
+        window.addEventListener("online", again);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener("online", again);
+        };
+    }, [unreachable, retries]);
 
     // The sentence that is heard is marked in the book, and the reader told
     // to show it: where it is, if its part of the book is laid out, and
@@ -359,6 +388,8 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
             ? t("Getting the sentences…")
             : failed !== null
             ? t("Could not be read: {why}", { why: failed })
+            : !clip && unreachable
+            ? t("Waiting for the connection…")
             : !clip
             ? t("Making the audio…")
             : held

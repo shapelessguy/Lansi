@@ -2033,6 +2033,10 @@ export const MESSAGES = {
         German: "Konnte nicht vorgelesen werden: {why}",
         Italian: "Non è stato possibile leggere: {why}",
     },
+    "Waiting for the connection…": {
+        German: "Warten auf die Verbindung…",
+        Italian: "In attesa della connessione…",
+    },
     "Making the audio…": {
         German: "Audio wird erstellt…",
         Italian: "Creazione dell'audio…",

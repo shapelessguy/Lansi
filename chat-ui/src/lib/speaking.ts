@@ -50,6 +50,16 @@ export interface Voice {
 export const AHEAD = 2;
 /** How often the audio of a sentence is asked for again while it is still being made. */
 const TRIES = 6;
+/**
+ * How long, in milliseconds, an answer with the audio of a sentence is
+ * waited for: the server waits up to 50 seconds for audio that is being
+ * made, and a connection that was lost, as when a phone goes from Wi-Fi to
+ * mobile data, may never answer at all.
+ */
+const AUDIO_WAIT_MS = 65_000;
+
+/** What is thrown when the server could not be reached, as when the connection is lost or changes: it is asked again. */
+export class Unreachable extends Error {}
 
 /** The attribute each paragraph of a book that is laid out has, with its place among all of them. */
 export const BLOCK_ATTRIBUTE = "data-block";
@@ -297,9 +307,20 @@ export async function startReading(
 export async function fetchSentenceAudio(base: string, sentenceId: string, signal?: AbortSignal): Promise<Blob> {
     let reason = "";
     for (let attempt = 0; attempt < TRIES; attempt++) {
-        const response = await checkerFetch(`${base}/speech/${sentenceId}`, { signal });
-        if (response.ok) {
-            return response.blob();
+        let response: Response;
+        try {
+            const timeout = AbortSignal.timeout(AUDIO_WAIT_MS);
+            response = await checkerFetch(`${base}/speech/${sentenceId}`, {
+                signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+            });
+            if (response.ok) {
+                return await response.blob();
+            }
+        } catch (caught) {
+            if (signal?.aborted) {
+                throw caught;
+            }
+            throw new Unreachable(caught instanceof Error ? caught.message : String(caught));
         }
         reason = (await response.json().catch(() => ({}))).error
             ?? t("The server answered {status}.", { status: response.status });
