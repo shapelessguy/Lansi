@@ -42,7 +42,7 @@ from tasks import Tasks
 from test_books import epub, page, png
 from test_intake import FakeChat, FakeProfiler
 from test_pdfs import a_pdf
-from test_speaking import FakeVoice
+from test_speaking import FakeVoice, as_it_is
 from test_topics import FakeOpenRouter
 from test_translating import FakeModel
 from tokens import count
@@ -912,7 +912,7 @@ def with_users(tmp_path: Path) -> Iterator[str]:
             intake,
             store=store,
             translator=Translator(model),
-            speaker=Speaker(store, FakeVoice()),
+            speaker=Speaker(store, FakeVoice(), encode=as_it_is),
             tasks=tasks,
             practice=practice,
             evaluations=Evaluations(store, practice, later=in_background(tasks, "log")),

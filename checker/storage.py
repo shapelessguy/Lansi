@@ -2094,6 +2094,35 @@ class UserStore:
             file = self._speech / book_id / sentence_id
             return (file.read_bytes(), row[0]) if file.exists() else None
 
+    def speech_of_kind(self, content_type: str) -> list[tuple[str, str]]:
+        """The books and the sentences whose audio is kept as a kind of file."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT book_id, sentence_id FROM book_speech WHERE content_type = ?",
+                (content_type,),
+            ).fetchall()
+        return [(book_id, sentence_id) for book_id, sentence_id in rows]
+
+    def replace_speech_audio(
+        self, book_id: str, sentence_id: str, audio: bytes, content_type: str
+    ) -> None:
+        """Keep the audio of a sentence, which is kept already, as another
+        file of the same sound, such as a smaller one."""
+        if not is_id(book_id) or not _SENTENCE_ID.fullmatch(sentence_id):
+            raise ValueError("not the id of a sentence of a book")
+        with self._lock, self._db:
+            file = self._speech / book_id / sentence_id
+            if not file.exists():
+                return
+            written = file.with_name(file.name + ".new")
+            written.write_bytes(audio)
+            written.replace(file)
+            self._db.execute(
+                "UPDATE book_speech SET content_type = ?"
+                " WHERE book_id = ? AND sentence_id = ?",
+                (content_type, book_id, sentence_id),
+            )
+
     def spoken(self, book_id: str) -> dict[str, tuple[str, str, str]]:
         """The sentences of a book whose audio is kept, by their ids: each
         as it was read, with the model and the voice that read it."""

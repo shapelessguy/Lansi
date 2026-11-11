@@ -23,6 +23,9 @@ from __future__ import annotations
 import io
 import json
 import re
+import shutil
+import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -264,15 +267,57 @@ def playable(data: bytes, content_type: str) -> tuple[bytes, str]:
     return file.getvalue(), "audio/wav"
 
 
+# The audio that is kept: Opus, made for speech, in an Ogg file, at a rate
+# at which a voice sounds as it does in a WAV file of 24 kHz while taking
+# about a fifteenth of the room.
+OPUS = "audio/ogg; codecs=opus"
+OPUS_BITRATE = "32k"
+ENCODE_TIMEOUT_SECS = 60
+
+# Makes the audio of a sentence, as a file players can open, smaller to
+# keep: returns the audio and the kind of file it is.
+Encode = Callable[[bytes, str], tuple[bytes, str]]
+
+
+def compressed(audio: bytes, content_type: str) -> tuple[bytes, str]:
+    """A WAV file as Opus, by ffmpeg. Any other file, or one that ffmpeg,
+    if there is one, cannot make anything of, is kept as it is."""
+    ffmpeg = shutil.which("ffmpeg")
+    if content_type != "audio/wav" or ffmpeg is None:
+        return audio, content_type
+    try:
+        done = subprocess.run(
+            [ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "wav", "-i", "pipe:0"]
+            + ["-c:a", "libopus", "-b:a", OPUS_BITRATE, "-application", "voip"]
+            + ["-f", "ogg", "pipe:1"],
+            input=audio,
+            capture_output=True,
+            timeout=ENCODE_TIMEOUT_SECS,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        print(
+            f"the audio was kept as WAV, as it could not be made Opus: {error}",
+            file=sys.stderr,
+        )
+        return audio, content_type
+    return (done.stdout, OPUS) if done.stdout else (audio, content_type)
+
+
 class Speaker:
     """Reads the sentences of the books of one user aloud."""
 
     def __init__(
-        self, store: UserStore, send: SendSpeech = send_speech, workers: int = WORKERS
+        self,
+        store: UserStore,
+        send: SendSpeech = send_speech,
+        workers: int = WORKERS,
+        encode: Encode = compressed,
     ) -> None:
         self._store = store
         self._send = send
         self._workers = workers
+        self._encode = encode
         # set once the audio of a sentence that is being made is there, or
         # is given up on, by the id of the book and of the sentence
         self._pending: dict[tuple[str, str], threading.Event] = {}
@@ -372,7 +417,7 @@ class Speaker:
                     data, content_type, generation = self._send(body, model)
                     if not data:
                         raise SpeechError("the speech model returned no audio")
-                    audio, kind = playable(data, content_type)
+                    audio, kind = self._encode(*playable(data, content_type))
                     self._store.save_speech(
                         book_id,
                         sentence.id,

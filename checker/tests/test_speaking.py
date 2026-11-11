@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import io
+import shutil
 import threading
 import wave
 from pathlib import Path
@@ -12,9 +13,11 @@ from typing import Any
 import pytest
 from models import Model
 from speaking import (
+    OPUS,
     BookSentence,
     Speaker,
     SpeechError,
+    compressed,
     generation_usages,
     playable,
     sentences_between,
@@ -51,6 +54,11 @@ class FakeVoice:
 
     def read(self) -> list[str]:
         return [body["input"] for body in self.bodies]
+
+
+def as_it_is(audio: bytes, content_type: str) -> tuple[bytes, str]:
+    """Keeps the audio made as it is, so that what it says can be told."""
+    return audio, content_type
 
 
 @pytest.fixture
@@ -92,9 +100,33 @@ def test_bare_samples_are_made_a_file_players_can_open() -> None:
     assert playable(b"ID3", "audio/mpeg") == (b"ID3", "audio/mpeg")
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
+def test_a_wav_file_is_kept_as_opus_and_other_files_as_they_are() -> None:
+    wav, _ = playable(bytes(48_000), "audio/pcm;rate=24000")
+
+    audio, kind = compressed(wav, "audio/wav")
+
+    assert kind == OPUS and audio.startswith(b"OggS") and len(audio) < len(wav) / 4
+    assert compressed(b"ID3", "audio/mpeg") == (b"ID3", "audio/mpeg")
+    assert compressed(b"not a wav", "audio/wav") == (b"not a wav", "audio/wav")
+
+
+def test_the_audio_of_a_sentence_is_replaced_by_another_file_of_it(
+    store: UserStore,
+) -> None:
+    store.save_speech(BOOK, "1.0", "Der Hund schläft.", "m", "v", b"RIFF", "audio/wav")
+    store.save_speech(BOOK, "1.1", "Die Katze nicht.", "m", "v", b"ID3", "audio/mpeg")
+
+    assert store.speech_of_kind("audio/wav") == [(BOOK, "1.0")]
+    store.replace_speech_audio(BOOK, "1.0", b"OggS", OPUS)
+
+    assert store.speech(BOOK, "1.0") == (b"OggS", OPUS)
+    assert store.speech_of_kind("audio/wav") == []
+
+
 def test_the_audio_of_each_sentence_is_made_once_and_kept(store: UserStore) -> None:
     voice = FakeVoice()
-    speaker = Speaker(store, voice, workers=1)
+    speaker = Speaker(store, voice, workers=1, encode=as_it_is)
     wanted = sentences(1, 0, 1, 24)
 
     reading = speaker.start(BOOK, wanted)
@@ -125,7 +157,7 @@ def test_the_audio_of_each_sentence_is_made_once_and_kept(store: UserStore) -> N
 def test_audio_is_not_taken_as_kept_for_another_voice_or_another_wording(
     store: UserStore,
 ) -> None:
-    speaker = Speaker(store, FakeVoice(), workers=1)
+    speaker = Speaker(store, FakeVoice(), workers=1, encode=as_it_is)
     wanted = sentences(2, 0, 2, 5)
     speaker.make(
         speaker.start(BOOK, wanted), BOOK, wanted, Model("some/tts", key=KEY), "Kore"
@@ -142,7 +174,7 @@ def test_the_sentences_from_where_the_listener_is_are_made_first(
     store: UserStore,
 ) -> None:
     voice = FakeVoice()
-    speaker = Speaker(store, voice, workers=1)
+    speaker = Speaker(store, voice, workers=1, encode=as_it_is)
     wanted = sentences(0, 0, 2, 5)
     reading = speaker.start(BOOK, wanted)
 
@@ -162,7 +194,7 @@ def test_the_sentences_from_where_the_listener_is_are_made_first(
 def test_a_sentence_that_cannot_be_read_fails_by_itself_with_the_reason(
     store: UserStore,
 ) -> None:
-    speaker = Speaker(store, FakeVoice(fails_on="Katze"), workers=1)
+    speaker = Speaker(store, FakeVoice(fails_on="Katze"), workers=1, encode=as_it_is)
     wanted = sentences(1, 0, 1, 24)
 
     made = speaker.make(
@@ -179,7 +211,7 @@ def test_a_sentence_that_cannot_be_read_fails_by_itself_with_the_reason(
 
 def test_a_reading_that_is_stopped_leaves_the_rest_unread(store: UserStore) -> None:
     voice = FakeVoice()
-    speaker = Speaker(store, voice, workers=1)
+    speaker = Speaker(store, voice, workers=1, encode=as_it_is)
     wanted = sentences(1, 0, 1, 24)
     reading = speaker.start(BOOK, wanted)
 
@@ -193,7 +225,7 @@ def test_a_reading_that_is_stopped_leaves_the_rest_unread(store: UserStore) -> N
 
 
 def test_audio_that_is_being_made_is_waited_for(store: UserStore) -> None:
-    speaker = Speaker(store, FakeVoice(), workers=1)
+    speaker = Speaker(store, FakeVoice(), workers=1, encode=as_it_is)
     wanted = sentences(2, 0, 2, 5)
     reading = speaker.start(BOOK, wanted)
 
@@ -228,7 +260,7 @@ def test_audio_is_not_kept_under_what_is_not_the_id_of_a_sentence(
 
 def test_a_sentence_two_readings_want_is_read_once(store: UserStore) -> None:
     voice = FakeVoice()
-    speaker = Speaker(store, voice, workers=1)
+    speaker = Speaker(store, voice, workers=1, encode=as_it_is)
     wanted = sentences(2, 0, 2, 5)
     first, second = speaker.start(BOOK, wanted), speaker.start(BOOK, wanted)
 

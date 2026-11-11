@@ -39,6 +39,12 @@ android:
 checker: _checker-env
     {{ checker_python }} checker/server.py
 
+# Make the audio read aloud that the checker keeps as WAV files Opus files,
+# as it keeps what it makes from now on, which take far less room. Needs
+# ffmpeg. It can be run while the checker is.
+compress-speech: _checker-env
+    {{ checker_python }} checker/compress_speech.py
+
 # Run the tests of all three parts
 test: _checker-env
     cargo test --target-dir out/rust -p anki-deck-status
