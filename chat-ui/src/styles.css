@@ -1111,17 +1111,24 @@ a {
 }
 
 /* Of the bar, only the player of what is read aloud, while there is one,
-   and the way out of the full screen are kept, at the top right over the
-   text, which takes the whole height. */
+   and the way out of the full screen are kept, at the bottom right over the
+   text, which takes the whole height, where a hand holding a tablet reaches
+   them; the reader raises it over the sentence read aloud (bottom). */
 .reader.full .reader-bar {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    right: 12px;
     z-index: 1;
+    gap: 8px;
+    transition: bottom 0.15s ease-out;
     padding: 0;
     border: none;
     /* in the colour of the text of the paper, so as to sit on a light paper as well as a dark one */
     color: var(--paper-text, var(--text));
+}
+
+/* the bar is placed on the screen, rather than on its wrapper, which has no height there */
+.reader.full .reader-top {
+    position: static;
 }
 
 .reader.full .reader-bar > :not(.speech-dock, .reader-view-tools),
@@ -1129,24 +1136,78 @@ a {
     display: none;
 }
 
-/* see through, so as to take after the paper under it */
+/* Each group a pill that takes after the paper under it, with round
+   buttons large enough to be tapped surely with a finger. */
 .reader.full .reader-view-tools,
 .reader.full .speech-player.docked {
-    border-color: color-mix(in srgb, currentColor 22%, transparent);
-    background: color-mix(in srgb, currentColor 8%, transparent);
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--paper-background, var(--bg)) 82%, transparent);
     color: inherit;
-    backdrop-filter: blur(6px);
+    box-shadow: 0 2px 10px rgb(0 0 0 / 12%);
+    backdrop-filter: blur(8px);
 }
 
-.reader.full .speech-player.docked button,
-.reader.full .speech-player.docked select {
-    border-color: color-mix(in srgb, currentColor 22%, transparent);
+.reader.full .speech-player.docked .speech-controls {
+    gap: 2px;
+    max-height: none;
+}
+
+.reader.full .speech-player.docked .icon-button,
+.reader.full .full-screen-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
     background: transparent;
     color: inherit;
 }
 
-.reader.full .full-screen-toggle {
+.reader.full .speech-player.docked .icon-button .icon,
+.reader.full .full-screen-toggle .icon {
+    width: 22px;
+    height: 22px;
+}
+
+.reader.full .speech-player.docked .speech-play {
+    background: color-mix(in srgb, currentColor 13%, transparent);
+}
+
+.reader.full .speech-player.docked .speech-play .icon {
+    width: 26px;
+    height: 26px;
+}
+
+.reader.full .speech-player.docked .icon-button:hover:not(:disabled),
+.reader.full .full-screen-toggle:hover {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.reader.full .speech-player.docked .speech-play:hover:not(:disabled) {
+    background: color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.reader.full .speech-player.docked .speech-speed {
+    height: 40px;
+    margin-left: 4px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 999px;
+    background: color-mix(in srgb, currentColor 8%, transparent);
     color: inherit;
+    font-size: 1rem;
+}
+
+.reader.full .speech-player.docked .count {
+    margin: 0 14px 0 6px;
+    font-size: 0.95rem;
+    opacity: 0.7;
 }
 
 /* the list of a menu opens over the app rather than the paper, in its colours */
@@ -1156,7 +1217,7 @@ a {
 }
 
 .reader.full .reader-view-tools {
-    opacity: 0.55;
+    opacity: 0.6;
     transition: opacity 0.15s;
 }
 
@@ -1330,6 +1391,39 @@ a {
     color: var(--accent);
 }
 
+/* the button on the heading of a section in the text of a book, which reads the section aloud */
+.heading-play {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3em;
+    height: 1.3em;
+    /* centred on the capitals of the heading, and taking no more height of the line than they do: it stands on
+       the line by the foot of its icon, which is as far above its own foot as the capitals are tall, about */
+    margin: -0.2em 0 -0.2em 0.4em;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: color-mix(in srgb, currentColor 9%, transparent);
+    color: inherit;
+    font-size: 1em;
+    vertical-align: baseline;
+    opacity: 0.55;
+    user-select: none;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+.heading-play .icon {
+    width: 0.75em;
+    height: 0.75em;
+}
+
+.heading-play:hover {
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+    color: var(--accent);
+    opacity: 1;
+}
+
 .contents-title[aria-current] {
     color: var(--accent);
     font-weight: 600;
@@ -1373,8 +1467,9 @@ a {
     overflow: clip;
     min-height: 0;
     display: flex;
-    /* a finger moved across turns the page (BookReader), and is not taken by the browser */
-    touch-action: pan-y pinch-zoom;
+    /* a finger moved across turns the page, one moved up from the sentence read aloud translates it, and two
+       move the reading aloud (BookReader), which the browser would take for a pan or a pinch, and takes none of */
+    touch-action: none;
     padding: 20px var(--reader-margin);
 }
 
@@ -1675,6 +1770,9 @@ div.book-cover {
 
 /* the buttons are told apart by a line between them, and have no edge of their own */
 .selection-bar button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 5px 12px;
     border: none;
     border-radius: 7px;
@@ -1689,6 +1787,25 @@ div.book-cover {
 
 .selection-bar button + button {
     margin-left: 7px;
+}
+
+.selection-bar .icon {
+    width: 15px;
+    height: 15px;
+}
+
+/* on a window too narrow for their names, as a phone's, the buttons are their icons alone, as large as a finger */
+.selection-bar.icons-only button {
+    padding: 8px 11px;
+}
+
+.selection-bar.icons-only button span {
+    display: none;
+}
+
+.selection-bar.icons-only .icon {
+    width: 20px;
+    height: 20px;
 }
 
 .selection-bar button + button::before {
@@ -3009,6 +3126,15 @@ div.book-cover {
 
 .speech-controls .count {
     margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.speech-controls .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .speech-speed {

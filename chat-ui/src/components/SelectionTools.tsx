@@ -23,6 +23,7 @@ import {
     visiblePart,
 } from "../lib/translate";
 import type { UsageEntry } from "../lib/usage";
+import { Icon, type IconName } from "./Icon";
 
 interface Props {
     /** Who translates, and into which language. */
@@ -43,13 +44,25 @@ interface Props {
     onNote: (selection: BookSelection, quote: string) => void;
 }
 
-/** How wide the buttons and the box they open are at most, and the room each needs above a selection, in pixels. */
-const BAR = { width: 360, room: 48 };
+/**
+ * How wide the buttons and the box they open are at most, and the room each
+ * needs above a selection, in pixels. The buttons are only icons on a
+ * window too narrow for their names, as a phone's is.
+ */
+const BAR = { width: 520, room: 48 };
+const ICONS_BAR = { width: 250, room: 48 };
+const ICONS_BELOW = 600;
 const BOX = { width: 380, room: 150 };
+
+/** What has a range of text translated as if it were selected, such as the sentence read aloud of a book. */
+export const TRANSLATE_EVENT = "lansi:translate";
+/** What has the reader of books read aloud the smallest section a selection of it is in, from the selection on. */
+export const PLAY_SECTION_EVENT = "lansi:play-section";
 
 /** What can be done with a selection, and what each is called on its button. */
 const TASKS = { translate: "Translate", words: "Add to vocabulary" } as const satisfies Record<string, Message>;
 type Task = keyof typeof TASKS;
+const TASK_ICONS = { translate: "translate", words: "add-words" } as const satisfies Record<Task, IconName>;
 
 /** What was selected, and where on the window. */
 interface Found {
@@ -92,9 +105,17 @@ function findSelection(): Found | null {
     if (!found) {
         return null;
     }
-    const { region, root, book } = found;
     // the selection of the document has only the host of a shadow root
-    const text = root === region ? selection.toString() : range.toString();
+    return foundIn(range, found.root === found.region ? selection.toString() : range.toString());
+}
+
+/** A range of text where text can be translated, as it is found when it is selected, if it is there. */
+function foundIn(range: Range, text = range.toString()): Found | null {
+    const found = regionOf(range.commonAncestorContainer);
+    if (!found) {
+        return null;
+    }
+    const { region, root, book } = found;
     const area = clipOf(range.commonAncestorContainer);
     return {
         picked: textAround(range, root, text),
@@ -181,6 +202,9 @@ export function SelectionTools(
         setFound(next);
     }
 
+    // what a task is started with as things are now, for what asks for one from outside
+    const started = useRef((_task: Task, _of: Found) => {});
+    started.current = start;
     useEffect(() => {
         // The selection is as it will be only after the click that made or
         // dropped it is over.
@@ -241,6 +265,13 @@ export function SelectionTools(
             clearTimeout(moving);
             moving = window.setTimeout(show, 300);
         };
+        function onTranslate(event: Event) {
+            const asked = foundIn((event as CustomEvent<{ range: Range }>).detail.range);
+            if (asked) {
+                started.current("translate", asked);
+            }
+        }
+        window.addEventListener(TRANSLATE_EVENT, onTranslate);
         document.addEventListener("mouseup", look);
         // and once what a click does is done, such as turning a page of a book under the selection
         document.addEventListener("click", look);
@@ -259,6 +290,7 @@ export function SelectionTools(
             clearTimeout(timer);
             clearTimeout(settling);
             clearTimeout(moving);
+            window.removeEventListener(TRANSLATE_EVENT, onTranslate);
             document.removeEventListener("mouseup", look);
             document.removeEventListener("click", look);
             document.removeEventListener("keyup", look);
@@ -320,31 +352,61 @@ export function SelectionTools(
         }
     }
 
+    const iconsOnly = window.innerWidth < ICONS_BELOW;
+    const bar = iconsOnly ? ICONS_BAR : BAR;
     return (
         <div ref={tools}>
             {found && !box && (
                 <div
-                    className="selection-bar"
+                    className={iconsOnly ? "selection-bar icons-only" : "selection-bar"}
                     role="toolbar"
                     aria-label={t("Selected text")}
                     style={placed(
-                        anchorFor(found.rect, found.area, BAR.width, BAR.room),
+                        anchorFor(found.rect, found.area, bar.width, bar.room),
                     )}
                     // a click on a button must not drop the selection the button is for
                     onMouseDown={(event) => event.preventDefault()}
                 >
                     {(Object.keys(TASKS) as Task[]).map((task) => (
-                        <button key={task} onClick={() => start(task, found)}>{t(TASKS[task])}</button>
+                        <button
+                            key={task}
+                            onClick={() => start(task, found)}
+                            title={t(TASKS[task])}
+                            aria-label={t(TASKS[task])}
+                        >
+                            <Icon name={TASK_ICONS[task]} />
+                            <span>{t(TASKS[task])}</span>
+                        </button>
                     ))}
                     {found.book && (
                         <button
                             onClick={() => {
                                 onPlay(found.book!);
+                                // what is read aloud is marked as it is heard, which the selection would hide
+                                window.getSelection()?.removeAllRanges();
                                 setFound(null);
                             }}
                             title={t("Read the selected sentences aloud")}
+                            aria-label={t("Read the selected sentences aloud")}
                         >
-                            ▶ {t("Play")}
+                            <Icon name="play" />
+                            <span>{t("Play")}</span>
+                        </button>
+                    )}
+                    {found.book && (
+                        <button
+                            onClick={() => {
+                                window.dispatchEvent(
+                                    new CustomEvent(PLAY_SECTION_EVENT, { detail: { selection: found.book } }),
+                                );
+                                window.getSelection()?.removeAllRanges();
+                                setFound(null);
+                            }}
+                            title={t("Read aloud its whole section, from here")}
+                            aria-label={t("Read aloud its whole section, from here")}
+                        >
+                            <Icon name="play-section" />
+                            <span>{t("From here")}</span>
                         </button>
                     )}
                     {found.book && (
@@ -354,8 +416,10 @@ export function SelectionTools(
                                 setFound(null);
                             }}
                             title={t("Write a note on the selected text")}
+                            aria-label={t("Write a note on the selected text")}
                         >
-                            ✎ {t("Note")}
+                            <Icon name="pencil" />
+                            <span>{t("Note")}</span>
                         </button>
                     )}
                 </div>

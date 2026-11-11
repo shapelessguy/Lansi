@@ -8,14 +8,18 @@ import {
     type Book,
     type BookBlock,
     type BookNote,
+    type BookSection,
     bookWindows,
     changeBookNote,
     changeReading,
     deleteBookNote,
+    doubleTap,
     fetchBook,
     fetchBookNotes,
     fetchPicture,
     FONTS,
+    headings,
+    liftOver,
     loadReading,
     MAX_FONT_SIZE,
     MIN_FONT_SIZE,
@@ -25,19 +29,25 @@ import {
     PAPERS,
     type Reading,
     resized,
+    sectionAround,
     segments,
     shownSize,
     SPACINGS,
+    swipeDrawn,
+    swipeStep,
     swipeTurn,
+    swipeUp,
+    type Tap,
     windowAt,
 } from "../lib/books";
 import { t } from "../lib/i18n";
 import type { Where } from "../lib/logs";
-import { BLOCK_ATTRIBUTE, bookBlock, type BookSelection, laidBlocks, placeOf } from "../lib/speaking";
+import { BLOCK_ATTRIBUTE, bookBlock, type BookPlace, type BookSelection, laidBlocks, placeOf } from "../lib/speaking";
 import { BookContents } from "./BookContents";
 import { BookNoteBox } from "./BookNoteBox";
 import { Icon } from "./Icon";
-import { LAID_OUT_EVENT, SPOKEN_EVENT } from "./SpeechPlayer";
+import { PLAY_SECTION_EVENT, TRANSLATE_EVENT } from "./SelectionTools";
+import { CONTROL_EVENT, LAID_OUT_EVENT, type SpeechControl, SPOKEN_EVENT, SPOKEN_HIGHLIGHT } from "./SpeechPlayer";
 
 interface Props {
     /** The book to read, by its id, if one was chosen. */
@@ -47,7 +57,7 @@ interface Props {
     /** What the book and the version are called as they are listed, which they may have been renamed to since. */
     names?: { title: string; version?: string };
     /** Told what of the book to read aloud, such as a section chosen in the contents. */
-    onPlay: (selection: BookSelection) => void;
+    onPlay: (selection: BookSelection, from?: BookPlace) => void;
     /**
      * Which panels are shown beside the reader, told apart by anything that
      * changes with them: the reader may be moved by them without changing
@@ -85,6 +95,8 @@ const PAGE_GAP = 48;
 const SLIDE_MS = 250;
 /** How long the wheel is not listened to after it has turned a page, in milliseconds. */
 const WHEEL_PAUSE_MS = 250;
+/** How far, in pixels, the bar on the full screen is from the edges of the screen and from the sentence read aloud. */
+const BAR_MARGIN = 12;
 /** How many pages each key turns. */
 const KEYS: Record<string, number> = {
     ArrowRight: 1,
@@ -503,6 +515,31 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         }
     }, [book, pageWith, keepPlace, mounted, settle]);
 
+    // a section read aloud, from its contents or from the button on its heading, to the end of its last paragraph,
+    // however long it is
+    const playSection = useCallback((section: BookSection) => {
+        onPlay({ startBlock: section.start, start: 0, endBlock: section.end - 1, end: Number.MAX_SAFE_INTEGER });
+    }, [onPlay]);
+    // what is selected is read aloud with the whole of the smallest section it is in, from where it starts
+    useEffect(() => {
+        if (!book) {
+            return;
+        }
+        function onPlaySection(event: Event) {
+            const { selection } = (event as CustomEvent<{ selection: BookSelection }>).detail;
+            const around = sectionAround(book!.sections, selection.startBlock);
+            const whole = around
+                ? { startBlock: around.start, start: 0, endBlock: around.end - 1, end: Number.MAX_SAFE_INTEGER }
+                : { ...selection, endBlock: book!.blocks.length - 1, end: Number.MAX_SAFE_INTEGER };
+            onPlay(whole, { block: selection.startBlock, offset: selection.start });
+        }
+        window.addEventListener(PLAY_SECTION_EVENT, onPlaySection);
+        return () => window.removeEventListener(PLAY_SECTION_EVENT, onPlaySection);
+    }, [book, onPlay]);
+    const headed = useMemo(() => book ? headings(book.blocks, book.sections) : new Map<number, BookSection>(), [
+        book,
+    ]);
+
     // a link in the book leads to another paragraph of it, and back from there
     const follow = useCallback((to: number) => {
         if (book) {
@@ -593,6 +630,59 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         return () => window.removeEventListener(SPOKEN_EVENT, onSpoken);
     }, [book, turnTo, goTo, pageAt]);
 
+    // On the full screen the bar is at the bottom right, where a hand holding
+    // a tablet reaches it, and goes up over the sentence read aloud, as far
+    // as it takes to leave each line of it to be read.
+    const bar = useRef<HTMLElement>(null);
+    const [lift, setLift] = useState(0);
+    const lifted = useRef(0);
+    const placeBar = useCallback(() => {
+        const shown = bar.current;
+        const marked = CSS.highlights?.get(SPOKEN_HIGHLIGHT);
+        let by = 0;
+        if (full && shown && marked) {
+            const at = shown.getBoundingClientRect();
+            // where it is with no lift
+            const rest = {
+                top: at.top + lifted.current,
+                bottom: at.bottom + lifted.current,
+                left: at.left,
+                right: at.right,
+            };
+            const lines = [...marked].flatMap((range) => [...(range as Range).getClientRects()]);
+            // never above the top of the screen, should the sentence take up all of it
+            by = Math.min(liftOver(lines, rest, BAR_MARGIN), window.innerHeight - at.height - 2 * BAR_MARGIN);
+        }
+        lifted.current = by;
+        setLift(by);
+    }, [full]);
+    // placed again as the sentence, the page, the text or the bar change, and once the page turned to has slid in
+    useEffect(() => {
+        if (!full) {
+            placeBar();
+            return;
+        }
+        let slid = 0;
+        function again() {
+            placeBar();
+            window.clearTimeout(slid);
+            slid = window.setTimeout(placeBar, SLIDE_MS + 50);
+        }
+        again();
+        window.addEventListener(SPOKEN_EVENT, again);
+        window.addEventListener("resize", again);
+        const resized = new ResizeObserver(again);
+        if (bar.current) {
+            resized.observe(bar.current);
+        }
+        return () => {
+            window.clearTimeout(slid);
+            window.removeEventListener(SPOKEN_EVENT, again);
+            window.removeEventListener("resize", again);
+            resized.disconnect();
+        };
+    }, [full, placeBar, page, look, viewSize]);
+
     // a turn of the wheel arrives as many small ones, which are to turn one page
     const wheelAt = useRef(0);
     function onWheel(event: React.WheelEvent) {
@@ -603,28 +693,63 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
     }
 
     // A swipe of a finger across the page turns it, as in a book: the page
-    // follows the finger, and once it is let go slides on to the next or
+    // follows the finger, once it has moved far enough to be more than one
+    // that selects, and once it is let go slides on to the next or
     // back to where it was. A mouse turns none, as it selects by dragging,
     // and a finger held to select is taken by the browser, which cancels
     // the swipe.
     const swipe = useRef<{ x: number; y: number; at: number } | null>(null);
     // how far, in pixels, the page is drawn by the finger, while it is
     const [drawn, setDrawn] = useState(0);
+    // The book read aloud is controlled by touches too: a double tap pauses
+    // it or plays it on, a swipe of two fingers moves it on a sentence to
+    // the left, as a page is turned, and back one to the right, and a swipe
+    // up from the sentence that is heard has it translated.
+    function control(wanted: SpeechControl) {
+        if (book) {
+            window.dispatchEvent(new CustomEvent(CONTROL_EVENT, { detail: { bookId: book.id, control: wanted } }));
+        }
+    }
+    // where each finger on the page touched it, and whether those on it are two, or were, which they are until
+    // all are lifted, and the first of them lifted has moved the reading
+    const fingers = useRef(new Map<number, { x: number; y: number }>());
+    const twoFingers = useRef<"down" | "done" | null>(null);
+    // the tap before, for a double tap
+    const lastTap = useRef<Tap | null>(null);
+    // the sentence heard, if the finger on the page touched it
+    const heardTouched = useRef<Range | null>(null);
     function onPointerDown(event: React.PointerEvent) {
         pressed.current = { x: event.clientX, y: event.clientY };
+        heardTouched.current = event.pointerType === "touch" ? heardAt(event.clientX, event.clientY) : null;
+        if (event.pointerType === "touch") {
+            fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        }
+        if (fingers.current.size >= 2) {
+            twoFingers.current ??= "down";
+            lastTap.current = null;
+            letGo();
+            return;
+        }
         swipe.current = event.pointerType === "touch"
             ? { x: event.clientX, y: event.clientY, at: event.timeStamp }
             : null;
+    }
+    function liftFinger(event: React.PointerEvent) {
+        const from = fingers.current.get(event.pointerId);
+        fingers.current.delete(event.pointerId);
+        if (fingers.current.size === 0 && twoFingers.current) {
+            twoFingers.current = null;
+            // the last finger of two is lifted with nothing more to do
+            return { from, two: true };
+        }
+        return { from, two: twoFingers.current !== null };
     }
     function onPointerMove(event: React.PointerEvent) {
         const from = swipe.current;
         if (!from || !(window.getSelection()?.isCollapsed ?? true)) {
             return;
         }
-        const across = event.clientX - from.x;
-        if (Math.abs(across) < 2 * Math.abs(event.clientY - from.y)) {
-            return;
-        }
+        const across = swipeDrawn(event.clientX - from.x, event.clientY - from.y);
         // past the first page or the last the page gives only a little
         const end = (atStart && across > 0) || (atEnd && across < 0);
         setDrawn(end ? across / 4 : across);
@@ -633,10 +758,49 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         swipe.current = null;
         setDrawn(0);
     }
+    function onPointerCancel(event: React.PointerEvent) {
+        liftFinger(event);
+        letGo();
+    }
     function onPointerUp(event: React.PointerEvent) {
         const from = swipe.current;
         letGo();
-        if (!from || event.pointerType !== "touch" || !(window.getSelection()?.isCollapsed ?? true)) {
+        const lifted = liftFinger(event);
+        if (lifted.two) {
+            if (twoFingers.current === "down" && lifted.from) {
+                const step = swipeStep(event.clientX - lifted.from.x, event.clientY - lifted.from.y);
+                if (step !== 0) {
+                    twoFingers.current = "done";
+                    control(step > 0 ? "next" : "previous");
+                }
+            }
+            return;
+        }
+        if (!from || event.pointerType !== "touch") {
+            return;
+        }
+        const heard = heardTouched.current;
+        heardTouched.current = null;
+        if (heard && swipeUp(event.clientX - from.x, event.clientY - from.y)) {
+            lastTap.current = null;
+            window.dispatchEvent(new CustomEvent(TRANSLATE_EVENT, { detail: { range: heard } }));
+            return;
+        }
+        const tap = { x: event.clientX, y: event.clientY, at: event.timeStamp };
+        const still = Math.hypot(tap.x - from.x, tap.y - from.y) <= CLICK_SLOP;
+        if (still && book && !(event.target as Element).closest("button, a")) {
+            if (doubleTap(lastTap.current, tap)) {
+                lastTap.current = null;
+                // and leaves the word the browser may have selected with it
+                window.getSelection()?.removeAllRanges();
+                control("toggle");
+            } else {
+                lastTap.current = tap;
+            }
+            return;
+        }
+        lastTap.current = null;
+        if (!(window.getSelection()?.isCollapsed ?? true)) {
             return;
         }
         const turned = swipeTurn(
@@ -676,7 +840,11 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         >
             {/* how the book looks opens over the page, under the bar */}
             <div className="reader-top">
-                <header className="reader-bar">
+                <header
+                    className="reader-bar"
+                    ref={bar}
+                    style={full ? { bottom: BAR_MARGIN + lift } : undefined}
+                >
                     <button
                         className="icon-button"
                         aria-pressed={contentsOpen}
@@ -764,13 +932,7 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                         onPlay={(section) => {
                             goTo(section.start);
                             setContentsOpen(false);
-                            // to the end of its last paragraph, however long it is
-                            onPlay({
-                                startBlock: section.start,
-                                start: 0,
-                                endBlock: section.end - 1,
-                                end: Number.MAX_SAFE_INTEGER,
-                            });
+                            playSection(section);
                         }}
                     />
                 )}
@@ -866,7 +1028,7 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                     onPointerDown={onPointerDown}
                     onPointerUp={onPointerUp}
                     onPointerMove={onPointerMove}
-                    onPointerCancel={letGo}
+                    onPointerCancel={onPointerCancel}
                 >
                     <div className="reader-view" ref={view} style={{ marginLeft: -fromLeft }}>
                         <div
@@ -911,6 +1073,8 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                                         start={part.start}
                                         end={part.end}
                                         onFollow={follow}
+                                        headings={headed}
+                                        onPlay={playSection}
                                     />
                                 </div>
                             ))}
@@ -1032,6 +1196,23 @@ function firstWhere(block: HTMLElement, reached: (left: number) => boolean): num
     return low;
 }
 
+/** How far, in pixels, a finger may touch from the sentence that is heard to touch it. */
+const HEARD_SLOP = 12;
+
+/** The sentence that is heard, marked in the book, if it is at a point of the window, or near it. */
+function heardAt(x: number, y: number): Range | null {
+    for (const range of CSS.highlights?.get(SPOKEN_HIGHLIGHT) ?? []) {
+        const near = [...(range as Range).getClientRects()].some((rect) =>
+            x >= rect.left - HEARD_SLOP && x <= rect.right + HEARD_SLOP && y >= rect.top - HEARD_SLOP
+            && y <= rect.bottom + HEARD_SLOP
+        );
+        if (near) {
+            return range as Range;
+        }
+    }
+    return null;
+}
+
 interface BlocksProps {
     /** The book the blocks are of, for their pictures. */
     bookId: string;
@@ -1041,15 +1222,19 @@ interface BlocksProps {
     end: number;
     /** Told the paragraph a link in the book leads to, by its place among them, when it is followed. */
     onFollow: (to: number) => void;
+    /** The sections by the paragraph that is their heading, which has a button to read the section aloud. */
+    headings: Map<number, BookSection>;
+    onPlay: (section: BookSection) => void;
 }
 
 /** The paragraphs of a book, which are many, and are not gone through again when a page is turned. */
-const Blocks = memo(function Blocks({ bookId, blocks, start, end, onFollow }: BlocksProps) {
+const Blocks = memo(function Blocks({ bookId, blocks, start, end, onFollow, headings, onPlay }: BlocksProps) {
     return (
         <>
             {blocks.slice(start, end).map((block, at) => {
                 // each says its place in the book, as only some parts of it are laid out
                 const place = { [BLOCK_ATTRIBUTE]: start + at };
+                const heading = headings.get(start + at);
                 return block.image
                     ? (
                         // a paragraph of its own, as each block is one
@@ -1092,6 +1277,21 @@ const Blocks = memo(function Blocks({ bookId, blocks, start, end, onFollow }: Bl
                                         : segment.text
                                 )
                                 : block.text}
+                            {heading && (
+                                // with no text of its own, so that the places in the text of the paragraph are as
+                                // they were
+                                <button
+                                    className="heading-play"
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        onPlay(heading);
+                                    }}
+                                    title={t("Read it aloud")}
+                                    aria-label={t("Read {name} aloud", { name: heading.title })}
+                                >
+                                    <Icon name="play" />
+                                </button>
+                            )}
                         </p>
                     );
             })}

@@ -1332,8 +1332,9 @@ export function App({ user, initialSettings, initialChats }: Props) {
                             active={activity === "books"}
                             besides={`${libraryOpen || logsOpen}:${panel}:${behind}:${sidesFit}`}
                             names={readNames}
-                            onPlay={(selection) =>
-                                bookId && setListening({ source: bookSource(bookId, selection), nonce: Date.now() })}
+                            onPlay={(selection, from) =>
+                                bookId
+                                && setListening({ source: bookSource(bookId, selection, from), nonce: Date.now() })}
                             noteAsked={noteAsked}
                         />
                     </div>

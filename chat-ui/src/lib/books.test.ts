@@ -5,7 +5,10 @@ import { expect, test } from "vitest";
 
 import {
     bookWindows,
+    doubleTap,
+    headings,
     keptStretches,
+    liftOver,
     MAX_FONT_SIZE,
     MIN_FONT_SIZE,
     normalizeReading,
@@ -13,6 +16,7 @@ import {
     pageOf,
     partFits,
     resized,
+    sectionAround,
     sectionsAt,
     segments,
     sentence,
@@ -21,7 +25,10 @@ import {
     storyParts,
     stretchTokens,
     suggestedStories,
+    swipeDrawn,
+    swipeStep,
     swipeTurn,
+    swipeUp,
     windowAt,
 } from "./books";
 
@@ -225,7 +232,80 @@ test("a slow swipe turns the page once it has drawn it a third of the way", () =
 
 test("a move of a finger that is short or up and down turns no page", () => {
     expect(swipeTurn(-30, 0, 200, 400)).toBe(0);
+    expect(swipeTurn(-60, 0, 200, 400)).toBe(0);
     expect(swipeTurn(-120, 90, 200, 400)).toBe(0);
+});
+
+test("a page follows a finger only once it has moved across past where it was still", () => {
+    expect(swipeDrawn(-20, 0)).toBe(0);
+    expect(swipeDrawn(-50, 5)).toBe(-20);
+    expect(swipeDrawn(70, 0)).toBe(40);
+    expect(swipeDrawn(-60, 40)).toBe(0);
+});
+
+test("the heading of a section is the paragraph it starts with when it says what it is called", () => {
+    const blocks = [
+        { text: "Hartnäckigkeit  zahlt sich aus", size: 1.6 },
+        { text: "Kapitel 1", size: 1.3 },
+        { text: "„Warum können wir nicht rein?“", size: 1 },
+        { text: "Ein Absatz.", size: 1 },
+    ];
+    const chapter = { title: "Kapitel 1", start: 1, end: 3 };
+    const story = { title: "Hartnäckigkeit zahlt sich aus", start: 0, end: 3, sections: [chapter] };
+    const untitled = { title: "Nachwort", start: 3, end: 4 };
+
+    expect(headings(blocks, [story, untitled])).toEqual(new Map([[0, story], [1, chapter]]));
+});
+
+test("a tap is the second of a double tap when it comes soon after the one before and near it", () => {
+    const first = { x: 300, y: 400, at: 1000 };
+
+    expect(doubleTap(first, { x: 310, y: 395, at: 1250 })).toBe(true);
+    expect(doubleTap(first, { x: 310, y: 395, at: 1500 })).toBe(false);
+    expect(doubleTap(first, { x: 420, y: 400, at: 1250 })).toBe(false);
+    expect(doubleTap(null, { x: 300, y: 400, at: 1250 })).toBe(false);
+});
+
+test("a swipe of two fingers steps on to the left and back to the right, once it is long and across", () => {
+    expect(swipeStep(-80, 10)).toBe(1);
+    expect(swipeStep(80, -10)).toBe(-1);
+    expect(swipeStep(-40, 0)).toBe(0);
+    expect(swipeStep(-80, 60)).toBe(0);
+});
+
+test("a swipe of a finger goes up once it is long and more up than across", () => {
+    expect(swipeUp(10, -80)).toBe(true);
+    expect(swipeUp(10, -40)).toBe(false);
+    expect(swipeUp(60, -80)).toBe(false);
+    expect(swipeUp(0, 80)).toBe(false);
+});
+
+test("the section around a paragraph is the smallest it is in", () => {
+    const chapter = { title: "Kapitel 2", start: 5, end: 9 };
+    const story = {
+        title: "Die Geschichte",
+        start: 0,
+        end: 9,
+        sections: [{ title: "Kapitel 1", start: 1, end: 5 }, chapter],
+    };
+
+    expect(sectionAround([story], 6)).toBe(chapter);
+    expect(sectionAround([story], 0)).toBe(story);
+    expect(sectionAround([story], 12)).toBeNull();
+});
+
+const BAR = { top: 900, bottom: 960, left: 1500, right: 1900 };
+const line = (top: number, left = 40, right = 1860) => ({ top, bottom: top + 24, left, right });
+
+test("a bar over the text is left where it is when the sentence marked is not under it", () => {
+    expect(liftOver([line(400), line(430)], BAR, 8)).toBe(0);
+    expect(liftOver([line(920, 40, 900)], BAR, 8)).toBe(0);
+});
+
+test("a bar over the text is raised above each line of the sentence marked that it would cover", () => {
+    expect(liftOver([line(930)], BAR, 8)).toBe(960 - 930 + 8);
+    // raised above the last line, it comes to cover the one before, and goes above that too
+    expect(liftOver([line(866), line(900), line(934)], BAR, 8)).toBe(960 - 866 + 8);
 });
 
 /** Blocks of text, each as long as its number says. */

@@ -644,8 +644,45 @@ export function pageCount(laidWidth: number, width: number, gap: number): number
     return Math.max(1, Math.round((laidWidth + gap) / (width + gap)));
 }
 
-/** How far, in pixels, and how quickly, in milliseconds, a finger is to move to turn a page. */
-const SWIPE = { distance: 50, time: 600 };
+/**
+ * How far, in pixels, and how quickly, in milliseconds, a finger is to move
+ * to turn a page, and how far it moves before the page follows it at all,
+ * so that a finger that only wanders a little, as it does to select, leaves
+ * the page where it is.
+ */
+const SWIPE = { distance: 90, time: 600, still: 30 };
+
+/**
+ * How far, in pixels, a page is drawn by a finger that moved `across` and
+ * `down` since it touched it: not at all while it is still near where it
+ * touched or moves more up and down than across, and from there on as far
+ * as it moved past that.
+ */
+export function swipeDrawn(across: number, down: number): number {
+    const far = Math.abs(across);
+    if (far <= SWIPE.still || far < 2 * Math.abs(down)) {
+        return 0;
+    }
+    return Math.sign(across) * (far - SWIPE.still);
+}
+
+/**
+ * The step a swipe of two fingers that moved `across` and `down` takes: on,
+ * 1, for one to the left, as a page is turned, back, -1, for one to the
+ * right, or none, 0, for one too short or more up and down than across.
+ */
+export function swipeStep(across: number, down: number): -1 | 0 | 1 {
+    const far = Math.abs(across);
+    if (far < 2 * SWIPE.still || far < 2 * Math.abs(down)) {
+        return 0;
+    }
+    return across < 0 ? 1 : -1;
+}
+
+/** Whether a swipe of a finger that moved `across` and `down` goes up, far enough and more up than across. */
+export function swipeUp(across: number, down: number): boolean {
+    return -down >= 2 * SWIPE.still && -down >= 2 * Math.abs(across);
+}
 
 /**
  * The page a swipe of a finger on a book `width` wide turns to, from the
@@ -662,6 +699,78 @@ export function swipeTurn(across: number, down: number, time: number, width: num
         return 0;
     }
     return across < 0 ? 1 : -1;
+}
+
+/**
+ * The sections of a book by the paragraph that is their heading: the first
+ * of each, where it says what the section is called. Where more than one
+ * start at the same heading, the one that holds the others is kept.
+ */
+export function headings(blocks: BookBlock[], sections: BookSection[]): Map<number, BookSection> {
+    const found = new Map<number, BookSection>();
+    const plain = (text: string) => text.replace(/\s+/g, " ").trim();
+    function walk(under: BookSection[]) {
+        for (const section of under) {
+            const block = blocks[section.start];
+            const title = plain(section.title);
+            if (title && block && !block.image && !found.has(section.start) && plain(block.text) === title) {
+                found.set(section.start, section);
+            }
+            walk(section.sections ?? []);
+        }
+    }
+    walk(sections);
+    return found;
+}
+
+/** A touch of a finger let go of: where it was let go, and when, in milliseconds. */
+export interface Tap {
+    x: number;
+    y: number;
+    at: number;
+}
+
+/** How far, in pixels, and how long, in milliseconds, a tap and the one after it may be apart to be a double tap. */
+const DOUBLE_TAP = { distance: 40, time: 350 };
+
+/** Whether a tap is the second of a double tap, with the one before it. */
+export function doubleTap(before: Tap | null, tap: Tap): boolean {
+    return before !== null
+        && tap.at - before.at <= DOUBLE_TAP.time
+        && Math.hypot(tap.x - before.x, tap.y - before.y) <= DOUBLE_TAP.distance;
+}
+
+/** The smallest of the sections that the paragraph at `block` is in, if it is in any. */
+export function sectionAround(sections: BookSection[], block: number): BookSection | null {
+    const around = sections.find((section) => section.start <= block && block < section.end);
+    return around ? sectionAround(around.sections ?? [], block) ?? around : null;
+}
+
+/** A box on the screen, as `getBoundingClientRect` gives it. */
+export interface Box {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+}
+
+/**
+ * How far, in pixels, a bar that floats over the text at `bar` is to be
+ * raised so as to cover none of the `lines` of the sentence that is marked:
+ * above each line it would cover, the lowest first, and so above those it
+ * comes to cover as it goes up, `gap` apart from them.
+ */
+export function liftOver(lines: Box[], bar: Box, gap: number): number {
+    let { top, bottom } = bar;
+    for (const line of [...lines].sort((a, b) => b.bottom - a.bottom)) {
+        const across = line.left < bar.right && line.right > bar.left;
+        if (across && line.bottom > top - gap && line.top < bottom + gap && line.bottom > line.top) {
+            const by = bottom - line.top + gap;
+            top -= by;
+            bottom -= by;
+        }
+    }
+    return bar.bottom - bottom;
 }
 
 /** The page, from 0, of what is `left` from the start of such columns. */

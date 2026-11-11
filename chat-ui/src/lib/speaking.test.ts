@@ -3,7 +3,7 @@
 
 import { expect, test } from "vitest";
 
-import { normalizeSpeed, spotBeside, stepped, wanted } from "./speaking";
+import { normalizeSpeed, spotBeside, startingAt, stepped, wanted } from "./speaking";
 
 test("the next and the previous sentence are a step away, and there is none beyond the ends", () => {
     expect(stepped(2, 1, 5)).toBe(3);
@@ -44,4 +44,13 @@ test("the player does not reach over the edge of what the thing it is shown besi
         left: 400,
         top: 246,
     });
+});
+
+test("a reading starts at the sentence that goes on past the place it is to start from", () => {
+    const sentences = [{ block: 4, end: 20 }, { block: 4, end: 45 }, { block: 5, end: 30 }];
+
+    expect(startingAt(sentences, { block: 4, offset: 25 })).toBe(1);
+    expect(startingAt(sentences, { block: 4, offset: 45 })).toBe(2);
+    expect(startingAt(sentences, { block: 4, offset: 0 })).toBe(0);
+    expect(startingAt(sentences, { block: 9, offset: 0 })).toBe(0);
 });

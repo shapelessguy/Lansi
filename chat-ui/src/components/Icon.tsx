@@ -169,6 +169,45 @@ const ICONS = {
         </>
     ),
     trash: <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" />,
+    // those of a player, filled
+    play: <path d="M7 4.5v15l12-7.5Z" fill="currentColor" />,
+    pause: (
+        <>
+            <rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor" />
+            <rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor" />
+        </>
+    ),
+    "skip-back": (
+        <>
+            <path d="M6 5v14" />
+            <path d="M19 5.5v13L9 12Z" fill="currentColor" />
+        </>
+    ),
+    "skip-forward": (
+        <>
+            <path d="M18 5v14" />
+            <path d="M5 5.5v13L15 12Z" fill="currentColor" />
+        </>
+    ),
+    "play-section": (
+        <>
+            <path d="M3 5v14l9-7Z" fill="currentColor" />
+            <path d="M15 6h6M15 12h6M15 18h6" />
+        </>
+    ),
+    translate: (
+        <>
+            <path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1" />
+            <path d="m22 22-5-10-5 10M14 18h6" />
+        </>
+    ),
+    "add-words": (
+        <>
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+            <path d="M12 7v6M9 10h6" />
+        </>
+    ),
+    stop: <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" />,
 } as const;
 
 export type IconName = keyof typeof ICONS;

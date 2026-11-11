@@ -21,6 +21,7 @@ import {
     type SpokenSentence,
     type Spot,
     spotBeside,
+    startingAt,
     startReading,
     stepped,
     stopReading,
@@ -28,6 +29,7 @@ import {
     wanted,
 } from "../lib/speaking";
 import type { BackgroundTask } from "../lib/tasks";
+import { Icon } from "./Icon";
 
 interface Props {
     /** What is read aloud. Give the component a key of its own for each thing that is. */
@@ -42,8 +44,15 @@ interface Props {
 class Declined extends Error {}
 
 /** What the sentence that is listened to is marked with in the book, and what tells the reader to show it. */
-const HIGHLIGHT = "spoken";
+export const SPOKEN_HIGHLIGHT = "spoken";
+const HIGHLIGHT = SPOKEN_HIGHLIGHT;
 export const SPOKEN_EVENT = "lansi:spoken";
+/**
+ * What the reader of books tells to have the reading of a book, by the id
+ * of the book, paused or played on, or moved on or back a sentence.
+ */
+export const CONTROL_EVENT = "lansi:speech-control";
+export type SpeechControl = "toggle" | "next" | "previous";
 /** What the reader of books tells as it lays out other parts of a book. */
 export const LAID_OUT_EVENT = "lansi:book-laid-out";
 
@@ -159,6 +168,9 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                         return;
                     }
                     setReading(begun);
+                    if (source.from) {
+                        setIndex(startingAt(begun.sentences, source.from));
+                    }
                     if (begun.task) {
                         onTask(begun.task);
                     }
@@ -316,6 +328,32 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
         setPlaying(!playing);
     }
 
+    // the reader of the book this reads asks for what the buttons do, when they can be pressed
+    const controlled = useRef((_control: SpeechControl) => {});
+    controlled.current = (control) => {
+        if (control === "toggle" && clip && failed === null) {
+            toggle();
+        } else if (control === "previous" && index > 0) {
+            go(-1);
+        } else if (control === "next" && reading && !last) {
+            go(1);
+        }
+    };
+    useEffect(() => {
+        if (bookId === null) {
+            return;
+        }
+        function onControl(event: Event) {
+            const { bookId: asked, control } = (event as CustomEvent<{ bookId: string; control: SpeechControl }>)
+                .detail;
+            if (asked === bookId) {
+                controlled.current(control);
+            }
+        }
+        window.addEventListener(CONTROL_EVENT, onControl);
+        return () => window.removeEventListener(CONTROL_EVENT, onControl);
+    }, [bookId]);
+
     const status = error
         ?? (!reading
             ? t("Getting the sentences…")
@@ -352,16 +390,18 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                     title={t("Previous sentence")}
                     aria-label={t("Previous sentence")}
                 >
-                    ⏮
+                    <Icon name="skip-back" />
                 </button>
                 <button
-                    className="icon-button"
+                    className="icon-button speech-play"
                     onClick={toggle}
                     disabled={!clip || failed !== null}
                     title={playing ? t("Pause") : t("Play")}
                     aria-label={playing ? t("Pause") : t("Play")}
                 >
-                    {reading && !clip && !error ? <span className="spinner" aria-hidden="true" /> : playing ? "⏸" : "▶"}
+                    {reading && !clip && !error
+                        ? <span className="spinner" aria-hidden="true" />
+                        : <Icon name={playing ? "pause" : "play"} />}
                 </button>
                 <button
                     className="icon-button"
@@ -370,9 +410,11 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                     title={t("Next sentence")}
                     aria-label={t("Next sentence")}
                 >
-                    ⏭
+                    <Icon name="skip-forward" />
                 </button>
-                <button className="icon-button" onClick={onClose} title={t("Stop")} aria-label={t("Stop")}>⏹</button>
+                <button className="icon-button" onClick={onClose} title={t("Stop")} aria-label={t("Stop")}>
+                    <Icon name="stop" />
+                </button>
                 <select
                     className="speech-speed"
                     value={speed}
@@ -386,7 +428,15 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                 >
                     {SPEEDS.map((each) => <option key={each} value={each}>{each}×</option>)}
                 </select>
-                {reading && <span className={wrong ? "count error" : "count"}>{index + 1} / {sentences.length}</span>}
+                {reading && (
+                    <span
+                        className={wrong ? "count error" : "count"}
+                        // as wide as the last sentence makes it, so that the buttons stay where they are
+                        style={{ width: `${2 * String(sentences.length).length + 2}ch` }}
+                    >
+                        {index + 1} / {sentences.length}
+                    </span>
+                )}
             </div>
             {((!besideIt && !docked) || wrong) && (
                 <p className={wrong ? "speech-status error" : "speech-status"}>

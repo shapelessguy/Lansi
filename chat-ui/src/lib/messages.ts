@@ -1271,6 +1271,14 @@ export const MESSAGES = {
         German: "Abspielen",
         Italian: "Riproduci",
     },
+    "From here": {
+        German: "Ab hier",
+        Italian: "Da qui",
+    },
+    "Read aloud its whole section, from here": {
+        German: "Den ganzen Abschnitt vorlesen, ab hier",
+        Italian: "Leggi ad alta voce tutta la sezione, da qui",
+    },
     "Translating…": {
         German: "Wird übersetzt…",
         Italian: "Traduzione in corso…",

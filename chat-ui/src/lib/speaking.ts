@@ -131,6 +131,20 @@ export function wanted(index: number, count: number): number[] {
     return Array.from({ length: AHEAD + 1 }, (_, ahead) => index + ahead).filter((each) => each < count);
 }
 
+/** A place in the text of a book: the paragraph, and the character in it. */
+export interface BookPlace {
+    block: number;
+    offset: number;
+}
+
+/** The first of the sentences, which are in the order of the book, that goes on past a place in it, or the first. */
+export function startingAt(sentences: Pick<SpokenSentence, "block" | "end">[], from: BookPlace): number {
+    const found = sentences.findIndex((each) =>
+        each.block > from.block || (each.block === from.block && each.end > from.offset)
+    );
+    return Math.max(0, found);
+}
+
 /** What is to be read aloud: where the server is asked for it, and what it is asked. */
 export interface SpeechSource {
     /** The path of the book or the chat on the server, such as `/books/ID`. */
@@ -143,6 +157,8 @@ export interface SpeechSource {
     beside: string | null;
     /** The slot in the bar above what is read that the player is shown in, as a selector, if it has one. */
     dock: string | null;
+    /** Where in a book the reading starts, if not at its first sentence. */
+    from?: BookPlace;
 }
 
 /** The slot the player is shown in, in the bar of the book reader or of practice. */
@@ -150,8 +166,8 @@ export function dockOf(place: "book" | "practice" | "evaluation"): string {
     return `[data-speech-dock="${place}"]`;
 }
 
-/** What was selected of a book, as something to read aloud. */
-export function bookSource(bookId: string, selection: BookSelection): SpeechSource {
+/** What was selected of a book, as something to read aloud, from its first sentence or from the one at `from`. */
+export function bookSource(bookId: string, selection: BookSelection, from?: BookPlace): SpeechSource {
     return {
         base: `/books/${bookId}`,
         wanted: {
@@ -163,6 +179,7 @@ export function bookSource(bookId: string, selection: BookSelection): SpeechSour
         bookId,
         beside: null,
         dock: dockOf("book"),
+        from,
     };
 }
 
