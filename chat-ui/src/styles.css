@@ -1136,10 +1136,21 @@ a {
     display: none;
 }
 
+/* On a phone, where the bar has no room for it, the player floats over the
+   text at the bottom right as it does on the full screen; the reader raises
+   it over the sentence read aloud (bottom). */
+.reader-float {
+    position: fixed;
+    right: 12px;
+    z-index: 9;
+    color: var(--paper-text, var(--text));
+    transition: bottom 0.15s ease-out;
+}
+
 /* Each group a pill that takes after the paper under it, with round
    buttons large enough to be tapped surely with a finger. */
 .reader.full .reader-view-tools,
-.reader.full .speech-player.docked {
+.big-player .speech-player.docked {
     gap: 4px;
     padding: 4px;
     border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
@@ -1150,12 +1161,12 @@ a {
     backdrop-filter: blur(8px);
 }
 
-.reader.full .speech-player.docked .speech-controls {
+.big-player .speech-player.docked .speech-controls {
     gap: 2px;
     max-height: none;
 }
 
-.reader.full .speech-player.docked .icon-button,
+.big-player .speech-player.docked .icon-button,
 .reader.full .full-screen-toggle {
     display: inline-flex;
     align-items: center;
@@ -1169,31 +1180,31 @@ a {
     color: inherit;
 }
 
-.reader.full .speech-player.docked .icon-button .icon,
+.big-player .speech-player.docked .icon-button .icon,
 .reader.full .full-screen-toggle .icon {
     width: 22px;
     height: 22px;
 }
 
-.reader.full .speech-player.docked .speech-play {
+.big-player .speech-player.docked .speech-play {
     background: color-mix(in srgb, currentColor 13%, transparent);
 }
 
-.reader.full .speech-player.docked .speech-play .icon {
+.big-player .speech-player.docked .speech-play .icon {
     width: 26px;
     height: 26px;
 }
 
-.reader.full .speech-player.docked .icon-button:hover:not(:disabled),
+.big-player .speech-player.docked .icon-button:hover:not(:disabled),
 .reader.full .full-screen-toggle:hover {
     background: color-mix(in srgb, currentColor 10%, transparent);
 }
 
-.reader.full .speech-player.docked .speech-play:hover:not(:disabled) {
+.big-player .speech-player.docked .speech-play:hover:not(:disabled) {
     background: color-mix(in srgb, currentColor 20%, transparent);
 }
 
-.reader.full .speech-player.docked .speech-speed {
+.big-player .speech-player.docked .speech-speed {
     height: 40px;
     margin-left: 4px;
     padding: 0 10px;
@@ -1204,14 +1215,31 @@ a {
     font-size: 1rem;
 }
 
-.reader.full .speech-player.docked .count {
+.big-player .speech-player.docked .count {
     margin: 0 14px 0 6px;
     font-size: 0.95rem;
     opacity: 0.7;
 }
 
+/* on a phone as narrow as most, a little smaller, to fit across it */
+@media (max-width: 420px) {
+    .big-player .speech-player.docked .icon-button {
+        width: 42px;
+        height: 42px;
+    }
+
+    .big-player .speech-player.docked .speech-speed {
+        padding: 0 6px;
+    }
+
+    .big-player .speech-player.docked .count {
+        margin: 0 8px 0 2px;
+        font-size: 0.85rem;
+    }
+}
+
 /* the list of a menu opens over the app rather than the paper, in its colours */
-.reader.full .speech-player.docked option {
+.big-player .speech-player.docked option {
     background: var(--panel);
     color: var(--text);
 }

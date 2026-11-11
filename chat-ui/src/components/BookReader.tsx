@@ -41,6 +41,7 @@ import {
     windowAt,
 } from "../lib/books";
 import { t } from "../lib/i18n";
+import { useMediaQuery } from "../lib/layout";
 import type { Where } from "../lib/logs";
 import { BLOCK_ATTRIBUTE, bookBlock, type BookPlace, type BookSelection, laidBlocks, placeOf } from "../lib/speaking";
 import { BookContents } from "./BookContents";
@@ -95,6 +96,8 @@ const PAGE_GAP = 48;
 const SLIDE_MS = 250;
 /** How long the wheel is not listened to after it has turned a page, in milliseconds. */
 const WHEEL_PAUSE_MS = 250;
+/** A window as narrow as a phone's, as the styles also say at this width. */
+const NARROW = "(max-width: 720px)";
 /** How far, in pixels, the bar on the full screen is from the edges of the screen and from the sentence read aloud. */
 const BAR_MARGIN = 12;
 /** How many pages each key turns. */
@@ -119,6 +122,11 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
     // the page there: the reader follows the browser's full screen, which
     // the browser's own way out, such as Escape or the Back of a phone, leaves.
     const [full, setFull] = useState(false);
+    // On the full screen, and on a phone, where the bar has no room for it,
+    // the player floats over the text, at the bottom right, with buttons
+    // large enough for a finger.
+    const narrow = useMediaQuery(NARROW);
+    const floating = full || narrow;
     useEffect(() => {
         const follow = () => setFull(document.fullscreenElement !== null);
         document.addEventListener("fullscreenchange", follow);
@@ -633,14 +641,14 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
     // On the full screen the bar is at the bottom right, where a hand holding
     // a tablet reaches it, and goes up over the sentence read aloud, as far
     // as it takes to leave each line of it to be read.
-    const bar = useRef<HTMLElement>(null);
+    const bar = useRef<HTMLDivElement>(null);
     const [lift, setLift] = useState(0);
     const lifted = useRef(0);
     const placeBar = useCallback(() => {
         const shown = bar.current;
         const marked = CSS.highlights?.get(SPOKEN_HIGHLIGHT);
         let by = 0;
-        if (full && shown && marked) {
+        if (floating && shown && marked) {
             const at = shown.getBoundingClientRect();
             // where it is with no lift
             const rest = {
@@ -650,15 +658,16 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                 right: at.right,
             };
             const lines = [...marked].flatMap((range) => [...(range as Range).getClientRects()]);
-            // never above the top of the screen, should the sentence take up all of it
-            by = Math.min(liftOver(lines, rest, BAR_MARGIN), window.innerHeight - at.height - 2 * BAR_MARGIN);
+            // never above the top of the reader, should the sentence take up all of it
+            const top = shown.offsetParent?.getBoundingClientRect().top ?? 0;
+            by = Math.max(0, Math.min(liftOver(lines, rest, BAR_MARGIN), rest.top - top - BAR_MARGIN));
         }
         lifted.current = by;
         setLift(by);
-    }, [full]);
+    }, [floating]);
     // placed again as the sentence, the page, the text or the bar change, and once the page turned to has slid in
     useEffect(() => {
-        if (!full) {
+        if (!floating) {
             placeBar();
             return;
         }
@@ -681,7 +690,7 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
             window.removeEventListener("resize", again);
             resized.disconnect();
         };
-    }, [full, placeBar, page, look, viewSize]);
+    }, [floating, placeBar, page, look, viewSize]);
 
     // a turn of the wheel arrives as many small ones, which are to turn one page
     const wheelAt = useRef(0);
@@ -841,8 +850,8 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
             {/* how the book looks opens over the page, under the bar */}
             <div className="reader-top">
                 <header
-                    className="reader-bar"
-                    ref={bar}
+                    className={full ? "reader-bar big-player" : "reader-bar"}
+                    ref={full ? bar : undefined}
                     style={full ? { bottom: BAR_MARGIN + lift } : undefined}
                 >
                     <button
@@ -863,7 +872,7 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                             : ""}
                     </span>
                     {/* where the player of what is read aloud goes */}
-                    <span className="speech-dock" data-speech-dock="book" />
+                    {(full || !narrow) && <span className="speech-dock" data-speech-dock="book" />}
                     {trail.length > 0 && (
                         <button onClick={goBack} title={t("Back to where the link was")}>
                             ↩ {t("Back")}
@@ -935,6 +944,11 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                             playSection(section);
                         }}
                     />
+                )}
+                {narrow && !full && (
+                    <div className="reader-float big-player" ref={bar} style={{ bottom: BAR_MARGIN + lift }}>
+                        <span className="speech-dock" data-speech-dock="book" />
+                    </div>
                 )}
                 {optionsOpen && (
                     <div className="reader-options">
