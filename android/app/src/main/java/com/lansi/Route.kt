@@ -58,7 +58,7 @@ object Route {
             ?.takeIf { it == LAN_URL || it == PUBLIC_URL }
 
     /** Whether the phone is on a network that reaches the internet. */
-    private fun online(context: Context): Boolean {
+    fun online(context: Context): Boolean {
         val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return false
         val network = connectivity.activeNetwork ?: return false
         val capabilities = connectivity.getNetworkCapabilities(network) ?: return false

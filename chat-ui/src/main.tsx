@@ -12,6 +12,7 @@ import { Login } from "./components/Login";
 import { goBack } from "./lib/back";
 import { fetchChats, type StoredChat } from "./lib/chats";
 import { t } from "./lib/i18n";
+import { dropBrowserCopies, nativeStore } from "./lib/offlineCache";
 import { currentSession, logOut, onSessionChange } from "./lib/session";
 import { fetchSettings, type Settings } from "./lib/settings";
 
@@ -70,8 +71,12 @@ function Root() {
 // the Back of the phone, in the Android app, closes what is open in the page before it leaves the app
 window.lansiBack = goBack;
 
-// the app is kept on the device, to open without a connection (public/sw.js)
-if ("serviceWorker" in navigator) {
+// The app is kept on the device, to open without a connection: by the
+// Android app, once for both its addresses, and in a browser by a service
+// worker (public/sw.js).
+if (nativeStore()) {
+    dropBrowserCopies().catch(() => undefined);
+} else if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch((caught: unknown) =>
         console.warn("the app cannot be kept offline:", caught)
     );

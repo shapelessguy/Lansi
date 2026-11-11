@@ -4,8 +4,8 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 import type { Book } from "./books";
-import { forgetBook, keptBooks, openCache, setKeptBooks } from "./offlineCache";
-import { BASE, checkerFetch, currentSession } from "./session";
+import { canKeep, forgetBook, keptBooks, readKept, removeKept, setKeptBooks, writeKept } from "./offlineCache";
+import { BASE, checkerFetch, checkerKept, currentSession } from "./session";
 import type { BookSelection, Reading, SpokenSentence } from "./speaking";
 
 /** A sentence of a book whose audio the server keeps, as it lists them, with who read it. */
@@ -73,35 +73,42 @@ function subscribe(listener: () => void): () => void {
     return () => listeners.delete(listener);
 }
 
-/** The key under which what is had of the audio of a book is noted, beside the audio itself. */
-function hadUrl(bookId: string): string {
-    return `${BASE}/books/${bookId}/speech?offline=had`;
+/** The path under which what is had of the audio of a book is noted, beside the audio itself. */
+function hadPath(bookId: string): string {
+    return `/books/${bookId}/speech-had`;
 }
 
 function madeOf(sentence: ListedSentence): string {
     return [sentence.text, sentence.model, sentence.voice].join("\u0000");
 }
 
-async function readHad(cache: Cache, bookId: string): Promise<Record<string, Had>> {
-    const found = await cache.match(hadUrl(bookId));
-    return found ? found.json().catch(() => ({})) : {};
+async function readHad(user: string, bookId: string): Promise<Record<string, Had>> {
+    const text = await readKept(user, hadPath(bookId), BASE + hadPath(bookId));
+    try {
+        return text ? JSON.parse(text) : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeHad(user: string, bookId: string, had: Record<string, Had>): Promise<void> {
+    return writeKept(user, hadPath(bookId), BASE + hadPath(bookId), JSON.stringify(had));
 }
 
 /** The listing of a book's audio as the device last had it from the server. */
-async function keptListing(cache: Cache, bookId: string): Promise<Listing | null> {
-    const found = await cache.match(`${BASE}/books/${bookId}/speech`);
+async function keptListing(bookId: string): Promise<Listing | null> {
+    const found = await checkerKept(`/books/${bookId}/speech`);
     return found ? found.json().catch(() => null) : null;
 }
 
-/** Shows what is kept of a book as the cache has it, without asking the server. */
+/** Shows what is kept of a book as the device has it, without asking the server. */
 async function count(bookId: string): Promise<void> {
     const user = currentSession()?.user;
-    if (!user || typeof caches === "undefined") {
+    if (!user || !canKeep()) {
         return;
     }
-    const cache = await openCache(user);
-    const had = Object.values(await readHad(cache, bookId));
-    const listing = await keptListing(cache, bookId);
+    const had = Object.values(await readHad(user, bookId));
+    const listing = await keptListing(bookId);
     update(bookId, {
         audio: had.length,
         bytes: had.reduce((sum, each) => sum + each.size, 0),
@@ -127,28 +134,28 @@ async function fetched(path: string): Promise<Response> {
  */
 async function sync(bookId: string): Promise<void> {
     const user = currentSession()?.user;
-    if (!user || typeof caches === "undefined") {
+    if (!user || !canKeep()) {
         return;
     }
     update(bookId, { syncing: true });
     try {
-        const cache = await openCache(user);
         const book: Book = await (await fetched(`/books/${bookId}`)).json();
         await fetched(`/books/${bookId}/notes`).catch(() => undefined);
         for (const block of book.blocks) {
             const path = `/books/${bookId}/pictures/${block.image}`;
-            if (block.image && !(await cache.match(`${BASE}${path}`))) {
+            if (block.image && !(await checkerKept(path))) {
                 await fetched(path).catch(() => undefined);
             }
         }
         const listing: Listing = await (await fetched(`/books/${bookId}/speech`)).json();
-        const had = await readHad(cache, bookId);
+        const had = await readHad(user, bookId);
         const listed = new Set(listing.sentences.map((each) => each.id));
         // what the server no longer has, as a sentence written anew, is let go of
         for (const id of Object.keys(had)) {
             if (!listed.has(id)) {
                 delete had[id];
-                await cache.delete(`${BASE}/books/${bookId}/speech/${id}`);
+                const path = `/books/${bookId}/speech/${id}`;
+                await removeKept(user, path, BASE + path);
             }
         }
         const show = () =>
@@ -161,18 +168,24 @@ async function sync(bookId: string): Promise<void> {
         show();
         const missing: ListedSentence[] = [];
         for (const sentence of listing.sentences) {
-            const kept = await cache.match(`${BASE}/books/${bookId}/speech/${sentence.id}`);
-            if (kept && !had[sentence.id]) {
+            if (had[sentence.id]) {
+                if (had[sentence.id].made !== madeOf(sentence)) {
+                    missing.push(sentence);
+                }
+                continue;
+            }
+            const kept = await checkerKept(`/books/${bookId}/speech/${sentence.id}`);
+            if (kept) {
                 // audio the player fetched as it was listened to, which is as the server has it now
                 had[sentence.id] = { made: madeOf(sentence), size: (await kept.blob()).size };
-            } else if (!kept || had[sentence.id].made !== madeOf(sentence)) {
+            } else {
                 missing.push(sentence);
             }
         }
         show();
         let next = 0;
         let lastSaved = Date.now();
-        const save = () => cache.put(hadUrl(bookId), new Response(JSON.stringify(had)));
+        const save = () => writeHad(user, bookId, had);
         async function worker() {
             while (next < missing.length && keptBooks().includes(bookId)) {
                 const sentence = missing[next++];
@@ -270,12 +283,11 @@ export function useOffline(bookId: string | null): OfflineState | null {
  */
 export async function offlineReading(bookId: string, selection: BookSelection): Promise<Reading | null> {
     const user = currentSession()?.user;
-    if (!user || typeof caches === "undefined" || !keptBooks().includes(bookId)) {
+    if (!user || !canKeep() || !keptBooks().includes(bookId)) {
         return null;
     }
-    const cache = await openCache(user);
-    const listing = await keptListing(cache, bookId);
-    const had = await readHad(cache, bookId);
+    const listing = await keptListing(bookId);
+    const had = await readHad(user, bookId);
     const sentences = (listing?.sentences ?? []).filter((sentence) => {
         if (!(sentence.id in had) || sentence.block < selection.startBlock || sentence.block > selection.endBlock) {
             return false;

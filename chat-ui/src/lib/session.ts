@@ -2,7 +2,7 @@
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 import { t } from "./i18n";
-import { cachedFetch } from "./offlineCache";
+import { cachedFetch, keptAnswer } from "./offlineCache";
 
 /** Who is logged in, and the token the checker server gave them to say so. */
 export interface Session {
@@ -91,12 +91,15 @@ export function logOut(): void {
  * asking it at all.
  */
 export async function checkerFetch(path: string, init: RequestInit = {}, keptFirst = false): Promise<Response> {
-    const headers = new Headers(init.headers);
-    if (current) {
-        headers.set("Authorization", `Bearer ${current.token}`);
-    }
     const url = `${BASE}${path}`;
-    const ask = () => fetch(url, { ...init, headers });
+    const ask = (extra: Record<string, string> = {}) => {
+        const headers = new Headers(init.headers);
+        if (current) {
+            headers.set("Authorization", `Bearer ${current.token}`);
+        }
+        Object.entries(extra).forEach(([name, value]) => headers.set(name, value));
+        return fetch(url, { ...init, headers });
+    };
     const response = current && (init.method ?? "GET") === "GET"
         ? await cachedFetch(current.user, path, url, ask, keptFirst)
         : await ask();
@@ -104,4 +107,18 @@ export async function checkerFetch(path: string, init: RequestInit = {}, keptFir
         setSession(null);
     }
     return response;
+}
+
+/** What the device keeps of a GET of `path` on the checker server, without asking the server, if anything. */
+export async function checkerKept(path: string): Promise<Response | undefined> {
+    if (!current) {
+        return undefined;
+    }
+    const { token } = current;
+    const url = `${BASE}${path}`;
+    return keptAnswer(
+        current.user,
+        url,
+        (extra) => fetch(url, { headers: { ...extra, Authorization: `Bearer ${token}` } }),
+    );
 }

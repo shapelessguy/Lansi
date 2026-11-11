@@ -12,11 +12,17 @@ What the app adds to the page:
   Wi-Fi the phone is on holds the address `LAN_HOST` points at and it
   answers from there, and the other otherwise, without waiting, and
   chooses again when the page can no longer be loaded. With no connection
-  at all it opens the one it opened last, whose service worker has the
-  page, and the books kept offline, on the phone.
+  at all it opens the one it opened last.
 - `Storage.kt`: the login kept from one name to the other. Each is an
   origin with a localStorage of its own, so the storage of the web app is
   carried over whenever the app goes from one to the other.
+- `Offline.kt`: what is kept on the phone to open Lansi and read the books
+  kept offline without a connection: the files of the page, and what the
+  checker server answers that the page marks to be kept
+  (`chat-ui/src/lib/offlineCache.ts`), each asked of the server first and
+  given from the phone when it cannot be reached. It is kept once, in the
+  files of the app, for both addresses, and in place of what the page
+  would keep itself in the WebView for each of them.
 - `MainActivity.kt`: the picker of files for the EPUB books, links out of
   Lansi opened in the browser, Back closing what is open in the page, from
   the one on top (`chat-ui/src/lib/back.ts`), before it leaves the app, and

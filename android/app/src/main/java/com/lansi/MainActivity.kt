@@ -20,6 +20,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
@@ -36,7 +37,8 @@ import androidx.core.view.WindowInsetsControllerCompat
  * Lansi as the web shows it, in a WebView: the app is the page at /lansi/
  * of the server of CyanHouse, which has its own login and phone layout.
  * What the app adds is the choice of address (Route), keeping the login
- * from one address to the other (Storage), the picker of files for the
+ * from one address to the other (Storage), what is kept of it to open and
+ * read the books kept offline without a connection (Offline), the picker of files for the
  * books, links out of Lansi opened in the browser, the full screen a book
  * is read on without the bars of the system (Chrome), and text selected
  * without the phone's own menu over it, since Lansi has its own (Frame).
@@ -46,6 +48,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var frame: Frame
     private val chrome = Chrome()
     private val handler = Handler(Looper.getMainLooper())
+    private lateinit var offline: Offline
     // the page could not be loaded, and is tried again while the app is in sight
     private var failed = false
     private var picking: ValueCallback<Array<Uri>>? = null
@@ -78,6 +81,7 @@ class MainActivity : ComponentActivity() {
         }
         setContentView(frame)
         Storage(this).attach(webView)
+        offline = Offline(this).also { it.attach(webView) }
         onBackPressedDispatcher.addCallback(this) {
             if (chrome.fullScreen) {
                 chrome.leaveFullScreen()
@@ -133,6 +137,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class Client : WebViewClient() {
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+            offline.intercept(request)
+
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             if (Route.isLansi(request.url)) {
                 return false
