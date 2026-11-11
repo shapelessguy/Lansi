@@ -98,6 +98,8 @@ const SLIDE_MS = 250;
 const WHEEL_PAUSE_MS = 250;
 /** A window as narrow as a phone's, as the styles also say at this width. */
 const NARROW = "(max-width: 720px)";
+/** How long, in milliseconds, the bar on the full screen is shown once the page is tapped. */
+const REVEAL_MS = 5000;
 /** How far, in pixels, the bar on the full screen is from the edges of the screen and from the sentence read aloud. */
 const BAR_MARGIN = 12;
 /** How many pages each key turns. */
@@ -127,6 +129,25 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
     // large enough for a finger.
     const narrow = useMediaQuery(NARROW);
     const floating = full || narrow;
+    // On the full screen the bar is hidden, leaving the text alone, until
+    // the page is tapped or clicked, and then shown for a while, again
+    // from the start each time it is touched itself.
+    const [revealed, setRevealed] = useState(false);
+    const revealTimer = useRef(0);
+    const reveal = useCallback(() => {
+        setRevealed(true);
+        window.clearTimeout(revealTimer.current);
+        revealTimer.current = window.setTimeout(() => setRevealed(false), REVEAL_MS);
+    }, []);
+    useEffect(() => {
+        if (full) {
+            reveal();
+        } else {
+            window.clearTimeout(revealTimer.current);
+            setRevealed(false);
+        }
+    }, [full, reveal]);
+    useEffect(() => () => window.clearTimeout(revealTimer.current), []);
     useEffect(() => {
         const follow = () => setFull(document.fullscreenElement !== null);
         document.addEventListener("fullscreenchange", follow);
@@ -772,6 +793,9 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         letGo();
     }
     function onPointerUp(event: React.PointerEvent) {
+        if (full && Math.hypot(event.clientX - pressed.current.x, event.clientY - pressed.current.y) <= CLICK_SLOP) {
+            reveal();
+        }
         const from = swipe.current;
         letGo();
         const lifted = liftFinger(event);
@@ -850,8 +874,9 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
             {/* how the book looks opens over the page, under the bar */}
             <div className="reader-top">
                 <header
-                    className={full ? "reader-bar big-player" : "reader-bar"}
+                    className={full ? `reader-bar big-player${revealed ? "" : " concealed"}` : "reader-bar"}
                     ref={full ? bar : undefined}
+                    onPointerDown={full ? reveal : undefined}
                     style={full ? { bottom: BAR_MARGIN + lift } : undefined}
                 >
                     <button

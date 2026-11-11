@@ -1119,11 +1119,17 @@ a {
     right: 12px;
     z-index: 1;
     gap: 8px;
-    transition: bottom 0.15s ease-out;
+    transition: bottom 0.15s ease-out, opacity 0.25s;
     padding: 0;
     border: none;
     /* in the colour of the text of the paper, so as to sit on a light paper as well as a dark one */
     color: var(--paper-text, var(--text));
+}
+
+/* hidden until the page is tapped, and not in the way of a tap meanwhile */
+.reader.full .reader-bar.concealed {
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* the bar is placed on the screen, rather than on its wrapper, which has no height there */
@@ -1219,6 +1225,11 @@ a {
     margin: 0 14px 0 6px;
     font-size: 0.95rem;
     opacity: 0.7;
+}
+
+/* on the full screen the text alone, with no count of the sentences */
+.reader.full .speech-player.docked .count {
+    display: none;
 }
 
 /* on a phone as narrow as most, a little smaller, to fit across it */
