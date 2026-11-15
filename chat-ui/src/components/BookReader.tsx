@@ -641,7 +641,7 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
     // its first line, on its left, and held there for a second turns the
     // page that way, to be carried on over it; then it waits to be carried
     // there again, a second at least, so that it never runs over many
-    // pages. A word selected where it is, by itself, turns nothing.
+    // pages. A single word selected, by itself, turns nothing.
     const latestEnds = useRef({ atStart, atEnd });
     latestEnds.current = { atStart, atEnd };
     useEffect(() => {
@@ -668,8 +668,7 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                 return 0;
             }
             const focus = caretAt(selection.focusNode, selection.focusOffset);
-            const anchor = caretAt(selection.anchorNode, selection.anchorOffset);
-            if (!focus || !anchor) {
+            if (!focus) {
                 return 0;
             }
             // whether the selection goes on from where it was started, rather than back
@@ -687,10 +686,11 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
             if (focus.left < edges.left - 1) {
                 return onwards ? 0 : -1;
             }
-            const line = Math.max(focus.height, 16);
-            if (Math.abs(anchor.top - focus.top) < line / 2) {
+            // a word selected by itself, as one is held to be translated, is not carried anywhere
+            if (!/\s/.test(selection.toString().trim())) {
                 return 0;
             }
+            const line = Math.max(focus.height, 16);
             const middle = edges.left + edges.width / 2;
             if (onwards && focus.bottom > edges.bottom - line * 2.5 && focus.left > middle) {
                 return 1;
