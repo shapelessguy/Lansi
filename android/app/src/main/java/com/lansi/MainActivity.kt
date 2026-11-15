@@ -7,6 +7,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
@@ -15,7 +16,9 @@ import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowManager
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -41,7 +44,9 @@ import androidx.core.view.WindowInsetsControllerCompat
  * read the books kept offline without a connection (Offline), the picker of files for the
  * books, links out of Lansi opened in the browser, the full screen a book
  * is read on without the bars of the system (Chrome), and text selected
- * without the phone's own menu over it, since Lansi has its own (Frame).
+ * without the phone's own menu over it, since Lansi has its own (Frame),
+ * and the screen kept on while the page asks, as while a book is read
+ * (Screen), since the WebView has no wake lock of its own.
  */
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -82,6 +87,7 @@ class MainActivity : ComponentActivity() {
         setContentView(frame)
         Storage(this).attach(webView)
         offline = Offline(this).also { it.attach(webView) }
+        webView.addJavascriptInterface(Screen(), "lansiScreen")
         onBackPressedDispatcher.addCallback(this) {
             if (chrome.fullScreen) {
                 chrome.leaveFullScreen()
@@ -152,12 +158,32 @@ class MainActivity : ComponentActivity() {
             return true
         }
 
+        // a page loaded anew has asked nothing of the screen yet
+        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+
         // The address in use no longer answers, as when the phone left the
         // Wi-Fi at home: it is chosen again in a moment.
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (request.isForMainFrame && !failed) {
                 failed = true
                 handler.postDelayed(::load, 3000)
+            }
+        }
+    }
+
+    /** What the page asks of the screen, through `lansiScreen` (see chat-ui/src/lib/awake.ts). */
+    private inner class Screen {
+        /** Keeps the screen from going dark while the app is in sight, or lets it go dark again. */
+        @JavascriptInterface
+        fun keepOn(on: Boolean) {
+            runOnUiThread {
+                if (on) {
+                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
             }
         }
     }

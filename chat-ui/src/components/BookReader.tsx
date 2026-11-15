@@ -3,6 +3,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { useAwake } from "../lib/awake";
 import {
     addBookNote,
     type Book,
@@ -121,6 +122,8 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
     // how the text looks: its size, its font, its colours and how far apart its lines are
     const [look, setLook] = useState<Reading>(loadReading);
     const [optionsOpen, setOptionsOpen] = useState(false);
+    // the screen stays on while the book is in sight, as it is read or listened to
+    useAwake(active && bookId !== null);
     // The text of the book alone on the whole screen, as the browser puts
     // the page there: the reader follows the browser's full screen, which
     // the browser's own way out, such as Escape or the Back of a phone, leaves.
