@@ -21,9 +21,13 @@ interface Props {
     onClose: () => void;
 }
 
-/** Whether the page is in the Android app, which gives it what it does with the screen (lib/awake.ts). */
+/**
+ * Whether the page is in the Android app: a WebView of Android says so in
+ * its user agent, which the browsers of a phone do not, whatever build of
+ * the app it is.
+ */
 function inApp(): boolean {
-    return window.lansiScreen !== undefined;
+    return /; wv\)/.test(navigator.userAgent);
 }
 
 /**
