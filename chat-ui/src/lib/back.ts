@@ -36,6 +36,11 @@ export function goBack(): boolean {
     return top !== null;
 }
 
+/** Whether anything is open over the page, a dialog, an editor or a window, rather than the panels at its sides alone. */
+export function overlaid(): boolean {
+    return open.some((closer) => closer.layer !== "panel");
+}
+
 /** Has Back call `close` while `shown`, unless something on a layer above it, or opened after it on its own, is there. */
 export function useBack(layer: BackLayer, close: () => void, shown = true): void {
     const latest = useRef(close);

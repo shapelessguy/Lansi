@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { overlaid } from "../lib/back";
 import { ask } from "../lib/dialogs";
 import { t } from "../lib/i18n";
 import { useMediaControls } from "../lib/media";
@@ -416,6 +417,42 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
             go(1);
         }
     };
+    // Space plays and pauses it wherever it is shown, before the reader of
+    // books turns a page with it, and Ctrl with an arrow moves it on or
+    // back a sentence, but not in what is typed in, nor on a button reached
+    // with the keyboard, nor while something is open over the page
+    useEffect(() => {
+        function onKeyDown(event: KeyboardEvent) {
+            const arrow = event.key === "ArrowRight" ? "next" : event.key === "ArrowLeft" ? "previous" : null;
+            const wanted: SpeechControl | null = event.key === " " && !event.ctrlKey
+                ? "toggle"
+                : event.ctrlKey
+                ? arrow
+                : null;
+            if (
+                wanted === null || event.repeat || event.isComposing || event.metaKey || event.altKey
+                || event.shiftKey || event.defaultPrevented || overlaid()
+            ) {
+                return;
+            }
+            const target = event.target instanceof Element ? event.target : null;
+            if (target?.closest("input, textarea, select, [contenteditable]")) {
+                return;
+            }
+            // a button reached with the keyboard is pressed by Space, but not one only left with the focus by a click
+            const pressed = target?.closest("button, a, summary, [role=button]");
+            if (
+                wanted === "toggle" && pressed
+                && (pressed.matches(":focus-visible") || shown.current?.contains(pressed))
+            ) {
+                return;
+            }
+            event.preventDefault();
+            controlled.current(wanted);
+        }
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
+    }, []);
     // the buttons of the system, as those of headphones, work it too
     useMediaControls(playing, (begun ? sentences[index]?.text : null) ?? t("Reading aloud"), (action) => {
         if (action === "stop") {

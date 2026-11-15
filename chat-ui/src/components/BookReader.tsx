@@ -620,7 +620,8 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
             // a key that is typed somewhere, presses a button or is part of a shortcut is not for the book
             const typed = target?.closest("input, textarea, select, [contenteditable]");
             const pressed = event.key === " " && target?.closest("button, a");
-            if (typed || pressed || event.ctrlKey || event.metaKey || event.altKey) {
+            // a key the player of what is read aloud took, as Space while it is shown
+            if (typed || pressed || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
                 return;
             }
             if (event.key in KEYS) {
@@ -637,11 +638,14 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [active, book, turnTo]);
 
-    // A selection carried to the last line of the page, on its right, or to
-    // its first line, on its left, and held there for a second turns the
-    // page that way, to be carried on over it; then it waits to be carried
-    // there again, a second at least, so that it never runs over many
-    // pages. A single word selected, by itself, turns nothing.
+    // The end of a selection that is dragged, as by its handle on a phone,
+    // to the far right of the page, the end of a line there or past the
+    // page, and held there for a second turns the page onwards, and its
+    // start dragged to the far left, the start of a line or past the page,
+    // turns it back, to be carried on over it; then the end waits to be
+    // dragged there again, a second at least, so that it never runs over
+    // many pages. A selection that was not dragged, as a word held to be
+    // translated, turns nothing.
     const latestEnds = useRef({ atStart, atEnd });
     latestEnds.current = { atStart, atEnd };
     useEffect(() => {
@@ -650,55 +654,78 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         }
         let timer = 0;
         let held = 0;
-        function caretAt(node: Node, offset: number): DOMRect | null {
-            const caret = document.createRange();
-            caret.setStart(node, offset);
-            const rect = caret.getClientRects()[0] ?? caret.getBoundingClientRect();
-            return rect.width === 0 && rect.height === 0 && rect.left === 0 && rect.top === 0 ? null : rect;
+        // where the selection started and ended at its last change, and which of them was dragged then
+        let before: { start: [Node, number]; end: [Node, number] } | null = null;
+        let dragged: "start" | "end" | null = null;
+        /** The rect of the first character that is not a space from a place in the text of the book, onwards or back. */
+        function letter(node: Node, offset: number, onwards: boolean): DOMRect | null {
+            const laid = columns.current;
+            if (!laid || !(node instanceof Text)) {
+                return null;
+            }
+            const walker = document.createTreeWalker(laid, NodeFilter.SHOW_TEXT);
+            walker.currentNode = node;
+            let text: Text | null = node;
+            let at = offset;
+            while (text) {
+                const { data } = text;
+                for (let i = onwards ? at : at - 1; onwards ? i < data.length : i >= 0; i += onwards ? 1 : -1) {
+                    if (!/\s/.test(data[i])) {
+                        const one = document.createRange();
+                        one.setStart(text, i);
+                        one.setEnd(text, i + 1);
+                        return one.getClientRects()[0] ?? null;
+                    }
+                }
+                text = (onwards ? walker.nextNode() : walker.previousNode()) as Text | null;
+                at = onwards ? 0 : text?.data.length ?? 0;
+            }
+            return null;
         }
-        /** Which way the selection is held to turn the page: 1 to the next, -1 to the one before, or 0. */
+        /** Which way the page is to be turned for the end of the selection that was dragged: 1 onwards, -1 back, or 0. */
         function heldTo(): number {
             const selection = window.getSelection();
             const shown = view.current;
-            const laid = columns.current;
-            if (
-                !selection || selection.isCollapsed || !shown || !laid || !selection.focusNode
-                || !selection.anchorNode || !laid.contains(selection.focusNode)
-            ) {
+            if (!selection || selection.rangeCount === 0 || selection.isCollapsed || !shown || !dragged) {
                 return 0;
             }
-            const focus = caretAt(selection.focusNode, selection.focusOffset);
-            if (!focus) {
-                return 0;
-            }
-            // whether the selection goes on from where it was started, rather than back
-            const span = document.createRange();
-            span.setStart(selection.anchorNode, selection.anchorOffset);
-            span.setEnd(selection.focusNode, selection.focusOffset);
-            const onwards = !span.collapsed;
+            const range = selection.getRangeAt(0);
             const edges = shown.getBoundingClientRect();
-            // A moving end carried past the page, as the browser carries it
-            // past the end of its last line, is to be shown; one left behind
-            // on the page turned from is not.
-            if (focus.left > edges.right + 1) {
-                return onwards ? 1 : 0;
+            const width = edges.width;
+            const apart = (one: DOMRect, other: DOMRect) =>
+                Math.abs(one.top - other.top) > one.height / 2 || Math.abs(one.left - other.left) >= width;
+            if (dragged === "end") {
+                // the last letter selected, and the one after it
+                const last = letter(range.endContainer, range.endOffset, false);
+                if (!last) {
+                    return 0;
+                }
+                if (last.right > edges.right + 1) {
+                    return 1;
+                }
+                const next = letter(range.endContainer, range.endOffset, true);
+                // the last letter of the page, as at the end of a chapter, however short its line
+                if (next && next.left > edges.right + 1 && last.left >= edges.left - 1) {
+                    return 1;
+                }
+                const lineEnds = !next || apart(last, next);
+                return lineEnds && last.right >= edges.left + width * 0.6 && last.left >= edges.left - 1 ? 1 : 0;
             }
-            if (focus.left < edges.left - 1) {
-                return onwards ? 0 : -1;
-            }
-            // a word selected by itself, as one is held to be translated, is not carried anywhere
-            if (!/\s/.test(selection.toString().trim())) {
+            // the first letter selected, and the one before it
+            const first = letter(range.startContainer, range.startOffset, true);
+            if (!first) {
                 return 0;
             }
-            const line = Math.max(focus.height, 16);
-            const middle = edges.left + edges.width / 2;
-            if (onwards && focus.bottom > edges.bottom - line * 2.5 && focus.left > middle) {
-                return 1;
-            }
-            if (!onwards && focus.top < edges.top + line * 2.5 && focus.left < middle) {
+            if (first.left < edges.left - 1) {
                 return -1;
             }
-            return 0;
+            const previous = letter(range.startContainer, range.startOffset, false);
+            // the first letter of the page
+            if (previous && previous.right < edges.left - 1 && first.right <= edges.right + 1) {
+                return -1;
+            }
+            const lineStarts = !previous || apart(first, previous);
+            return lineStarts && first.left <= edges.left + width * 0.4 && first.right <= edges.right + 1 ? -1 : 0;
         }
         function turn() {
             const way = heldTo();
@@ -710,6 +737,33 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
             turnTo(latestPage.current + way);
         }
         function onSelectionChange() {
+            const selection = window.getSelection();
+            const laid = columns.current;
+            if (
+                !selection || selection.rangeCount === 0 || selection.isCollapsed || !laid
+                || !laid.contains(selection.getRangeAt(0).commonAncestorContainer)
+            ) {
+                before = null;
+                dragged = null;
+                held = 0;
+                window.clearTimeout(timer);
+                return;
+            }
+            const range = selection.getRangeAt(0);
+            const now = {
+                start: [range.startContainer, range.startOffset] as [Node, number],
+                end: [range.endContainer, range.endOffset] as [Node, number],
+            };
+            const same = (one: [Node, number], other: [Node, number]) => one[0] === other[0] && one[1] === other[1];
+            // a selection that has just come was not dragged
+            if (before) {
+                if (!same(before.end, now.end)) {
+                    dragged = "end";
+                } else if (!same(before.start, now.start)) {
+                    dragged = "start";
+                }
+            }
+            before = now;
             const way = heldTo();
             if (way === held) {
                 return;
