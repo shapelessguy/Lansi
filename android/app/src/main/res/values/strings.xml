@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lansi</string>
+    <!-- what is read aloud, in the notification and on the locked screen -->
+    <string name="speaking_channel">Reading aloud</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="previous_sentence">Previous sentence</string>
+    <string name="next_sentence">Next sentence</string>
 </resources>

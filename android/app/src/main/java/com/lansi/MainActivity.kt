@@ -46,7 +46,9 @@ import androidx.core.view.WindowInsetsControllerCompat
  * is read on without the bars of the system (Chrome), and text selected
  * without the phone's own menu over it, since Lansi has its own (Frame),
  * and the screen kept on while the page asks, as while a book is read
- * (Screen), since the WebView has no wake lock of its own.
+ * (Screen), since the WebView has no wake lock of its own, and what is
+ * read aloud shown to the phone, worked by its buttons and kept playing
+ * with the screen off (Speaking, through Media).
  */
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -88,6 +90,10 @@ class MainActivity : ComponentActivity() {
         Storage(this).attach(webView)
         offline = Offline(this).also { it.attach(webView) }
         webView.addJavascriptInterface(Screen(), "lansiScreen")
+        webView.addJavascriptInterface(Media(), "lansiMedia")
+        Speaking.onAsked = { action ->
+            webView.evaluateJavascript("window.lansiMediaAction && window.lansiMediaAction(\"$action\")", null)
+        }
         onBackPressedDispatcher.addCallback(this) {
             if (chrome.fullScreen) {
                 chrome.leaveFullScreen()
@@ -125,6 +131,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        Speaking.onAsked = null
+        Speaking.end(this)
         webView.destroy()
         super.onDestroy()
     }
@@ -161,6 +169,7 @@ class MainActivity : ComponentActivity() {
         // a page loaded anew has asked nothing of the screen yet
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            Speaking.end(this@MainActivity)
         }
 
         // The address in use no longer answers, as when the phone left the
@@ -183,6 +192,30 @@ class MainActivity : ComponentActivity() {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 } else {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+        }
+    }
+
+    /** What the page reads aloud, through `lansiMedia` (see chat-ui/src/lib/media.ts). */
+    private inner class Media {
+        @JavascriptInterface
+        fun state(playing: Boolean, title: String) {
+            runOnUiThread {
+                if (!isDestroyed) {
+                    // the page goes on with the screen off, rather than being the first the phone lets go of
+                    webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+                    Speaking.show(this@MainActivity, playing, title)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun end() {
+            runOnUiThread {
+                if (!isDestroyed) {
+                    webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, true)
+                    Speaking.end(this@MainActivity)
                 }
             }
         }

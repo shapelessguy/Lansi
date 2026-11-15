@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 
 import { ask } from "../lib/dialogs";
 import { t } from "../lib/i18n";
+import { useMediaControls } from "../lib/media";
 import {
     audioPlayer,
     bookBlock,
@@ -415,6 +416,18 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
             go(1);
         }
     };
+    // the buttons of the system, as those of headphones, work it too
+    useMediaControls(playing, (begun ? sentences[index]?.text : null) ?? t("Reading aloud"), (action) => {
+        if (action === "stop") {
+            onClose();
+        } else if (action === "play" || action === "pause") {
+            if ((action === "play") !== playing) {
+                controlled.current("toggle");
+            }
+        } else {
+            controlled.current(action);
+        }
+    });
     useEffect(() => {
         if (bookId === null) {
             return;

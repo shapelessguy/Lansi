@@ -23,6 +23,11 @@ What the app adds to the page:
   given from the phone when it cannot be reached. It is kept once, in the
   files of the app, for both addresses, and in place of what the page
   would keep itself in the WebView for each of them.
+- `Speaking.kt`: what the page reads aloud (`chat-ui/src/lib/media.ts`),
+  shown to the phone as what it plays, so that the buttons of headphones,
+  of the locked screen and of the notification play, pause and skip it,
+  and a service in the foreground that keeps the page fetching and playing
+  the sentences while the screen is off.
 - `MainActivity.kt`: the picker of files for the EPUB books, links out of
   Lansi opened in the browser, Back closing what is open in the page, from
   the one on top (`chat-ui/src/lib/back.ts`), before it leaves the app, and
