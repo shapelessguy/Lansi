@@ -21,6 +21,11 @@ interface Props {
     onClose: () => void;
 }
 
+/** Whether the page is in the Android app, which gives it what it does with the screen (lib/awake.ts). */
+function inApp(): boolean {
+    return window.lansiScreen !== undefined;
+}
+
 /**
  * A chat about a selection that was translated, in a window over the page. It starts with
  * the passage and the translation, and lasts until it is closed or another
@@ -81,6 +86,10 @@ export function SubChat({ translated, asking, onUsage, onTask, onClose }: Props)
         setDraft("");
         setError(null);
         setBusy(true);
+        // in the app the keyboard is put away, so that the answer can be read with the whole window
+        if (inApp()) {
+            input.current?.blur();
+        }
         try {
             const { reply, usage } = await askAbout(translated, asked, asking, controller.signal);
             usage.forEach((used) => onUsage(usageEntry(used, Date.now())));
@@ -96,7 +105,9 @@ export function SubChat({ translated, asking, onUsage, onTask, onClose }: Props)
         } finally {
             if (!controller.signal.aborted) {
                 setBusy(false);
-                input.current?.focus();
+                if (!inApp()) {
+                    input.current?.focus();
+                }
             }
         }
     }
