@@ -1142,15 +1142,23 @@ a {
     display: none;
 }
 
-/* On a phone, where the bar has no room for it, the player floats over the
-   text at the bottom right as it does on the full screen; the reader raises
-   it over the sentence read aloud (bottom). */
-.reader-float {
-    position: fixed;
-    right: 12px;
-    z-index: 9;
-    color: var(--paper-text, var(--text));
-    transition: bottom 0.15s ease-out;
+/* On a phone, where the bar has no room for it, the player has a row of
+   its own under the bar, there only while something is read aloud, with
+   buttons large enough for a finger. */
+.reader-player-row {
+    display: flex;
+    justify-content: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.reader-player-row:has(.speech-dock:empty) {
+    display: none;
+}
+
+.reader-player-row .speech-player.docked .icon-button {
+    width: 40px;
+    padding: 6px 0;
 }
 
 /* Each group a pill that takes after the paper under it, with round

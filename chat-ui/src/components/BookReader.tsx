@@ -98,10 +98,8 @@ const PAGE_GAP = 48;
 const SLIDE_MS = 250;
 /** How long the wheel is not listened to after it has turned a page, in milliseconds. */
 const WHEEL_PAUSE_MS = 250;
-/** How long, in milliseconds, a selection held at the edge of the page waits before it turns another. */
+/** How long, in milliseconds, a selection is held at the end of a page or at its start before it turns it. */
 const SELECTING_PAUSE_MS = 1000;
-/** How near the edge of the page, in pixels, a selection is carried on to the next page or the one before. */
-const SELECTING_EDGE = 24;
 /** A window as narrow as a phone's, as the styles also say at this width. */
 const NARROW = "(max-width: 720px)";
 /** How long, in milliseconds, the bar on the full screen is shown once the page is tapped. */
@@ -132,11 +130,11 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
     // the page there: the reader follows the browser's full screen, which
     // the browser's own way out, such as Escape or the Back of a phone, leaves.
     const [full, setFull] = useState(false);
-    // On the full screen, and on a phone, where the bar has no room for it,
-    // the player floats over the text, at the bottom right, with buttons
-    // large enough for a finger.
+    // On the full screen the player floats over the text, at the bottom
+    // right, with buttons large enough for a finger; on a phone, where the
+    // bar has no room for it, it has a row of its own under the bar.
     const narrow = useMediaQuery(NARROW);
-    const floating = full || narrow;
+    const floating = full;
     // On the full screen the bar is hidden, leaving the text alone, until
     // the page is tapped or clicked, and then shown for a while, again
     // from the start each time it is touched itself, or until the page is
@@ -639,6 +637,83 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [active, book, turnTo]);
 
+    // A selection carried to the last line of the page, on its right, or to
+    // its first line, on its left, and held there for a second turns the
+    // page that way, to be carried on over it; then it waits to be carried
+    // there again, a second at least, so that it never runs over many
+    // pages. A word selected where it is, by itself, turns nothing.
+    const latestEnds = useRef({ atStart, atEnd });
+    latestEnds.current = { atStart, atEnd };
+    useEffect(() => {
+        if (!active || !book) {
+            return;
+        }
+        let timer = 0;
+        let held = 0;
+        function caretAt(node: Node, offset: number): DOMRect | null {
+            const caret = document.createRange();
+            caret.setStart(node, offset);
+            const rect = caret.getClientRects()[0] ?? caret.getBoundingClientRect();
+            return rect.width === 0 && rect.height === 0 && rect.left === 0 && rect.top === 0 ? null : rect;
+        }
+        /** Which way the selection is held to turn the page: 1 to the next, -1 to the one before, or 0. */
+        function heldTo(): number {
+            const selection = window.getSelection();
+            const shown = view.current;
+            const laid = columns.current;
+            if (
+                !selection || selection.isCollapsed || !shown || !laid || !selection.focusNode
+                || !selection.anchorNode || !laid.contains(selection.focusNode)
+            ) {
+                return 0;
+            }
+            const focus = caretAt(selection.focusNode, selection.focusOffset);
+            const anchor = caretAt(selection.anchorNode, selection.anchorOffset);
+            const edges = shown.getBoundingClientRect();
+            // a moving end on a page that is not shown, as the one it was carried from, is not held anywhere
+            if (!focus || !anchor || focus.left < edges.left - 1 || focus.left > edges.right + 1) {
+                return 0;
+            }
+            const line = Math.max(focus.height, 16);
+            if (Math.abs(anchor.top - focus.top) < line / 2) {
+                return 0;
+            }
+            const middle = edges.left + edges.width / 2;
+            if (focus.bottom > edges.bottom - line * 1.5 && focus.left > middle) {
+                return 1;
+            }
+            if (focus.top < edges.top + line * 1.5 && focus.left < middle) {
+                return -1;
+            }
+            return 0;
+        }
+        function turn() {
+            const way = heldTo();
+            held = 0;
+            const { atStart, atEnd } = latestEnds.current;
+            if (way === 0 || (way > 0 && atEnd) || (way < 0 && atStart)) {
+                return;
+            }
+            turnTo(latestPage.current + way);
+        }
+        function onSelectionChange() {
+            const way = heldTo();
+            if (way === held) {
+                return;
+            }
+            held = way;
+            window.clearTimeout(timer);
+            if (way !== 0) {
+                timer = window.setTimeout(turn, SELECTING_PAUSE_MS);
+            }
+        }
+        document.addEventListener("selectionchange", onSelectionChange);
+        return () => {
+            document.removeEventListener("selectionchange", onSelectionChange);
+            window.clearTimeout(timer);
+        };
+    }, [active, book, turnTo]);
+
     // the page with the sentence that is being read aloud is shown as it comes up
     useEffect(() => {
         if (!book) {
@@ -785,44 +860,17 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         }
         return { from, two: twoFingers.current !== null };
     }
-    // A selection carried to the edge of the page turns it, one page at a
-    // time, and then waits, so that it is not carried over many at once.
-    const selectionTurned = useRef(-Infinity);
-    function turnWhileSelecting(step: number, at: number) {
-        if (at - selectionTurned.current < SELECTING_PAUSE_MS) {
-            return;
-        }
-        if ((step > 0 && atEnd) || (step < 0 && atStart)) {
-            return;
-        }
-        selectionTurned.current = at;
-        turnTo(latestPage.current + step);
-    }
     // The browser scrolls what the pages are seen through as a selection is
     // dragged to its edge, over many pages, which the pages, turned by moving
-    // the columns instead, would then be off from: it is put back at once,
-    // and taken for the page turned while selecting.
+    // the columns instead, would then be off from: it is put back at once.
     function onViewScroll(event: React.UIEvent<HTMLDivElement>) {
         const shown = event.currentTarget;
-        const by = shown.scrollLeft;
-        if (by === 0 && shown.scrollTop === 0) {
-            return;
-        }
-        shown.scrollLeft = 0;
-        shown.scrollTop = 0;
-        if (by !== 0 && !(window.getSelection()?.isCollapsed ?? true)) {
-            turnWhileSelecting(Math.sign(by), event.timeStamp);
+        if (shown.scrollLeft !== 0 || shown.scrollTop !== 0) {
+            shown.scrollLeft = 0;
+            shown.scrollTop = 0;
         }
     }
     function onPointerMove(event: React.PointerEvent) {
-        if (!(window.getSelection()?.isCollapsed ?? true) && event.buttons !== 0) {
-            const edges = view.current?.getBoundingClientRect();
-            if (edges && event.clientX >= edges.right - SELECTING_EDGE) {
-                turnWhileSelecting(1, event.timeStamp);
-            } else if (edges && event.clientX <= edges.left + SELECTING_EDGE) {
-                turnWhileSelecting(-1, event.timeStamp);
-            }
-        }
         const from = swipe.current;
         if (!from || !(window.getSelection()?.isCollapsed ?? true)) {
             return;
@@ -1012,6 +1060,11 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                         </button>
                     </div>
                 </header>
+                {narrow && !full && (
+                    <div className="reader-player-row">
+                        <span className="speech-dock" data-speech-dock="book" />
+                    </div>
+                )}
                 {contentsOpen && book && (
                     <BookContents
                         sections={book.sections}
@@ -1028,11 +1081,6 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                         offline={offline}
                         onKeepOffline={(keep) => keepOffline(book.id, keep)}
                     />
-                )}
-                {narrow && !full && (
-                    <div className="reader-float big-player" ref={bar} style={{ bottom: BAR_MARGIN + lift }}>
-                        <span className="speech-dock" data-speech-dock="book" />
-                    </div>
                 )}
                 {optionsOpen && (
                     <div className="reader-options">
