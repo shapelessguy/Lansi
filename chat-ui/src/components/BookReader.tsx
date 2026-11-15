@@ -98,6 +98,10 @@ const PAGE_GAP = 48;
 const SLIDE_MS = 250;
 /** How long the wheel is not listened to after it has turned a page, in milliseconds. */
 const WHEEL_PAUSE_MS = 250;
+/** How long, in milliseconds, a selection held at the edge of the page waits before it turns another. */
+const SELECTING_PAUSE_MS = 1000;
+/** How near the edge of the page, in pixels, a selection is carried on to the next page or the one before. */
+const SELECTING_EDGE = 24;
 /** A window as narrow as a phone's, as the styles also say at this width. */
 const NARROW = "(max-width: 720px)";
 /** How long, in milliseconds, the bar on the full screen is shown once the page is tapped. */
@@ -781,7 +785,44 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         }
         return { from, two: twoFingers.current !== null };
     }
+    // A selection carried to the edge of the page turns it, one page at a
+    // time, and then waits, so that it is not carried over many at once.
+    const selectionTurned = useRef(-Infinity);
+    function turnWhileSelecting(step: number, at: number) {
+        if (at - selectionTurned.current < SELECTING_PAUSE_MS) {
+            return;
+        }
+        if ((step > 0 && atEnd) || (step < 0 && atStart)) {
+            return;
+        }
+        selectionTurned.current = at;
+        turnTo(latestPage.current + step);
+    }
+    // The browser scrolls what the pages are seen through as a selection is
+    // dragged to its edge, over many pages, which the pages, turned by moving
+    // the columns instead, would then be off from: it is put back at once,
+    // and taken for the page turned while selecting.
+    function onViewScroll(event: React.UIEvent<HTMLDivElement>) {
+        const shown = event.currentTarget;
+        const by = shown.scrollLeft;
+        if (by === 0 && shown.scrollTop === 0) {
+            return;
+        }
+        shown.scrollLeft = 0;
+        shown.scrollTop = 0;
+        if (by !== 0 && !(window.getSelection()?.isCollapsed ?? true)) {
+            turnWhileSelecting(Math.sign(by), event.timeStamp);
+        }
+    }
     function onPointerMove(event: React.PointerEvent) {
+        if (!(window.getSelection()?.isCollapsed ?? true) && event.buttons !== 0) {
+            const edges = view.current?.getBoundingClientRect();
+            if (edges && event.clientX >= edges.right - SELECTING_EDGE) {
+                turnWhileSelecting(1, event.timeStamp);
+            } else if (edges && event.clientX <= edges.left + SELECTING_EDGE) {
+                turnWhileSelecting(-1, event.timeStamp);
+            }
+        }
         const from = swipe.current;
         if (!from || !(window.getSelection()?.isCollapsed ?? true)) {
             return;
@@ -1087,7 +1128,7 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
                     onPointerMove={onPointerMove}
                     onPointerCancel={onPointerCancel}
                 >
-                    <div className="reader-view" ref={view} style={{ marginLeft: -fromLeft }}>
+                    <div className="reader-view" ref={view} style={{ marginLeft: -fromLeft }} onScroll={onViewScroll}>
                         <div
                             className="reader-columns"
                             data-selectable="book"
