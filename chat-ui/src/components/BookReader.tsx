@@ -135,7 +135,8 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
     const floating = full || narrow;
     // On the full screen the bar is hidden, leaving the text alone, until
     // the page is tapped or clicked, and then shown for a while, again
-    // from the start each time it is touched itself.
+    // from the start each time it is touched itself, or until the page is
+    // tapped again.
     const [revealed, setRevealed] = useState(false);
     const revealTimer = useRef(0);
     const reveal = useCallback(() => {
@@ -799,8 +800,17 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
         letGo();
     }
     function onPointerUp(event: React.PointerEvent) {
-        if (full && Math.hypot(event.clientX - pressed.current.x, event.clientY - pressed.current.y) <= CLICK_SLOP) {
-            reveal();
+        // a tap on the page shows the bar, or hides it again if it was shown, but not one that selects
+        if (
+            full && (window.getSelection()?.isCollapsed ?? true)
+            && Math.hypot(event.clientX - pressed.current.x, event.clientY - pressed.current.y) <= CLICK_SLOP
+        ) {
+            if (revealed) {
+                window.clearTimeout(revealTimer.current);
+                setRevealed(false);
+            } else {
+                reveal();
+            }
         }
         const from = swipe.current;
         letGo();

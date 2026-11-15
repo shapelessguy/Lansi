@@ -170,6 +170,14 @@ export interface SpeechSource {
     dock: string | null;
     /** Where in a book the reading starts, if not at its first sentence. */
     from?: BookPlace;
+    /** What of the book is read, if it is one, so that the reading can be taken up again where it was left. */
+    selection?: BookSelection;
+    /**
+     * The sentence the reading was left at, if it is taken up again: the
+     * player waits there, paused, and asks the server for nothing until it
+     * is played.
+     */
+    held?: HeardSentence;
 }
 
 /** The slot the player is shown in, in the bar of the book reader or of practice. */
@@ -191,7 +199,50 @@ export function bookSource(bookId: string, selection: BookSelection, from?: Book
         beside: null,
         dock: dockOf("book"),
         from,
+        selection,
     };
+}
+
+/** A sentence of a book, by its paragraph and where it is in the text of it. */
+export type HeardSentence = Pick<SpokenSentence, "block" | "start" | "end">;
+
+/** Where the reading aloud of a book was left: what of it was read, and the sentence that was heard last. */
+export interface Heard {
+    selection: BookSelection;
+    sentence: HeardSentence;
+}
+
+const HEARD_KEY = "chat-ui.heard";
+
+/** Where the reading aloud of each book was left on this device, by the id of the book. */
+function loadAllHeard(): Record<string, Heard> {
+    try {
+        const stored: unknown = JSON.parse(localStorage.getItem(HEARD_KEY) ?? "{}");
+        return typeof stored === "object" && stored !== null && !Array.isArray(stored)
+            ? stored as Record<string, Heard>
+            : {};
+    } catch {
+        return {};
+    }
+}
+
+/** Where the reading aloud of a book was left on this device, if it was read aloud on it. */
+export function loadHeard(bookId: string): Heard | null {
+    const heard = loadAllHeard()[bookId];
+    const whole = (value: unknown) => Number.isInteger(value) && (value as number) >= 0;
+    return heard && whole(heard.selection?.startBlock) && whole(heard.selection?.start)
+            && whole(heard.selection?.endBlock) && whole(heard.selection?.end) && whole(heard.sentence?.block)
+            && whole(heard.sentence?.start) && whole(heard.sentence?.end)
+        ? heard
+        : null;
+}
+
+export function keepHeard(bookId: string, heard: Heard): void {
+    try {
+        localStorage.setItem(HEARD_KEY, JSON.stringify({ ...loadAllHeard(), [bookId]: heard }));
+    } catch {
+        // without storage, the reading is started again from the sentence chosen
+    }
 }
 
 /**

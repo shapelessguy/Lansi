@@ -3,7 +3,17 @@
 
 import { afterEach, expect, test, vi } from "vitest";
 
-import { fetchSentenceAudio, normalizeSpeed, spotBeside, startingAt, stepped, Unreachable, wanted } from "./speaking";
+import {
+    fetchSentenceAudio,
+    keepHeard,
+    loadHeard,
+    normalizeSpeed,
+    spotBeside,
+    startingAt,
+    stepped,
+    Unreachable,
+    wanted,
+} from "./speaking";
 
 test("the next and the previous sentence are a step away, and there is none beyond the ends", () => {
     expect(stepped(2, 1, 5)).toBe(3);
@@ -75,4 +85,33 @@ test("audio that the server says cannot be had is given up on", async () => {
 
     await expect(failed).rejects.toThrow("no credit");
     await expect(failed).rejects.not.toBeInstanceOf(Unreachable);
+});
+
+/** A localStorage of its own, as the browser keeps it. */
+function storage() {
+    const kept = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+        getItem: (key: string) => kept.get(key) ?? null,
+        setItem: (key: string, value: string) => kept.set(key, value),
+    });
+}
+
+test("where the reading aloud of a book was left is found again for that book alone", () => {
+    storage();
+    const selection = { startBlock: 0, start: 0, endBlock: 40, end: 120 };
+    keepHeard("book-1", { selection, sentence: { block: 3, start: 20, end: 41 } });
+    keepHeard("book-2", { selection, sentence: { block: 9, start: 0, end: 12 } });
+    keepHeard("book-1", { selection, sentence: { block: 4, start: 0, end: 30 } });
+
+    expect(loadHeard("book-1")).toEqual({ selection, sentence: { block: 4, start: 0, end: 30 } });
+    expect(loadHeard("book-2")?.sentence).toEqual({ block: 9, start: 0, end: 12 });
+    expect(loadHeard("book-3")).toBeNull();
+});
+
+test("where the reading aloud of a book was left is not found when what was kept is unusable", () => {
+    vi.stubGlobal("localStorage", {
+        getItem: () =>
+            JSON.stringify({ "book-1": { selection: { startBlock: 0 }, sentence: { block: -1, start: 0, end: 4 } } }),
+    });
+    expect(loadHeard("book-1")).toBeNull();
 });

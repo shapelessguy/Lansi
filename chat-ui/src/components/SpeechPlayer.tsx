@@ -10,6 +10,8 @@ import {
     audioPlayer,
     bookBlock,
     fetchSentenceAudio,
+    type HeardSentence,
+    keepHeard,
     listenAt,
     loadSpeed,
     ManyToMake,
@@ -18,7 +20,6 @@ import {
     saveSpeed,
     type SpeechSource,
     SPEEDS,
-    type SpokenSentence,
     type Spot,
     spotBeside,
     startingAt,
@@ -120,8 +121,19 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
     const [index, setIndex] = useState(0);
     // the audio of each sentence that has arrived, or why it has not, by the place of the sentence
     const [clips, setClips] = useState<Record<number, { url: string } | { failed: string }>>({});
+    // Whether the reading was begun: one taken up again where it was left
+    // waits there, paused, without asking the server for anything, until
+    // it is played, so that no audio is made that was not asked for.
+    const [begun, setBegun] = useState(!source.held);
     // whether the listener wants to hear, rather than having paused
-    const [playing, setPlaying] = useState(true);
+    const [playing, setPlaying] = useState(begun);
+    // how far from the sentence it waited at the reading was moved on or back to begin it
+    const firstStep = useRef(0);
+    function begin(step: number) {
+        firstStep.current = step;
+        setBegun(true);
+        setPlaying(true);
+    }
     // whether the browser kept the audio from starting by itself
     const [held, setHeld] = useState(false);
     // whether the server could not be reached the last time audio was asked for, which is asked for again
@@ -135,10 +147,14 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
     const leaving = useRef(new AbortController());
     const readingId = reading?.task?.reading ?? null;
     const sentences = reading?.sentences ?? [];
-    const sentence = sentences[index];
+    // the sentence that is listened to, or the one the reading waits at until it is begun
+    const sentence: HeardSentence | undefined = begun ? sentences[index] : source.held;
     const clip = clips[index];
 
     useEffect(() => {
+        if (!begun) {
+            return;
+        }
         const controller = new AbortController();
         leaving.current = controller;
         let started: string | null = null;
@@ -165,8 +181,8 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
             });
         const timer = setTimeout(() =>
             start().then(
-                (begun) => {
-                    started = begun.task?.reading ?? null;
+                (opened) => {
+                    started = opened.task?.reading ?? null;
                     if (controller.signal.aborted) {
                         // it was closed before the server answered
                         if (started) {
@@ -174,12 +190,18 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                         }
                         return;
                     }
-                    setReading(begun);
+                    setReading(opened);
                     if (source.from) {
-                        setIndex(startingAt(begun.sentences, source.from));
+                        setIndex(
+                            stepped(
+                                startingAt(opened.sentences, source.from),
+                                firstStep.current,
+                                opened.sentences.length,
+                            ),
+                        );
                     }
-                    if (begun.task) {
-                        onTask(begun.task);
+                    if (opened.task) {
+                        onTask(opened.task);
                     }
                 },
                 (caught: Error) => {
@@ -202,7 +224,7 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
         };
         // the selection is read as it was when the player came up
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [begun]);
 
     // The audio of the sentence that is listened to and of the next few is
     // asked for, and the server is told where the listener is, so that it
@@ -268,8 +290,20 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
         window.addEventListener(LAID_OUT_EVENT, count);
         return () => window.removeEventListener(LAID_OUT_EVENT, count);
     }, []);
+    // the sentence heard is kept on the device, to take the reading up there the next time
+    const selection = source.selection;
+    useEffect(() => {
+        if (sentence && bookId !== null && selection) {
+            keepHeard(bookId, {
+                selection,
+                sentence: { block: sentence.block, start: sentence.start, end: sentence.end },
+            });
+        }
+    }, [bookId, selection, sentence]);
+    // what is marked is let go of with the player, begun or not
+    useEffect(() => () => void CSS.highlights?.delete(HIGHLIGHT), []);
     // the sentence the reader was last told to show, once it was found in the book
-    const toldShown = useRef<SpokenSentence | null>(null);
+    const toldShown = useRef<HeardSentence | null>(null);
     useEffect(() => {
         if (!sentence || bookId === null) {
             return;
@@ -348,11 +382,19 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
     }, [failed, last, sentences.length]);
 
     function go(step: number) {
+        if (!begun) {
+            begin(step);
+            return;
+        }
         setIndex((current) => stepped(current, step, sentences.length));
         setPlaying(true);
     }
 
     function toggle() {
+        if (!begun) {
+            begin(0);
+            return;
+        }
         if (playing) {
             audioPlayer().pause();
         } else {
@@ -365,11 +407,11 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
     // the reader of the book this reads asks for what the buttons do, when they can be pressed
     const controlled = useRef((_control: SpeechControl) => {});
     controlled.current = (control) => {
-        if (control === "toggle" && clip && failed === null) {
+        if (control === "toggle" && (!begun || (clip && failed === null))) {
             toggle();
-        } else if (control === "previous" && index > 0) {
+        } else if (control === "previous" && (!begun || index > 0)) {
             go(-1);
-        } else if (control === "next" && reading && !last) {
+        } else if (control === "next" && (!begun || (reading && !last))) {
             go(1);
         }
     };
@@ -389,7 +431,9 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
     }, [bookId]);
 
     const status = error
-        ?? (!reading
+        ?? (!begun
+            ? null
+            : !reading
             ? t("Getting the sentences…")
             : failed !== null
             ? t("Could not be read: {why}", { why: failed })
@@ -422,7 +466,7 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                 <button
                     className="icon-button"
                     onClick={() => go(-1)}
-                    disabled={index === 0}
+                    disabled={begun && index === 0}
                     title={t("Previous sentence")}
                     aria-label={t("Previous sentence")}
                 >
@@ -431,7 +475,7 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                 <button
                     className="icon-button speech-play"
                     onClick={toggle}
-                    disabled={!clip || failed !== null}
+                    disabled={begun && (!clip || failed !== null)}
                     title={playing ? t("Pause") : t("Play")}
                     aria-label={playing ? t("Pause") : t("Play")}
                 >
@@ -442,7 +486,7 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
                 <button
                     className="icon-button"
                     onClick={() => go(1)}
-                    disabled={!reading || last}
+                    disabled={begun && (!reading || last)}
                     title={t("Next sentence")}
                     aria-label={t("Next sentence")}
                 >
@@ -476,7 +520,7 @@ export function SpeechPlayer({ source, voice, onTask, onClose }: Props) {
             </div>
             {((!besideIt && !docked) || wrong) && (
                 <p className={wrong ? "speech-status error" : "speech-status"}>
-                    {status ?? sentence?.text}
+                    {status ?? (begun ? sentences[index]?.text : null)}
                 </p>
             )}
         </div>

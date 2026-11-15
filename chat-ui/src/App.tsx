@@ -90,7 +90,7 @@ import { logOut } from "./lib/session";
 import { deleteSet, fetchSets, membersOf, newSet, saveSet, wordLists, type WordSet } from "./lib/sets";
 import { applyAppearance, exerciseVocabularyOf, expandPrompt, saveSettings, type Settings } from "./lib/settings";
 import { useShownOnce } from "./lib/shownOnce";
-import { bookSource, exerciseSource, messageSource, type SpeechSource, type Voice } from "./lib/speaking";
+import { bookSource, exerciseSource, loadHeard, messageSource, type SpeechSource, type Voice } from "./lib/speaking";
 import { type BackgroundTask, fetchTasks, TASKS_INTERVAL_MS, withTask } from "./lib/tasks";
 import { deleteText, fetchTexts, saveText, type Text } from "./lib/texts";
 import type { Asking, Translated } from "./lib/translate";
@@ -672,6 +672,25 @@ export function App({ user, initialSettings, initialChats }: Props) {
     }, [addUsageEntry]);
     // what is read aloud, with a number that tells it from what was read before
     const [listening, setListening] = useState<{ source: SpeechSource; nonce: number } | null>(null);
+    // A book opened, as when the app is, has its player come up where its
+    // reading aloud was left on this device, paused there until it is played.
+    useEffect(() => {
+        const heard = bookId ? loadHeard(bookId) : null;
+        if (bookId && heard) {
+            setListening((current) =>
+                current ?? {
+                    source: {
+                        ...bookSource(bookId, heard.selection, {
+                            block: heard.sentence.block,
+                            offset: heard.sentence.start,
+                        }),
+                        held: heard.sentence,
+                    },
+                    nonce: Date.now(),
+                }
+            );
+        }
+    }, [bookId]);
     // the selection of the book in the reader a note was last asked to be written on
     const [noteAsked, setNoteAsked] = useState<NoteAsked | null>(null);
     const speakMessage = useCallback(
