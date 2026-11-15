@@ -669,20 +669,33 @@ export function BookReader({ bookId, active, names, onPlay, besides, noteAsked }
             }
             const focus = caretAt(selection.focusNode, selection.focusOffset);
             const anchor = caretAt(selection.anchorNode, selection.anchorOffset);
-            const edges = shown.getBoundingClientRect();
-            // a moving end on a page that is not shown, as the one it was carried from, is not held anywhere
-            if (!focus || !anchor || focus.left < edges.left - 1 || focus.left > edges.right + 1) {
+            if (!focus || !anchor) {
                 return 0;
+            }
+            // whether the selection goes on from where it was started, rather than back
+            const span = document.createRange();
+            span.setStart(selection.anchorNode, selection.anchorOffset);
+            span.setEnd(selection.focusNode, selection.focusOffset);
+            const onwards = !span.collapsed;
+            const edges = shown.getBoundingClientRect();
+            // A moving end carried past the page, as the browser carries it
+            // past the end of its last line, is to be shown; one left behind
+            // on the page turned from is not.
+            if (focus.left > edges.right + 1) {
+                return onwards ? 1 : 0;
+            }
+            if (focus.left < edges.left - 1) {
+                return onwards ? 0 : -1;
             }
             const line = Math.max(focus.height, 16);
             if (Math.abs(anchor.top - focus.top) < line / 2) {
                 return 0;
             }
             const middle = edges.left + edges.width / 2;
-            if (focus.bottom > edges.bottom - line * 1.5 && focus.left > middle) {
+            if (onwards && focus.bottom > edges.bottom - line * 2.5 && focus.left > middle) {
                 return 1;
             }
-            if (focus.top < edges.top + line * 1.5 && focus.left < middle) {
+            if (!onwards && focus.top < edges.top + line * 2.5 && focus.left < middle) {
                 return -1;
             }
             return 0;
