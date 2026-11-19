@@ -163,6 +163,22 @@ export const MESSAGES = {
         German: "Vollbild verlassen",
         Italian: "Esci dallo schermo intero",
     },
+    "Fill the window": {
+        German: "Fenster füllen",
+        Italian: "Riempi la finestra",
+    },
+    "Put back at the side": {
+        German: "Wieder an die Seite",
+        Italian: "Rimetti di lato",
+    },
+    "Fill the window with {name}": {
+        German: "Das Fenster mit {name} füllen",
+        Italian: "Riempi la finestra con {name}",
+    },
+    "Put {name} back at the side": {
+        German: "{name} wieder an die Seite stellen",
+        Italian: "Rimetti {name} di lato",
+    },
     "Close {name}": {
         German: "{name} schließen",
         Italian: "Chiudi {name}",

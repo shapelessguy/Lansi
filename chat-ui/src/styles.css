@@ -2353,6 +2353,36 @@ div.book-cover {
     display: none;
 }
 
+/* a panel that fills the window, as it is asked to with the button by its title;
+   above the rules of narrower windows, which keep it at its side */
+aside.side-panel.full {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    border: none;
+}
+
+.panel-header-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+/* the icon and the × as big as each other, in buttons as big as each other */
+.panel-header-buttons .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    line-height: 1;
+}
+
+.panel-header-buttons .icon {
+    width: 15px;
+    height: 15px;
+}
+
 .panel-header {
     display: flex;
     align-items: center;
@@ -3274,6 +3304,11 @@ div.book-cover {
     /* on a phone a panel takes the whole window, rather than leaving a strip of the page */
     .side-panel {
         width: 100%;
+    }
+
+    /* where every panel fills the window, there is nothing to switch */
+    .panel-full-toggle {
+        display: none;
     }
 
     .chat-header {
